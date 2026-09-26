@@ -67,7 +67,7 @@ alla volta.
   continua a chiudersi appena avviata).
 
 **Shell**
-- Sfondo del desktop (`images/vela_splash.svg`, incluso nell'eseguibile),
+- Sfondo del desktop (`images/vela_splash_169.svg`, incluso nell'eseguibile),
   disegnato già alla dimensione esatta dello schermo: in memoria c'è solo
   ciò che si vede. Un altro sfondo con `VELA_WALLPAPER`.
 - Taskbar in stile Windows 11: pulsante Start, app fissate e app aperte al

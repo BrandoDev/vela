@@ -12,7 +12,7 @@ class ShellController : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString userName READ userName CONSTANT)
     Q_PROPERTY(QString userInitial READ userInitial CONSTANT)
-    // Percorso dello sfondo: VELA_WALLPAPER, oppure quello di Vela.
+    // Percorso dello sfondo: VELA_WALLPAPER, oppure quello di Vela (16:9).
     Q_PROPERTY(QString wallpaper READ wallpaper CONSTANT)
     // Stato del menu Start, condiviso tra la finestra del menu e la taskbar.
     Q_PROPERTY(bool startMenuOpen READ startMenuOpen WRITE setStartMenuOpen NOTIFY startMenuOpenChanged)

@@ -21,11 +21,11 @@ qt_add_executable(vela-shell
     src/windowcapture.cpp
     src/windowcapture.h)
 
-# Lo sfondo predefinito, dentro l'eseguibile: ":/vela/images/vela_splash.svg".
+# Lo sfondo predefinito, dentro l'eseguibile: ":/vela/images/vela_splash_169.svg".
 qt_add_resources(vela-shell "images"
     PREFIX "/vela"
     BASE ${PROJECT_SOURCE_DIR}
-    FILES ${PROJECT_SOURCE_DIR}/images/vela_splash.svg)
+    FILES ${PROJECT_SOURCE_DIR}/images/vela_splash_169.svg)
 
 # Elenco delle finestre aperte, pubblicato dal compositor.
 qt_generate_wayland_protocol_client_sources(vela-shell
