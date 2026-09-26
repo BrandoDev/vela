@@ -246,9 +246,9 @@ scripts/           avvio annidato e headless
   avanti).
 
 **Milestone 2: l'aspetto**
-- Sfocatura acrilica, angoli arrotondati e ombre disegnati dal compositor.
-  Due strade: SceneFX (sostituto di wlr_scene che li ha già) oppure un
-  renderer proprio.
+- Sfocatura acrilica, angoli arrotondati e ombre disegnati dal compositor,
+  con una scena e un renderer Vulkan tutti nostri: vedi
+  [docs/renderer.md](docs/renderer.md).
 - Barra del titolo lato server in stile Vela, uguale per tutte le app.
 - Sfondo, centro notifiche, impostazioni rapide (volume, rete, luminosità).
 
