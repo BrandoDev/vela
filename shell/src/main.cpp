@@ -9,6 +9,7 @@
 #include "iconprovider.h"
 #include "shellcontroller.h"
 #include "taskbarmodel.h"
+#include "wallpaperprovider.h"
 
 #include <LayerShellQt/Window>
 
@@ -41,6 +42,17 @@ void setupTaskbar(QQuickWindow* window, int height)
     layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorBottom) | LayerWindow::AnchorLeft
         | LayerWindow::AnchorRight);
     layer->setExclusiveZone(height); // le finestre massimizzate non la coprono
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityNone);
+}
+
+void setupWallpaper(QQuickWindow* window)
+{
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScope(QStringLiteral("vela-wallpaper"));
+    layer->setLayer(LayerWindow::LayerBackground);
+    layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorTop) | LayerWindow::AnchorBottom
+        | LayerWindow::AnchorLeft | LayerWindow::AnchorRight);
+    layer->setExclusiveZone(-1); // tutto lo schermo, anche sotto la taskbar
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityNone);
 }
 
@@ -99,24 +111,29 @@ int main(int argc, char* argv[])
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
+    engine.addImageProvider(QStringLiteral("wallpaper"), new WallpaperProvider);
     engine.rootContext()->setContextProperty(QStringLiteral("Apps"), &apps);
     engine.rootContext()->setContextProperty(QStringLiteral("Shell"), &shell);
     engine.rootContext()->setContextProperty(QStringLiteral("Tasks"), &tasks);
 
     // Le finestre QML partono invisibili: le trasformiamo in superfici
     // layer-shell PRIMA che vengano mostrate.
+    engine.loadFromModule("Vela.Shell", "Wallpaper");
     engine.loadFromModule("Vela.Shell", "Taskbar");
     engine.loadFromModule("Vela.Shell", "StartMenu");
 
+    QQuickWindow* wallpaper = findWindow(engine, "wallpaper");
     QQuickWindow* taskbar = findWindow(engine, "taskbar");
     QQuickWindow* startMenu = findWindow(engine, "startMenu");
-    if (!taskbar || !startMenu) {
+    if (!wallpaper || !taskbar || !startMenu) {
         qCritical("vela-shell: impossibile caricare l'interfaccia QML");
         return 1;
     }
 
+    setupWallpaper(wallpaper);
     setupTaskbar(taskbar, taskbar->height());
     setupStartMenu(startMenu);
+    wallpaper->show();
     taskbar->show();
 
     return app.exec();

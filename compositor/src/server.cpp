@@ -24,6 +24,25 @@ int envInt(const char* name, int fallback)
     return std::atoi(value);
 }
 
+// Vulkan di default: più moderno ed efficiente con i driver attuali. Se non
+// c'è (driver, GPU vecchia) si ripiega su OpenGL ES. WLR_RENDERER, se
+// impostata a mano (gles2, vulkan, pixman), vince sempre.
+wlr_renderer* createRenderer(wlr_backend* backend)
+{
+    if (const char* chosen = std::getenv("WLR_RENDERER"); chosen && *chosen) {
+        return wlr_renderer_autocreate(backend);
+    }
+    setenv("WLR_RENDERER", "vulkan", 1);
+    wlr_renderer* renderer = wlr_renderer_autocreate(backend);
+    unsetenv("WLR_RENDERER"); // le app lanciate da Vela non devono ereditarla
+    if (renderer) {
+        wlr_log(WLR_INFO, "Renderer: Vulkan");
+        return renderer;
+    }
+    wlr_log(WLR_ERROR, "Vulkan non disponibile, uso OpenGL ES");
+    return wlr_renderer_autocreate(backend);
+}
+
 int handleTerminate(int /*signal*/, void* data)
 {
     wl_display_terminate(static_cast<wl_display*>(data));
@@ -112,7 +131,7 @@ bool Server::init()
         },
         &nested);
 
-    renderer = wlr_renderer_autocreate(backend);
+    renderer = createRenderer(backend);
     if (!renderer) {
         wlr_log(WLR_ERROR, "Impossibile creare il renderer");
         return false;

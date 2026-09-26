@@ -7,6 +7,7 @@ import QtQuick
 // muovono nello stesso modo.
 QtObject {
     // --- colori (tema scuro) ---
+    readonly property color desktop: "#06182d" // sotto lo sfondo, il suo blu più scuro
     readonly property color taskbar: Qt.rgba(0.10, 0.10, 0.12, 0.94)
     readonly property color surface: Qt.rgba(0.14, 0.14, 0.16, 0.97)
     readonly property color surfaceRaised: Qt.rgba(1, 1, 1, 0.06)

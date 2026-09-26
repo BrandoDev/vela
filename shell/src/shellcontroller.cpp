@@ -85,6 +85,12 @@ QString ShellController::userName() const
     return qEnvironmentVariable("USER");
 }
 
+QString ShellController::wallpaper() const
+{
+    // Quello predefinito è incluso nell'eseguibile (images/ nel sorgente).
+    return qEnvironmentVariable("VELA_WALLPAPER", QStringLiteral(":/vela/images/vela_splash.svg"));
+}
+
 QString ShellController::userInitial() const
 {
     const QString name = userName();

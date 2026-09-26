@@ -21,7 +21,8 @@ alla volta.
 ```
 
 - **Compositor** (`compositor/`): C++20 su **wlroots 0.20**. Disegna tutto con
-  la GPU usando la scena di wlroots, gestisce schermi, input e finestre.
+  la GPU usando la scena di wlroots e il renderer **Vulkan** (se non c'è,
+  OpenGL ES), gestisce schermi, input e finestre.
   Le animazioni avanzano a ogni frame reale dello schermo, quindi a 180 Hz
   fanno 180 passi al secondo.
 - **Shell** (`shell/`): **Qt Quick** (scena grafica su GPU) con
@@ -61,6 +62,9 @@ alla volta.
   continua a chiudersi appena avviata).
 
 **Shell**
+- Sfondo del desktop (`images/vela_splash.svg`, incluso nell'eseguibile),
+  disegnato già alla dimensione esatta dello schermo: in memoria c'è solo
+  ciò che si vede. Un altro sfondo con `VELA_WALLPAPER`.
 - Taskbar in stile Windows 11: pulsante Start, app fissate e app aperte al
   centro, orologio a destra, effetti di hover e pressione animati.
   - Le finestre della stessa app stanno sotto un solo pulsante; sotto
@@ -83,21 +87,21 @@ Servono CMake ≥ 3.22, un compilatore C++20, **wlroots 0.20**
 **Arch / CachyOS / EndeavourOS**
 ```sh
 sudo pacman -S --needed base-devel cmake pkgconf wlroots0.20 wayland-protocols \
-    libxkbcommon pixman libinput qt6-declarative layer-shell-qt
+    libxkbcommon pixman libinput qt6-declarative qt6-svg layer-shell-qt
 ```
 
 **Fedora**
 ```sh
 sudo dnf install cmake gcc-c++ wlroots-devel wayland-devel wayland-protocols-devel \
     libxkbcommon-devel pixman-devel libinput-devel qt6-qtdeclarative-devel \
-    qt6-qtwayland-devel layer-shell-qt-devel
+    qt6-qtsvg-devel qt6-qtwayland-devel layer-shell-qt-devel
 ```
 
 **openSUSE Tumbleweed**
 ```sh
 sudo zypper install cmake gcc-c++ wlroots-devel wayland-protocols-devel \
     libxkbcommon-devel pixman-devel libinput-devel qt6-declarative-devel \
-    qt6-waylandclient-devel layer-shell-qt6-devel
+    qt6-svg-devel qt6-waylandclient-devel layer-shell-qt6-devel
 ```
 
 I nomi dei pacchetti cambiano ogni tanto: se uno non esiste, cerca
@@ -160,6 +164,8 @@ resta alle app, che lo usano per aprire i propri menu.
 | `VELA_VRR=1`         | attiva il refresh variabile (spento di default)      |
 | `VELA_NATURAL_SCROLL=0` | scorrimento classico sul touchpad (predef. naturale, come Windows) |
 | `VELA_ICON_THEME`    | tema di icone se Qt non lo trova (predef. breeze-dark) |
+| `VELA_WALLPAPER`     | immagine di sfondo (SVG, PNG, JPEG...), riempie lo schermo tagliando i bordi |
+| `WLR_RENDERER`       | renderer: di default `vulkan` (con ripiego su OpenGL ES); `gles2` o `pixman` per forzarne un altro |
 | `VELA_DEBUG=1`       | log dettagliato di wlroots                           |
 | `VELA_OUTPUT_SIZE`   | risoluzione quando lo schermo non ne ha (finestra annidata, headless), es. `1920x1080` |
 | `VELA_DEBUG_INPUT=1` | mouse e tastiera virtuali per `vela-input` (spento di default: permettono a qualunque programma di simulare input) |
@@ -215,6 +221,7 @@ shell/
   src/             app installate, finestre aperte, taskbar, icone, socket
   qml/             Theme, Taskbar, StartMenu e componenti
 tools/             vela-shot, vela-windows, vela-input (prove automatiche)
+images/            sfondo predefinito
 protocols/         protocolli wlroots non inclusi in wayland-protocols
 scripts/           avvio annidato e headless
 ```
