@@ -6,7 +6,7 @@ tutto ciò che verrà dopo. Questo documento viene prima del codice: le
 decisioni si prendono qui, il codice le segue.
 
 > **Stato:** progetto discusso e approvato nelle scelte di fondo (§2,
-> riassunte anche in §13). Prossimo passo: la tappa S0 (§11).
+> riassunte anche in §13). Tappa **S0 fatta** (§11); prossima: S1.
 
 ## 1. Obiettivi
 
@@ -181,6 +181,14 @@ renderer userà invece l'**istante previsto di presentazione** del frame che
 sta disegnando (ultimo vblank reale + periodo, dal feedback di
 presentazione del backend). Così il movimento è corretto al frame, anche a
 360 Hz, anche con VRR, anche quando un frame arriva in ritardo.
+
+**La latenza dello schermo si impara** (scoperto in S0). Tra la consegna di
+un frame e la sua comparsa possono passare più vblank: in una finestra
+annidata in KWin 1 o 2, a seconda di come KWin sta lavorando; su certi
+driver o con certi piani anche sull'hardware. Il `FrameClock` confronta
+ogni presentazione con la previsione: se le ultime 8 misure concordano su
+uno scarto di N periodi interi, aggiunge N alla latenza. Misurato in S0: a
+180 Hz annidati in KWin, dopo l'apprendimento, errore medio di 1 µs.
 
 ### 4.3 Disegnare tardi (late latching)
 
@@ -479,9 +487,13 @@ e di 24 al 150%, disegnata direttamente a quella misura.
   immagini attese; per la nitidezza, confronto bit per bit (§3.10); per gli
   effetti, tolleranza piccola.
 - **Matrice di prova**: scale 100/125/150/175/200%, frequenze simulate
-  60/144/240/360 Hz (il backend headless accetta una modalità con
-  frequenza: da verificare in S0 che il ritmo dei frame la rispetti), più
-  schermi con scale diverse.
+  60/75/144/165/240/360 Hz, più schermi con scale diverse.
+- **Vblank virtuale**: il backend headless di wlroots non simula uno
+  schermo fedele (timer al millisecondo, 1000000/refresh troncato: a 144 Hz
+  dà 166 fps; e "presenta" all'istante del commit). Per gli schermi
+  headless Vela usa un proprio vblank virtuale al nanosecondo (`timerfd`
+  con scadenze assolute su una griglia esatta): è su quello che si provano
+  frequenze, previsione e vblank persi. `VELA_OUTPUT_SIZE=1920x1080@144`.
 
 ## 11. Tappe
 
@@ -491,7 +503,7 @@ con i suoi test.
 
 | Tappa | Contenuto | Fatto quando |
 |---|---|---|
-| **S0** Fondamenta | device Vulkan nostro, allocatore, import dei buffer degli schermi, shader compilati, un colore a tutto schermo; ciclo di frame per schermo con tempo di presentazione previsto | schermo colorato a 60/144/240 Hz simulati, validation layer senza errori |
+| **S0** Fondamenta ✔ | device Vulkan nostro, allocatore GBM, import dei buffer degli schermi, sincronizzazione implicita (sync_file), shader compilati, scena di prova; ciclo di frame per schermo con tempo di presentazione previsto e latenza imparata; vblank virtuale per l'headless | fatto: 60–360 Hz simulati esatti (0 vblank persi, errore < 10 µs); annidato in KWin a 75 e 180 Hz reali, errore ~1 µs dopo l'apprendimento. Validation layer: da ripetere con `vulkan-validation-layers` installato |
 | **S1** Parità | scena propria con finestre, layer, popup, sottosuperfici; shm e dmabuf; damage; frame callback, presentation, enter/leave; istantanee, snap, catture portate sul nuovo renderer | tutto ciò che c'è oggi funziona, `wlr_scene` rimosso |
 | **S2** Nitidezza | fractional scale, aggancio ai pixel, filtri di qualità, più schermi con scale diverse, cursore per scala, scala predefinita dai DPI | test bit per bit verdi a ogni scala |
 | **S3** Tempo e latenza | late latching, scanout diretto, sincronizzazione esplicita, dmabuf feedback | latenza misurata, nessun frame perso a 360 Hz simulati |

@@ -2,6 +2,9 @@
 
 #include "listener.hpp"
 #include "motion.hpp"
+#include "render/frame_clock.hpp"
+#include "render/output_renderer.hpp"
+#include "render/vulkan.hpp"
 #include "wlr.hpp"
 
 #include <functional>
@@ -78,10 +81,27 @@ struct Output {
 
     Listener frame;
     Listener requestState;
+    Listener present;
     Listener destroy;
+
+    // Renderer di Vela (VELA_RENDERER=vela, tappa S0 di docs/renderer.md).
+    std::unique_ptr<render::OutputRenderer> renderer;
+    render::FrameClock clock;
 
 private:
     void onFrame();
+    void onFrameVela();
+
+    // Schermo headless con il renderer di Vela: un vblank virtuale esatto
+    // al nanosecondo, per provare qualunque frequenza (il timer del backend
+    // headless di wlroots lavora al millisecondo e non ha vblank).
+    void startVirtualVblank();
+    void onVirtualVblank();
+    int m_vblankFd = -1;
+    wl_event_source* m_vblankSource = nullptr;
+    int64_t m_nextVblankNs = 0;
+    bool m_awaitingPresent = false; // un frame è stato consegnato e aspetta il vblank
+    uint32_t m_awaitingSeq = 0;
 };
 
 // ----------------------------------------------------------------- Popup --
@@ -321,6 +341,11 @@ public:
     wlr_xdg_shell* xdgShell = nullptr;
     wlr_layer_shell_v1* layerShell = nullptr;
     wlr_foreign_toplevel_manager_v1* foreignToplevels = nullptr;
+
+    // Renderer di Vela, se attivo (VELA_RENDERER=vela): device Vulkan e
+    // allocatore dei buffer degli schermi.
+    std::unique_ptr<render::VulkanDevice> vulkan;
+    wlr_allocator* velaAllocator = nullptr;
     wlr_ext_foreign_toplevel_list_v1* extToplevels = nullptr;
     wlr_cursor* cursor = nullptr;
     wlr_xcursor_manager* cursorManager = nullptr;

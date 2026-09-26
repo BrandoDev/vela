@@ -87,26 +87,30 @@ alla volta.
 ## Compilare
 
 Servono CMake ≥ 3.22, un compilatore C++20, **wlroots 0.20**
-(la 0.19 dovrebbe andare, vedi sotto), Qt ≥ 6.5 e LayerShellQt.
+(la 0.19 dovrebbe andare, vedi sotto), Qt ≥ 6.5, LayerShellQt e, per il
+renderer di Vela, **Vulkan 1.3** con gli header, `glslc`, GBM e libdrm.
 
 **Arch / CachyOS / EndeavourOS**
 ```sh
 sudo pacman -S --needed base-devel cmake pkgconf wlroots0.20 wayland-protocols \
-    libxkbcommon pixman libinput qt6-declarative qt6-svg layer-shell-qt
+    libxkbcommon pixman libinput qt6-declarative qt6-svg layer-shell-qt \
+    vulkan-headers vulkan-icd-loader shaderc mesa libdrm
 ```
 
 **Fedora**
 ```sh
 sudo dnf install cmake gcc-c++ wlroots-devel wayland-devel wayland-protocols-devel \
     libxkbcommon-devel pixman-devel libinput-devel qt6-qtdeclarative-devel \
-    qt6-qtsvg-devel qt6-qtwayland-devel layer-shell-qt-devel
+    qt6-qtsvg-devel qt6-qtwayland-devel layer-shell-qt-devel \
+    vulkan-headers vulkan-loader-devel glslc mesa-libgbm-devel libdrm-devel
 ```
 
 **openSUSE Tumbleweed**
 ```sh
 sudo zypper install cmake gcc-c++ wlroots-devel wayland-protocols-devel \
     libxkbcommon-devel pixman-devel libinput-devel qt6-declarative-devel \
-    qt6-svg-devel qt6-waylandclient-devel layer-shell-qt6-devel
+    qt6-svg-devel qt6-waylandclient-devel layer-shell-qt6-devel \
+    vulkan-headers vulkan-devel shaderc libgbm-devel libdrm-devel
 ```
 
 I nomi dei pacchetti cambiano ogni tanto: se uno non esiste, cerca
@@ -172,7 +176,9 @@ resta alle app, che lo usano per aprire i propri menu.
 | `VELA_WALLPAPER`     | immagine di sfondo (SVG, PNG, JPEG...), riempie lo schermo tagliando i bordi |
 | `WLR_RENDERER`       | renderer: di default `vulkan` (con ripiego su OpenGL ES); `gles2` o `pixman` per forzarne un altro |
 | `VELA_DEBUG=1`       | log dettagliato di wlroots                           |
-| `VELA_OUTPUT_SIZE`   | risoluzione quando lo schermo non ne ha (finestra annidata, headless), es. `1920x1080` |
+| `VELA_OUTPUT_SIZE`   | risoluzione quando lo schermo non ne ha (finestra annidata, headless), es. `1920x1080`, con frequenza facoltativa: `1920x1080@144` |
+| `VELA_RENDERER=vela` | il nuovo renderer Vulkan di Vela ([docs/renderer.md](docs/renderer.md)); per ora mostra solo la scena di prova della tappa S0 |
+| `VELA_VULKAN_VALIDATION=1` | validation layer di Vulkan (pacchetto `vulkan-validation-layers`) |
 | `VELA_DEBUG_INPUT=1` | mouse e tastiera virtuali per `vela-input` (spento di default: permettono a qualunque programma di simulare input) |
 
 Lo snap funziona anche col mouse: trascina una finestra contro il bordo

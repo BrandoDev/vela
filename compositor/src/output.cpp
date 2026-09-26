@@ -1,5 +1,7 @@
 #include "server.hpp"
 
+#include <sys/timerfd.h>
+
 namespace vela {
 
 namespace {
@@ -47,11 +49,14 @@ Output::Output(Server& s, wlr_output* output)
         wlr_output_state_set_mode(&state, mode);
     } else if (const char* size = std::getenv("VELA_OUTPUT_SIZE")) {
         // Schermo senza modalità (finestra annidata, headless): la
-        // dimensione la scegliamo noi, es. VELA_OUTPUT_SIZE=1920x1080.
+        // dimensione la scegliamo noi, es. VELA_OUTPUT_SIZE=1920x1080, con
+        // la frequenza facoltativa per le prove: 1920x1080@144.
         int width = 0;
         int height = 0;
-        if (std::sscanf(size, "%dx%d", &width, &height) == 2 && width > 0 && height > 0) {
-            wlr_output_state_set_custom_mode(&state, width, height, 0);
+        double hz = 0.0;
+        const int fields = std::sscanf(size, "%dx%d@%lf", &width, &height, &hz);
+        if (fields >= 2 && width > 0 && height > 0) {
+            wlr_output_state_set_custom_mode(&state, width, height, fields == 3 ? int32_t(hz * 1000.0) : 0);
         }
     }
     if (const char* scale = std::getenv("VELA_SCALE")) {
@@ -72,11 +77,29 @@ Output::Output(Server& s, wlr_output* output)
     wlr_log(WLR_INFO, "Schermo %s: %dx%d @ %.2f Hz", wlr->name, wlr->width, wlr->height,
         wlr->refresh / 1000.0);
 
-    frame.connect(&wlr->events.frame, [this](void*) { onFrame(); });
+    if (server.vulkan) {
+        renderer = render::OutputRenderer::create(*server.vulkan, server.velaAllocator, wlr);
+        if (!renderer) {
+            wlr_log(WLR_ERROR, "%s: renderer di Vela non disponibile, uso quello di wlroots", wlr->name);
+        }
+    }
+    clock.setModeRefresh(wlr->refresh);
+    if (renderer && wlr_output_is_headless(wlr)) {
+        startVirtualVblank();
+    } else {
+        present.connect(&wlr->events.present, [this](void* data) {
+            auto* event = static_cast<wlr_output_event_present*>(data);
+            if (event->presented) {
+                clock.presented(event->commit_seq, render::toNs(event->when), event->refresh);
+            }
+        });
+        frame.connect(&wlr->events.frame, [this](void*) { renderer ? onFrameVela() : onFrame(); });
+    }
     requestState.connect(&wlr->events.request_state, [this](void* data) {
         // Nel backend annidato: la finestra ospite è stata ridimensionata.
         auto* event = static_cast<wlr_output_event_request_state*>(data);
         wlr_output_commit_state(wlr, event->state);
+        clock.setModeRefresh(wlr->refresh);
         arrangeLayers();
     });
     destroy.connect(&wlr->events.destroy, [this](void*) { delete this; });
@@ -105,6 +128,64 @@ Output::~Output()
     server.endSnapZone(false); // l'anteprima potrebbe essere su questo schermo
     server.outputs.remove(this);
     wlr->data = nullptr;
+    if (m_vblankSource) {
+        wl_event_source_remove(m_vblankSource);
+    }
+    if (m_vblankFd >= 0) {
+        close(m_vblankFd);
+    }
+    renderer.reset(); // prima che l'allocatore e il device spariscano
+}
+
+// ---------------------------------------------------------- vblank virtuale --
+
+void Output::startVirtualVblank()
+{
+    m_vblankFd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
+    if (m_vblankFd < 0) {
+        wlr_log_errno(WLR_ERROR, "%s: timerfd per il vblank virtuale", wlr->name);
+        return;
+    }
+    m_vblankSource = wl_event_loop_add_fd(server.loop, m_vblankFd, WL_EVENT_READABLE,
+        [](int, uint32_t, void* data) {
+            static_cast<Output*>(data)->onVirtualVblank();
+            return 0;
+        },
+        this);
+    m_nextVblankNs = render::nowNs() + clock.periodNs();
+    const itimerspec when { .it_interval = {}, .it_value = { time_t(m_nextVblankNs / 1'000'000'000), long(m_nextVblankNs % 1'000'000'000) } };
+    timerfd_settime(m_vblankFd, TFD_TIMER_ABSTIME, &when, nullptr);
+    wlr_log(WLR_INFO, "%s: vblank virtuale ogni %.3f ms", wlr->name, clock.periodNs() / 1e6);
+}
+
+void Output::onVirtualVblank()
+{
+    uint64_t expirations = 0;
+    if (read(m_vblankFd, &expirations, sizeof(expirations)) < 0) {
+        return;
+    }
+    const int64_t period = clock.periodNs();
+    const int64_t vblank = m_nextVblankNs;
+
+    // Il frame consegnato prima di questo vblank diventa luce adesso.
+    if (m_awaitingPresent) {
+        clock.presented(m_awaitingSeq, vblank, period);
+        m_awaitingPresent = false;
+    }
+
+    // Se siamo in ritardo di uno o più periodi, quei vblank sono persi.
+    int64_t next = vblank + period;
+    const int64_t now = render::nowNs();
+    if (now >= next) {
+        const int64_t lost = (now - vblank) / period;
+        clock.missed(int(lost));
+        next = vblank + (lost + 1) * period;
+    }
+    m_nextVblankNs = next;
+    const itimerspec when { .it_interval = {}, .it_value = { time_t(next / 1'000'000'000), long(next % 1'000'000'000) } };
+    timerfd_settime(m_vblankFd, TFD_TIMER_ABSTIME, &when, nullptr);
+
+    onFrameVela();
 }
 
 wlr_box Output::box() const
@@ -126,6 +207,44 @@ void Output::onFrame()
 
     wlr_scene_output_commit(sceneOutput, nullptr);
     wlr_scene_output_send_frame_done(sceneOutput, &now);
+}
+
+// Tappa S0 del renderer di Vela: la scena di prova, disegnata per l'istante
+// in cui il frame verrà mostrato. Le finestre non si vedono ancora.
+void Output::onFrameVela()
+{
+    const int64_t now = render::nowNs();
+    const int64_t presentAt = clock.predict(now);
+
+    wlr_output_state state;
+    wlr_output_state_init(&state);
+    if (renderer->render(&state, presentAt) && wlr_output_commit_state(wlr, &state)) {
+        clock.committed(wlr->commit_seq, presentAt);
+        m_awaitingPresent = true;
+        m_awaitingSeq = wlr->commit_seq;
+    }
+    wlr_output_state_finish(&state);
+
+    // Le app devono continuare a ricevere i frame callback.
+    timespec nowTs {};
+    clock_gettime(CLOCK_MONOTONIC, &nowTs);
+    wlr_scene_output_send_frame_done(sceneOutput, &nowTs);
+
+    // La scena di prova si muove sempre: un frame dopo l'altro (col vblank
+    // virtuale è il suo timer a scandirli).
+    if (!m_vblankSource) {
+        wlr_output_schedule_frame(wlr);
+    }
+
+    double fps = 0.0;
+    double errorMean = 0.0;
+    double errorMax = 0.0;
+    int missed = 0;
+    if (clock.takeStats(now, fps, errorMean, errorMax, missed)) {
+        wlr_log(WLR_INFO, "%s: %.2f fps (periodo %.3f ms, latenza %d vblank), errore di previsione "
+                          "medio %.3f ms, massimo %.3f ms, vblank persi %d",
+            wlr->name, fps, clock.periodNs() / 1e6, clock.latencyFrames(), errorMean, errorMax, missed);
+    }
 }
 
 void Output::arrangeLayers()

@@ -1,5 +1,7 @@
 #include "server.hpp"
 
+#include "render/allocator.hpp"
+
 #include <algorithm>
 #include <csignal>
 #include <sys/socket.h>
@@ -146,6 +148,17 @@ bool Server::init()
     }
 
     allocator = wlr_allocator_autocreate(backend, renderer);
+
+    // Il renderer di Vela (docs/renderer.md), per ora da attivare a mano.
+    // Solo Vulkan: se non c'è, Vela non parte, e il log dice perché.
+    if (const char* choice = std::getenv("VELA_RENDERER"); choice && std::strcmp(choice, "vela") == 0) {
+        vulkan = render::VulkanDevice::create(wlr_backend_get_drm_fd(backend));
+        if (!vulkan || !(velaAllocator = render::createGbmAllocator(vulkan->renderFd))) {
+            wlr_log(WLR_ERROR, "Renderer di Vela non disponibile");
+            return false;
+        }
+        wlr_log(WLR_INFO, "Renderer di Vela attivo (tappa S0: scena di prova)");
+    }
     if (!allocator) {
         wlr_log(WLR_ERROR, "Impossibile creare l'allocator");
         return false;
@@ -354,6 +367,10 @@ void Server::shutdown()
     wlr_allocator_destroy(allocator);
     wlr_renderer_destroy(renderer);
     wlr_backend_destroy(backend); // distrugge schermi e tastiere
+    if (velaAllocator) {
+        wlr_allocator_destroy(velaAllocator);
+    }
+    vulkan.reset(); // dopo gli schermi, che ne usano il device
     wl_display_destroy(display);
 }
 

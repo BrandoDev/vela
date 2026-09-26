@@ -42,6 +42,7 @@ extern "C" {
 #define namespace namespace_
 #include <wlr/config.h>
 #include <wlr/backend.h>
+#include <wlr/backend/headless.h>
 #include <wlr/backend/multi.h>
 #include <wlr/backend/wayland.h>
 #if WLR_HAS_X11_BACKEND
@@ -73,6 +74,11 @@ extern "C" {
 #include <wlr/types/wlr_primary_selection.h>
 #include <wlr/types/wlr_primary_selection_v1.h>
 #include <wlr/types/wlr_scene.h>
+#include <wlr/render/dmabuf.h>
+#include <wlr/render/drm_format_set.h>
+#include <wlr/render/swapchain.h>
+#include <wlr/interfaces/wlr_buffer.h>
+#include <wlr/util/addon.h>
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_single_pixel_buffer_v1.h>
