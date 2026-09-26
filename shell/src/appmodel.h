@@ -50,6 +50,8 @@ public:
     // Il file .desktop di una finestra aperta, a partire dal suo app_id
     // (es. "org.kde.konsole" -> "org.kde.konsole.desktop"). Vuoto se ignoto.
     QString findDesktopId(const QString& appId) const;
+    // L'icona di una finestra aperta, dal suo app_id.
+    Q_INVOKABLE QString iconForAppId(const QString& appId) const;
 
 signals:
     void queryChanged();

@@ -82,11 +82,13 @@ Toplevel::Toplevel(Server& s, wlr_xdg_toplevel* toplevel)
         if (handle) {
             wlr_foreign_toplevel_handle_v1_set_title(handle, xdg->title ? xdg->title : "");
         }
+        updateExtHandle();
     });
     setAppId.connect(&xdg->events.set_app_id, [this](void*) {
         if (handle) {
             wlr_foreign_toplevel_handle_v1_set_app_id(handle, xdg->app_id ? xdg->app_id : "");
         }
+        updateExtHandle();
     });
     setParent.connect(&xdg->events.set_parent, [this](void*) { updateHandleParent(); });
     newPopup.connect(&xdg->base->events.new_popup, [this](void* data) {
@@ -104,7 +106,26 @@ Toplevel::Toplevel(Server& s, wlr_xdg_toplevel* toplevel)
 Toplevel::~Toplevel()
 {
     destroyHandle();
+    captureSnapshot.reset();
+    if (captureScene) {
+        wlr_scene_node_destroy(&captureScene->tree.node); // distrugge anche captureSource
+    }
     server.forget(this);
+}
+
+wlr_ext_image_capture_source_v1* Toplevel::prepareCapture()
+{
+    if (!captureScene) {
+        captureScene = wlr_scene_create();
+        captureTree = wlr_scene_tree_create(&captureScene->tree);
+        captureSource = wlr_ext_image_capture_source_v1_create_with_scene_node(
+            &captureTree->node, server.loop, server.allocator, server.renderer);
+    }
+    // L'aspetto attuale, anche se ridotta a icona o coperta da altre finestre.
+    const wlr_box frame = frameBox();
+    captureSnapshot = std::make_unique<Snapshot>(captureTree, &tree->node, frame);
+    captureSnapshot->apply(frame.x + frame.width / 2.0, frame.y + frame.height / 2.0, 1.0, 1.0f);
+    return captureSource;
 }
 
 wlr_box Toplevel::frameBox() const
@@ -224,8 +245,27 @@ void Toplevel::onUnmap()
 
 // ---------------------------------------------------------------- taskbar --
 
+void Toplevel::updateExtHandle()
+{
+    if (!extHandle) {
+        return;
+    }
+    const wlr_ext_foreign_toplevel_handle_v1_state state {
+        .title = xdg->title ? xdg->title : "",
+        .app_id = xdg->app_id ? xdg->app_id : "",
+    };
+    wlr_ext_foreign_toplevel_handle_v1_update_state(extHandle, &state);
+}
+
 void Toplevel::createHandle()
 {
+    const wlr_ext_foreign_toplevel_handle_v1_state state {
+        .title = xdg->title ? xdg->title : "",
+        .app_id = xdg->app_id ? xdg->app_id : "",
+    };
+    extHandle = wlr_ext_foreign_toplevel_handle_v1_create(server.extToplevels, &state);
+    extHandle->data = this;
+
     handle = wlr_foreign_toplevel_handle_v1_create(server.foreignToplevels);
     handle->data = this;
     wlr_foreign_toplevel_handle_v1_set_title(handle, xdg->title ? xdg->title : "");
@@ -271,6 +311,10 @@ void Toplevel::createHandle()
 
 void Toplevel::destroyHandle()
 {
+    if (extHandle) {
+        wlr_ext_foreign_toplevel_handle_v1_destroy(extHandle);
+        extHandle = nullptr;
+    }
     if (!handle) {
         return;
     }

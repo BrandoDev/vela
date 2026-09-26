@@ -44,6 +44,11 @@ public:
 
 signals:
     void toggleStartRequested();
+    // Alt+Tab, comandato dal compositor: finestre (identificativi
+    // ext-foreign-toplevel) in ordine di uso recente e quella selezionata.
+    void switcherShown(int selected, const QStringList& windows);
+    void switcherSelected(int selected);
+    void switcherHidden();
     void startMenuOpenChanged();
 
 private:

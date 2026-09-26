@@ -17,7 +17,9 @@ qt_add_executable(vela-shell
     src/shellcontroller.h
     src/taskbarmodel.cpp
     src/taskbarmodel.h
-    src/wallpaperprovider.h)
+    src/wallpaperprovider.h
+    src/windowcapture.cpp
+    src/windowcapture.h)
 
 # Lo sfondo predefinito, dentro l'eseguibile: ":/vela/images/vela_splash.svg".
 qt_add_resources(vela-shell "images"
@@ -29,6 +31,33 @@ qt_add_resources(vela-shell "images"
 qt_generate_wayland_protocol_client_sources(vela-shell
     FILES ${PROJECT_SOURCE_DIR}/protocols/wlr-foreign-toplevel-management-unstable-v1.xml)
 
+# Anteprime delle finestre (Alt+Tab): protocolli ext-*, usati con libwayland
+# direttamente (vedi windowcapture.cpp).
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(SHELL_WAYLAND_PROTOCOLS REQUIRED wayland-protocols>=1.37)
+pkg_get_variable(SHELL_WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
+pkg_check_modules(SHELL_WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
+find_program(WAYLAND_SCANNER NAMES wayland-scanner REQUIRED)
+set(SHELL_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/protocols)
+file(MAKE_DIRECTORY ${SHELL_GENERATED_DIR})
+foreach(name
+        ext-foreign-toplevel-list/ext-foreign-toplevel-list-v1
+        ext-image-capture-source/ext-image-capture-source-v1
+        ext-image-copy-capture/ext-image-copy-capture-v1)
+    get_filename_component(base ${name} NAME)
+    set(xml ${SHELL_WAYLAND_PROTOCOLS_DIR}/staging/${name}.xml)
+    set(header ${SHELL_GENERATED_DIR}/${base}-client-protocol.h)
+    set(code ${SHELL_GENERATED_DIR}/${base}-protocol.c)
+    add_custom_command(
+        OUTPUT ${header} ${code}
+        COMMAND ${WAYLAND_SCANNER} client-header ${xml} ${header}
+        COMMAND ${WAYLAND_SCANNER} private-code ${xml} ${code}
+        DEPENDS ${xml}
+        COMMENT "Genero il client di ${base}")
+    target_sources(vela-shell PRIVATE ${header} ${code})
+endforeach()
+target_include_directories(vela-shell PRIVATE ${SHELL_GENERATED_DIR})
+
 set(VELA_QML_FILES
     qml/Theme.qml
     qml/Taskbar.qml
@@ -36,6 +65,7 @@ set(VELA_QML_FILES
     qml/StartGlyph.qml
     qml/StartMenu.qml
     qml/AppTile.qml
+    qml/Switcher.qml
     qml/Wallpaper.qml)
 
 # I file stanno in qml/ per ordine, ma nel modulo devono stare alla radice:
@@ -58,6 +88,7 @@ target_link_libraries(vela-shell PRIVATE
     Qt6::Quick
     Qt6::Svg
     Qt6::WaylandClient
+    PkgConfig::SHELL_WAYLAND_CLIENT
     Qt6::GuiPrivate # wl_surface della taskbar (vedi foreigntoplevels.cpp)
     LayerShellQt::Interface)
 

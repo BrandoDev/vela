@@ -65,8 +65,19 @@ bool ShellController::listen()
 
 void ShellController::handleCommand(const QByteArray& command)
 {
+    const QList<QByteArray> parts = command.split(' ');
     if (command == "toggle-start") {
         emit toggleStartRequested();
+    } else if (parts.first() == "switcher-show" && parts.size() >= 3) {
+        QStringList windows;
+        for (qsizetype i = 2; i < parts.size(); ++i) {
+            windows << QString::fromLatin1(parts.at(i));
+        }
+        emit switcherShown(parts.at(1).toInt(), windows);
+    } else if (parts.first() == "switcher-select" && parts.size() == 2) {
+        emit switcherSelected(parts.at(1).toInt());
+    } else if (command == "switcher-hide") {
+        emit switcherHidden();
     } else if (!command.isEmpty() && command != "ping") {
         qWarning("vela-shell: comando sconosciuto '%s'", command.constData());
     }

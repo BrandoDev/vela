@@ -16,7 +16,9 @@ Snapshot::Snapshot(wlr_scene_tree* parent, wlr_scene_node* source, wlr_box frame
         wlr_scene_node_coords(&source->parent->node, &lx, &ly);
     }
     collect(source, lx, ly);
-    wlr_scene_node_place_above(&m_tree->node, source);
+    if (source->parent == parent) {
+        wlr_scene_node_place_above(&m_tree->node, source);
+    }
     wlr_log(WLR_DEBUG, "Istantanea: %zu buffer", m_pieces.size());
 }
 

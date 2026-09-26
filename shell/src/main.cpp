@@ -10,6 +10,7 @@
 #include "shellcontroller.h"
 #include "taskbarmodel.h"
 #include "wallpaperprovider.h"
+#include "windowcapture.h"
 
 #include <LayerShellQt/Window>
 
@@ -53,6 +54,19 @@ void setupWallpaper(QQuickWindow* window)
     layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorTop) | LayerWindow::AnchorBottom
         | LayerWindow::AnchorLeft | LayerWindow::AnchorRight);
     layer->setExclusiveZone(-1); // tutto lo schermo, anche sotto la taskbar
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityNone);
+}
+
+void setupSwitcher(QQuickWindow* window)
+{
+    // A tutto schermo e trasparente: il pannello sta al centro. Non prende
+    // la tastiera, che resta al compositor (è lui a gestire Alt+Tab).
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScope(QStringLiteral("vela-switcher"));
+    layer->setLayer(LayerWindow::LayerOverlay);
+    layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorTop) | LayerWindow::AnchorBottom
+        | LayerWindow::AnchorLeft | LayerWindow::AnchorRight);
+    layer->setExclusiveZone(-1);
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityNone);
 }
 
@@ -108,24 +122,29 @@ int main(int argc, char* argv[])
 
     ForeignToplevelManager windows;
     TaskbarModel tasks(&apps, &windows);
+    WindowCapture capture;
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
     engine.addImageProvider(QStringLiteral("wallpaper"), new WallpaperProvider);
+    engine.addImageProvider(QStringLiteral("thumbnail"), new ThumbnailProvider(&capture));
     engine.rootContext()->setContextProperty(QStringLiteral("Apps"), &apps);
     engine.rootContext()->setContextProperty(QStringLiteral("Shell"), &shell);
     engine.rootContext()->setContextProperty(QStringLiteral("Tasks"), &tasks);
+    engine.rootContext()->setContextProperty(QStringLiteral("Capture"), &capture);
 
     // Le finestre QML partono invisibili: le trasformiamo in superfici
     // layer-shell PRIMA che vengano mostrate.
     engine.loadFromModule("Vela.Shell", "Wallpaper");
     engine.loadFromModule("Vela.Shell", "Taskbar");
     engine.loadFromModule("Vela.Shell", "StartMenu");
+    engine.loadFromModule("Vela.Shell", "Switcher");
 
+    QQuickWindow* switcher = findWindow(engine, "switcher");
     QQuickWindow* wallpaper = findWindow(engine, "wallpaper");
     QQuickWindow* taskbar = findWindow(engine, "taskbar");
     QQuickWindow* startMenu = findWindow(engine, "startMenu");
-    if (!wallpaper || !taskbar || !startMenu) {
+    if (!wallpaper || !taskbar || !startMenu || !switcher) {
         qCritical("vela-shell: impossibile caricare l'interfaccia QML");
         return 1;
     }
@@ -133,6 +152,7 @@ int main(int argc, char* argv[])
     setupWallpaper(wallpaper);
     setupTaskbar(taskbar, taskbar->height());
     setupStartMenu(startMenu);
+    setupSwitcher(switcher);
     wallpaper->show();
     taskbar->show();
 

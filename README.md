@@ -52,6 +52,11 @@ alla volta.
 - Snap a metà schermo con Super+frecce o trascinando ai bordi, con
   anteprima animata.
 - Menu e popup tenuti dentro lo schermo.
+- Alt+Tab come su Windows: tenendo premuto Alt compare il pannello con le
+  anteprime delle finestre dalla più recente (anche quelle ridotte a icona
+  o coperte); un Alt+Tab veloce cambia finestra senza mostrarlo.
+- Cattura di schermi e finestre con i protocolli standard ext-image-copy-capture
+  (le anteprime di Alt+Tab; in futuro la condivisione dello schermo).
 - Buffer GPU condivisi con le app (linux-dmabuf) e cursori per nome
   (cursor-shape), oltre ai protocolli che le app moderne si aspettano:
   scala frazionaria, viewporter, appunti, screencopy, presentation time.
@@ -148,7 +153,7 @@ resta alle app, che lo usano per aprire i propri menu.
 | Menu Start                       | Super               | Alt+S         |
 | Terminale                        | Super+Invio         | Alt+Invio     |
 | Chiudi finestra                  | Alt+F4              | Alt+Q         |
-| Finestra precedente              | Alt+Tab             | Alt+J         |
+| Cambia finestra (con anteprime)  | Alt+Tab, Alt+Maiusc+Tab | Alt+J, Alt+Maiusc+J |
 | Massimizza                       | Super+↑             | Alt+M         |
 | Ripristina, poi riduci a icona   | Super+↓             |               |
 | Aggancia a metà sinistra/destra  | Super+← / Super+→   | Alt+← / Alt+→ |
@@ -195,7 +200,8 @@ build/tools/vela-shot cattura.png                      # screenshot PNG
 - `vela-windows [list] | AZIONE APP_ID`: activate, minimize, restore,
   maximize, unmaximize, close.
 - `vela-input AZIONE...`: `move X Y`, `down`/`up`/`click [left|right|middle]`,
-  `key super+Left`, `type testo`, `sleep MS`, eseguite in ordine. Un
+  `key super+Left`, `keydown alt`/`keyup alt`, `type testo`, `sleep MS`,
+  eseguite in ordine. Un
   trascinamento va fatto in un solo comando: quando `vela-input` termina,
   i tasti rimasti premuti vengono rilasciati.
 
@@ -233,7 +239,8 @@ scripts/           avvio annidato e headless
   pulsante.~~ Fatto.
 - ~~Animazione di chiusura (istantanea del contenuto che si dissolve).~~
   Fatto.
-- Alt+Tab grafico con anteprime.
+- ~~Alt+Tab grafico con anteprime.~~ Fatto (anteprime fotografate
+  all'apertura; il clic sulle anteprime più avanti).
 - ~~Snap delle finestre: Super+frecce e trascinamento ai bordi, con
   anteprima.~~ Fatto (metà schermo; i quarti e i layout di Windows 11 più
   avanti).

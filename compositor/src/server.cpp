@@ -192,6 +192,23 @@ bool Server::init()
     // Elenco delle finestre per la taskbar, con attiva/riduci/chiudi.
     foreignToplevels = wlr_foreign_toplevel_manager_v1_create(display);
 
+    // Cattura di schermi e finestre (anteprime di Alt+Tab, e in futuro la
+    // condivisione dello schermo): i protocolli standard ext-*.
+    extToplevels = wlr_ext_foreign_toplevel_list_v1_create(display, 1);
+    wlr_ext_image_copy_capture_manager_v1_create(display, 1);
+    wlr_ext_output_image_capture_source_manager_v1_create(display, 1);
+    auto* windowCapture = wlr_ext_foreign_toplevel_image_capture_source_manager_v1_create(display, 1);
+    on(&windowCapture->events.new_request, [this](void* data) {
+        auto* request = static_cast<wlr_ext_foreign_toplevel_image_capture_source_manager_v1_request*>(data);
+        auto* toplevel = static_cast<Toplevel*>(request->toplevel_handle->data);
+        if (!toplevel) {
+            return;
+        }
+        if (wlr_ext_image_capture_source_v1* source = toplevel->prepareCapture()) {
+            wlr_ext_foreign_toplevel_image_capture_source_manager_v1_request_accept(request, source);
+        }
+    });
+
     layerShell = wlr_layer_shell_v1_create(display, 4);
     on(&layerShell->events.new_surface, [this](void* data) {
         LayerSurface::create(*this, static_cast<wlr_layer_surface_v1*>(data));
@@ -434,6 +451,10 @@ void Server::forget(Toplevel* toplevel)
     toplevels.remove(toplevel);
     std::erase(m_animating, toplevel);
     cancelSnapshotAnimations(toplevel);
+    // Una finestra che sparisce durante Alt+Tab: si chiude il selettore.
+    if (std::find(m_switcher.windows.begin(), m_switcher.windows.end(), toplevel) != m_switcher.windows.end()) {
+        switcherFinish(false);
+    }
     if (grabbed == toplevel) {
         endSnapZone(false);
         grabbed = nullptr;
@@ -734,15 +755,17 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
         }
         return true;
     }
-    if ((alt && sym == XKB_KEY_Tab) || (altNested && sym == XKB_KEY_j)) {
-        // Passa alla finestra usata prima di quella attuale; se non ce n'è
-        // una attiva (es. tutte ridotte a icona), riprende la più recente.
-        // Le finestre ridotte a icona si ripristinano, come su Windows.
-        if (!focusedToplevel()) {
-            focusToplevel(toplevels.empty() ? nullptr : toplevels.front());
-        } else if (toplevels.size() >= 2) {
-            focusToplevel(*std::next(toplevels.begin()));
-        }
+    // Alt+Tab (dentro KDE: Alt+J), con Maiusc all'indietro. Si sceglie
+    // finché Alt resta premuto; rilasciandolo si passa alla finestra scelta
+    // (vedi Keyboard::onKey), Esc annulla.
+    const bool tab = sym == XKB_KEY_Tab || sym == XKB_KEY_ISO_Left_Tab;
+    const bool nestedTab = sym == XKB_KEY_j || sym == XKB_KEY_J;
+    if ((alt && tab) || (altNested && nestedTab)) {
+        switcherStep(shift || sym == XKB_KEY_ISO_Left_Tab ? -1 : 1);
+        return true;
+    }
+    if (m_switcher.active && sym == XKB_KEY_Escape) {
+        switcherFinish(false);
         return true;
     }
     if ((super && sym == XKB_KEY_Up) || (altNested && sym == XKB_KEY_m)) {
@@ -778,6 +801,71 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
         return true;
     }
     return false;
+}
+
+// --------------------------------------------------------------- Alt+Tab --
+
+void Server::switcherStep(int direction)
+{
+    if (m_switcher.active) {
+        const size_t count = m_switcher.windows.size();
+        m_switcher.selected = (m_switcher.selected + count + direction) % count;
+        sendSwitcher("select");
+        return;
+    }
+
+    // Tutte le finestre, dalla più recente; le ridotte a icona stanno già
+    // in fondo alla lista e si ripristinano se scelte.
+    m_switcher.windows.clear();
+    for (Toplevel* toplevel : toplevels) {
+        if (toplevel->mapped && toplevel->extHandle) {
+            m_switcher.windows.push_back(toplevel);
+        }
+    }
+    const size_t count = m_switcher.windows.size();
+    if (count == 0) {
+        return;
+    }
+    m_switcher.active = true;
+    // Si parte dalla finestra usata prima di quella attiva (o dalla più
+    // recente, se nessuna è attiva).
+    const bool frontActive = focusedToplevel() == m_switcher.windows.front();
+    if (direction > 0) {
+        m_switcher.selected = frontActive ? 1 % count : 0;
+    } else {
+        m_switcher.selected = count - 1;
+    }
+    sendSwitcher("show");
+}
+
+void Server::switcherFinish(bool activate)
+{
+    if (!m_switcher.active) {
+        return;
+    }
+    m_switcher.active = false;
+    Toplevel* chosen = activate && m_switcher.selected < m_switcher.windows.size()
+        ? m_switcher.windows[m_switcher.selected]
+        : nullptr;
+    m_switcher.windows.clear();
+    sendShellCommand("switcher-hide");
+    if (chosen) {
+        focusToplevel(chosen);
+    }
+}
+
+// "switcher-show N id1 id2..." oppure "switcher-select N": la shell trova
+// le finestre per identificativo (ext-foreign-toplevel-list).
+void Server::sendSwitcher(const char* command)
+{
+    std::string line = std::string("switcher-") + command + " " + std::to_string(m_switcher.selected);
+    if (std::strcmp(command, "show") == 0) {
+        for (Toplevel* toplevel : m_switcher.windows) {
+            line += " ";
+            line += toplevel->extHandle->identifier;
+        }
+    }
+    sendShellCommand(line);
 }
 
 void Server::spawn(const std::string& command)

@@ -354,6 +354,13 @@ QString AppModel::findDesktopId(const QString& appId) const
     return {};
 }
 
+QString AppModel::iconForAppId(const QString& appId) const
+{
+    const QString desktopId = findDesktopId(appId);
+    const QString icon = desktopId.isEmpty() ? QString() : entry(desktopId).value(QStringLiteral("iconName")).toString();
+    return icon.isEmpty() ? appId : icon; // spesso il tema ha un'icona col nome dell'app_id
+}
+
 bool AppModel::launchEntry(const Entry& entry) const
 {
     QString command = entry.exec;

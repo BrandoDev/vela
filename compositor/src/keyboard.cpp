@@ -9,6 +9,11 @@ bool isSuper(xkb_keysym_t sym)
     return sym == XKB_KEY_Super_L || sym == XKB_KEY_Super_R;
 }
 
+bool isAlt(xkb_keysym_t sym)
+{
+    return sym == XKB_KEY_Alt_L || sym == XKB_KEY_Alt_R || sym == XKB_KEY_Meta_L || sym == XKB_KEY_Meta_R;
+}
+
 } // namespace
 
 Keyboard::Keyboard(Server& s, wlr_keyboard* keyboard)
@@ -79,6 +84,10 @@ void Keyboard::onKey(wlr_keyboard_key_event* event)
             if (isSuper(syms[i]) && server.superTap) {
                 server.superTap = false;
                 server.sendShellCommand("toggle-start");
+            }
+            // Alt rilasciato durante Alt+Tab: si passa alla finestra scelta.
+            if (isAlt(syms[i]) && server.switcherActive()) {
+                server.switcherFinish(true);
             }
         }
     }

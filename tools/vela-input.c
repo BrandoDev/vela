@@ -6,6 +6,7 @@
 //   move X Y                 porta il cursore in (X, Y), coordinate globali
 //   down|up|click [TASTO]    tasto del mouse: left (predefinito), right, middle
 //   key COMBINAZIONE         es. super+Left, alt+F4, Return, super (da solo)
+//   keydown|keyup TASTO      tiene premuto / rilascia un tasto (es. alt per Alt+Tab)
 //   type TESTO               scrive del testo (layout us)
 //   sleep MS                 aspetta
 //
@@ -221,6 +222,20 @@ static xkb_keysym_t keysymFor(const char* name)
     return sym;
 }
 
+// Un tasto solo, premuto o rilasciato.
+static int pressKey(const char* name, int pressed)
+{
+    const xkb_keysym_t sym = keysymFor(name);
+    int shift = 0;
+    const int code = sym == XKB_KEY_NoSymbol ? -1 : keycodeFor(sym, &shift);
+    if (code < 0) {
+        fprintf(stderr, "vela-input: tasto sconosciuto '%s'\n", name);
+        return 0;
+    }
+    sendKey(code, pressed);
+    return 1;
+}
+
 // "super+shift+Left": preme tutto in ordine e rilascia al contrario.
 static int pressCombo(const char* combo)
 {
@@ -279,7 +294,7 @@ static void usage(const char* program)
     fprintf(stderr,
         "Uso: %s AZIONE [AZIONE...]\n"
         "  move X Y | down [left|right|middle] | up [...] | click [...]\n"
-        "  key COMBINAZIONE (es. super+Left) | type TESTO | sleep MS\n",
+        "  key COMBINAZIONE (es. super+Left) | keydown|keyup TASTO | type TESTO | sleep MS\n",
         program);
 }
 
@@ -348,6 +363,9 @@ int main(int argc, char** argv)
             }
         } else if (!strcmp(action, "key") && arg1) {
             ok = pressCombo(arg1);
+            ++i;
+        } else if ((!strcmp(action, "keydown") || !strcmp(action, "keyup")) && arg1) {
+            ok = pressKey(arg1, !strcmp(action, "keydown"));
             ++i;
         } else if (!strcmp(action, "type") && arg1) {
             ok = typeText(arg1);

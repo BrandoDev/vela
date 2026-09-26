@@ -148,6 +148,19 @@ struct Toplevel : SceneOwner {
     // Come la taskbar vede e comanda questa finestra (foreign-toplevel).
     // Esiste solo mentre la finestra è mappata.
     wlr_foreign_toplevel_handle_v1* handle = nullptr;
+    // La stessa finestra nel protocollo ext-foreign-toplevel-list: ha un
+    // identificativo univoco e serve per catturarne l'immagine (Alt+Tab).
+    wlr_ext_foreign_toplevel_handle_v1* extHandle = nullptr;
+
+    // Per catturarne l'immagine: una scena tutta sua, con dentro solo
+    // un'istantanea della finestra aggiornata a ogni richiesta. La sorgente
+    // di wlroots disegna tutto ciò che la scena ha in quella zona: nella
+    // scena principale comparirebbero anche le altre finestre.
+    wlr_scene* captureScene = nullptr;
+    wlr_scene_tree* captureTree = nullptr;
+    wlr_ext_image_capture_source_v1* captureSource = nullptr; // vive quanto captureTree
+    std::unique_ptr<Snapshot> captureSnapshot;
+    wlr_ext_image_capture_source_v1* prepareCapture();
 
     Listener map;
     Listener unmap;
@@ -177,6 +190,7 @@ struct Toplevel : SceneOwner {
 private:
     void createHandle();
     void destroyHandle();
+    void updateExtHandle();
     void updateHandleParent();
     void onMap();
     void onUnmap();
@@ -282,6 +296,12 @@ public:
     bool animateSnapshot(Toplevel* toplevel, SnapshotKind kind); // false se non parte
     void cancelSnapshotAnimations(Toplevel* toplevel);
 
+    // Alt+Tab: il compositor decide l'ordine e la selezione, la shell
+    // disegna il pannello con le anteprime.
+    void switcherStep(int direction);
+    void switcherFinish(bool activate);
+    bool switcherActive() const { return m_switcher.active; }
+
     // Tastiera
     bool handleBinding(uint32_t modifiers, xkb_keysym_t sym);
     void spawn(const std::string& command);
@@ -301,6 +321,7 @@ public:
     wlr_xdg_shell* xdgShell = nullptr;
     wlr_layer_shell_v1* layerShell = nullptr;
     wlr_foreign_toplevel_manager_v1* foreignToplevels = nullptr;
+    wlr_ext_foreign_toplevel_list_v1* extToplevels = nullptr;
     wlr_cursor* cursor = nullptr;
     wlr_xcursor_manager* cursorManager = nullptr;
     wlr_seat* seat = nullptr;
@@ -371,6 +392,13 @@ private:
         Tween tween;
     } m_snapPreview;
     void tickSnapPreview(double nowMs);
+
+    struct {
+        bool active = false;
+        std::vector<Toplevel*> windows; // in ordine di uso recente
+        size_t selected = 0;
+    } m_switcher;
+    void sendSwitcher(const char* command);
 
     struct {
         std::string command;
