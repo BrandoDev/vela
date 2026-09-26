@@ -1,0 +1,76 @@
+#pragma once
+
+// wlroots è una libreria C e i suoi header non sono pensati per il C++:
+// usano `static` dentro le dimensioni degli array nei parametri
+// (`const float color[static 4]`) e il protocollo layer-shell ha un campo
+// chiamato `namespace`. Qui li includiamo tutti in un unico posto, con gli
+// stessi accorgimenti usati da Wayfire (compositor C++ su wlroots 0.20).
+//
+// Regola: nel resto del progetto si include SOLO questo file, mai
+// direttamente <wlr/...>.
+
+// Header di sistema e C++ inclusi PRIMA delle macro, così le #define
+// qui sotto non li toccano (le include guard impediscono una seconda
+// espansione).
+#include <cerrno>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
+#include <fcntl.h>
+#include <limits.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#include <pixman.h>
+#include <wayland-server.h>
+#include <xkbcommon/xkbcommon.h>
+
+extern "C" {
+// Valgono per TUTTI gli header wlroots: se uno di loro includesse
+// indirettamente wlr_layer_shell_v1.h, il campo `namespace` sarebbe già
+// coperto.
+#define static
+#define namespace namespace_
+#include <wlr/backend.h>
+#include <wlr/render/allocator.h>
+#include <wlr/render/wlr_renderer.h>
+#include <wlr/types/wlr_buffer.h>
+#include <wlr/types/wlr_compositor.h>
+#include <wlr/types/wlr_cursor.h>
+#include <wlr/types/wlr_cursor_shape_v1.h>
+#include <wlr/types/wlr_data_control_v1.h>
+#include <wlr/types/wlr_data_device.h>
+#include <wlr/types/wlr_fractional_scale_v1.h>
+#include <wlr/types/wlr_input_device.h>
+#include <wlr/types/wlr_keyboard.h>
+#include <wlr/types/wlr_linux_dmabuf_v1.h>
+#include <wlr/types/wlr_output.h>
+#include <wlr/types/wlr_output_layout.h>
+#include <wlr/types/wlr_pointer.h>
+#include <wlr/types/wlr_presentation_time.h>
+#include <wlr/types/wlr_primary_selection.h>
+#include <wlr/types/wlr_primary_selection_v1.h>
+#include <wlr/types/wlr_scene.h>
+#include <wlr/types/wlr_screencopy_v1.h>
+#include <wlr/types/wlr_seat.h>
+#include <wlr/types/wlr_single_pixel_buffer_v1.h>
+#include <wlr/types/wlr_subcompositor.h>
+#include <wlr/types/wlr_viewporter.h>
+#include <wlr/types/wlr_xcursor_manager.h>
+#include <wlr/types/wlr_xdg_output_v1.h>
+#include <wlr/types/wlr_xdg_shell.h>
+#include <wlr/util/box.h>
+#include <wlr/util/edges.h>
+#include <wlr/util/log.h>
+#include <wlr/types/wlr_layer_shell_v1.h>
+
+#undef namespace
+#undef static
+}
