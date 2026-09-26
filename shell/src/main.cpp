@@ -5,8 +5,10 @@
 // riserva spazio sullo schermo.
 
 #include "appmodel.h"
+#include "foreigntoplevels.h"
 #include "iconprovider.h"
 #include "shellcontroller.h"
+#include "taskbarmodel.h"
 
 #include <LayerShellQt/Window>
 
@@ -48,9 +50,10 @@ void setupStartMenu(QQuickWindow* window)
     layer->setScope(QStringLiteral("vela-start-menu"));
     layer->setLayer(LayerWindow::LayerTop);
     // Ancorato solo in basso: il compositor lo centra orizzontalmente e lo
-    // mette sopra la taskbar (che ha riservato il suo spazio).
+    // mette sopra la taskbar (che ha riservato il suo spazio). Niente
+    // margine: la finestra tocca la taskbar, così il pannello che sale viene
+    // tagliato lì e sembra uscire da dietro la taskbar, come su Windows 11.
     layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorBottom));
-    layer->setMargins(QMargins(0, 0, 0, 12));
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
 }
 
@@ -91,10 +94,14 @@ int main(int argc, char* argv[])
     ShellController shell;
     shell.listen();
 
+    ForeignToplevelManager windows;
+    TaskbarModel tasks(&apps, &windows);
+
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
     engine.rootContext()->setContextProperty(QStringLiteral("Apps"), &apps);
     engine.rootContext()->setContextProperty(QStringLiteral("Shell"), &shell);
+    engine.rootContext()->setContextProperty(QStringLiteral("Tasks"), &tasks);
 
     // Le finestre QML partono invisibili: le trasformiamo in superfici
     // layer-shell PRIMA che vengano mostrate.

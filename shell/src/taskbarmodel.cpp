@@ -1,0 +1,248 @@
+#include "taskbarmodel.h"
+
+#include "appmodel.h"
+#include "foreigntoplevels.h"
+
+#include <algorithm>
+
+TaskbarModel::TaskbarModel(AppModel* apps, ForeignToplevelManager* windows, QObject* parent)
+    : QAbstractListModel(parent)
+    , m_apps(apps)
+    , m_windows(windows)
+{
+    connect(m_windows, &ForeignToplevelManager::windowsChanged, this, &TaskbarModel::rebuild);
+}
+
+void TaskbarModel::setPinnedIds(const QStringList& ids)
+{
+    if (ids == m_pinnedIds) {
+        return;
+    }
+    m_pinnedIds = ids;
+    emit pinnedIdsChanged();
+    rebuild();
+}
+
+QList<TaskbarModel::Item> TaskbarModel::buildItems()
+{
+    QList<Item> items;
+    const auto findItem = [&](const QString& key) -> Item* {
+        for (Item& item : items) {
+            if (item.key == key) {
+                return &item;
+            }
+        }
+        return nullptr;
+    };
+
+    // App fissate. Quelle non installate si saltano, e la stessa app può
+    // esistere sia come pacchetto sia come Flatpak: ne teniamo una.
+    for (const QString& id : std::as_const(m_pinnedIds)) {
+        const QVariantMap entry = m_apps->entry(id);
+        const QString name = entry.value(QStringLiteral("name")).toString();
+        if (name.isEmpty()) {
+            continue;
+        }
+        const bool duplicate = std::any_of(items.cbegin(), items.cend(),
+            [&](const Item& item) { return item.name == name; });
+        if (!duplicate) {
+            items.append({ id, id, name, entry.value(QStringLiteral("iconName")).toString(), true, {} });
+        }
+    }
+    const qsizetype pinnedCount = items.size();
+
+    // Finestre aperte, raggruppate per app. Le finestre di dialogo stanno
+    // sotto la finestra principale, non hanno un pulsante loro.
+    QList<Item> running;
+    for (ForeignToplevel* window : m_windows->windows()) {
+        if (window->parentWindow) {
+            continue;
+        }
+        const QString desktopId = m_apps->findDesktopId(window->appId);
+        const QString key = desktopId.isEmpty() ? QStringLiteral("app:") + window->appId : desktopId;
+
+        Item* item = findItem(key);
+        if (!item && !desktopId.isEmpty()) {
+            // La versione fissata della stessa app (es. Flatpak vs pacchetto).
+            const QString name = m_apps->entry(desktopId).value(QStringLiteral("name")).toString();
+            for (qsizetype i = 0; i < pinnedCount && !item; ++i) {
+                if (items[i].name == name) {
+                    item = &items[i];
+                }
+            }
+        }
+        if (!item) {
+            for (Item& other : running) {
+                if (other.key == key) {
+                    item = &other;
+                }
+            }
+        }
+        if (!item) {
+            Item fresh { key, desktopId, window->title, window->appId, false, {} };
+            if (!desktopId.isEmpty()) {
+                const QVariantMap entry = m_apps->entry(desktopId);
+                fresh.name = entry.value(QStringLiteral("name")).toString();
+                fresh.icon = entry.value(QStringLiteral("iconName")).toString();
+            }
+            running.append(fresh);
+            item = &running.last();
+        }
+        item->windows.append(window);
+    }
+
+    // Le app non fissate mantengono il posto che avevano quando sono comparse.
+    for (const Item& item : std::as_const(running)) {
+        if (!m_unpinnedOrder.contains(item.key)) {
+            m_unpinnedOrder.append(item.key);
+        }
+    }
+    m_unpinnedOrder.removeIf([&](const QString& key) {
+        return std::none_of(running.cbegin(), running.cend(), [&](const Item& item) { return item.key == key; });
+    });
+    std::sort(running.begin(), running.end(), [&](const Item& a, const Item& b) {
+        return m_unpinnedOrder.indexOf(a.key) < m_unpinnedOrder.indexOf(b.key);
+    });
+
+    items.append(running);
+    return items;
+}
+
+void TaskbarModel::rebuild()
+{
+    QList<Item> items = buildItems();
+
+    // Aggiorniamo il modello con inserimenti e rimozioni mirate: la taskbar
+    // può animare il pulsante che compare o sparisce, senza ricreare gli altri.
+    const auto keyAt = [](const QList<Item>& list, const QString& key) {
+        for (qsizetype i = 0; i < list.size(); ++i) {
+            if (list[i].key == key) {
+                return i;
+            }
+        }
+        return qsizetype(-1);
+    };
+    for (qsizetype i = m_items.size() - 1; i >= 0; --i) {
+        if (keyAt(items, m_items[i].key) < 0) {
+            beginRemoveRows({}, int(i), int(i));
+            m_items.removeAt(i);
+            endRemoveRows();
+        }
+    }
+    for (qsizetype i = 0; i < items.size(); ++i) {
+        if (i < m_items.size() && m_items[i].key == items[i].key) {
+            m_items[i] = items[i];
+            continue;
+        }
+        if (keyAt(m_items, items[i].key) > i) {
+            // Ordine cambiato (es. nuove app fissate): si riparte da capo.
+            beginResetModel();
+            m_items = std::move(items);
+            endResetModel();
+            return;
+        }
+        beginInsertRows({}, int(i), int(i));
+        m_items.insert(i, items[i]);
+        endInsertRows();
+    }
+    if (!m_items.isEmpty()) {
+        emit dataChanged(index(0), index(int(m_items.size()) - 1));
+    }
+    sendButtonRects(); // anche le finestre appena aperte devono saperlo
+}
+
+void TaskbarModel::setButtonGeometry(int row, QWindow* panel, const QRectF& rect)
+{
+    if (row < 0 || row >= m_items.size()) {
+        return;
+    }
+    m_panel = panel;
+    m_buttonRects.insert(m_items.at(row).key, rect.toAlignedRect());
+    sendButtonRects();
+}
+
+void TaskbarModel::sendButtonRects()
+{
+    for (const Item& item : std::as_const(m_items)) {
+        const auto rect = m_buttonRects.constFind(item.key);
+        if (rect == m_buttonRects.constEnd()) {
+            continue;
+        }
+        for (ForeignToplevel* window : item.windows) {
+            window->setButtonRect(m_panel, *rect);
+        }
+    }
+}
+
+int TaskbarModel::rowCount(const QModelIndex& parent) const
+{
+    return parent.isValid() ? 0 : int(m_items.size());
+}
+
+QVariant TaskbarModel::data(const QModelIndex& index, int role) const
+{
+    if (!index.isValid() || index.row() < 0 || index.row() >= m_items.size()) {
+        return {};
+    }
+    const Item& item = m_items.at(index.row());
+    switch (role) {
+    case KeyRole: return item.key;
+    case Qt::DisplayRole:
+    case NameRole: return item.name;
+    case IconRole: return item.icon;
+    case PinnedRole: return item.pinned;
+    case WindowCountRole: return int(item.windows.size());
+    case WindowActiveRole:
+        return std::any_of(item.windows.cbegin(), item.windows.cend(),
+            [](const ForeignToplevel* window) { return window->activated; });
+    default: return {};
+    }
+}
+
+QHash<int, QByteArray> TaskbarModel::roleNames() const
+{
+    return {
+        { KeyRole, "key" },
+        { NameRole, "name" },
+        { IconRole, "iconName" },
+        { PinnedRole, "pinned" },
+        { WindowCountRole, "windowCount" },
+        { WindowActiveRole, "windowActive" },
+    };
+}
+
+void TaskbarModel::activate(int row)
+{
+    if (row < 0 || row >= m_items.size()) {
+        return;
+    }
+    const Item& item = m_items.at(row);
+    if (item.windows.isEmpty()) {
+        m_apps->launchId(item.desktopId);
+        return;
+    }
+
+    const auto active = std::find_if(item.windows.cbegin(), item.windows.cend(),
+        [](const ForeignToplevel* window) { return window->activated; });
+    if (active != item.windows.cend()) {
+        if (item.windows.size() == 1) {
+            (*active)->requestMinimize();
+        } else {
+            // Più finestre della stessa app: si passa alla successiva.
+            const qsizetype next = (active - item.windows.cbegin() + 1) % item.windows.size();
+            item.windows.at(next)->requestActivate();
+        }
+        return;
+    }
+    // Altrimenti torna la finestra dell'app usata più di recente.
+    const auto recent = std::max_element(item.windows.cbegin(), item.windows.cend(),
+        [](const ForeignToplevel* a, const ForeignToplevel* b) { return a->lastActivated < b->lastActivated; });
+    (*recent)->requestActivate();
+}
+
+void TaskbarModel::launchNew(int row)
+{
+    if (row >= 0 && row < m_items.size() && !m_items.at(row).desktopId.isEmpty()) {
+        m_apps->launchId(m_items.at(row).desktopId);
+    }
+}

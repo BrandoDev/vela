@@ -6,6 +6,11 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 
+// glibc (almeno fino alla 2.44) non racchiude questo header in extern "C".
+extern "C" {
+#include <sys/pidfd.h>
+}
+
 namespace vela {
 
 namespace {
@@ -23,6 +28,53 @@ int handleTerminate(int /*signal*/, void* data)
 {
     wl_display_terminate(static_cast<wl_display*>(data));
     return 0;
+}
+
+// Eseguito nel processo figlio: non ritorna mai.
+[[noreturn]] void execCommand(const std::string& command)
+{
+    setsid();
+    // wlroots blocca alcuni segnali per gestirli nel suo loop: i processi
+    // lanciati da noi devono ripartire con una maschera pulita.
+    sigset_t set;
+    sigemptyset(&set);
+    sigprocmask(SIG_SETMASK, &set, nullptr);
+    execl("/bin/sh", "/bin/sh", "-c", command.c_str(), static_cast<char*>(nullptr));
+    _exit(127);
+}
+
+double secondsSince(const timespec& start)
+{
+    timespec now {};
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return static_cast<double>(now.tv_sec - start.tv_sec)
+        + static_cast<double>(now.tv_nsec - start.tv_nsec) / 1e9;
+}
+
+// Touchpad configurati come su Windows: tocco per cliccare, trascinamento
+// col tocco, niente tocchi accidentali mentre si scrive, scorrimento
+// "naturale". Mouse e trackpoint restano come sono.
+void configurePointer(wlr_input_device* device)
+{
+#if WLR_HAS_LIBINPUT_BACKEND
+    if (!wlr_input_device_is_libinput(device)) {
+        return; // es. backend annidato: il puntatore è del sistema ospite
+    }
+    libinput_device* handle = wlr_libinput_get_device_handle(device);
+    if (libinput_device_config_tap_get_finger_count(handle) == 0) {
+        return;
+    }
+    libinput_device_config_tap_set_enabled(handle, LIBINPUT_CONFIG_TAP_ENABLED);
+    libinput_device_config_tap_set_drag_enabled(handle, LIBINPUT_CONFIG_DRAG_ENABLED);
+    if (libinput_device_config_dwt_is_available(handle)) {
+        libinput_device_config_dwt_set_enabled(handle, LIBINPUT_CONFIG_DWT_ENABLED);
+    }
+    if (libinput_device_config_scroll_has_natural_scroll(handle)) {
+        libinput_device_config_scroll_set_natural_scroll_enabled(handle,
+            envInt("VELA_NATURAL_SCROLL", 1) != 0);
+    }
+    wlr_log(WLR_INFO, "Touchpad configurato: %s", libinput_device_get_name(handle));
+#endif
 }
 
 } // namespace
@@ -48,6 +100,17 @@ bool Server::init()
         wlr_log(WLR_ERROR, "Impossibile creare il backend");
         return false;
     }
+    wlr_multi_for_each_backend(backend,
+        [](wlr_backend* child, void* data) {
+            bool windowed = wlr_backend_is_wl(child);
+#if WLR_HAS_X11_BACKEND
+            windowed = windowed || wlr_backend_is_x11(child);
+#endif
+            if (windowed) {
+                *static_cast<bool*>(data) = true;
+            }
+        },
+        &nested);
 
     renderer = wlr_renderer_autocreate(backend);
     if (!renderer) {
@@ -106,6 +169,9 @@ bool Server::init()
     on(&xdgShell->events.new_toplevel, [this](void* data) {
         new Toplevel(*this, static_cast<wlr_xdg_toplevel*>(data));
     });
+
+    // Elenco delle finestre per la taskbar, con attiva/riduci/chiudi.
+    foreignToplevels = wlr_foreign_toplevel_manager_v1_create(display);
 
     layerShell = wlr_layer_shell_v1_create(display, 4);
     on(&layerShell->events.new_surface, [this](void* data) {
@@ -196,10 +262,17 @@ bool Server::start(const std::string& startupCommand)
     // Niente Xwayland per ora: senza questa riga un'app solo-X11 lanciata da
     // qui si aprirebbe nella sessione "ospite" (KDE) creando confusione.
     unsetenv("DISPLAY");
+    // Plasma la esporta perché le app sopravvivano a un crash di KWin. Qui
+    // non serve (Vela non si riavvia da solo) e fa danni: alla chiusura di
+    // Vela le app Qt provano a riconnettersi e vanno in crash dentro Qt.
+    unsetenv("QT_WAYLAND_RECONNECT");
 
     wlr_log(WLR_INFO, "Vela in esecuzione su WAYLAND_DISPLAY=%s", socket);
+    if (nested) {
+        wlr_log(WLR_INFO, "Modalità annidata: scorciatoie Alt attive");
+    }
     if (!startupCommand.empty()) {
-        spawn(startupCommand);
+        supervise(startupCommand);
     }
     return true;
 }
@@ -211,6 +284,9 @@ void Server::run()
 
 void Server::shutdown()
 {
+    // Stiamo chiudendo noi: la shell che se ne va non va rilanciata.
+    stopSupervising();
+
     // Chiudere i client distrugge finestre e superfici della shell, che si
     // rimuovono da sole dalle nostre liste.
     wl_display_destroy_clients(display);
@@ -218,6 +294,7 @@ void Server::shutdown()
     // wlroots controlla che nessun listener resti attaccato agli oggetti che
     // distrugge: scolleghiamo tutti quelli globali prima di procedere.
     m_listeners.clear();
+    m_snapshotAnimations.clear(); // le istantanee vivono nella scena
 
     wlr_scene_node_destroy(&scene->tree.node);
     wlr_xcursor_manager_destroy(cursorManager);
@@ -256,6 +333,10 @@ void Server::focusToplevel(Toplevel* toplevel)
     if (!toplevel || !toplevel->mapped) {
         return;
     }
+    if (toplevel->minimized) {
+        toplevel->setMinimized(false); // la riaccende e torna qui
+        return;
+    }
 
     // Porta in primo piano e in testa alla lista MRU in ogni caso.
     wlr_scene_node_raise_to_top(&toplevel->tree->node);
@@ -278,10 +359,10 @@ void Server::focusToplevel(Toplevel* toplevel)
     // Cerchiamo la finestra attiva tra le NOSTRE finestre vive: una appena
     // chiusa è già stata tolta dalla lista, e non le mandiamo nulla.
     Toplevel* previous = focusedToplevel();
-    if (previous && previous != toplevel && previous->xdg->base->initialized) {
-        wlr_xdg_toplevel_set_activated(previous->xdg, false);
+    if (previous && previous != toplevel) {
+        previous->setActivated(false);
     }
-    wlr_xdg_toplevel_set_activated(toplevel->xdg, true);
+    toplevel->setActivated(true);
     keyboardEnter(surface);
 }
 
@@ -294,7 +375,7 @@ void Server::focusLayer(LayerSurface* layer)
     }
     // Come su Windows: aprendo il menu Start la finestra attiva si "spegne".
     if (Toplevel* active = focusedToplevel()) {
-        wlr_xdg_toplevel_set_activated(active->xdg, false);
+        active->setActivated(false);
     }
     focusedLayerSurface = layer;
     keyboardEnter(layer->wlr->surface);
@@ -304,7 +385,7 @@ void Server::refocus()
 {
     focusedLayerSurface = nullptr;
     for (Toplevel* toplevel : toplevels) {
-        if (toplevel->mapped) {
+        if (toplevel->mapped && !toplevel->minimized) {
             focusToplevel(toplevel);
             return;
         }
@@ -317,6 +398,7 @@ void Server::forget(Toplevel* toplevel)
     const bool wasFocused = focusedToplevel() == toplevel;
     toplevels.remove(toplevel);
     std::erase(m_animating, toplevel);
+    cancelSnapshotAnimations(toplevel);
     if (grabbed == toplevel) {
         grabbed = nullptr;
         cursorMode = CursorMode::Passthrough;
@@ -377,7 +459,7 @@ void Server::addAnimation(Toplevel* toplevel)
 
 void Server::tickAnimations(const timespec& now)
 {
-    if (m_animating.empty()) {
+    if (m_animating.empty() && m_snapshotAnimations.empty()) {
         return;
     }
     const double nowMs = static_cast<double>(now.tv_sec) * 1000.0
@@ -389,7 +471,8 @@ void Server::tickAnimations(const timespec& now)
             std::erase(m_animating, toplevel);
         }
     }
-    if (!m_animating.empty()) {
+    tickSnapshotAnimations(nowMs);
+    if (!m_animating.empty() || !m_snapshotAnimations.empty()) {
         scheduleFrames();
     }
 }
@@ -442,6 +525,7 @@ void Server::onNewInput(wlr_input_device* device)
         new Keyboard(*this, wlr_keyboard_from_input_device(device));
         break;
     case WLR_INPUT_DEVICE_POINTER:
+        configurePointer(device);
         wlr_cursor_attach_input_device(cursor, device);
         break;
     default:
@@ -578,31 +662,38 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
     const bool super = modifiers & WLR_MODIFIER_LOGO;
     const bool shift = modifiers & WLR_MODIFIER_SHIFT;
 
-    // Le scorciatoie "Alt" esistono perché, quando Vela gira in una finestra
-    // dentro KDE, KDE si tiene per sé il tasto Super.
+    // Le varianti con Alt+lettera esistono perché, quando Vela gira in una
+    // finestra dentro KDE, KDE si tiene per sé il tasto Super. Nella sessione
+    // vera restano alle app, che le usano per aprire i propri menu.
+    const bool altNested = alt && nested;
+
     if ((alt && shift && sym == XKB_KEY_Escape)) {
         wl_display_terminate(display);
         return true;
     }
-    if ((alt || super) && sym == XKB_KEY_Return) {
+    if ((altNested || super) && sym == XKB_KEY_Return) {
         const char* terminal = std::getenv("VELA_TERMINAL");
         spawn(terminal ? terminal : "konsole || foot || kitty || alacritty || xterm");
         return true;
     }
-    if ((alt && sym == XKB_KEY_F4) || (alt && sym == XKB_KEY_q)) {
+    if ((alt && sym == XKB_KEY_F4) || (altNested && sym == XKB_KEY_q)) {
         if (Toplevel* active = focusedToplevel()) {
             wlr_xdg_toplevel_send_close(active->xdg);
         }
         return true;
     }
-    if (alt && (sym == XKB_KEY_Tab || sym == XKB_KEY_j)) {
-        // Passa alla finestra usata prima di quella attuale.
-        if (toplevels.size() >= 2) {
+    if ((alt && sym == XKB_KEY_Tab) || (altNested && sym == XKB_KEY_j)) {
+        // Passa alla finestra usata prima di quella attuale; se non ce n'è
+        // una attiva (es. tutte ridotte a icona), riprende la più recente.
+        // Le finestre ridotte a icona si ripristinano, come su Windows.
+        if (!focusedToplevel()) {
+            focusToplevel(toplevels.empty() ? nullptr : toplevels.front());
+        } else if (toplevels.size() >= 2) {
             focusToplevel(*std::next(toplevels.begin()));
         }
         return true;
     }
-    if ((super && sym == XKB_KEY_Up) || (alt && sym == XKB_KEY_m)) {
+    if ((super && sym == XKB_KEY_Up) || (altNested && sym == XKB_KEY_m)) {
         if (Toplevel* active = focusedToplevel()) {
             active->setMaximized(sym == XKB_KEY_Up ? true : !active->maximized);
         }
@@ -614,7 +705,7 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
         }
         return true;
     }
-    if (alt && sym == XKB_KEY_s) {
+    if (altNested && sym == XKB_KEY_s) {
         sendShellCommand("toggle-start");
         return true;
     }
@@ -626,21 +717,85 @@ void Server::spawn(const std::string& command)
     // Doppio fork: il figlio viene adottato da init e non resta zombie.
     const pid_t child = fork();
     if (child == 0) {
-        setsid();
-        // wlroots blocca alcuni segnali per gestirli nel suo loop: i processi
-        // lanciati da noi devono ripartire con una maschera pulita.
-        sigset_t set;
-        sigemptyset(&set);
-        sigprocmask(SIG_SETMASK, &set, nullptr);
         if (fork() == 0) {
-            execl("/bin/sh", "/bin/sh", "-c", command.c_str(), static_cast<char*>(nullptr));
-            _exit(127);
+            execCommand(command);
         }
         _exit(0);
     }
     if (child > 0) {
         waitpid(child, nullptr, 0);
     }
+}
+
+void Server::supervise(const std::string& command)
+{
+    // Fork singolo, così il processo resta nostro figlio e un pidfd nel loop
+    // di Wayland ci avvisa quando termina.
+    m_supervised.command = command;
+    const pid_t pid = fork();
+    if (pid < 0) {
+        wlr_log_errno(WLR_ERROR, "Impossibile avviare \"%s\"", command.c_str());
+        return;
+    }
+    if (pid == 0) {
+        execCommand(command);
+    }
+
+    const int pidfd = pidfd_open(pid, 0);
+    if (pidfd < 0) {
+        wlr_log_errno(WLR_ERROR, "pidfd_open: \"%s\" non verrà riavviato", command.c_str());
+        return;
+    }
+    m_supervised.pid = pid;
+    m_supervised.pidfd = pidfd;
+    clock_gettime(CLOCK_MONOTONIC, &m_supervised.startedAt);
+    m_supervised.source = wl_event_loop_add_fd(loop, pidfd, WL_EVENT_READABLE,
+        [](int, uint32_t, void* data) {
+            static_cast<Server*>(data)->onSupervisedExit();
+            return 0;
+        },
+        this);
+}
+
+void Server::onSupervisedExit()
+{
+    int status = 0;
+    waitpid(m_supervised.pid, &status, 0);
+    const std::string command = m_supervised.command;
+    const double uptime = secondsSince(m_supervised.startedAt);
+    stopSupervising();
+
+    // Uscita pulita (es. "già in esecuzione"): era voluta.
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+        wlr_log(WLR_INFO, "\"%s\" è terminato", command.c_str());
+        return;
+    }
+    const std::string reason = WIFSIGNALED(status)
+        ? std::string("segnale ") + strsignal(WTERMSIG(status))
+        : "codice " + std::to_string(WEXITSTATUS(status));
+
+    // Se si chiude di continuo appena partito, riavviarlo non serve a nulla.
+    m_supervised.quickCrashes = uptime < 5.0 ? m_supervised.quickCrashes + 1 : 0;
+    if (m_supervised.quickCrashes >= 3) {
+        wlr_log(WLR_ERROR, "\"%s\" continua a chiudersi (%s): non lo riavvio",
+            command.c_str(), reason.c_str());
+        return;
+    }
+    wlr_log(WLR_ERROR, "\"%s\" si è chiuso (%s): lo riavvio", command.c_str(), reason.c_str());
+    supervise(command);
+}
+
+void Server::stopSupervising()
+{
+    if (m_supervised.source) {
+        wl_event_source_remove(m_supervised.source);
+        m_supervised.source = nullptr;
+    }
+    if (m_supervised.pidfd >= 0) {
+        close(m_supervised.pidfd);
+        m_supervised.pidfd = -1;
+    }
+    m_supervised.pid = -1;
 }
 
 void Server::sendShellCommand(const std::string& command)

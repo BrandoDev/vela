@@ -1,4 +1,7 @@
-find_package(Qt6 6.5 REQUIRED COMPONENTS Gui Qml Quick)
+# GuiPrivate serve per un'unica API privata (la wl_surface della taskbar, vedi
+# foreigntoplevels.cpp): dopo un aggiornamento di Qt la shell va ricompilata.
+set(QT_NO_PRIVATE_MODULE_WARNING ON)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Gui GuiPrivate Qml Quick WaylandClient)
 find_package(LayerShellQt REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.5)
@@ -7,9 +10,17 @@ qt_add_executable(vela-shell
     src/main.cpp
     src/appmodel.cpp
     src/appmodel.h
+    src/foreigntoplevels.cpp
+    src/foreigntoplevels.h
     src/iconprovider.h
     src/shellcontroller.cpp
-    src/shellcontroller.h)
+    src/shellcontroller.h
+    src/taskbarmodel.cpp
+    src/taskbarmodel.h)
+
+# Elenco delle finestre aperte, pubblicato dal compositor.
+qt_generate_wayland_protocol_client_sources(vela-shell
+    FILES ${PROJECT_SOURCE_DIR}/protocols/wlr-foreign-toplevel-management-unstable-v1.xml)
 
 set(VELA_QML_FILES
     qml/Theme.qml
@@ -37,6 +48,8 @@ target_link_libraries(vela-shell PRIVATE
     Qt6::Gui
     Qt6::Qml
     Qt6::Quick
+    Qt6::WaylandClient
+    Qt6::GuiPrivate # wl_surface della taskbar (vedi foreigntoplevels.cpp)
     LayerShellQt::Interface)
 
 install(TARGETS vela-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

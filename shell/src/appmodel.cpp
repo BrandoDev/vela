@@ -15,6 +15,7 @@
 #include <QtDebug>
 
 #include <algorithm>
+#include <functional>
 #include <utility>
 
 namespace {
@@ -137,6 +138,7 @@ bool parseDesktopFile(const QString& path, const QStringList& localeKeys, AppMod
     entry.keywords = localized(QStringLiteral("Keywords"));
     entry.icon = values.value(QStringLiteral("Icon"));
     entry.exec = cleanExec(unescape(values.value(QStringLiteral("Exec"))));
+    entry.wmClass = values.value(QStringLiteral("StartupWMClass"));
     entry.terminal = isTrue("Terminal");
     return !entry.name.isEmpty() && !entry.exec.isEmpty();
 }
@@ -317,6 +319,36 @@ QVariantMap AppModel::entry(const QString& id) const
     for (const Entry& e : m_all) {
         if (e.id == id) {
             return { { QStringLiteral("name"), e.name }, { QStringLiteral("iconName"), e.icon } };
+        }
+    }
+    return {};
+}
+
+QString AppModel::findDesktopId(const QString& appId) const
+{
+    if (appId.isEmpty()) {
+        return {};
+    }
+    const auto baseId = [](const Entry& e) { return e.id.chopped(8); }; // senza ".desktop"
+    const auto program = [](const Entry& e) {
+        const QString first = e.exec.section(u' ', 0, 0);
+        return first.section(u'/', -1);
+    };
+    // Dalla regola più affidabile alla più approssimativa. Le app moderne
+    // usano come app_id il nome del proprio file .desktop.
+    const std::function<bool(const Entry&)> rules[] = {
+        [&](const Entry& e) { return baseId(e).compare(appId, Qt::CaseInsensitive) == 0; },
+        [&](const Entry& e) { return e.wmClass.compare(appId, Qt::CaseInsensitive) == 0; },
+        [&](const Entry& e) {
+            return baseId(e).section(u'.', -1).compare(appId, Qt::CaseInsensitive) == 0;
+        },
+        [&](const Entry& e) { return program(e).compare(appId, Qt::CaseInsensitive) == 0; },
+    };
+    for (const auto& matches : rules) {
+        for (const Entry& e : m_all) {
+            if (matches(e)) {
+                return e.id;
+            }
         }
     }
     return {};

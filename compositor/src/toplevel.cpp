@@ -40,11 +40,22 @@ Toplevel::Toplevel(Server& s, wlr_xdg_toplevel* toplevel)
     , tree(wlr_scene_xdg_surface_create(s.layers.windows, toplevel->base))
 {
     tree->node.data = static_cast<SceneOwner*>(this);
+    xdg->base->data = this; // per risalire alla finestra genitore
 
     wlr_surface* surface = xdg->base->surface;
     map.connect(&surface->events.map, [this](void*) { onMap(); });
     unmap.connect(&surface->events.unmap, [this](void*) { onUnmap(); });
     commit.connect(&surface->events.commit, [this](void*) { onCommit(); });
+    clientCommit.connect(&surface->events.client_commit, [this](void*) {
+        // L'app sta per togliere il contenuto con un buffer nullo (finestra
+        // nascosta): fotografiamo prima che il commit venga applicato e la
+        // scena perda il buffer.
+        const wlr_surface_state& pending = xdg->base->surface->pending;
+        if (mapped && !minimized && !m_closeAnimated
+            && (pending.committed & WLR_SURFACE_STATE_BUFFER) && !pending.buffer) {
+            m_closeAnimated = server.animateSnapshot(this, Server::SnapshotKind::Close);
+        }
+    });
     destroy.connect(&xdg->events.destroy, [this](void*) { delete this; });
 
     requestMove.connect(&xdg->events.request_move, [this](void*) {
@@ -64,6 +75,20 @@ Toplevel::Toplevel(Server& s, wlr_xdg_toplevel* toplevel)
             setFullscreen(xdg->requested.fullscreen);
         }
     });
+    requestMinimize.connect(&xdg->events.request_minimize, [this](void*) {
+        setMinimized(true);
+    });
+    setTitle.connect(&xdg->events.set_title, [this](void*) {
+        if (handle) {
+            wlr_foreign_toplevel_handle_v1_set_title(handle, xdg->title ? xdg->title : "");
+        }
+    });
+    setAppId.connect(&xdg->events.set_app_id, [this](void*) {
+        if (handle) {
+            wlr_foreign_toplevel_handle_v1_set_app_id(handle, xdg->app_id ? xdg->app_id : "");
+        }
+    });
+    setParent.connect(&xdg->events.set_parent, [this](void*) { updateHandleParent(); });
     newPopup.connect(&xdg->base->events.new_popup, [this](void* data) {
         new Popup(static_cast<wlr_xdg_popup*>(data), tree, [this] {
             // Area dello schermo espressa rispetto all'origine della finestra.
@@ -78,6 +103,7 @@ Toplevel::Toplevel(Server& s, wlr_xdg_toplevel* toplevel)
 
 Toplevel::~Toplevel()
 {
+    destroyHandle();
     server.forget(this);
 }
 
@@ -90,6 +116,17 @@ wlr_box Toplevel::frameBox() const
         .width = geometry.width,
         .height = geometry.height,
     };
+}
+
+wlr_box Toplevel::minimizeTarget() const
+{
+    if (taskbarRect.width > 0) {
+        return taskbarRect;
+    }
+    // Pulsante sconosciuto: il centro del bordo inferiore dello schermo.
+    const Output* out = output();
+    const wlr_box area = out ? out->box() : wlr_box { 0, 0, 1920, 1080 };
+    return { area.x + area.width / 2 - 24, area.y + area.height - 48, 48, 48 };
 }
 
 Output* Toplevel::output() const
@@ -108,7 +145,8 @@ void Toplevel::onCommit()
         // scelga la sua dimensione (0x0), a meno che non abbia già chiesto
         // di partire massimizzato o a schermo intero.
         wlr_xdg_toplevel_set_wm_capabilities(xdg,
-            WLR_XDG_TOPLEVEL_WM_CAPABILITIES_MAXIMIZE | WLR_XDG_TOPLEVEL_WM_CAPABILITIES_FULLSCREEN);
+            WLR_XDG_TOPLEVEL_WM_CAPABILITIES_MAXIMIZE | WLR_XDG_TOPLEVEL_WM_CAPABILITIES_FULLSCREEN
+                | WLR_XDG_TOPLEVEL_WM_CAPABILITIES_MINIMIZE);
         if (xdg->requested.fullscreen) {
             setFullscreen(true);
         } else if (xdg->requested.maximized) {
@@ -160,15 +198,112 @@ void Toplevel::onMap()
     }
 
     server.toplevels.push_front(this);
+    createHandle();
     server.focusToplevel(this);
     startOpenAnimation();
 }
 
 void Toplevel::onUnmap()
 {
+    // Chiusura: la scena ha ancora gli ultimi buffer (anche se ha già
+    // disabilitato l'albero), li fotografiamo e li facciamo sfumare. Se la
+    // finestra è stata nascosta con un buffer nullo, l'istantanea c'è già.
+    if (!minimized && !m_closeAnimated) {
+        server.animateSnapshot(this, Server::SnapshotKind::Close);
+    }
+    m_closeAnimated = false;
     mapped = false;
     m_animating = false;
+    if (minimized) {
+        minimized = false;
+        wlr_scene_node_set_enabled(&tree->node, true);
+    }
+    destroyHandle();
     server.forget(this);
+}
+
+// ---------------------------------------------------------------- taskbar --
+
+void Toplevel::createHandle()
+{
+    handle = wlr_foreign_toplevel_handle_v1_create(server.foreignToplevels);
+    handle->data = this;
+    wlr_foreign_toplevel_handle_v1_set_title(handle, xdg->title ? xdg->title : "");
+    wlr_foreign_toplevel_handle_v1_set_app_id(handle, xdg->app_id ? xdg->app_id : "");
+    wlr_foreign_toplevel_handle_v1_set_maximized(handle, maximized);
+    wlr_foreign_toplevel_handle_v1_set_fullscreen(handle, fullscreen);
+    updateHandleParent();
+
+    handleRequests.activate.connect(&handle->events.request_activate, [this](void*) {
+        server.focusToplevel(this);
+    });
+    handleRequests.close.connect(&handle->events.request_close, [this](void*) {
+        wlr_xdg_toplevel_send_close(xdg);
+    });
+    handleRequests.maximize.connect(&handle->events.request_maximize, [this](void* data) {
+        setMaximized(static_cast<wlr_foreign_toplevel_handle_v1_maximized_event*>(data)->maximized);
+    });
+    handleRequests.minimize.connect(&handle->events.request_minimize, [this](void* data) {
+        setMinimized(static_cast<wlr_foreign_toplevel_handle_v1_minimized_event*>(data)->minimized);
+    });
+    handleRequests.fullscreen.connect(&handle->events.request_fullscreen, [this](void* data) {
+        setFullscreen(static_cast<wlr_foreign_toplevel_handle_v1_fullscreen_event*>(data)->fullscreen);
+    });
+    handleRequests.rectangle.connect(&handle->events.set_rectangle, [this](void* data) {
+        // La taskbar ci dice dove sta il pulsante di questa finestra, in
+        // coordinate della sua superficie: lo portiamo in coordinate globali.
+        auto* event = static_cast<wlr_foreign_toplevel_handle_v1_set_rectangle_event*>(data);
+        taskbarRect = {};
+        if (event->width <= 0 || event->height <= 0) {
+            return;
+        }
+        for (LayerSurface* layer : server.layerSurfaces) {
+            if (layer->wlr->surface == event->surface) {
+                int lx = 0;
+                int ly = 0;
+                wlr_scene_node_coords(&layer->sceneLayer->tree->node, &lx, &ly);
+                taskbarRect = { lx + event->x, ly + event->y, event->width, event->height };
+                return;
+            }
+        }
+    });
+}
+
+void Toplevel::destroyHandle()
+{
+    if (!handle) {
+        return;
+    }
+    // wlroots verifica che nessuno ascolti più la maniglia quando la distrugge.
+    handleRequests.activate.disconnect();
+    handleRequests.close.disconnect();
+    handleRequests.maximize.disconnect();
+    handleRequests.minimize.disconnect();
+    handleRequests.fullscreen.disconnect();
+    handleRequests.rectangle.disconnect();
+    wlr_foreign_toplevel_handle_v1_destroy(handle);
+    handle = nullptr;
+}
+
+// Le finestre di dialogo dichiarano la finestra da cui dipendono: la taskbar
+// così sa di non mostrarle come app separate.
+void Toplevel::updateHandleParent()
+{
+    if (!handle) {
+        return;
+    }
+    const Toplevel* parent = xdg->parent ? static_cast<Toplevel*>(xdg->parent->base->data) : nullptr;
+    wlr_foreign_toplevel_handle_v1_set_parent(handle, parent ? parent->handle : nullptr);
+}
+
+void Toplevel::setActivated(bool on)
+{
+    if (xdg->base->initialized) {
+        wlr_xdg_toplevel_set_activated(xdg, on);
+    }
+    if (handle) {
+        wlr_foreign_toplevel_handle_v1_set_activated(handle, on);
+    }
 }
 
 // ------------------------------------------------------------ animazione --
@@ -177,6 +312,7 @@ void Toplevel::startOpenAnimation()
 {
     m_openTween = Tween(motion::windowOpenMs, &motion::decelerate);
     m_animating = true;
+    m_openFrames = 0;
     applyOpenFrame(0.0);
     server.addAnimation(this);
 }
@@ -187,7 +323,9 @@ bool Toplevel::tickOpen(double nowMs)
         return false;
     }
     applyOpenFrame(m_openTween.progress(nowMs));
+    ++m_openFrames;
     if (m_openTween.finished(nowMs)) {
+        wlr_log(WLR_DEBUG, "Animazione di apertura: %d frame", m_openFrames);
         finishOpenAnimation();
         return false;
     }
@@ -248,6 +386,9 @@ void Toplevel::setMaximized(bool on)
 
     maximized = false;
     wlr_xdg_toplevel_set_maximized(xdg, false);
+    if (handle) {
+        wlr_foreign_toplevel_handle_v1_set_maximized(handle, false);
+    }
     wlr_xdg_toplevel_set_size(xdg, restore.width, restore.height);
     if (mapped && restore.width > 0) {
         const wlr_box& geometry = xdg->base->geometry;
@@ -263,6 +404,9 @@ void Toplevel::applyMaximized()
     }
     wlr_xdg_toplevel_set_maximized(xdg, true);
     wlr_xdg_toplevel_set_size(xdg, out->usable.width, out->usable.height);
+    if (handle) {
+        wlr_foreign_toplevel_handle_v1_set_maximized(handle, true);
+    }
     keepInPlace();
 }
 
@@ -284,6 +428,9 @@ void Toplevel::setFullscreen(bool on)
         }
         fullscreen = true;
         wlr_xdg_toplevel_set_fullscreen(xdg, true);
+        if (handle) {
+            wlr_foreign_toplevel_handle_v1_set_fullscreen(handle, true);
+        }
         if (out) {
             const wlr_box area = out->box();
             wlr_xdg_toplevel_set_size(xdg, area.width, area.height);
@@ -296,6 +443,9 @@ void Toplevel::setFullscreen(bool on)
 
     fullscreen = false;
     wlr_xdg_toplevel_set_fullscreen(xdg, false);
+    if (handle) {
+        wlr_foreign_toplevel_handle_v1_set_fullscreen(handle, false);
+    }
     wlr_scene_node_reparent(&tree->node, server.layers.windows);
     if (maximized) {
         applyMaximized();
@@ -305,6 +455,54 @@ void Toplevel::setFullscreen(bool on)
             const wlr_box& geometry = xdg->base->geometry;
             wlr_scene_node_set_position(&tree->node, restore.x - geometry.x, restore.y - geometry.y);
         }
+    }
+}
+
+// ------------------------------------------------------ riduci a icona --
+
+// Come su Windows: la finestra sparisce, va in fondo all'ordine di Alt+Tab e
+// la tastiera passa alla finestra successiva. Si ripristina dalla taskbar o
+// con Alt+Tab (vedi Server::focusToplevel).
+void Toplevel::setMinimized(bool on)
+{
+    if (!mapped || on == minimized) {
+        return;
+    }
+    minimized = on;
+    if (handle) {
+        wlr_foreign_toplevel_handle_v1_set_minimized(handle, on);
+    }
+
+    if (!on) {
+        // La finestra vera ricompare a fine volo (finishRestore); intanto
+        // riceve già la tastiera.
+        server.focusToplevel(this);
+        if (!server.animateSnapshot(this, Server::SnapshotKind::Restore)) {
+            finishRestore();
+        }
+        return;
+    }
+
+    finishOpenAnimation();
+    const bool wasFocused = server.focusedToplevel() == this;
+    wlr_scene_node_set_enabled(&tree->node, false);
+    server.animateSnapshot(this, Server::SnapshotKind::Minimize);
+    if (server.grabbed == this) {
+        server.grabbed = nullptr;
+        server.cursorMode = CursorMode::Passthrough;
+    }
+    server.toplevels.remove(this);
+    server.toplevels.push_back(this);
+    if (wasFocused) {
+        setActivated(false);
+        server.refocus();
+    }
+}
+
+void Toplevel::finishRestore()
+{
+    if (mapped && !minimized) {
+        wlr_scene_node_set_enabled(&tree->node, true);
     }
 }
 

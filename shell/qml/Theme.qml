@@ -29,9 +29,10 @@ QtObject {
 
     // --- movimento ---
     readonly property int fast: 120
-    readonly property int normal: 220
-    // cubic-bezier(0.1, 0.9, 0.2, 1): parte veloce, si posa morbida
-    readonly property var decelerate: [0.1, 0.9, 0.2, 1.0, 1.0, 1.0]
+    readonly property int normal: 200
+    readonly property int slow: 250 // pannelli e finestre che entrano in scena
+    // cubic-bezier(0, 0, 0.2, 1): parte decisa, si posa morbida
+    readonly property var decelerate: [0.0, 0.0, 0.2, 1.0, 1.0, 1.0]
     // per le uscite: parte piano e se ne va veloce
     readonly property var accelerate: [0.7, 0.0, 0.84, 0.0, 1.0, 1.0]
 }

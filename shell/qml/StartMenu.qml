@@ -9,7 +9,8 @@ Window {
 
     visible: false
     width: 660
-    height: 720
+    // Su schermi bassi si accorcia: la ricerca in alto deve restare visibile.
+    height: Math.min(732, Screen.height - Theme.taskbarHeight - 12)
     color: "transparent"
 
     property bool closing: false
@@ -21,7 +22,7 @@ Window {
         grid.currentIndex = 0
         grid.positionViewAtBeginning()
         panel.opacity = 0
-        panel.y = panel.restY + 32
+        panel.y = panel.restY + panel.slide
         visible = true
         Shell.startMenuOpen = true
         openAnimation.restart()
@@ -67,7 +68,7 @@ Window {
         id: openAnimation
         NumberAnimation {
             target: panel; property: "y"; to: panel.restY
-            duration: Theme.normal + 60
+            duration: Theme.slow
             easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate
         }
         NumberAnimation {
@@ -81,13 +82,13 @@ Window {
         id: closeAnimation
         ParallelAnimation {
             NumberAnimation {
-                target: panel; property: "y"; to: panel.restY + 24
-                duration: Theme.fast + 30
+                target: panel; property: "y"; to: panel.restY + panel.slide
+                duration: Theme.normal
                 easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.accelerate
             }
             NumberAnimation {
                 target: panel; property: "opacity"; to: 0
-                duration: Theme.fast + 30
+                duration: Theme.normal
                 easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.accelerate
             }
         }
@@ -127,10 +128,13 @@ Window {
         id: panel
 
         readonly property real restY: 10
+        // Di quanto sale aprendosi. La parte che sporge sotto la finestra
+        // viene tagliata al bordo della taskbar.
+        readonly property real slide: 140
         x: 10
         y: restY
         width: root.width - 20
-        height: root.height - 20
+        height: root.height - 32 // 10 sopra, 22 sotto: 12 di stacco dalla taskbar
         radius: Theme.radiusLarge
         color: Theme.surface
         border.width: 1

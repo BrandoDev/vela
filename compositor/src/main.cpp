@@ -10,12 +10,14 @@ void printUsage(const char* program)
         "Uso: %s [-s comando]\n"
         "\n"
         "  -s comando   esegue il comando all'avvio (es. la shell: -s vela-shell)\n"
+        "               e lo riavvia se si chiude per errore\n"
         "  -h           mostra questo aiuto\n"
         "\n"
         "Variabili d'ambiente:\n"
         "  VELA_TERMINAL      terminale per Alt/Super+Invio (predefinito: konsole)\n"
         "  VELA_SCALE         scala degli schermi (es. 1.25)\n"
         "  VELA_VRR=1         attiva il refresh variabile\n"
+        "  VELA_NATURAL_SCROLL=0  scorrimento classico sul touchpad\n"
         "  VELA_DEBUG=1       log dettagliato\n"
         "  XKB_DEFAULT_LAYOUT layout della tastiera (es. it)\n",
         program);

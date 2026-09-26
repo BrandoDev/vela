@@ -28,7 +28,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <libinput.h>
 #include <pixman.h>
+#include <wayland-client-protocol.h> // usato da <wlr/backend/wayland.h>
 #include <wayland-server.h>
 #include <xkbcommon/xkbcommon.h>
 
@@ -38,7 +40,16 @@ extern "C" {
 // coperto.
 #define static
 #define namespace namespace_
+#include <wlr/config.h>
 #include <wlr/backend.h>
+#include <wlr/backend/multi.h>
+#include <wlr/backend/wayland.h>
+#if WLR_HAS_X11_BACKEND
+#include <wlr/backend/x11.h>
+#endif
+#if WLR_HAS_LIBINPUT_BACKEND
+#include <wlr/backend/libinput.h>
+#endif
 #include <wlr/render/allocator.h>
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/types/wlr_buffer.h>
@@ -47,6 +58,7 @@ extern "C" {
 #include <wlr/types/wlr_cursor_shape_v1.h>
 #include <wlr/types/wlr_data_control_v1.h>
 #include <wlr/types/wlr_data_device.h>
+#include <wlr/types/wlr_foreign_toplevel_management_v1.h>
 #include <wlr/types/wlr_fractional_scale_v1.h>
 #include <wlr/types/wlr_input_device.h>
 #include <wlr/types/wlr_keyboard.h>

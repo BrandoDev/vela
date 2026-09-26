@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <list>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,41 @@ struct SceneOwner {
     }
     virtual ~SceneOwner() = default;
     SceneKind kind;
+};
+
+// -------------------------------------------------------------- Snapshot --
+
+// L'aspetto di una finestra "congelato": copie dei suoi buffer, che restano
+// valide anche se l'app li cambia o si chiude. Le animazioni di chiusura e di
+// riduzione a icona muovono e scalano l'istantanea, non la finestra vera
+// (che è fatta di superfici annidate e non si può scalare).
+class Snapshot {
+public:
+    // Copia i buffer sotto `source`, anche se è disabilitato (succede alla
+    // chiusura e con la finestra ridotta a icona). `frame` è il riquadro della
+    // finestra in coordinate globali: le trasformazioni si fanno sul suo centro.
+    Snapshot(wlr_scene_tree* parent, wlr_scene_node* source, wlr_box frame);
+    ~Snapshot();
+    Snapshot(const Snapshot&) = delete;
+    Snapshot& operator=(const Snapshot&) = delete;
+
+    // Disegna l'istantanea col centro del riquadro in (cx, cy).
+    void apply(double cx, double cy, double scale, float opacity);
+
+    wlr_scene_tree* tree() const { return m_tree; }
+    const wlr_box& frame() const { return m_frame; }
+
+private:
+    struct Piece {
+        wlr_scene_buffer* buffer;
+        double x, y; // rispetto al centro del riquadro
+        int width, height;
+    };
+    void collect(wlr_scene_node* node, int lx, int ly);
+
+    wlr_scene_tree* m_tree;
+    wlr_box m_frame;
+    std::vector<Piece> m_pieces;
 };
 
 // ---------------------------------------------------------------- Output --
@@ -78,10 +114,14 @@ struct Toplevel : SceneOwner {
 
     Output* output() const; // lo schermo su cui sta il centro della finestra
     wlr_box frameBox() const; // geometria visibile, coordinate globali
+    wlr_box minimizeTarget() const; // dove "va" quando si riduce a icona
 
     void setMaximized(bool on);
     void setFullscreen(bool on);
+    void setMinimized(bool on);
     void applyMaximized();
+    void setActivated(bool on); // per l'app e per la taskbar
+    void finishRestore(); // fine dell'animazione di ripristino
 
     // Animazione di apertura. tickOpen restituisce false quando ha finito.
     void startOpenAnimation();
@@ -95,19 +135,43 @@ struct Toplevel : SceneOwner {
     bool mapped = false;
     bool maximized = false;
     bool fullscreen = false;
+    bool minimized = false;
     wlr_box restore {}; // posizione e dimensione prima di massimizzare
+    wlr_box taskbarRect {}; // il suo pulsante nella taskbar (globali), se noto
+
+    // Come la taskbar vede e comanda questa finestra (foreign-toplevel).
+    // Esiste solo mentre la finestra è mappata.
+    wlr_foreign_toplevel_handle_v1* handle = nullptr;
 
     Listener map;
     Listener unmap;
     Listener commit;
+    Listener clientCommit;
     Listener destroy;
     Listener requestMove;
     Listener requestResize;
     Listener requestMaximize;
     Listener requestFullscreen;
+    Listener requestMinimize;
+    Listener setTitle;
+    Listener setAppId;
+    Listener setParent;
     Listener newPopup;
 
+    // Richieste che arrivano dalla taskbar attraverso la maniglia.
+    struct {
+        Listener activate;
+        Listener close;
+        Listener maximize;
+        Listener minimize;
+        Listener fullscreen;
+        Listener rectangle;
+    } handleRequests;
+
 private:
+    void createHandle();
+    void destroyHandle();
+    void updateHandleParent();
     void onMap();
     void onUnmap();
     void onCommit();
@@ -116,7 +180,9 @@ private:
     void setOpacity(float opacity);
 
     bool m_animating = false;
+    bool m_closeAnimated = false; // istantanea di chiusura già scattata
     Tween m_openTween;
+    int m_openFrames = 0;
     int m_targetX = 0;
     int m_targetY = 0;
 };
@@ -197,6 +263,11 @@ public:
     void tickAnimations(const timespec& now);
     void scheduleFrames();
 
+    // Animazioni su un'istantanea della finestra
+    enum class SnapshotKind { Close, Minimize, Restore };
+    bool animateSnapshot(Toplevel* toplevel, SnapshotKind kind); // false se non parte
+    void cancelSnapshotAnimations(Toplevel* toplevel);
+
     // Tastiera
     bool handleBinding(uint32_t modifiers, xkb_keysym_t sym);
     void spawn(const std::string& command);
@@ -215,10 +286,12 @@ public:
     wlr_scene_output_layout* sceneLayout = nullptr;
     wlr_xdg_shell* xdgShell = nullptr;
     wlr_layer_shell_v1* layerShell = nullptr;
+    wlr_foreign_toplevel_manager_v1* foreignToplevels = nullptr;
     wlr_cursor* cursor = nullptr;
     wlr_xcursor_manager* cursorManager = nullptr;
     wlr_seat* seat = nullptr;
     std::string socketName;
+    bool nested = false; // dentro un'altra sessione (finestra Wayland o X11)
 
     // Strati della scena, dal basso verso l'alto
     struct {
@@ -254,8 +327,35 @@ private:
     void onCursorButton(wlr_pointer_button_event* event);
     void keyboardEnter(wlr_surface* surface);
 
+    // Il comando di avvio (la shell) viene rilanciato se si chiude male.
+    void tickSnapshotAnimations(double nowMs);
+
+    void supervise(const std::string& command);
+    void onSupervisedExit();
+    void stopSupervising();
+
     std::list<Listener> m_listeners; // listener globali, scollegati in shutdown()
     std::vector<Toplevel*> m_animating;
+
+    struct SnapshotAnimation {
+        SnapshotKind kind;
+        Toplevel* owner; // la finestra, finché esiste (non per la chiusura)
+        std::unique_ptr<Snapshot> snapshot;
+        Tween tween;
+        double fromX, fromY, toX, toY; // centro
+        double fromScale, toScale;
+        float fromOpacity, toOpacity;
+    };
+    std::list<SnapshotAnimation> m_snapshotAnimations;
+
+    struct {
+        std::string command;
+        pid_t pid = -1;
+        int pidfd = -1;
+        wl_event_source* source = nullptr;
+        timespec startedAt {};
+        int quickCrashes = 0; // chiusure anomale di fila poco dopo l'avvio
+    } m_supervised;
 };
 
 } // namespace vela

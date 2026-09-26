@@ -28,6 +28,7 @@ public:
         QString keywords;
         QString icon;
         QString exec;
+        QString wmClass; // StartupWMClass: l'app_id delle sue finestre, se diverso dall'id
         bool terminal = false;
     };
 
@@ -46,6 +47,9 @@ public:
     Q_INVOKABLE bool launchId(const QString& id);
     // Dati di una singola app per id (per le icone fissate sulla taskbar).
     Q_INVOKABLE QVariantMap entry(const QString& id) const;
+    // Il file .desktop di una finestra aperta, a partire dal suo app_id
+    // (es. "org.kde.konsole" -> "org.kde.konsole.desktop"). Vuoto se ignoto.
+    QString findDesktopId(const QString& appId) const;
 
 signals:
     void queryChanged();

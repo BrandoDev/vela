@@ -110,13 +110,26 @@ private:
 
 namespace motion {
 
-// Decelerazione morbida: parte veloce e si posa dolcemente. È la curva che
-// dà la sensazione "moderna"; conta più della durata.
-inline constexpr CubicBezier decelerate { 0.1, 0.9, 0.2, 1.0 };
+// Decelerazione: parte decisa e si posa dolcemente. È la curva che dà la
+// sensazione "moderna"; conta più della durata.
+// Attenzione alle curve più estreme come (0.1, 0.9, 0.2, 1): a 180 Hz fanno
+// metà del movimento nei primi 3 frame e l'animazione non si vede più.
+inline constexpr CubicBezier decelerate { 0.0, 0.0, 0.2, 1.0 };
 
-// Apertura finestra: dissolvenza + risalita di qualche pixel.
-inline constexpr double windowOpenMs = 220.0;
-inline constexpr int windowOpenRisePx = 18;
+// Apertura finestra: dissolvenza + risalita. Stessa durata di Theme.slow.
+inline constexpr double windowOpenMs = 250.0;
+inline constexpr int windowOpenRisePx = 36;
+
+// Chiusura: la finestra si ritrae un poco e sparisce. Anche qui la curva di
+// decelerazione: con una che parte piano la finestra sembrerebbe ignorare il
+// clic per metà del tempo.
+inline constexpr double windowCloseMs = 180.0;
+inline constexpr double windowCloseScale = 0.94;
+
+// Riduzione a icona e ripristino: la finestra vola verso il suo pulsante
+// nella taskbar (e ritorno), rimpicciolendo e sfumando.
+inline constexpr double windowMinimizeMs = 250.0;
+inline constexpr double windowMinimizeScale = 0.3;
 
 } // namespace motion
 

@@ -30,30 +30,47 @@ alla volta.
 - I due parlano con i protocolli Wayland standard, più un piccolo socket per
   i comandi (es. il tasto Super apre il menu Start).
 - Motion design in un posto solo: `compositor/src/motion.hpp` e
-  `shell/qml/Theme.qml` usano la stessa curva, cubic-bezier(0.1, 0.9, 0.2, 1).
+  `shell/qml/Theme.qml` usano la stessa curva, cubic-bezier(0, 0, 0.2, 1).
 
 ### Cosa c'è già
 
 **Compositor**
 - Sceglie da solo la **frequenza più alta** del monitor alla risoluzione
   nativa. Molti monitor a 180 Hz dichiarano 60 Hz come "preferita".
-- Finestre che si aprono **sfumando e salendo di qualche pixel** (220 ms).
+- Finestre che si aprono **sfumando e salendo di qualche pixel** (250 ms)
+  e si chiudono sfumando e ritraendosi un poco (180 ms).
+- Riduzione a icona animata: la finestra vola verso il suo pulsante nella
+  taskbar rimpicciolendo, e da lì ritorna quando la ripristini.
 - Spostamento e ridimensionamento. Trascinando una finestra massimizzata
   questa si ripristina sotto il cursore, come su Windows.
-- Massimizza e schermo intero. Le finestre a schermo intero stanno sopra la
-  taskbar e beneficiano del direct scanout.
+- Massimizza, riduci a icona e schermo intero. Le finestre a schermo intero
+  stanno sopra la taskbar e beneficiano del direct scanout. Alt+Tab
+  ripristina anche le finestre ridotte a icona, come su Windows.
+- Pubblica l'elenco delle finestre aperte (protocollo foreign-toplevel):
+  lo usa la taskbar, ma funziona anche con strumenti esterni.
 - Menu e popup tenuti dentro lo schermo.
 - Buffer GPU condivisi con le app (linux-dmabuf) e cursori per nome
   (cursor-shape), oltre ai protocolli che le app moderne si aspettano:
   scala frazionaria, viewporter, appunti, screencopy, presentation time.
 - Il tasto Super premuto da solo apre il menu Start.
+- Touchpad come su Windows: tocco per cliccare, trascinamento col tocco,
+  niente tocchi accidentali mentre scrivi, scorrimento naturale.
+- Se la shell va in crash il compositor la rilancia (ma si arrende se
+  continua a chiudersi appena avviata).
 
 **Shell**
-- Taskbar in stile Windows 11: pulsante Start e app fissate al centro,
-  orologio a destra, effetti di hover e pressione animati.
+- Taskbar in stile Windows 11: pulsante Start, app fissate e app aperte al
+  centro, orologio a destra, effetti di hover e pressione animati.
+  - Le finestre della stessa app stanno sotto un solo pulsante; sotto
+    l'icona un trattino grigio se l'app è aperta, blu se è quella attiva.
+  - Clic: avvia l'app, oppure porta davanti la sua finestra, oppure (se è
+    già attiva) la riduce a icona. Con più finestre, il clic passa alla
+    successiva. Clic centrale: una nuova finestra.
+  - I pulsanti delle app che si aprono entrano con un'animazione e la fila
+    scivola al nuovo centro.
 - Menu Start con ricerca istantanea tra le app installate (legge i normali
   file `.desktop`, con i nomi in italiano), navigazione da tastiera e
-  animazioni di apertura e chiusura.
+  animazioni di apertura e chiusura: il pannello sale da dietro la taskbar.
 - Si chiude cliccando fuori o con Esc.
 
 ## Compilare
@@ -64,19 +81,21 @@ Servono CMake ≥ 3.22, un compilatore C++20, **wlroots 0.20**
 **Arch / CachyOS / EndeavourOS**
 ```sh
 sudo pacman -S --needed base-devel cmake pkgconf wlroots0.20 wayland-protocols \
-    libxkbcommon pixman qt6-declarative layer-shell-qt
+    libxkbcommon pixman libinput qt6-declarative layer-shell-qt
 ```
 
 **Fedora**
 ```sh
 sudo dnf install cmake gcc-c++ wlroots-devel wayland-devel wayland-protocols-devel \
-    libxkbcommon-devel pixman-devel qt6-qtdeclarative-devel layer-shell-qt-devel
+    libxkbcommon-devel pixman-devel libinput-devel qt6-qtdeclarative-devel \
+    qt6-qtwayland-devel layer-shell-qt-devel
 ```
 
 **openSUSE Tumbleweed**
 ```sh
 sudo zypper install cmake gcc-c++ wlroots-devel wayland-protocols-devel \
-    libxkbcommon-devel pixman-devel qt6-declarative-devel layer-shell-qt6-devel
+    libxkbcommon-devel pixman-devel libinput-devel qt6-declarative-devel \
+    qt6-waylandclient-devel layer-shell-qt6-devel
 ```
 
 I nomi dei pacchetti cambiano ogni tanto: se uno non esiste, cerca
@@ -114,7 +133,9 @@ Le app che avvii da lì (menu Start, `Alt+Invio`) si aprono dentro Vela.
 ### Scorciatoie
 
 Quando Vela gira in una finestra, KDE si tiene il tasto Super: per questo
-ogni comando ha anche una versione con Alt.
+ogni comando ha anche una versione con Alt. Le varianti Alt+lettera sono
+attive **solo** dentro un'altra sessione: nella sessione vera Alt+lettera
+resta alle app, che lo usano per aprire i propri menu.
 
 | Azione                           | Sessione vera       | Dentro KDE    |
 |----------------------------------|---------------------|---------------|
@@ -133,6 +154,7 @@ ogni comando ha anche una versione con Alt.
 | `VELA_TERMINAL`      | terminale da usare (predefinito: konsole)            |
 | `VELA_SCALE`         | scala dello schermo, es. `1.25`                      |
 | `VELA_VRR=1`         | attiva il refresh variabile (spento di default)      |
+| `VELA_NATURAL_SCROLL=0` | scorrimento classico sul touchpad (predef. naturale, come Windows) |
 | `VELA_ICON_THEME`    | tema di icone se Qt non lo trova (predef. breeze-dark) |
 | `VELA_DEBUG=1`       | log dettagliato di wlroots                           |
 
@@ -145,22 +167,26 @@ compositor/src/
   motion.hpp       curve e durate delle animazioni
   server.*         avvio, focus, puntatore, scorciatoie, lancio processi
   output.cpp       schermi, scelta della frequenza, frame, spazio dei pannelli
-  toplevel.cpp     finestre, popup, animazione di apertura, massimizza
+  toplevel.cpp     finestre, popup, animazione di apertura, massimizza,
+                   riduci a icona, maniglie per la taskbar
+  snapshot.cpp     istantanee delle finestre e animazioni di chiusura/riduzione
   layer.cpp        superfici della shell (layer-shell)
   keyboard.cpp     tastiera e tasto Super
 shell/
-  src/             modello delle app, icone, socket dei comandi
+  src/             app installate, finestre aperte, taskbar, icone, socket
   qml/             Theme, Taskbar, StartMenu e componenti
-protocols/         wlr-layer-shell (non incluso in wayland-protocols)
+protocols/         wlr-layer-shell e wlr-foreign-toplevel-management
+                   (non inclusi in wayland-protocols)
 scripts/           avvio annidato
 ```
 
 ## Roadmap
 
 **Milestone 1: un desktop usabile tutti i giorni**
-- Finestre aperte nella taskbar (protocollo foreign-toplevel), con
-  riduzione a icona e animazione verso la taskbar.
-- Animazione di chiusura (istantanea del contenuto che si dissolve).
+- ~~Finestre aperte nella taskbar, riduzione a icona animata verso il
+  pulsante.~~ Fatto.
+- ~~Animazione di chiusura (istantanea del contenuto che si dissolve).~~
+  Fatto.
 - Alt+Tab grafico con anteprime.
 - Snap delle finestre: Super+frecce e trascinamento ai bordi, con anteprima.
 

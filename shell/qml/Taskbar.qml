@@ -1,6 +1,7 @@
 import QtQuick
 
-// La taskbar: pulsante Start e app fissate al centro, orologio a destra.
+// La taskbar: pulsante Start, app fissate e app aperte al centro, orologio
+// a destra.
 Window {
     id: root
     objectName: "taskbar"
@@ -14,7 +15,7 @@ Window {
 
     // App fissate (id dei file .desktop). Quelle non installate si saltano.
     // TODO: renderle configurabili e trascinabili.
-    readonly property var pinnedIds: [
+    readonly property list<string> pinnedIds: [
         "org.kde.dolphin.desktop",
         "org.kde.konsole.desktop",
         "firefox.desktop",
@@ -23,11 +24,7 @@ Window {
         "org.kde.kate.desktop",
         "systemsettings.desktop"
     ]
-    readonly property var pinned: pinnedIds
-        .map(id => ({ id: id, info: Apps.entry(id) }))
-        .filter(item => item.info.name !== undefined)
-        // la stessa app può esistere sia come pacchetto sia come Flatpak
-        .filter((item, i, all) => all.findIndex(other => other.info.name === item.info.name) === i)
+    Component.onCompleted: Tasks.pinnedIds = pinnedIds
 
     Rectangle {
         anchors.fill: parent
@@ -42,8 +39,30 @@ Window {
     }
 
     Row {
-        anchors.centerIn: parent
+        id: buttons
+        // Centrata a mano invece che con anchors: così, quando un'app si
+        // apre o si chiude, la fila scivola al nuovo centro invece di saltare.
+        x: Math.round((parent.width - width) / 2)
+        anchors.verticalCenter: parent.verticalCenter
         spacing: 4
+
+        Behavior on x {
+            NumberAnimation { duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
+        }
+        // Il pulsante di un'app appena aperta entra crescendo.
+        add: Transition {
+            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.normal }
+            NumberAnimation {
+                property: "scale"; from: 0.5; to: 1; duration: Theme.slow
+                easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate
+            }
+        }
+        move: Transition {
+            NumberAnimation {
+                property: "x"; duration: Theme.normal
+                easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate
+            }
+        }
 
         TaskbarButton {
             active: Shell.startMenuOpen
@@ -52,15 +71,39 @@ Window {
         }
 
         Repeater {
-            model: root.pinned
+            model: Tasks
 
             TaskbarButton {
-                required property var modelData
-                onClicked: Apps.launchId(modelData.id)
+                id: task
+                required property int index
+                required property string name
+                required property string iconName
+                required property int windowCount
+                required property bool windowActive
+
+                tooltip: name
+                running: windowCount > 0
+                active: windowActive
+                onClicked: Tasks.activate(index)
+                onMiddleClicked: Tasks.launchNew(index)
+
+                // Il compositor fa volare qui le finestre ridotte a icona.
+                function reportGeometry() {
+                    if (windowCount > 0) {
+                        const p = mapToItem(null, 0, 0)
+                        Tasks.setButtonGeometry(index, root, Qt.rect(p.x, p.y, width, height))
+                    }
+                }
+                onXChanged: reportGeometry()
+                onWindowCountChanged: reportGeometry()
+                Connections {
+                    target: buttons
+                    function onXChanged() { task.reportGeometry() }
+                }
 
                 Image {
                     anchors.fill: parent
-                    source: "image://icon/" + encodeURIComponent(modelData.info.iconName)
+                    source: "image://icon/" + encodeURIComponent(task.iconName)
                     sourceSize: Qt.size(52, 52)
                     smooth: true
                     mipmap: true

@@ -9,6 +9,7 @@ pkg_check_modules(WLROOTS REQUIRED IMPORTED_TARGET ${VELA_WLROOTS})
 pkg_check_modules(WAYLAND_SERVER REQUIRED IMPORTED_TARGET wayland-server)
 pkg_check_modules(XKBCOMMON REQUIRED IMPORTED_TARGET xkbcommon)
 pkg_check_modules(PIXMAN REQUIRED IMPORTED_TARGET pixman-1)
+pkg_check_modules(LIBINPUT REQUIRED IMPORTED_TARGET libinput)
 pkg_check_modules(WAYLAND_PROTOCOLS REQUIRED wayland-protocols>=1.32)
 pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
 find_program(WAYLAND_SCANNER NAMES wayland-scanner REQUIRED)
@@ -43,6 +44,7 @@ add_executable(vela-compositor
     src/toplevel.cpp
     src/layer.cpp
     src/keyboard.cpp
+    src/snapshot.cpp
     ${VELA_PROTOCOL_HEADERS})
 
 target_include_directories(vela-compositor PRIVATE ${VELA_GENERATED_DIR})
@@ -52,6 +54,7 @@ target_link_libraries(vela-compositor PRIVATE
     PkgConfig::WLROOTS
     PkgConfig::WAYLAND_SERVER
     PkgConfig::XKBCOMMON
-    PkgConfig::PIXMAN)
+    PkgConfig::PIXMAN
+    PkgConfig::LIBINPUT)
 
 install(TARGETS vela-compositor RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
