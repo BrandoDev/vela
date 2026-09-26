@@ -3,28 +3,21 @@
 // Il device Vulkan di Vela (docs/renderer.md §7). Uno per la GPU che pilota
 // gli schermi; tutto il disegno del renderer di Vela passa da qui.
 
+#include "render/formats.hpp"
 #include "wlr.hpp"
 
 #include <vulkan/vulkan.h>
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace vela::render {
-
-// Formati DRM che sappiamo usare, con il formato Vulkan corrispondente. Le
-// viste sono _SRGB: gli shader lavorano in spazio lineare e la GPU converte
-// scrivendo (§7.5).
-struct FormatInfo {
-    uint32_t drm;
-    VkFormat vk;
-};
-const FormatInfo* formatInfo(uint32_t drmFormat);
 
 class VulkanDevice {
 public:
     // backendDrmFd: il device DRM del backend (-1 se non ce l'ha, es.
-    // headless): si sceglie la GPU corrispondente. nullptr se Vulkan 1.3 o
+    // headless): si sceglie la GPU corrispondente. nullptr se Vulkan 1.4 o
     // le estensioni necessarie mancano; il motivo è già nel log.
     static std::unique_ptr<VulkanDevice> create(int backendDrmFd);
     ~VulkanDevice();
@@ -33,6 +26,9 @@ public:
     VulkanDevice& operator=(const VulkanDevice&) = delete;
 
     uint32_t findMemoryType(uint32_t typeBits, VkMemoryPropertyFlags flags) const;
+    // Un dmabuf come VkImage, senza copie (tutti i piani nello stesso dmabuf).
+    bool importDmabuf(const wlr_dmabuf_attributes& dmabuf, VkFormat format, VkImageUsageFlags usage,
+        VkImage& image, VkDeviceMemory& memory) const;
     VkShaderModule createShader(const uint32_t* code, size_t bytes) const;
 
     VkInstance instance = VK_NULL_HANDLE;
@@ -47,6 +43,11 @@ public:
     // (formato, modifier) importabili come dmabuf e usabili come
     // destinazione di rendering.
     wlr_drm_format_set renderFormats {};
+    // (formato, modifier) dei dmabuf che sappiamo leggere come texture:
+    // quelli che offriamo alle app (linux-dmabuf).
+    wlr_drm_format_set textureFormats {};
+    // Formati dei buffer in memoria condivisa (wl_shm) che sappiamo caricare.
+    std::vector<uint32_t> shmFormats;
     // La GPU sa esportare e importare semafori come sync_file
     // (sincronizzazione implicita con il kernel, §7.3).
     bool syncFile = false;
@@ -61,7 +62,8 @@ private:
     bool pickPhysicalDevice(int backendDrmFd);
     bool createDevice();
     bool openRenderNode();
-    void queryRenderFormats();
+    void queryFormats();
+    bool supportsDmabuf(VkFormat format, uint64_t modifier, VkImageUsageFlags usage) const;
 
     VkDebugUtilsMessengerEXT m_messenger = VK_NULL_HANDLE;
     VkPhysicalDeviceDrmPropertiesEXT m_drm {};

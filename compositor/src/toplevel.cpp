@@ -4,25 +4,32 @@ namespace vela {
 
 // ----------------------------------------------------------------- Popup --
 
-Popup::Popup(wlr_xdg_popup* popup, wlr_scene_tree* parent, BoxFn box)
+Popup::Popup(wlr_xdg_popup* popup, scene::Tree* parent, BoxFn box)
     : xdg(popup)
-    , tree(wlr_scene_xdg_surface_create(parent, popup->base))
+    , tree(std::make_unique<scene::Tree>(parent))
+    , surfaceNode(std::make_unique<scene::SurfaceNode>(tree.get(), popup->base->surface))
     , constraintBox(std::move(box))
 {
     commit.connect(&xdg->base->surface->events.commit, [this](void*) {
         if (xdg->base->initial_commit) {
             unconstrain(); // invia anche il primo configure
         }
+        // La posizione dipende dalla geometria sua e del genitore, che
+        // cambiano con i commit.
+        double x = 0.0;
+        double y = 0.0;
+        scene::popupPosition(xdg, x, y);
+        tree->setPosition(x, y);
     });
     reposition.connect(&xdg->events.reposition, [this](void*) {
         unconstrain();
     });
     newPopup.connect(&xdg->base->events.new_popup, [this](void* data) {
-        new Popup(static_cast<wlr_xdg_popup*>(data), tree, constraintBox);
+        // Un popup di un popup: l'area resta nelle coordinate della
+        // superficie radice (come vuole wlroots).
+        new Popup(static_cast<wlr_xdg_popup*>(data), tree.get(), constraintBox);
     });
-    destroy.connect(&xdg->events.destroy, [this](void*) {
-        delete this; // l'albero della scena si distrugge da solo
-    });
+    destroy.connect(&xdg->events.destroy, [this](void*) { delete this; });
 }
 
 void Popup::unconstrain()
@@ -37,9 +44,10 @@ Toplevel::Toplevel(Server& s, wlr_xdg_toplevel* toplevel)
     : SceneOwner(SceneKind::Toplevel)
     , server(s)
     , xdg(toplevel)
-    , tree(wlr_scene_xdg_surface_create(s.layers.windows, toplevel->base))
+    , tree(std::make_unique<scene::Tree>(s.layers.windows.get()))
+    , surfaceNode(std::make_unique<scene::SurfaceNode>(tree.get(), toplevel->base->surface))
 {
-    tree->node.data = static_cast<SceneOwner*>(this);
+    tree->data = static_cast<SceneOwner*>(this);
     xdg->base->data = this; // per risalire alla finestra genitore
 
     wlr_surface* surface = xdg->base->surface;
@@ -92,12 +100,13 @@ Toplevel::Toplevel(Server& s, wlr_xdg_toplevel* toplevel)
     });
     setParent.connect(&xdg->events.set_parent, [this](void*) { updateHandleParent(); });
     newPopup.connect(&xdg->base->events.new_popup, [this](void* data) {
-        new Popup(static_cast<wlr_xdg_popup*>(data), tree, [this] {
-            // Area dello schermo espressa rispetto all'origine della finestra.
+        new Popup(static_cast<wlr_xdg_popup*>(data), tree.get(), [this] {
+            // Area dello schermo espressa rispetto all'origine della
+            // superficie della finestra.
             Output* out = output();
             wlr_box box = out ? out->box() : wlr_box { 0, 0, 1920, 1080 };
-            box.x -= tree->node.x;
-            box.y -= tree->node.y;
+            box.x -= int(std::lround(tree->x()));
+            box.y -= int(std::lround(tree->y()));
             return box;
         });
     });
@@ -106,34 +115,27 @@ Toplevel::Toplevel(Server& s, wlr_xdg_toplevel* toplevel)
 Toplevel::~Toplevel()
 {
     destroyHandle();
-    captureSnapshot.reset();
-    if (captureScene) {
-        wlr_scene_node_destroy(&captureScene->tree.node); // distrugge anche captureSource
-    }
+    capture.reset();
     server.forget(this);
 }
 
 wlr_ext_image_capture_source_v1* Toplevel::prepareCapture()
 {
-    if (!captureScene) {
-        captureScene = wlr_scene_create();
-        captureTree = wlr_scene_tree_create(&captureScene->tree);
-        captureSource = wlr_ext_image_capture_source_v1_create_with_scene_node(
-            &captureTree->node, server.loop, server.allocator, server.renderer);
+    // L'aspetto attuale, anche se ridotta a icona o coperta da altre
+    // finestre: il renderer disegna solo lei.
+    if (!capture) {
+        capture = std::make_unique<scene::WindowCapture>(tree.get(), [this] { return frameBox(); },
+            *server.velaRenderer, server.allocator);
     }
-    // L'aspetto attuale, anche se ridotta a icona o coperta da altre finestre.
-    const wlr_box frame = frameBox();
-    captureSnapshot = std::make_unique<Snapshot>(captureTree, &tree->node, frame);
-    captureSnapshot->apply(frame.x + frame.width / 2.0, frame.y + frame.height / 2.0, 1.0, 1.0f);
-    return captureSource;
+    return capture->source();
 }
 
 wlr_box Toplevel::frameBox() const
 {
     const wlr_box& geometry = xdg->base->geometry;
     return wlr_box {
-        .x = tree->node.x + geometry.x,
-        .y = tree->node.y + geometry.y,
+        .x = int(std::lround(tree->x())) + geometry.x,
+        .y = int(std::lround(tree->y())) + geometry.y,
         .width = geometry.width,
         .height = geometry.height,
     };
@@ -195,7 +197,7 @@ void Toplevel::keepInPlace()
     }
     const wlr_box area = fullscreen ? out->box() : maximized ? out->usable : snapArea(out, snap);
     const wlr_box& geometry = xdg->base->geometry;
-    wlr_scene_node_set_position(&tree->node, area.x - geometry.x, area.y - geometry.y);
+    tree->setPosition(area.x - geometry.x, area.y - geometry.y);
 }
 
 void Toplevel::onMap()
@@ -237,7 +239,7 @@ void Toplevel::onUnmap()
     m_animating = false;
     if (minimized) {
         minimized = false;
-        wlr_scene_node_set_enabled(&tree->node, true);
+        tree->setEnabled(true);
     }
     destroyHandle();
     server.forget(this);
@@ -299,10 +301,11 @@ void Toplevel::createHandle()
         }
         for (LayerSurface* layer : server.layerSurfaces) {
             if (layer->wlr->surface == event->surface) {
-                int lx = 0;
-                int ly = 0;
-                wlr_scene_node_coords(&layer->sceneLayer->tree->node, &lx, &ly);
-                taskbarRect = { lx + event->x, ly + event->y, event->width, event->height };
+                double lx = 0.0;
+                double ly = 0.0;
+                layer->tree->coords(lx, ly);
+                taskbarRect = { int(std::lround(lx)) + event->x, int(std::lround(ly)) + event->y, event->width,
+                    event->height };
                 return;
             }
         }
@@ -390,7 +393,7 @@ void Toplevel::applyOpenFrame(double progress)
     // Massimizzate e a schermo intero compaiono solo in dissolvenza.
     const int rise = (maximized || fullscreen) ? 0 : motion::windowOpenRisePx;
     const int y = m_targetY + static_cast<int>(std::lround((1.0 - progress) * rise));
-    wlr_scene_node_set_position(&tree->node, m_targetX, y);
+    tree->setPosition(m_targetX, y);
     // L'opacità arriva a 1 un po' prima del movimento: la finestra risulta
     // leggibile subito, il movimento finale è solo "assestamento".
     setOpacity(static_cast<float>(std::min(1.0, progress * 1.4)));
@@ -398,11 +401,7 @@ void Toplevel::applyOpenFrame(double progress)
 
 void Toplevel::setOpacity(float opacity)
 {
-    wlr_scene_node_for_each_buffer(&tree->node,
-        [](wlr_scene_buffer* buffer, int, int, void* data) {
-            wlr_scene_buffer_set_opacity(buffer, *static_cast<float*>(data));
-        },
-        &opacity);
+    tree->setOpacity(opacity);
 }
 
 // --------------------------------------------------- massimizza/fullscreen --
@@ -440,7 +439,7 @@ void Toplevel::setMaximized(bool on)
     wlr_xdg_toplevel_set_size(xdg, restore.width, restore.height);
     if (mapped && restore.width > 0) {
         const wlr_box& geometry = xdg->base->geometry;
-        wlr_scene_node_set_position(&tree->node, restore.x - geometry.x, restore.y - geometry.y);
+        tree->setPosition(restore.x - geometry.x, restore.y - geometry.y);
     }
 }
 
@@ -484,7 +483,7 @@ void Toplevel::setFullscreen(bool on)
             wlr_xdg_toplevel_set_size(xdg, area.width, area.height);
         }
         // Sopra taskbar e pannelli.
-        wlr_scene_node_reparent(&tree->node, server.layers.fullscreen);
+        tree->reparent(server.layers.fullscreen.get());
         keepInPlace();
         return;
     }
@@ -494,7 +493,7 @@ void Toplevel::setFullscreen(bool on)
     if (handle) {
         wlr_foreign_toplevel_handle_v1_set_fullscreen(handle, false);
     }
-    wlr_scene_node_reparent(&tree->node, server.layers.windows);
+    tree->reparent(server.layers.windows.get());
     if (maximized) {
         applyMaximized();
     } else if (snap != Snap::None) {
@@ -503,7 +502,7 @@ void Toplevel::setFullscreen(bool on)
         wlr_xdg_toplevel_set_size(xdg, restore.width, restore.height);
         if (mapped && restore.width > 0) {
             const wlr_box& geometry = xdg->base->geometry;
-            wlr_scene_node_set_position(&tree->node, restore.x - geometry.x, restore.y - geometry.y);
+            tree->setPosition(restore.x - geometry.x, restore.y - geometry.y);
         }
     }
 }
@@ -535,7 +534,7 @@ void Toplevel::setMinimized(bool on)
 
     finishOpenAnimation();
     const bool wasFocused = server.focusedToplevel() == this;
-    wlr_scene_node_set_enabled(&tree->node, false);
+    tree->setEnabled(false);
     server.animateSnapshot(this, Server::SnapshotKind::Minimize);
     if (server.grabbed == this) {
         server.endSnapZone(false);
@@ -553,7 +552,7 @@ void Toplevel::setMinimized(bool on)
 void Toplevel::finishRestore()
 {
     if (mapped && !minimized) {
-        wlr_scene_node_set_enabled(&tree->node, true);
+        tree->setEnabled(true);
     }
 }
 

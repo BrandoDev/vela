@@ -11,7 +11,7 @@ pkg_check_modules(XKBCOMMON REQUIRED IMPORTED_TARGET xkbcommon)
 pkg_check_modules(PIXMAN REQUIRED IMPORTED_TARGET pixman-1)
 pkg_check_modules(LIBINPUT REQUIRED IMPORTED_TARGET libinput)
 # Renderer di Vela (docs/renderer.md): Vulkan, buffer degli schermi con GBM.
-pkg_check_modules(VULKAN REQUIRED IMPORTED_TARGET vulkan>=1.3)
+pkg_check_modules(VULKAN REQUIRED IMPORTED_TARGET vulkan>=1.4)
 pkg_check_modules(GBM REQUIRED IMPORTED_TARGET gbm)
 pkg_check_modules(LIBDRM REQUIRED IMPORTED_TARGET libdrm)
 find_program(GLSLC NAMES glslc REQUIRED)
@@ -47,13 +47,13 @@ vela_server_protocol(${PROJECT_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1
 set(VELA_SHADER_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
 file(MAKE_DIRECTORY ${VELA_SHADER_DIR})
 set(VELA_SHADERS)
-foreach(shader fullscreen.vert s0.frag)
+foreach(shader quad.vert texture.frag rect.frag)
     set(source ${CMAKE_CURRENT_SOURCE_DIR}/src/render/shaders/${shader})
     set(output ${VELA_SHADER_DIR}/${shader}.spv.inc)
     add_custom_command(
         OUTPUT ${output}
-        COMMAND ${GLSLC} --target-env=vulkan1.3 -O -mfmt=num -o ${output} ${source}
-        DEPENDS ${source}
+        COMMAND ${GLSLC} --target-env=vulkan1.4 -O -mfmt=num -o ${output} ${source}
+        DEPENDS ${source} ${CMAKE_CURRENT_SOURCE_DIR}/src/render/shaders/push.glsl
         COMMENT "Compilo lo shader ${shader}")
     list(APPEND VELA_SHADERS ${output})
 endforeach()
@@ -68,8 +68,13 @@ add_executable(vela-compositor
     src/snap.cpp
     src/snapshot.cpp
     src/render/allocator.cpp
-    src/render/output_renderer.cpp
+    src/render/pass.cpp
+    src/render/renderer.cpp
+    src/render/texture.cpp
     src/render/vulkan.cpp
+    src/scene/capture.cpp
+    src/scene/frame.cpp
+    src/scene/scene.cpp
     ${VELA_SHADERS}
     ${VELA_PROTOCOL_HEADERS})
 

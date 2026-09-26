@@ -58,7 +58,7 @@ void Toplevel::setSnap(Snap side, Output* out)
         wlr_xdg_toplevel_set_size(xdg, restore.width, restore.height);
         if (restore.width > 0) {
             const wlr_box& geometry = xdg->base->geometry;
-            wlr_scene_node_set_position(&tree->node, restore.x - geometry.x, restore.y - geometry.y);
+            tree->setPosition(restore.x - geometry.x, restore.y - geometry.y);
         }
         return;
     }
@@ -90,7 +90,7 @@ void Toplevel::applySnap(Output* out)
     wlr_xdg_toplevel_set_tiled(xdg, tiledEdges(snap));
     wlr_xdg_toplevel_set_size(xdg, area.width, area.height);
     const wlr_box& geometry = xdg->base->geometry;
-    wlr_scene_node_set_position(&tree->node, area.x - geometry.x, area.y - geometry.y);
+    tree->setPosition(area.x - geometry.x, area.y - geometry.y);
 }
 
 // ---------------------------------------------------- anteprima (Server) --
@@ -116,10 +116,7 @@ void Server::updateSnapZone()
     m_snapPreview.output = out;
 
     if (zone == SnapZone::None) {
-        if (m_snapPreview.rect) {
-            wlr_scene_node_destroy(&m_snapPreview.rect->node);
-            m_snapPreview.rect = nullptr;
-        }
+        m_snapPreview.rect.reset();
         return;
     }
 
@@ -127,11 +124,11 @@ void Server::updateSnapZone()
         ? out->usable
         : snapArea(out, zone == SnapZone::Left ? Snap::Left : Snap::Right);
     if (!m_snapPreview.rect) {
-        const float transparent[4] = { 0, 0, 0, 0 };
-        m_snapPreview.rect = wlr_scene_rect_create(grabbed->tree->node.parent, 0, 0, transparent);
+        m_snapPreview.rect = std::make_unique<scene::RectNode>(grabbed->tree->parent(), 0, 0,
+            wlr_render_color { 0, 0, 0, 0 });
     }
     // Sotto la finestra trascinata, come su Windows.
-    wlr_scene_node_place_below(&m_snapPreview.rect->node, &grabbed->tree->node);
+    m_snapPreview.rect->placeBelow(grabbed->tree.get());
     m_snapPreview.tween = Tween(motion::snapPreviewMs, &motion::decelerate);
     tickSnapPreview(0.0);
     scheduleFrames();
@@ -146,27 +143,20 @@ void Server::tickSnapPreview(double nowMs)
     const double p = nowMs > 0.0 ? m_snapPreview.tween.progress(nowMs) : 0.0;
     const double scale = 0.9 + 0.1 * p;
     const wlr_box& t = m_snapPreview.target;
-    const int width = static_cast<int>(std::lround(t.width * scale));
-    const int height = static_cast<int>(std::lround(t.height * scale));
-    wlr_scene_rect_set_size(m_snapPreview.rect, width, height);
-    wlr_scene_node_set_position(&m_snapPreview.rect->node,
-        t.x + (t.width - width) / 2, t.y + (t.height - height) / 2);
+    const double width = t.width * scale;
+    const double height = t.height * scale;
+    m_snapPreview.rect->setSize(width, height);
+    m_snapPreview.rect->setPosition(t.x + (t.width - width) / 2, t.y + (t.height - height) / 2);
 
     const float alpha = previewAlpha * static_cast<float>(p);
-    const float color[4] = {
-        previewColor[0] * alpha, previewColor[1] * alpha, previewColor[2] * alpha, alpha,
-    };
-    wlr_scene_rect_set_color(m_snapPreview.rect, color);
+    m_snapPreview.rect->setColor({ previewColor[0] * alpha, previewColor[1] * alpha, previewColor[2] * alpha, alpha });
 }
 
 void Server::endSnapZone(bool apply)
 {
     const SnapZone zone = m_snapPreview.zone;
     Output* out = m_snapPreview.output;
-    if (m_snapPreview.rect) {
-        wlr_scene_node_destroy(&m_snapPreview.rect->node);
-    }
-    m_snapPreview.rect = nullptr;
+    m_snapPreview.rect.reset();
     m_snapPreview.zone = SnapZone::None;
     m_snapPreview.output = nullptr;
 

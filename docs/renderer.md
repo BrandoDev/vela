@@ -6,7 +6,8 @@ tutto ciò che verrà dopo. Questo documento viene prima del codice: le
 decisioni si prendono qui, il codice le segue.
 
 > **Stato:** progetto discusso e approvato nelle scelte di fondo (§2,
-> riassunte anche in §13). Tappa **S0 fatta** (§11); prossima: S1.
+> riassunte anche in §13). Tappe **S0 e S1 fatte** (§11): la scena e il
+> renderer di Vela sono gli unici, `wlr_scene` è stato rimosso. Prossima: S2.
 
 ## 1. Obiettivi
 
@@ -35,7 +36,8 @@ circolazione. Per il renderer questo significa, in ordine di importanza:
 | Decisione | Scelta | Conseguenza |
 |---|---|---|
 | Scena | **tutta nostra**, non `wlr_scene` | ciò che `wlr_scene` faceva (damage, feedback, scanout...) lo facciamo noi, e lo facciamo meglio (§5) |
-| API grafica | **solo Vulkan** | nessun ripiego GLES/pixman; requisito minimo esplicito (§7.1) |
+| API grafica | **solo Vulkan**, versione **1.4** | nessun ripiego GLES/pixman; requisito minimo esplicito (§7.1) |
+| Verso wlroots | il nostro renderer si presenta anche come **`wlr_renderer`** | ciò che wlroots disegna da sé (cursore hardware, screencopy, catture degli schermi, caricamento dei buffer delle app) usa il nostro device e i nostri shader; nessun secondo renderer (§7.2) |
 | Sfocatura | **sempre dal vivo** | ciò che sta dietro viene sfocato a ogni frame in cui cambia; va reso economico per costruzione (§8) |
 | Scala predefinita | **scelta da Vela dai DPI del monitor**, a passi del 25% | come Windows; l'utente può cambiarla (§3.8) |
 | App X11 a scala frazionaria | **ingrandite dal compositor** (misura giusta, un po' sfocate) | più avanti un'impostazione per lasciarle scalare da sole, come Plasma (§3.9) |
@@ -245,17 +247,20 @@ nostro: posizione, effetti, animazioni.
 
 ### 5.3 Ciò che `wlr_scene` faceva e ora facciamo noi
 
-| Compito | Come |
-|---|---|
-| Import dei buffer | shm → upload in una `VkImage`; dmabuf → import diretto (§7.3); cache per `wlr_buffer`, invalidata al rilascio |
-| Damage | danni della superficie (in coordinate buffer) → logico → fisico per schermo; + danni dei nostri nodi; storia per l'età dei buffer della swapchain |
-| Frame callback, presentation | §4.5 |
-| Output enter/leave | ricalcolati quando una finestra si sposta o cambia dimensione |
-| Scala preferita | §3.3, §3.6 |
-| dmabuf feedback | per superficie: tranche di scanout quando la finestra è a schermo intero |
-| Direct scanout | una sola superficie opaca che copre lo schermo, 1:1, senza effetti sopra → il suo buffer va direttamente sul piano primario |
-| Catture | sorgenti `ext-image-capture` e screencopy disegnate **dal nostro renderer**, effetti compresi |
-| Istantanee | già nostre (snapshot.cpp): buffer bloccati disegnati come nodi |
+| Compito | Come | Stato |
+|---|---|---|
+| Import dei buffer | shm → texture nostra, ricaricata solo dove l'app ha disegnato (con il riuso dei `wlr_client_buffer` di wlroots); dmabuf → import diretto (§7.3), una volta per buffer | ✔ S1 |
+| Damage | a ogni frame la scena appiattita si confronta con il frame precedente (elementi apparsi, spariti, spostati, cambiati, saliti sopra altri); il contenuto delle superfici arriva dai commit, con il danno preciso dell'app; età dei buffer con `wlr_damage_ring` | ✔ S1 |
+| Occlusione | ciò che è coperto da regioni opache non si disegna e non riceve frame callback | ✔ S1 |
+| Frame callback, presentation | §4.5: solo alle superfici visibili, dallo schermo che ne mostra la parte visibile maggiore | ✔ S1 |
+| Output enter/leave | per ogni superficie e sottosuperficie, dagli schermi su cui cade; una superficie nascosta ovunque non riceve leave (ricomparendo non cambia nulla per l'app) | ✔ S1 |
+| Scala preferita | dallo schermo che ne mostra la parte maggiore (§3.6), intera e frazionaria | ✔ S1 |
+| Catture | finestre (`ext-image-capture`, anteprime di Alt+Tab): il renderer disegna solo quella finestra; schermi (screencopy, `ext-image-copy-capture`): via il nostro `wlr_renderer` | ✔ S1 |
+| Istantanee | buffer bloccati disegnati come nodi della scena | ✔ S1 |
+| Cursore | hardware tramite wlroots (col nostro renderer); disegnato da noi quando non c'è il piano cursore | ✔ S1 |
+| dmabuf feedback | per superficie: tranche di scanout quando la finestra è a schermo intero | S3 |
+| Direct scanout | una sola superficie opaca che copre lo schermo, 1:1, senza effetti sopra → il suo buffer va direttamente sul piano primario | S3 |
+| Formati YUV (video) | NV12 e simili, con conversione nello shader | S7 |
 
 ## 6. Il frame, passo per passo
 
@@ -283,8 +288,10 @@ Per ogni schermo, quando è il momento (§4.3):
 
 ### 7.1 Requisito minimo
 
-**Vulkan 1.3** (dynamic rendering, synchronization2, timeline semaphore
-nel core) più le estensioni per scambiare buffer con kernel e client:
+**Vulkan 1.4** (dynamic rendering e synchronization2 dalla 1.3, semafori
+timeline dalla 1.2, push descriptor dalla 1.4: le texture si legano a ogni
+disegno senza pool di descrittori) più le estensioni per scambiare buffer
+con kernel e client:
 
 - `VK_EXT_image_drm_format_modifier`, `VK_EXT_external_memory_dma_buf`,
   `VK_KHR_external_memory_fd`, `VK_EXT_queue_family_foreign`
@@ -292,9 +299,9 @@ nel core) più le estensioni per scambiare buffer con kernel e client:
   implicita ed esplicita)
 - `VK_EXT_physical_device_drm` (scegliere la GPU che pilota lo schermo)
 
-In pratica: AMD GCN e successive (RADV), Intel Gen9/Skylake e successive
-(ANV), NVIDIA con driver proprietario recente o NVK. Chi non ha Vulkan 1.3
-non può usare Vela: va scritto chiaramente nel README e detto all'avvio con
+In pratica: AMD GCN e successive (RADV) e Intel Gen9/Skylake e successive
+(ANV) con Mesa ≥ 25.0, NVIDIA con driver proprietario ≥ 570 o NVK. Chi non
+ha Vulkan 1.4 non può usare Vela: è scritto nel README e detto all'avvio con
 un messaggio comprensibile, non con un crash.
 
 ### 7.2 Un device nostro
@@ -303,8 +310,28 @@ Vela crea il proprio `VkInstance`/`VkDevice` sulla GPU dello schermo
 (`VK_EXT_physical_device_drm` confrontato con il device DRM del backend).
 Non usiamo il renderer di wlroots per disegnare. Per allocare i buffer degli
 schermi scriviamo un nostro `wlr_allocator` (`wlr_allocator_init` è
-pubblica): buffer esportati dal nostro device come dmabuf con un modifier
-accettato dal piano primario (`wlr_output_get_primary_formats`).
+pubblica): buffer GBM con un modifier esplicito accettato dal piano
+primario (`wlr_output_get_primary_formats`).
+
+**Il nostro renderer parla anche la lingua di wlroots** (scelto in S1).
+wlroots disegna da sé in alcuni punti: prepara il buffer del cursore
+hardware, copia lo schermo per screencopy ed `ext-image-copy-capture`,
+carica i buffer `wl_shm` delle app in texture a ogni commit (solo la parte
+cambiata, con la logica di riuso dei `wlr_client_buffer`). Invece di
+tenere per questo un secondo renderer, il nostro renderer implementa anche
+l'interfaccia pubblica `wlr_renderer` (`wlr/render/interface.h`): texture,
+render pass e lettura dei pixel sono nostri, con lo stesso device, gli
+stessi shader, la stessa fusione in spazio lineare e la stessa
+sincronizzazione. Il codice è in `compositor/src/render/`:
+
+| File | Cosa fa |
+|---|---|
+| `vulkan.*` | device, formati importabili (texture, destinazioni, wl_shm), import dei dmabuf |
+| `renderer.*` | invio alla GPU con semaforo timeline, distruzione differita, memoria di appoggio per i caricamenti, destinazioni dmabuf, pipeline; il `wlr_renderer` |
+| `texture.*` | texture da dmabuf (una importazione per buffer) e da memoria (caricamento solo delle zone cambiate), lettura dei pixel |
+| `pass.*` | il disegno: quad con texture o a tinta unita, ritaglio per rettangoli, barriere e sincronizzazione implicita; il `wlr_render_pass` |
+
+La scena e il frame sono in `compositor/src/scene/` (§5, §6).
 
 ### 7.3 Buffer dei client e sincronizzazione
 
@@ -503,8 +530,8 @@ con i suoi test.
 
 | Tappa | Contenuto | Fatto quando |
 |---|---|---|
-| **S0** Fondamenta ✔ | device Vulkan nostro, allocatore GBM, import dei buffer degli schermi, sincronizzazione implicita (sync_file), shader compilati, scena di prova; ciclo di frame per schermo con tempo di presentazione previsto e latenza imparata; vblank virtuale per l'headless | fatto: 60–360 Hz simulati esatti (0 vblank persi, errore < 10 µs); annidato in KWin a 75 e 180 Hz reali, errore ~1 µs dopo l'apprendimento. Validation layer: da ripetere con `vulkan-validation-layers` installato |
-| **S1** Parità | scena propria con finestre, layer, popup, sottosuperfici; shm e dmabuf; damage; frame callback, presentation, enter/leave; istantanee, snap, catture portate sul nuovo renderer | tutto ciò che c'è oggi funziona, `wlr_scene` rimosso |
+| **S0** Fondamenta ✔ | device Vulkan nostro, allocatore GBM, import dei buffer degli schermi, sincronizzazione implicita (sync_file), shader compilati, scena di prova; ciclo di frame per schermo con tempo di presentazione previsto e latenza imparata; vblank virtuale per l'headless | fatto: 60–360 Hz simulati esatti (0 vblank persi, errore < 10 µs); annidato in KWin a 75 e 180 Hz reali, errore ~1 µs dopo l'apprendimento; validation layer (anche della sincronizzazione): nessun messaggio |
+| **S1** Parità ✔ | scena propria con finestre, layer, popup, sottosuperfici; shm e dmabuf; damage; frame callback, presentation, enter/leave; istantanee, snap, catture portate sul nuovo renderer; Vulkan 1.4; il nostro renderer anche come `wlr_renderer` | fatto: `wlr_scene` e il renderer di wlroots rimossi. Provati headless e annidato in KWin: Konsole (shm), shell Qt Quick e Firefox (dmabuf), popup anche con sottosuperfici, menu Start, trascinamento, snap con anteprima, riduzione a icona e ripristino, chiusura, Alt+Tab con anteprime, screencopy, due schermi (enter/leave), scala 150%. Validation layer (anche della sincronizzazione): nessun messaggio. A riposo 0 CPU; trascinando una finestra a 144 Hz 17–29 ms di CPU su 3,4 s, contro 34–36 ms di `wlr_scene` |
 | **S2** Nitidezza | fractional scale, aggancio ai pixel, filtri di qualità, più schermi con scale diverse, cursore per scala, scala predefinita dai DPI | test bit per bit verdi a ogni scala |
 | **S3** Tempo e latenza | late latching, scanout diretto, sincronizzazione esplicita, dmabuf feedback | latenza misurata, nessun frame perso a 360 Hz simulati |
 | **S4** Forma | angoli arrotondati, ombre | nitidi a ogni scala |
@@ -523,9 +550,17 @@ con i suoi test.
   superficie esposta.
 - **Driver**: dmabuf con modifier e sync_file sono ben supportati su
   AMD/Intel; NVIDIA va provato presto.
-- **Cursore hardware**: `wlr_output_cursor` usa il renderer di wlroots per
-  preparare il buffer del piano cursore. Da verificare in S0 se accetta un
-  buffer già pronto; altrimenti gestiamo noi il piano cursore.
+- ~~**Cursore hardware**: `wlr_output_cursor` usa il renderer di wlroots
+  per preparare il buffer del piano cursore.~~ Risolto in S1: il renderer di
+  wlroots, per wlroots, è il nostro (§7.2).
+- **Previsione dei frame isolati** (emerso in S1): quando i frame arrivano
+  sporadici (niente animazioni) la latenza dello schermo può essere diversa
+  da quella imparata durante le animazioni; annidati in KWin l'errore
+  arriva a un periodo. Non tocca le animazioni (lì il ritmo è continuo e la
+  previsione esatta), ma va sistemato con il late latching (S3).
+- **Rotazione degli schermi**: il frame la gestisce (elementi nello spazio
+  ruotato, danno e disegno riportati al buffer), ma non è ancora stata
+  provata su uno schermo vero.
 - **Testo e icone nel compositor** (§9.2, §9.6): dipendenze nuove
   (FreeType, HarfBuzz, fontconfig, resvg) e codice delicato. Le prime tre
   sono su ogni sistema; resvg va verificato sulle altre distribuzioni.

@@ -3,8 +3,11 @@
 #include "listener.hpp"
 #include "motion.hpp"
 #include "render/frame_clock.hpp"
-#include "render/output_renderer.hpp"
+#include "render/renderer.hpp"
 #include "render/vulkan.hpp"
+#include "scene/capture.hpp"
+#include "scene/frame.hpp"
+#include "scene/scene.hpp"
 #include "wlr.hpp"
 
 #include <functional>
@@ -17,8 +20,8 @@ namespace vela {
 
 class Server;
 
-// Chi possiede un albero della scena: serve a capire cosa c'è sotto il
-// cursore (una finestra o un pezzo della shell).
+// Chi possiede un albero della scena (scene::Node::data): serve a capire
+// cosa c'è sotto il cursore (una finestra o un pezzo della shell).
 enum class SceneKind { Toplevel, Layer };
 
 struct SceneOwner {
@@ -41,7 +44,7 @@ public:
     // Copia i buffer sotto `source`, anche se è disabilitato (succede alla
     // chiusura e con la finestra ridotta a icona). `frame` è il riquadro della
     // finestra in coordinate globali: le trasformazioni si fanno sul suo centro.
-    Snapshot(wlr_scene_tree* parent, wlr_scene_node* source, wlr_box frame);
+    Snapshot(scene::Tree* parent, scene::Node* source, wlr_box frame);
     ~Snapshot();
     Snapshot(const Snapshot&) = delete;
     Snapshot& operator=(const Snapshot&) = delete;
@@ -49,18 +52,18 @@ public:
     // Disegna l'istantanea col centro del riquadro in (cx, cy).
     void apply(double cx, double cy, double scale, float opacity);
 
-    wlr_scene_tree* tree() const { return m_tree; }
+    scene::Tree* tree() const { return m_tree.get(); }
     const wlr_box& frame() const { return m_frame; }
 
 private:
     struct Piece {
-        wlr_scene_buffer* buffer;
+        std::unique_ptr<scene::BufferNode> node;
         double x, y; // rispetto al centro del riquadro
-        int width, height;
+        double width, height;
     };
-    void collect(wlr_scene_node* node, int lx, int ly);
+    void collect(scene::Node* node, double lx, double ly);
 
-    wlr_scene_tree* m_tree;
+    std::unique_ptr<scene::Tree> m_tree;
     wlr_box m_frame;
     std::vector<Piece> m_pieces;
 };
@@ -76,30 +79,37 @@ struct Output {
 
     Server& server;
     wlr_output* wlr;
-    wlr_scene_output* sceneOutput = nullptr;
     wlr_box usable {}; // area libera da pannelli (coordinate globali)
+
+    // Chiede un frame: al prossimo vblank lo schermo ridisegna ciò che è
+    // cambiato (e i frame callback partono).
+    void scheduleFrame();
 
     Listener frame;
     Listener requestState;
     Listener present;
     Listener destroy;
 
-    // Renderer di Vela (VELA_RENDERER=vela, tappa S0 di docs/renderer.md).
-    std::unique_ptr<render::OutputRenderer> renderer;
+    // Dalla scena ai pixel di questo schermo (docs/renderer.md §6).
+    std::unique_ptr<scene::OutputFrame> sceneFrame;
     render::FrameClock clock;
 
 private:
     void onFrame();
-    void onFrameVela();
 
-    // Schermo headless con il renderer di Vela: un vblank virtuale esatto
-    // al nanosecondo, per provare qualunque frequenza (il timer del backend
-    // headless di wlroots lavora al millisecondo e non ha vblank).
+    // Schermo headless: un vblank virtuale esatto al nanosecondo, per
+    // provare qualunque frequenza (il timer del backend headless di wlroots
+    // lavora al millisecondo e non ha vblank). Batte solo se c'è un frame
+    // da fare.
     void startVirtualVblank();
+    void armVirtualVblank();
     void onVirtualVblank();
     int m_vblankFd = -1;
     wl_event_source* m_vblankSource = nullptr;
-    int64_t m_nextVblankNs = 0;
+    int64_t m_lastVblankNs = 0;
+    int64_t m_targetVblankNs = 0; // il vblank a cui deve comparire il frame consegnato
+    bool m_vblankArmed = false;
+    bool m_frameRequested = false;
     bool m_awaitingPresent = false; // un frame è stato consegnato e aspetta il vblank
     uint32_t m_awaitingSeq = 0;
 };
@@ -111,12 +121,13 @@ private:
 struct Popup {
     using BoxFn = std::function<wlr_box()>;
 
-    Popup(wlr_xdg_popup* popup, wlr_scene_tree* parent, BoxFn constraintBox);
+    Popup(wlr_xdg_popup* popup, scene::Tree* parent, BoxFn constraintBox);
 
     void unconstrain();
 
     wlr_xdg_popup* xdg;
-    wlr_scene_tree* tree;
+    std::unique_ptr<scene::Tree> tree; // origine: quella della superficie del popup
+    std::unique_ptr<scene::SurfaceNode> surfaceNode;
     BoxFn constraintBox; // area consentita, relativa alla superficie radice
 
     Listener commit;
@@ -155,7 +166,10 @@ struct Toplevel : SceneOwner {
 
     Server& server;
     wlr_xdg_toplevel* xdg;
-    wlr_scene_tree* tree;
+    // Origine dell'albero: quella della superficie (non della geometria,
+    // che può avere un margine per l'ombra).
+    std::unique_ptr<scene::Tree> tree;
+    std::unique_ptr<scene::SurfaceNode> surfaceNode;
 
     bool mapped = false;
     bool maximized = false;
@@ -172,14 +186,9 @@ struct Toplevel : SceneOwner {
     // identificativo univoco e serve per catturarne l'immagine (Alt+Tab).
     wlr_ext_foreign_toplevel_handle_v1* extHandle = nullptr;
 
-    // Per catturarne l'immagine: una scena tutta sua, con dentro solo
-    // un'istantanea della finestra aggiornata a ogni richiesta. La sorgente
-    // di wlroots disegna tutto ciò che la scena ha in quella zona: nella
-    // scena principale comparirebbero anche le altre finestre.
-    wlr_scene* captureScene = nullptr;
-    wlr_scene_tree* captureTree = nullptr;
-    wlr_ext_image_capture_source_v1* captureSource = nullptr; // vive quanto captureTree
-    std::unique_ptr<Snapshot> captureSnapshot;
+    // Per catturarne l'immagine (anteprime di Alt+Tab): il nostro renderer
+    // disegna solo lei.
+    std::unique_ptr<scene::WindowCapture> capture;
     wlr_ext_image_capture_source_v1* prepareCapture();
 
     Listener map;
@@ -238,9 +247,15 @@ struct LayerSurface : SceneOwner {
     Output* output() const;
     bool wantsKeyboard() const;
 
+    // Posizione e dimensione secondo ancore e margini; riduce `usable` se
+    // la superficie riserva spazio (la taskbar).
+    void configure(const wlr_box& full, wlr_box& usable);
+
     Server& server;
     wlr_layer_surface_v1* wlr;
-    wlr_scene_layer_surface_v1* sceneLayer;
+    std::unique_ptr<scene::Tree> tree;
+    std::unique_ptr<scene::SurfaceNode> surfaceNode;
+    zwlr_layer_shell_v1_layer layer; // lo strato in cui sta l'albero
     bool mapped = false;
 
     Listener map;
@@ -299,16 +314,17 @@ public:
     // Schermi
     Output* outputAt(double lx, double ly) const;
     Output* outputUnderCursor() const;
-    wlr_scene_tree* layerTree(zwlr_layer_shell_v1_layer layer) const;
+    scene::Tree* layerTree(zwlr_layer_shell_v1_layer layer) const;
 
     // Interazione col puntatore
     void beginInteractive(Toplevel* toplevel, CursorMode mode, uint32_t edges);
     void updateSnapZone(); // durante il trascinamento: anteprima dello snap
     void endSnapZone(bool apply);
 
-    // Animazioni: chiamate dal frame di ogni schermo
+    // Animazioni: chiamate dal frame di ogni schermo, con l'istante in cui
+    // quel frame verrà mostrato (docs/renderer.md §4.2).
     void addAnimation(Toplevel* toplevel);
-    void tickAnimations(const timespec& now);
+    void tickAnimations(int64_t presentNs);
     void scheduleFrames();
 
     // Animazioni su un'istantanea della finestra
@@ -331,21 +347,20 @@ public:
     wl_display* display = nullptr;
     wl_event_loop* loop = nullptr;
     wlr_backend* backend = nullptr;
-    wlr_renderer* renderer = nullptr;
+    // Il renderer di Vela (docs/renderer.md): device Vulkan nostro, il
+    // renderer (anche wlr_renderer per wlroots) e l'allocatore GBM dei
+    // buffer di schermi, cursori e catture.
+    std::unique_ptr<render::VulkanDevice> vulkan;
+    render::Renderer* velaRenderer = nullptr; // appartiene a wlroots: vedi shutdown()
+    wlr_renderer* renderer = nullptr; // lo stesso, visto da wlroots
     wlr_allocator* allocator = nullptr;
     wlr_compositor* compositor = nullptr;
     wlr_linux_dmabuf_v1* dmabuf = nullptr;
     wlr_output_layout* outputLayout = nullptr;
-    wlr_scene* scene = nullptr;
-    wlr_scene_output_layout* sceneLayout = nullptr;
+    std::unique_ptr<scene::Scene> sceneGraph;
     wlr_xdg_shell* xdgShell = nullptr;
     wlr_layer_shell_v1* layerShell = nullptr;
     wlr_foreign_toplevel_manager_v1* foreignToplevels = nullptr;
-
-    // Renderer di Vela, se attivo (VELA_RENDERER=vela): device Vulkan e
-    // allocatore dei buffer degli schermi.
-    std::unique_ptr<render::VulkanDevice> vulkan;
-    wlr_allocator* velaAllocator = nullptr;
     wlr_ext_foreign_toplevel_list_v1* extToplevels = nullptr;
     wlr_cursor* cursor = nullptr;
     wlr_xcursor_manager* cursorManager = nullptr;
@@ -355,12 +370,12 @@ public:
 
     // Strati della scena, dal basso verso l'alto
     struct {
-        wlr_scene_tree* background = nullptr;
-        wlr_scene_tree* bottom = nullptr;
-        wlr_scene_tree* windows = nullptr;
-        wlr_scene_tree* top = nullptr;
-        wlr_scene_tree* fullscreen = nullptr;
-        wlr_scene_tree* overlay = nullptr;
+        std::unique_ptr<scene::Tree> background;
+        std::unique_ptr<scene::Tree> bottom;
+        std::unique_ptr<scene::Tree> windows;
+        std::unique_ptr<scene::Tree> top;
+        std::unique_ptr<scene::Tree> fullscreen;
+        std::unique_ptr<scene::Tree> overlay;
     } layers;
 
     std::list<Output*> outputs;
@@ -396,6 +411,9 @@ private:
 
     std::list<Listener> m_listeners; // listener globali, scollegati in shutdown()
     std::vector<Toplevel*> m_animating;
+    // Il tempo delle animazioni non torna mai indietro, anche se schermi
+    // diversi prevedono istanti diversi.
+    double m_animationNowMs = 0.0;
 
     struct SnapshotAnimation {
         SnapshotKind kind;
@@ -412,7 +430,7 @@ private:
     struct {
         SnapZone zone = SnapZone::None;
         Output* output = nullptr;
-        wlr_scene_rect* rect = nullptr;
+        std::unique_ptr<scene::RectNode> rect;
         wlr_box target {};
         Tween tween;
     } m_snapPreview;

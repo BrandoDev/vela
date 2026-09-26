@@ -26,25 +26,6 @@ int envInt(const char* name, int fallback)
     return std::atoi(value);
 }
 
-// Vulkan di default: più moderno ed efficiente con i driver attuali. Se non
-// c'è (driver, GPU vecchia) si ripiega su OpenGL ES. WLR_RENDERER, se
-// impostata a mano (gles2, vulkan, pixman), vince sempre.
-wlr_renderer* createRenderer(wlr_backend* backend)
-{
-    if (const char* chosen = std::getenv("WLR_RENDERER"); chosen && *chosen) {
-        return wlr_renderer_autocreate(backend);
-    }
-    setenv("WLR_RENDERER", "vulkan", 1);
-    wlr_renderer* renderer = wlr_renderer_autocreate(backend);
-    unsetenv("WLR_RENDERER"); // le app lanciate da Vela non devono ereditarla
-    if (renderer) {
-        wlr_log(WLR_INFO, "Renderer: Vulkan");
-        return renderer;
-    }
-    wlr_log(WLR_ERROR, "Vulkan non disponibile, uso OpenGL ES");
-    return wlr_renderer_autocreate(backend);
-}
-
 int handleTerminate(int /*signal*/, void* data)
 {
     wl_display_terminate(static_cast<wl_display*>(data));
@@ -133,38 +114,32 @@ bool Server::init()
         },
         &nested);
 
-    renderer = createRenderer(backend);
-    if (!renderer) {
-        wlr_log(WLR_ERROR, "Impossibile creare il renderer");
+    // Il renderer di Vela (docs/renderer.md): solo Vulkan 1.4, sul device
+    // della GPU che pilota gli schermi. Senza, Vela non parte e il log dice
+    // perché.
+    vulkan = render::VulkanDevice::create(wlr_backend_get_drm_fd(backend));
+    if (vulkan) {
+        velaRenderer = render::Renderer::create(*vulkan);
+    }
+    if (!velaRenderer) {
+        wlr_log(WLR_ERROR, "Vela ha bisogno di una GPU con Vulkan 1.4 e il supporto ai dmabuf: "
+                           "non posso disegnare");
+        return false;
+    }
+    renderer = velaRenderer->wlr();
+    allocator = render::createGbmAllocator(vulkan->renderFd);
+    if (!allocator) {
+        wlr_log(WLR_ERROR, "Impossibile creare l'allocatore dei buffer (GBM)");
         return false;
     }
     wlr_renderer_init_wl_shm(renderer, display);
-
-    // Buffer GPU condivisi con i client (niente copie in RAM) e, dove
-    // possibile, "direct scanout" delle finestre a schermo intero.
-    if (wlr_renderer_get_drm_fd(renderer) >= 0
-        && wlr_renderer_get_texture_formats(renderer, WLR_BUFFER_CAP_DMABUF) != nullptr) {
-        dmabuf = wlr_linux_dmabuf_v1_create_with_renderer(display, 4, renderer);
-    }
-
-    allocator = wlr_allocator_autocreate(backend, renderer);
-
-    // Il renderer di Vela (docs/renderer.md), per ora da attivare a mano.
-    // Solo Vulkan: se non c'è, Vela non parte, e il log dice perché.
-    if (const char* choice = std::getenv("VELA_RENDERER"); choice && std::strcmp(choice, "vela") == 0) {
-        vulkan = render::VulkanDevice::create(wlr_backend_get_drm_fd(backend));
-        if (!vulkan || !(velaAllocator = render::createGbmAllocator(vulkan->renderFd))) {
-            wlr_log(WLR_ERROR, "Renderer di Vela non disponibile");
-            return false;
-        }
-        wlr_log(WLR_INFO, "Renderer di Vela attivo (tappa S0: scena di prova)");
-    }
-    if (!allocator) {
-        wlr_log(WLR_ERROR, "Impossibile creare l'allocator");
-        return false;
-    }
+    // Buffer GPU condivisi con le app, senza copie: i formati sono quelli
+    // che il nostro device sa leggere.
+    dmabuf = wlr_linux_dmabuf_v1_create_with_renderer(display, 4, renderer);
 
     // Protocolli di base che quasi ogni applicazione moderna si aspetta.
+    // Con il renderer, wlroots carica i buffer delle app nelle nostre
+    // texture a ogni commit (solo la parte cambiata).
     compositor = wlr_compositor_create(display, 6, renderer);
     wlr_subcompositor_create(display);
     wlr_data_device_manager_create(display);
@@ -179,19 +154,17 @@ bool Server::init()
     outputLayout = wlr_output_layout_create(display);
     wlr_xdg_output_manager_v1_create(display, outputLayout);
 
-    scene = wlr_scene_create();
-    sceneLayout = wlr_scene_attach_output_layout(scene, outputLayout);
-    if (dmabuf) {
-        wlr_scene_set_linux_dmabuf_v1(scene, dmabuf);
-    }
+    sceneGraph = std::make_unique<scene::Scene>();
+    sceneGraph->watch(compositor);
 
     // L'ordine di creazione è l'ordine di impilamento (dal basso).
-    layers.background = wlr_scene_tree_create(&scene->tree);
-    layers.bottom = wlr_scene_tree_create(&scene->tree);
-    layers.windows = wlr_scene_tree_create(&scene->tree);
-    layers.top = wlr_scene_tree_create(&scene->tree);
-    layers.fullscreen = wlr_scene_tree_create(&scene->tree);
-    layers.overlay = wlr_scene_tree_create(&scene->tree);
+    scene::Tree* root = &sceneGraph->root();
+    layers.background = std::make_unique<scene::Tree>(root);
+    layers.bottom = std::make_unique<scene::Tree>(root);
+    layers.windows = std::make_unique<scene::Tree>(root);
+    layers.top = std::make_unique<scene::Tree>(root);
+    layers.fullscreen = std::make_unique<scene::Tree>(root);
+    layers.overlay = std::make_unique<scene::Tree>(root);
 
     on(&backend->events.new_output, [this](void* data) {
         new Output(*this, static_cast<wlr_output*>(data));
@@ -358,19 +331,19 @@ void Server::shutdown()
     // wlroots controlla che nessun listener resti attaccato agli oggetti che
     // distrugge: scolleghiamo tutti quelli globali prima di procedere.
     m_listeners.clear();
-    m_snapshotAnimations.clear(); // le istantanee vivono nella scena
-    m_snapPreview.rect = nullptr; // distrutta insieme alla scena
+    m_snapshotAnimations.clear();
+    m_snapPreview.rect.reset();
 
-    wlr_scene_node_destroy(&scene->tree.node);
     wlr_xcursor_manager_destroy(cursorManager);
     wlr_cursor_destroy(cursor);
-    wlr_allocator_destroy(allocator);
-    wlr_renderer_destroy(renderer);
     wlr_backend_destroy(backend); // distrugge schermi e tastiere
-    if (velaAllocator) {
-        wlr_allocator_destroy(velaAllocator);
-    }
-    vulkan.reset(); // dopo gli schermi, che ne usano il device
+    // Dopo gli schermi, che la usano per disegnare.
+    layers = {};
+    sceneGraph.reset();
+    // Il renderer avvisa chi lo usa (wlr_compositor) e si distrugge.
+    wlr_renderer_destroy(renderer);
+    wlr_allocator_destroy(allocator);
+    vulkan.reset(); // per ultimo: tutto il resto ne usa il device
     wl_display_destroy(display);
 }
 
@@ -408,7 +381,7 @@ void Server::focusToplevel(Toplevel* toplevel)
     }
 
     // Porta in primo piano e in testa alla lista MRU in ogni caso.
-    wlr_scene_node_raise_to_top(&toplevel->tree->node);
+    toplevel->tree->raiseToTop();
     toplevels.remove(toplevel);
     toplevels.push_front(toplevel);
 
@@ -506,19 +479,19 @@ Output* Server::outputUnderCursor() const
     return outputs.empty() ? nullptr : outputs.front();
 }
 
-wlr_scene_tree* Server::layerTree(zwlr_layer_shell_v1_layer layer) const
+scene::Tree* Server::layerTree(zwlr_layer_shell_v1_layer layer) const
 {
     switch (layer) {
     case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
-        return layers.background;
+        return layers.background.get();
     case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
-        return layers.bottom;
+        return layers.bottom.get();
     case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
-        return layers.top;
+        return layers.top.get();
     case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY:
-        return layers.overlay;
+        return layers.overlay.get();
     }
-    return layers.top;
+    return layers.top.get();
 }
 
 // ------------------------------------------------------------ animazioni --
@@ -531,13 +504,13 @@ void Server::addAnimation(Toplevel* toplevel)
     scheduleFrames();
 }
 
-void Server::tickAnimations(const timespec& now)
+void Server::tickAnimations(int64_t presentNs)
 {
+    m_animationNowMs = std::max(m_animationNowMs, double(presentNs) / 1e6);
     if (m_animating.empty() && m_snapshotAnimations.empty() && !m_snapPreview.rect) {
         return;
     }
-    const double nowMs = static_cast<double>(now.tv_sec) * 1000.0
-        + static_cast<double>(now.tv_nsec) / 1'000'000.0;
+    const double nowMs = m_animationNowMs;
 
     const auto running = m_animating; // la lista può cambiare durante il giro
     for (Toplevel* toplevel : running) {
@@ -556,7 +529,7 @@ void Server::tickAnimations(const timespec& now)
 void Server::scheduleFrames()
 {
     for (Output* output : outputs) {
-        wlr_output_schedule_frame(output->wlr);
+        output->scheduleFrame();
     }
 }
 
@@ -564,6 +537,7 @@ void Server::scheduleFrames()
 
 namespace {
 
+// Cosa c'è sotto il cursore: la superficie e chi la possiede.
 struct Hit {
     SceneOwner* owner = nullptr;
     wlr_surface* surface = nullptr;
@@ -571,25 +545,10 @@ struct Hit {
     double sy = 0.0;
 };
 
-Hit hitTest(wlr_scene* scene, double lx, double ly)
+Hit hitTest(const scene::Scene& scene, double lx, double ly)
 {
-    Hit hit;
-    wlr_scene_node* node = wlr_scene_node_at(&scene->tree.node, lx, ly, &hit.sx, &hit.sy);
-    if (!node || node->type != WLR_SCENE_NODE_BUFFER) {
-        return hit;
-    }
-    wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(wlr_scene_buffer_from_node(node));
-    if (!sceneSurface) {
-        return hit;
-    }
-    hit.surface = sceneSurface->surface;
-    for (wlr_scene_tree* tree = node->parent; tree; tree = tree->node.parent) {
-        if (tree->node.data) {
-            hit.owner = static_cast<SceneOwner*>(tree->node.data);
-            break;
-        }
-    }
-    return hit;
+    const scene::Scene::Hit found = scene.at(lx, ly);
+    return { static_cast<SceneOwner*>(found.owner), found.surface, found.sx, found.sy };
 }
 
 } // namespace
@@ -618,9 +577,7 @@ void Server::onNewInput(wlr_input_device* device)
 void Server::onCursorMotion(uint32_t timeMsec)
 {
     if (cursorMode == CursorMode::Move && grabbed) {
-        wlr_scene_node_set_position(&grabbed->tree->node,
-            static_cast<int>(std::lround(cursor->x - grabX)),
-            static_cast<int>(std::lround(cursor->y - grabY)));
+        grabbed->tree->setPosition(std::lround(cursor->x - grabX), std::lround(cursor->y - grabY));
         updateSnapZone();
         return;
     }
@@ -645,12 +602,12 @@ void Server::onCursorMotion(uint32_t timeMsec)
         }
 
         const wlr_box& geometry = grabbed->xdg->base->geometry;
-        wlr_scene_node_set_position(&grabbed->tree->node, left - geometry.x, top - geometry.y);
+        grabbed->tree->setPosition(left - geometry.x, top - geometry.y);
         wlr_xdg_toplevel_set_size(grabbed->xdg, right - left, bottom - top);
         return;
     }
 
-    const Hit hit = hitTest(scene, cursor->x, cursor->y);
+    const Hit hit = hitTest(*sceneGraph, cursor->x, cursor->y);
     if (!hit.surface) {
         wlr_cursor_set_xcursor(cursor, cursorManager, "default");
         wlr_seat_pointer_clear_focus(seat);
@@ -677,7 +634,7 @@ void Server::onCursorButton(wlr_pointer_button_event* event)
         return;
     }
 
-    const Hit hit = hitTest(scene, cursor->x, cursor->y);
+    const Hit hit = hitTest(*sceneGraph, cursor->x, cursor->y);
     if (!hit.owner) {
         return;
     }
@@ -716,8 +673,7 @@ void Server::beginInteractive(Toplevel* toplevel, CursorMode mode, uint32_t edge
             toplevel->setSnap(Snap::None);
         }
         const wlr_box& geometry = toplevel->xdg->base->geometry;
-        wlr_scene_node_set_position(&toplevel->tree->node,
-            static_cast<int>(cursor->x - fraction * restoredWidth) - geometry.x,
+        toplevel->tree->setPosition(static_cast<int>(cursor->x - fraction * restoredWidth) - geometry.x,
             frame.y - geometry.y);
     }
     // Ridimensionare una finestra agganciata la sgancia, lasciandola dov'è.
@@ -730,8 +686,8 @@ void Server::beginInteractive(Toplevel* toplevel, CursorMode mode, uint32_t edge
     cursorMode = mode;
 
     if (mode == CursorMode::Move) {
-        grabX = cursor->x - toplevel->tree->node.x;
-        grabY = cursor->y - toplevel->tree->node.y;
+        grabX = cursor->x - toplevel->tree->x();
+        grabY = cursor->y - toplevel->tree->y();
         return;
     }
 

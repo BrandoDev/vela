@@ -17,7 +17,7 @@ void printUsage(const char* program)
         "  VELA_TERMINAL      terminale per Alt/Super+Invio (predefinito: konsole)\n"
         "  VELA_SCALE         scala degli schermi (es. 1.25)\n"
         "  VELA_VRR=1         attiva il refresh variabile\n"
-        "  VELA_RENDERER=vela il nuovo renderer Vulkan (tappa S0: scena di prova)\n"
+        "  VELA_VULKAN_VALIDATION=1  validation layer di Vulkan (per lo sviluppo)\n"
         "  VELA_NATURAL_SCROLL=0  scorrimento classico sul touchpad\n"
         "  VELA_DEBUG=1       log dettagliato\n"
         "  XKB_DEFAULT_LAYOUT layout della tastiera (es. it)\n",

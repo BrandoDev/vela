@@ -6,92 +6,69 @@ namespace vela {
 
 // -------------------------------------------------------------- Snapshot --
 
-Snapshot::Snapshot(wlr_scene_tree* parent, wlr_scene_node* source, wlr_box frame)
-    : m_tree(wlr_scene_tree_create(parent))
+Snapshot::Snapshot(scene::Tree* parent, scene::Node* source, wlr_box frame)
+    : m_tree(std::make_unique<scene::Tree>(parent))
     , m_frame(frame)
 {
-    int lx = 0;
-    int ly = 0;
-    if (source->parent) {
-        wlr_scene_node_coords(&source->parent->node, &lx, &ly);
+    double lx = 0.0;
+    double ly = 0.0;
+    if (source->parent()) {
+        source->parent()->coords(lx, ly);
     }
     collect(source, lx, ly);
-    if (source->parent == parent) {
-        wlr_scene_node_place_above(&m_tree->node, source);
+    if (source->parent() == parent) {
+        m_tree->placeAbove(source);
     }
     wlr_log(WLR_DEBUG, "Istantanea: %zu buffer", m_pieces.size());
 }
 
-Snapshot::~Snapshot()
-{
-    wlr_scene_node_destroy(&m_tree->node);
-}
+Snapshot::~Snapshot() = default;
 
-// Non si guarda se i nodi sono abilitati: alla chiusura (e con la finestra
-// ridotta a icona) wlroots disabilita tutto l'albero, ma i buffer restano.
-// Una superficie davvero nascosta dall'app non ha buffer e resta fuori.
-void Snapshot::collect(wlr_scene_node* node, int lx, int ly)
+// Non si guarda se i nodi sono abilitati: alla chiusura la superficie è già
+// "smappata" e con la finestra ridotta a icona l'albero è spento, ma i
+// buffer restano. Una superficie davvero nascosta dall'app non ha buffer e
+// resta fuori.
+void Snapshot::collect(scene::Node* node, double lx, double ly)
 {
-    lx += node->x;
-    ly += node->y;
+    lx += node->x();
+    ly += node->y();
 
-    if (node->type == WLR_SCENE_NODE_TREE) {
-        wlr_scene_node* child;
-        wl_list_for_each(child, &wlr_scene_tree_from_node(node)->children, link)
-        {
+    if (node->type() == scene::Node::Type::Tree) {
+        for (scene::Node* child : static_cast<scene::Tree*>(node)->children()) {
             collect(child, lx, ly);
         }
         return;
     }
-    if (node->type != WLR_SCENE_NODE_BUFFER) {
+    if (node->type() != scene::Node::Type::Surface) {
         return;
     }
-
-    wlr_scene_buffer* source = wlr_scene_buffer_from_node(node);
-    if (!source->buffer) {
-        return;
-    }
-    int width = source->dst_width;
-    int height = source->dst_height;
-    if (width <= 0 || height <= 0) {
-        width = source->buffer->width;
-        height = source->buffer->height;
-        if (source->transform & WL_OUTPUT_TRANSFORM_90) {
-            std::swap(width, height);
-        }
-    }
-
-    // wlr_scene_buffer_create blocca il buffer: resta valido finché esiste
-    // la copia, qualunque cosa faccia l'app.
-    wlr_scene_buffer* copy = wlr_scene_buffer_create(m_tree, source->buffer);
-    if (!copy) {
-        return;
-    }
-    wlr_scene_buffer_set_transform(copy, source->transform);
-    if (!wlr_fbox_empty(&source->src_box)) {
-        wlr_scene_buffer_set_source_box(copy, &source->src_box);
-    }
-    wlr_scene_buffer_set_transfer_function(copy, source->transfer_function);
-    wlr_scene_buffer_set_primaries(copy, source->primaries);
-    // Un'istantanea non riceve clic: passano alla finestra sotto.
-    copy->point_accepts_input = [](wlr_scene_buffer*, double*, double*) { return false; };
 
     const double cx = m_frame.x + m_frame.width / 2.0;
     const double cy = m_frame.y + m_frame.height / 2.0;
-    m_pieces.push_back({ copy, lx - cx, ly - cy, width, height });
+    scene::forEachSurface(static_cast<scene::SurfaceNode*>(node)->surface(), [&](wlr_surface* surface, int sx, int sy) {
+        // Il buffer della superficie (già caricato in una texture): bloccato
+        // dal nodo, resta valido qualunque cosa faccia l'app.
+        wlr_client_buffer* buffer = surface->buffer;
+        if (!buffer || !buffer->texture) {
+            return;
+        }
+        wlr_fbox src {};
+        wlr_surface_get_buffer_source_box(surface, &src);
+        const double width = surface->current.width;
+        const double height = surface->current.height;
+        auto copy = std::make_unique<scene::BufferNode>(m_tree.get(), &buffer->base, buffer->texture, src,
+            wlr_output_transform_invert(surface->current.transform), width, height);
+        m_pieces.push_back({ std::move(copy), lx + sx - cx, ly + sy - cy, width, height });
+    });
 }
 
 void Snapshot::apply(double cx, double cy, double scale, float opacity)
 {
     for (const Piece& piece : m_pieces) {
-        wlr_scene_node_set_position(&piece.buffer->node,
-            static_cast<int>(std::lround(cx + piece.x * scale)),
-            static_cast<int>(std::lround(cy + piece.y * scale)));
-        wlr_scene_buffer_set_dest_size(piece.buffer,
-            std::max(1, static_cast<int>(std::lround(piece.width * scale))),
-            std::max(1, static_cast<int>(std::lround(piece.height * scale))));
-        wlr_scene_buffer_set_opacity(piece.buffer, opacity);
+        piece.node->setPosition(cx + piece.x * scale, cy + piece.y * scale);
+        piece.node->setSize(piece.width * scale, piece.height * scale);
     }
+    m_tree->setOpacity(opacity);
 }
 
 // ------------------------------------------------------------ animazioni --
@@ -116,7 +93,7 @@ bool Server::animateSnapshot(Toplevel* toplevel, SnapshotKind kind)
     SnapshotAnimation animation {
         .kind = kind,
         .owner = kind == SnapshotKind::Close ? nullptr : toplevel,
-        .snapshot = std::make_unique<Snapshot>(toplevel->tree->node.parent, &toplevel->tree->node, frame),
+        .snapshot = std::make_unique<Snapshot>(toplevel->tree->parent(), toplevel->tree.get(), frame),
         .tween = {},
         .fromX = frame.x + frame.width / 2.0,
         .fromY = frame.y + frame.height / 2.0,
