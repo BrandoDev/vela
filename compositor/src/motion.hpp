@@ -131,6 +131,9 @@ inline constexpr double windowCloseScale = 0.94;
 inline constexpr double windowMinimizeMs = 250.0;
 inline constexpr double windowMinimizeScale = 0.3;
 
+// Anteprima dello snap: cresce dal centro dell'area e si accende.
+inline constexpr double snapPreviewMs = 150.0;
+
 } // namespace motion
 
 } // namespace vela

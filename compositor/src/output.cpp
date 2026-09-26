@@ -45,6 +45,14 @@ Output::Output(Server& s, wlr_output* output)
     wlr_output_state_set_enabled(&state, true);
     if (wlr_output_mode* mode = pickMode(wlr)) {
         wlr_output_state_set_mode(&state, mode);
+    } else if (const char* size = std::getenv("VELA_OUTPUT_SIZE")) {
+        // Schermo senza modalità (finestra annidata, headless): la
+        // dimensione la scegliamo noi, es. VELA_OUTPUT_SIZE=1920x1080.
+        int width = 0;
+        int height = 0;
+        if (std::sscanf(size, "%dx%d", &width, &height) == 2 && width > 0 && height > 0) {
+            wlr_output_state_set_custom_mode(&state, width, height, 0);
+        }
     }
     if (const char* scale = std::getenv("VELA_SCALE")) {
         wlr_output_state_set_scale(&state, std::strtof(scale, nullptr));
@@ -94,6 +102,7 @@ Output::~Output()
         layer->wlr->output = nullptr;
         wlr_layer_surface_v1_destroy(layer->wlr);
     }
+    server.endSnapZone(false); // l'anteprima potrebbe essere su questo schermo
     server.outputs.remove(this);
     wlr->data = nullptr;
 }
@@ -154,8 +163,13 @@ void Output::arrangeLayers()
     usable = area;
     if (changed) {
         for (Toplevel* toplevel : server.toplevels) {
-            if (toplevel->maximized && toplevel->output() == this) {
+            if (toplevel->fullscreen || toplevel->output() != this) {
+                continue;
+            }
+            if (toplevel->maximized) {
                 toplevel->applyMaximized();
+            } else if (toplevel->snap != Snap::None) {
+                toplevel->applySnap(this);
             }
         }
     }

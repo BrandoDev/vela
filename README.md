@@ -48,6 +48,8 @@ alla volta.
   ripristina anche le finestre ridotte a icona, come su Windows.
 - Pubblica l'elenco delle finestre aperte (protocollo foreign-toplevel):
   lo usa la taskbar, ma funziona anche con strumenti esterni.
+- Snap a metà schermo con Super+frecce o trascinando ai bordi, con
+  anteprima animata.
 - Menu e popup tenuti dentro lo schermo.
 - Buffer GPU condivisi con le app (linux-dmabuf) e cursori per nome
   (cursor-shape), oltre ai protocolli che le app moderne si aspettano:
@@ -143,7 +145,9 @@ resta alle app, che lo usano per aprire i propri menu.
 | Terminale                        | Super+Invio         | Alt+Invio     |
 | Chiudi finestra                  | Alt+F4              | Alt+Q         |
 | Finestra precedente              | Alt+Tab             | Alt+J         |
-| Massimizza / ripristina          | Super+↑ / Super+↓   | Alt+M         |
+| Massimizza                       | Super+↑             | Alt+M         |
+| Ripristina, poi riduci a icona   | Super+↓             |               |
+| Aggancia a metà sinistra/destra  | Super+← / Super+→   | Alt+← / Alt+→ |
 | Esci da Vela                     | Alt+Shift+Esc       | Alt+Shift+Esc |
 
 ### Variabili utili
@@ -157,6 +161,40 @@ resta alle app, che lo usano per aprire i propri menu.
 | `VELA_NATURAL_SCROLL=0` | scorrimento classico sul touchpad (predef. naturale, come Windows) |
 | `VELA_ICON_THEME`    | tema di icone se Qt non lo trova (predef. breeze-dark) |
 | `VELA_DEBUG=1`       | log dettagliato di wlroots                           |
+| `VELA_OUTPUT_SIZE`   | risoluzione quando lo schermo non ne ha (finestra annidata, headless), es. `1920x1080` |
+| `VELA_DEBUG_INPUT=1` | mouse e tastiera virtuali per `vela-input` (spento di default: permettono a qualunque programma di simulare input) |
+
+Lo snap funziona anche col mouse: trascina una finestra contro il bordo
+sinistro o destro (o in alto, per massimizzarla) e un'anteprima mostra dove
+finirà. Trascinando una finestra agganciata o massimizzata, torna alla sua
+dimensione sotto il cursore.
+
+## Provarlo senza guardarlo
+
+`scripts/run-headless.sh` avvia Vela senza finestra (backend headless di
+wlroots, 1920x1080): nulla compare sullo schermo, ma le app si aprono. Con
+gli strumenti in `build/tools/` lo si guarda e lo si comanda come un utente:
+
+```sh
+sh scripts/run-headless.sh &          # il log dice il WAYLAND_DISPLAY
+export WAYLAND_DISPLAY=wayland-1
+kcalc &
+build/tools/vela-input key super+Left                  # aggancia a sinistra
+build/tools/vela-input move 1100 1055 click            # clic sulla taskbar
+build/tools/vela-windows list                          # finestre e stato
+build/tools/vela-shot cattura.png                      # screenshot PNG
+```
+
+- `vela-shot FILE.png [X Y L A]`: cattura lo schermo o una zona.
+- `vela-windows [list] | AZIONE APP_ID`: activate, minimize, restore,
+  maximize, unmaximize, close.
+- `vela-input AZIONE...`: `move X Y`, `down`/`up`/`click [left|right|middle]`,
+  `key super+Left`, `type testo`, `sleep MS`, eseguite in ordine. Un
+  trascinamento va fatto in un solo comando: quando `vela-input` termina,
+  i tasti rimasti premuti vengono rilasciati.
+
+Funzionano anche con Vela annidato in KDE (per `vela-input` serve
+`VELA_DEBUG_INPUT=1`).
 
 ## Struttura
 
@@ -170,14 +208,15 @@ compositor/src/
   toplevel.cpp     finestre, popup, animazione di apertura, massimizza,
                    riduci a icona, maniglie per la taskbar
   snapshot.cpp     istantanee delle finestre e animazioni di chiusura/riduzione
+  snap.cpp         snap a metà schermo, con anteprima durante il trascinamento
   layer.cpp        superfici della shell (layer-shell)
   keyboard.cpp     tastiera e tasto Super
 shell/
   src/             app installate, finestre aperte, taskbar, icone, socket
   qml/             Theme, Taskbar, StartMenu e componenti
-protocols/         wlr-layer-shell e wlr-foreign-toplevel-management
-                   (non inclusi in wayland-protocols)
-scripts/           avvio annidato
+tools/             vela-shot, vela-windows, vela-input (prove automatiche)
+protocols/         protocolli wlroots non inclusi in wayland-protocols
+scripts/           avvio annidato e headless
 ```
 
 ## Roadmap
@@ -188,7 +227,9 @@ scripts/           avvio annidato
 - ~~Animazione di chiusura (istantanea del contenuto che si dissolve).~~
   Fatto.
 - Alt+Tab grafico con anteprime.
-- Snap delle finestre: Super+frecce e trascinamento ai bordi, con anteprima.
+- ~~Snap delle finestre: Super+frecce e trascinamento ai bordi, con
+  anteprima.~~ Fatto (metà schermo; i quarti e i layout di Windows 11 più
+  avanti).
 
 **Milestone 2: l'aspetto**
 - Sfocatura acrilica, angoli arrotondati e ombre disegnati dal compositor.

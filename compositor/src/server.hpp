@@ -107,6 +107,9 @@ struct Popup {
 
 // -------------------------------------------------------------- Toplevel --
 
+// Metà dello schermo a cui è agganciata una finestra (snap).
+enum class Snap { None, Left, Right };
+
 // Una finestra applicativa (xdg-shell).
 struct Toplevel : SceneOwner {
     Toplevel(Server& server, wlr_xdg_toplevel* toplevel);
@@ -119,7 +122,9 @@ struct Toplevel : SceneOwner {
     void setMaximized(bool on);
     void setFullscreen(bool on);
     void setMinimized(bool on);
+    void setSnap(Snap side, Output* out = nullptr); // out: lo schermo, se non quello attuale
     void applyMaximized();
+    void applySnap(Output* out);
     void setActivated(bool on); // per l'app e per la taskbar
     void finishRestore(); // fine dell'animazione di ripristino
 
@@ -136,7 +141,8 @@ struct Toplevel : SceneOwner {
     bool maximized = false;
     bool fullscreen = false;
     bool minimized = false;
-    wlr_box restore {}; // posizione e dimensione prima di massimizzare
+    Snap snap = Snap::None;
+    wlr_box restore {}; // posizione e dimensione prima di massimizzare o agganciare
     wlr_box taskbarRect {}; // il suo pulsante nella taskbar (globali), se noto
 
     // Come la taskbar vede e comanda questa finestra (foreign-toplevel).
@@ -235,6 +241,12 @@ private:
 
 enum class CursorMode { Passthrough, Move, Resize };
 
+// Dove si aggancerà la finestra trascinata, se la rilasci ora.
+enum class SnapZone { None, Left, Right, Maximize };
+
+// L'area utile di uno schermo divisa a metà.
+wlr_box snapArea(const Output* out, Snap side);
+
 class Server {
 public:
     bool init();
@@ -257,6 +269,8 @@ public:
 
     // Interazione col puntatore
     void beginInteractive(Toplevel* toplevel, CursorMode mode, uint32_t edges);
+    void updateSnapZone(); // durante il trascinamento: anteprima dello snap
+    void endSnapZone(bool apply);
 
     // Animazioni: chiamate dal frame di ogni schermo
     void addAnimation(Toplevel* toplevel);
@@ -347,6 +361,16 @@ private:
         float fromOpacity, toOpacity;
     };
     std::list<SnapshotAnimation> m_snapshotAnimations;
+
+    // Anteprima dello snap mentre trascini una finestra verso un bordo.
+    struct {
+        SnapZone zone = SnapZone::None;
+        Output* output = nullptr;
+        wlr_scene_rect* rect = nullptr;
+        wlr_box target {};
+        Tween tween;
+    } m_snapPreview;
+    void tickSnapPreview(double nowMs);
 
     struct {
         std::string command;

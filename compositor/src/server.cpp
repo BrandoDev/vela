@@ -238,6 +238,21 @@ bool Server::init()
         }
     });
 
+    // Mouse e tastiera virtuali, per i test automatici (tools/vela-input).
+    // Spenti di default: permettono a qualunque programma di simulare input.
+    if (envInt("VELA_DEBUG_INPUT", 0) != 0) {
+        wlr_log(WLR_INFO, "VELA_DEBUG_INPUT: mouse e tastiera virtuali attivi");
+        auto* pointers = wlr_virtual_pointer_manager_v1_create(display);
+        on(&pointers->events.new_virtual_pointer, [this](void* data) {
+            auto* event = static_cast<wlr_virtual_pointer_v1_new_pointer_event*>(data);
+            onNewInput(&event->new_pointer->pointer.base);
+        });
+        auto* keyboards = wlr_virtual_keyboard_manager_v1_create(display);
+        on(&keyboards->events.new_virtual_keyboard, [this](void* data) {
+            onNewInput(&static_cast<wlr_virtual_keyboard_v1*>(data)->keyboard.base);
+        });
+    }
+
     wl_event_loop_add_signal(loop, SIGINT, handleTerminate, display);
     wl_event_loop_add_signal(loop, SIGTERM, handleTerminate, display);
 
@@ -295,6 +310,7 @@ void Server::shutdown()
     // distrugge: scolleghiamo tutti quelli globali prima di procedere.
     m_listeners.clear();
     m_snapshotAnimations.clear(); // le istantanee vivono nella scena
+    m_snapPreview.rect = nullptr; // distrutta insieme alla scena
 
     wlr_scene_node_destroy(&scene->tree.node);
     wlr_xcursor_manager_destroy(cursorManager);
@@ -400,6 +416,7 @@ void Server::forget(Toplevel* toplevel)
     std::erase(m_animating, toplevel);
     cancelSnapshotAnimations(toplevel);
     if (grabbed == toplevel) {
+        endSnapZone(false);
         grabbed = nullptr;
         cursorMode = CursorMode::Passthrough;
     }
@@ -459,7 +476,7 @@ void Server::addAnimation(Toplevel* toplevel)
 
 void Server::tickAnimations(const timespec& now)
 {
-    if (m_animating.empty() && m_snapshotAnimations.empty()) {
+    if (m_animating.empty() && m_snapshotAnimations.empty() && !m_snapPreview.rect) {
         return;
     }
     const double nowMs = static_cast<double>(now.tv_sec) * 1000.0
@@ -472,7 +489,9 @@ void Server::tickAnimations(const timespec& now)
         }
     }
     tickSnapshotAnimations(nowMs);
-    if (!m_animating.empty() || !m_snapshotAnimations.empty()) {
+    tickSnapPreview(nowMs);
+    if (!m_animating.empty() || !m_snapshotAnimations.empty()
+        || (m_snapPreview.rect && !m_snapPreview.tween.finished(nowMs))) {
         scheduleFrames();
     }
 }
@@ -545,6 +564,7 @@ void Server::onCursorMotion(uint32_t timeMsec)
         wlr_scene_node_set_position(&grabbed->tree->node,
             static_cast<int>(std::lround(cursor->x - grabX)),
             static_cast<int>(std::lround(cursor->y - grabY)));
+        updateSnapZone();
         return;
     }
 
@@ -590,6 +610,9 @@ void Server::onCursorButton(wlr_pointer_button_event* event)
 
     if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
         if (cursorMode != CursorMode::Passthrough) {
+            if (cursorMode == CursorMode::Move) {
+                endSnapZone(true); // rilasciata su un bordo: si aggancia
+            }
             cursorMode = CursorMode::Passthrough;
             grabbed = nullptr;
             onCursorMotion(event->time_msec);
@@ -623,17 +646,27 @@ void Server::beginInteractive(Toplevel* toplevel, CursorMode mode, uint32_t edge
     }
     toplevel->finishOpenAnimation();
 
-    // Trascinare una finestra massimizzata la ripristina sotto il cursore,
-    // mantenendo il punto afferrato alla stessa proporzione (come Windows).
-    if (toplevel->maximized && mode == CursorMode::Move) {
+    // Trascinare una finestra massimizzata o agganciata la ripristina sotto
+    // il cursore, mantenendo il punto afferrato alla stessa proporzione e la
+    // barra del titolo sotto il cursore (come Windows).
+    if ((toplevel->maximized || toplevel->snap != Snap::None) && mode == CursorMode::Move) {
         const wlr_box frame = toplevel->frameBox();
         const double fraction = frame.width > 0 ? (cursor->x - frame.x) / frame.width : 0.5;
         const int restoredWidth = toplevel->restore.width > 0 ? toplevel->restore.width : frame.width;
-        toplevel->setMaximized(false);
+        if (toplevel->maximized) {
+            toplevel->setMaximized(false);
+        } else {
+            toplevel->setSnap(Snap::None);
+        }
         const wlr_box& geometry = toplevel->xdg->base->geometry;
         wlr_scene_node_set_position(&toplevel->tree->node,
             static_cast<int>(cursor->x - fraction * restoredWidth) - geometry.x,
-            toplevel->tree->node.y);
+            frame.y - geometry.y);
+    }
+    // Ridimensionare una finestra agganciata la sgancia, lasciandola dov'è.
+    if (toplevel->snap != Snap::None && mode == CursorMode::Resize) {
+        toplevel->snap = Snap::None;
+        wlr_xdg_toplevel_set_tiled(toplevel->xdg, WLR_EDGE_NONE);
     }
 
     grabbed = toplevel;
@@ -700,8 +733,24 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
         return true;
     }
     if (super && sym == XKB_KEY_Down) {
+        // Come su Windows: prima si ripristina, poi si riduce a icona.
         if (Toplevel* active = focusedToplevel()) {
-            active->setMaximized(false);
+            if (active->maximized) {
+                active->setMaximized(false);
+            } else if (active->snap != Snap::None) {
+                active->setSnap(Snap::None);
+            } else {
+                active->setMinimized(true);
+            }
+        }
+        return true;
+    }
+    if ((super || altNested) && (sym == XKB_KEY_Left || sym == XKB_KEY_Right)) {
+        // Metà sinistra/destra; verso il lato opposto la finestra si sgancia.
+        if (Toplevel* active = focusedToplevel()) {
+            const Snap side = sym == XKB_KEY_Left ? Snap::Left : Snap::Right;
+            const Snap opposite = side == Snap::Left ? Snap::Right : Snap::Left;
+            active->setSnap(active->snap == opposite ? Snap::None : side);
         }
         return true;
     }

@@ -165,14 +165,14 @@ void Toplevel::onCommit()
 // d'ombra (geometry.x/y) quando ridisegnano: le teniamo allineate.
 void Toplevel::keepInPlace()
 {
-    if (m_animating || (!maximized && !fullscreen)) {
+    if (m_animating || (!maximized && !fullscreen && snap == Snap::None)) {
         return;
     }
     Output* out = output();
     if (!out) {
         return;
     }
-    const wlr_box area = fullscreen ? out->box() : out->usable;
+    const wlr_box area = fullscreen ? out->box() : maximized ? out->usable : snapArea(out, snap);
     const wlr_box& geometry = xdg->base->geometry;
     wlr_scene_node_set_position(&tree->node, area.x - geometry.x, area.y - geometry.y);
 }
@@ -376,8 +376,12 @@ void Toplevel::setMaximized(bool on)
     finishOpenAnimation();
 
     if (on) {
-        if (mapped) {
-            restore = frameBox();
+        if (mapped && snap == Snap::None) {
+            restore = frameBox(); // da agganciata si torna alla dimensione libera
+        }
+        if (snap != Snap::None) {
+            snap = Snap::None;
+            wlr_xdg_toplevel_set_tiled(xdg, WLR_EDGE_NONE);
         }
         maximized = true;
         applyMaximized();
@@ -423,7 +427,7 @@ void Toplevel::setFullscreen(bool on)
     Output* out = mapped ? output() : server.outputUnderCursor();
 
     if (on) {
-        if (mapped && !maximized) {
+        if (mapped && !maximized && snap == Snap::None) {
             restore = frameBox();
         }
         fullscreen = true;
@@ -449,6 +453,8 @@ void Toplevel::setFullscreen(bool on)
     wlr_scene_node_reparent(&tree->node, server.layers.windows);
     if (maximized) {
         applyMaximized();
+    } else if (snap != Snap::None) {
+        applySnap(output());
     } else {
         wlr_xdg_toplevel_set_size(xdg, restore.width, restore.height);
         if (mapped && restore.width > 0) {
@@ -488,6 +494,7 @@ void Toplevel::setMinimized(bool on)
     wlr_scene_node_set_enabled(&tree->node, false);
     server.animateSnapshot(this, Server::SnapshotKind::Minimize);
     if (server.grabbed == this) {
+        server.endSnapZone(false);
         server.grabbed = nullptr;
         server.cursorMode = CursorMode::Passthrough;
     }

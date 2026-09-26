@@ -44,6 +44,7 @@ add_executable(vela-compositor
     src/toplevel.cpp
     src/layer.cpp
     src/keyboard.cpp
+    src/snap.cpp
     src/snapshot.cpp
     ${VELA_PROTOCOL_HEADERS})
 

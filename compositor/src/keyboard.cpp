@@ -15,23 +15,28 @@ Keyboard::Keyboard(Server& s, wlr_keyboard* keyboard)
     : server(s)
     , wlr(keyboard)
 {
+    // Una tastiera virtuale (test automatici) porta il suo layout.
+    const bool isVirtual = wlr_input_device_get_virtual_keyboard(&keyboard->base) != nullptr;
+
     // Il layout arriva dalle variabili XKB_DEFAULT_LAYOUT/VARIANT/OPTIONS
     // (es. XKB_DEFAULT_LAYOUT=it). Più avanti lo leggeremo dalle impostazioni.
-    xkb_context* context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    xkb_keymap* keymap = xkb_keymap_new_from_names(context, nullptr, XKB_KEYMAP_COMPILE_NO_FLAGS);
-    if (!keymap) {
-        wlr_log(WLR_ERROR, "Layout XKB non valido, uso quello di base");
-        xkb_rule_names fallback {};
-        fallback.layout = "us";
-        keymap = xkb_keymap_new_from_names(context, &fallback, XKB_KEYMAP_COMPILE_NO_FLAGS);
-    }
-    wlr_keyboard_set_keymap(wlr, keymap);
-    xkb_keymap_unref(keymap);
-    xkb_context_unref(context);
+    if (!isVirtual) {
+        xkb_context* context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+        xkb_keymap* keymap = xkb_keymap_new_from_names(context, nullptr, XKB_KEYMAP_COMPILE_NO_FLAGS);
+        if (!keymap) {
+            wlr_log(WLR_ERROR, "Layout XKB non valido, uso quello di base");
+            xkb_rule_names fallback {};
+            fallback.layout = "us";
+            keymap = xkb_keymap_new_from_names(context, &fallback, XKB_KEYMAP_COMPILE_NO_FLAGS);
+        }
+        wlr_keyboard_set_keymap(wlr, keymap);
+        xkb_keymap_unref(keymap);
+        xkb_context_unref(context);
 
-    // Ripetizione tasti: ritardo 400 ms, 30 caratteri/s (valori simili a
-    // quelli predefiniti di Windows).
-    wlr_keyboard_set_repeat_info(wlr, 30, 400);
+        // Ripetizione tasti: ritardo 400 ms, 30 caratteri/s (valori simili a
+        // quelli predefiniti di Windows).
+        wlr_keyboard_set_repeat_info(wlr, 30, 400);
+    }
 
     modifiers.connect(&wlr->events.modifiers, [this](void*) {
         wlr_seat_set_keyboard(server.seat, wlr);
