@@ -1,0 +1,107 @@
+#pragma once
+
+// Dalla scena ai pixel di uno schermo (docs/renderer.md §6): la scena
+// appiattita in una lista di quad, le parti coperte scartate, il danno
+// calcolato confrontando con il frame precedente, e solo quello ridisegnato.
+
+#include "render/pass.hpp"
+#include "render/renderer.hpp"
+#include "scene/scene.hpp"
+
+#include <functional>
+#include <unordered_map>
+#include <vector>
+
+namespace vela::scene {
+
+// Un quad da disegnare, in pixel della destinazione.
+struct Element {
+    const void* key; // chi è: la superficie o il nodo nostro
+    wlr_surface* surface; // superfici delle app, altrimenti null
+    wlr_texture* texture; // null: tinta unita
+    wlr_render_color color;
+    wlr_fbox src;
+    wl_output_transform transform;
+    wlr_box box;
+    float opacity;
+    bool linear; // filtro bilineare; false: copia 1:1
+    // Dalla superficie ai pixel: pixel = origin + scale * coordinata logica.
+    double originX, originY;
+    double scaleX, scaleY;
+    bool visible; // non del tutto coperto
+    int64_t visibleArea; // pixel non coperti
+    size_t order; // posizione nella lista, dal basso
+
+    bool sameLook(const Element& other) const;
+};
+
+// Appiattisce `root` (dal basso verso l'alto). Il punto logico (originX,
+// originY) finisce nel pixel (0, 0); `bounds`: i pixel della destinazione.
+struct BuildParams {
+    double originX = 0.0;
+    double originY = 0.0;
+    double scale = 1.0;
+    wlr_box bounds {};
+    // Catture: la radice si disegna anche se nascosta (finestra ridotta a
+    // icona) e senza la sua opacità (animazioni).
+    bool captureRoot = false;
+};
+void buildElements(Node* root, const BuildParams& params, std::vector<Element>& out);
+
+// Scarta ciò che è coperto da superfici opache (dall'alto verso il basso).
+void cullOccluded(std::vector<Element>& elements);
+
+// Disegna gli elementi visibili dentro `clip` (in pixel del buffer). Gli
+// elementi sono nello spazio dello schermo ruotato (width x height); il
+// buffer può essere ruotato rispetto a esso (outputTransform).
+void drawElements(render::Pass& pass, const std::vector<Element>& elements, const pixman_region32_t* clip,
+    wl_output_transform outputTransform, int width, int height);
+
+class OutputFrame {
+public:
+    OutputFrame(Scene& scene, render::Renderer& renderer, wlr_output* output);
+    ~OutputFrame();
+    OutputFrame(const OutputFrame&) = delete;
+    OutputFrame& operator=(const OutputFrame&) = delete;
+
+    wlr_output* output() const { return m_output; }
+
+    // Chiesto un frame (danno, cursore, cattura): chi lo programma.
+    std::function<void()> scheduleFrame;
+
+    // Costruisce il frame per lo schermo che nel layout sta in (lx, ly) e fa
+    // il commit se c'è qualcosa da mostrare. false: niente da fare.
+    bool render(double lx, double ly);
+
+    // Dopo il frame: i frame callback alle superfici visibili scandite da
+    // questo schermo.
+    void sendFrameDone(const timespec& when);
+
+    void damage(const pixman_region32_t* region);
+    void damageWhole();
+
+    // Dalla scena.
+    void surfaceCommitted(wlr_surface* surface);
+    void surfaceDestroyed(wlr_surface* surface);
+    bool shows(wlr_surface* surface) const { return m_last.contains(surface); }
+
+private:
+    void updateSurfaces(const std::vector<Element>& elements);
+
+    Scene& m_scene;
+    render::Renderer& m_renderer;
+    wlr_output* m_output;
+    wlr_damage_ring m_ring {};
+    int m_width = 0;
+    int m_height = 0;
+    float m_scale = 0.0f;
+
+    // Il frame precedente, per chiave: da qui il danno.
+    std::unordered_map<const void*, Element> m_last;
+    std::vector<wlr_surface*> m_visibleSurfaces;
+
+    wl_listener m_damage {};
+    wl_listener m_needsFrame {};
+};
+
+} // namespace vela::scene

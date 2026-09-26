@@ -13,13 +13,6 @@ namespace vela::render {
 
 namespace {
 
-constexpr FormatInfo formats[] = {
-    { DRM_FORMAT_XRGB8888, VK_FORMAT_B8G8R8A8_SRGB },
-    { DRM_FORMAT_ARGB8888, VK_FORMAT_B8G8R8A8_SRGB },
-    { DRM_FORMAT_XBGR8888, VK_FORMAT_R8G8B8A8_SRGB },
-    { DRM_FORMAT_ABGR8888, VK_FORMAT_R8G8B8A8_SRGB },
-};
-
 // Il minimo per scambiare buffer con il kernel e con le app (§7.1).
 constexpr const char* requiredExtensions[] = {
     VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME,
@@ -54,16 +47,6 @@ VKAPI_ATTR VkBool32 VKAPI_CALL onDebugMessage(VkDebugUtilsMessageSeverityFlagBit
 
 } // namespace
 
-const FormatInfo* formatInfo(uint32_t drmFormat)
-{
-    for (const FormatInfo& info : formats) {
-        if (info.drm == drmFormat) {
-            return &info;
-        }
-    }
-    return nullptr;
-}
-
 std::unique_ptr<VulkanDevice> VulkanDevice::create(int backendDrmFd)
 {
     std::unique_ptr<VulkanDevice> vk(new VulkanDevice);
@@ -76,6 +59,7 @@ std::unique_ptr<VulkanDevice> VulkanDevice::create(int backendDrmFd)
 VulkanDevice::~VulkanDevice()
 {
     wlr_drm_format_set_finish(&renderFormats);
+    wlr_drm_format_set_finish(&textureFormats);
     if (renderFd >= 0) {
         close(renderFd);
     }
@@ -95,8 +79,8 @@ VulkanDevice::~VulkanDevice()
 bool VulkanDevice::init(int backendDrmFd)
 {
     uint32_t version = 0;
-    if (vkEnumerateInstanceVersion(&version) != VK_SUCCESS || version < VK_API_VERSION_1_3) {
-        wlr_log(WLR_ERROR, "Vela richiede Vulkan 1.3: il sistema offre al massimo %u.%u",
+    if (vkEnumerateInstanceVersion(&version) != VK_SUCCESS || version < VK_API_VERSION_1_4) {
+        wlr_log(WLR_ERROR, "Vela richiede Vulkan 1.4: il sistema offre al massimo %u.%u",
             VK_API_VERSION_MAJOR(version), VK_API_VERSION_MINOR(version));
         return false;
     }
@@ -127,7 +111,7 @@ bool VulkanDevice::init(int backendDrmFd)
         .applicationVersion = VK_MAKE_VERSION(0, 1, 0),
         .pEngineName = "vela",
         .engineVersion = VK_MAKE_VERSION(0, 1, 0),
-        .apiVersion = VK_API_VERSION_1_3,
+        .apiVersion = VK_API_VERSION_1_4,
     };
     const VkInstanceCreateInfo instanceInfo {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -161,7 +145,7 @@ bool VulkanDevice::init(int backendDrmFd)
     if (!pickPhysicalDevice(backendDrmFd) || !createDevice() || !openRenderNode()) {
         return false;
     }
-    queryRenderFormats();
+    queryFormats();
     if (renderFormats.len == 0) {
         wlr_log(WLR_ERROR, "%s: nessun formato utilizzabile per disegnare sugli schermi", name.c_str());
         return false;
@@ -202,9 +186,9 @@ bool VulkanDevice::pickPhysicalDevice(int backendDrmFd)
                 break;
             }
         }
-        if (props.apiVersion < VK_API_VERSION_1_3 || missing) {
+        if (props.apiVersion < VK_API_VERSION_1_4 || missing) {
             wlr_log(WLR_INFO, "GPU %s scartata: %s", props.deviceName,
-                missing ? missing : "Vulkan 1.3 non supportato");
+                missing ? missing : "Vulkan 1.4 non supportato");
             continue;
         }
 
@@ -236,11 +220,11 @@ bool VulkanDevice::pickPhysicalDevice(int backendDrmFd)
     }
 
     if (!best) {
-        wlr_log(WLR_ERROR, "Nessuna GPU con Vulkan 1.3 e le estensioni per i dmabuf: Vela non può disegnare");
+        wlr_log(WLR_ERROR, "Nessuna GPU con Vulkan 1.4 e le estensioni per i dmabuf: Vela non può disegnare");
         return false;
     }
     if (backendDev != 0 && bestScore < 100) {
-        wlr_log(WLR_ERROR, "La GPU dello schermo non ha Vulkan 1.3: uso %s", name.c_str());
+        wlr_log(WLR_ERROR, "La GPU dello schermo non ha Vulkan 1.4: uso %s", name.c_str());
     }
     physical = best;
     return true;
@@ -264,18 +248,40 @@ bool VulkanDevice::createDevice()
         return false;
     }
 
-    VkPhysicalDeviceVulkan13Features supported13 { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
-    VkPhysicalDeviceFeatures2 supported { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, .pNext = &supported13 };
+    // Cosa usiamo del core: semafori timeline (1.2) per sapere quando la GPU
+    // ha finito, dynamic rendering e synchronization2 (1.3), push
+    // descriptor (1.4) per legare le texture senza pool di descrittori.
+    VkPhysicalDeviceVulkan14Features supported14 { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES };
+    VkPhysicalDeviceVulkan13Features supported13 {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .pNext = &supported14,
+    };
+    VkPhysicalDeviceVulkan12Features supported12 {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .pNext = &supported13,
+    };
+    VkPhysicalDeviceFeatures2 supported { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, .pNext = &supported12 };
     vkGetPhysicalDeviceFeatures2(physical, &supported);
-    if (!supported13.dynamicRendering || !supported13.synchronization2) {
-        wlr_log(WLR_ERROR, "%s: mancano dynamic rendering o synchronization2", name.c_str());
+    if (!supported12.timelineSemaphore || !supported13.dynamicRendering || !supported13.synchronization2
+        || !supported14.pushDescriptor) {
+        wlr_log(WLR_ERROR, "%s: mancano funzioni obbligatorie di Vulkan 1.4", name.c_str());
         return false;
     }
 
+    VkPhysicalDeviceVulkan14Features enabled14 {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+        .pushDescriptor = VK_TRUE,
+    };
     VkPhysicalDeviceVulkan13Features enabled13 {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .pNext = &enabled14,
         .synchronization2 = VK_TRUE,
         .dynamicRendering = VK_TRUE,
+    };
+    VkPhysicalDeviceVulkan12Features enabled12 {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .pNext = &enabled13,
+        .timelineSemaphore = VK_TRUE,
     };
     const float priority = 1.0f;
     const VkDeviceQueueCreateInfo queueInfo {
@@ -286,7 +292,7 @@ bool VulkanDevice::createDevice()
     };
     const VkDeviceCreateInfo deviceInfo {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext = &enabled13,
+        .pNext = &enabled12,
         .queueCreateInfoCount = 1,
         .pQueueCreateInfos = &queueInfo,
         .enabledExtensionCount = static_cast<uint32_t>(std::size(requiredExtensions)),
@@ -337,49 +343,77 @@ bool VulkanDevice::openRenderNode()
     return true;
 }
 
-void VulkanDevice::queryRenderFormats()
+bool VulkanDevice::supportsDmabuf(VkFormat format, uint64_t modifier, VkImageUsageFlags usage) const
 {
-    for (const FormatInfo& info : formats) {
+    const VkPhysicalDeviceImageDrmFormatModifierInfoEXT modInfo {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_DRM_FORMAT_MODIFIER_INFO_EXT,
+        .drmFormatModifier = modifier,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    };
+    const VkPhysicalDeviceExternalImageFormatInfo externalInfo {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
+        .pNext = &modInfo,
+        .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+    };
+    const VkPhysicalDeviceImageFormatInfo2 imageInfo {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+        .pNext = &externalInfo,
+        .format = format,
+        .type = VK_IMAGE_TYPE_2D,
+        .tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT,
+        .usage = usage,
+    };
+    VkExternalImageFormatProperties externalProps { .sType = VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES };
+    VkImageFormatProperties2 imageProps { .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2, .pNext = &externalProps };
+    if (vkGetPhysicalDeviceImageFormatProperties2(physical, &imageInfo, &imageProps) != VK_SUCCESS) {
+        return false;
+    }
+    return externalProps.externalMemoryProperties.externalMemoryFeatures & VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT;
+}
+
+void VulkanDevice::queryFormats()
+{
+    for (const PixelFormat& format : pixelFormats()) {
+        // dmabuf: per ogni modifier, se si può leggere (texture delle app)
+        // e se ci si può disegnare sopra (schermi, catture, cursori).
         VkDrmFormatModifierPropertiesListEXT list { .sType = VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_LIST_EXT };
         VkFormatProperties2 props { .sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2, .pNext = &list };
-        vkGetPhysicalDeviceFormatProperties2(physical, info.vk, &props);
+        vkGetPhysicalDeviceFormatProperties2(physical, format.unorm, &props);
         std::vector<VkDrmFormatModifierPropertiesEXT> modifiers(list.drmFormatModifierCount);
         list.pDrmFormatModifierProperties = modifiers.data();
-        vkGetPhysicalDeviceFormatProperties2(physical, info.vk, &props);
+        vkGetPhysicalDeviceFormatProperties2(physical, format.unorm, &props);
 
+        const VkFormatFeatureFlags sampled
+            = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
         for (const VkDrmFormatModifierPropertiesEXT& mod : modifiers) {
-            if (!(mod.drmFormatModifierTilingFeatures & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT)) {
-                continue;
+            if ((mod.drmFormatModifierTilingFeatures & sampled) == sampled
+                && supportsDmabuf(format.unorm, mod.drmFormatModifier,
+                    VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT)) {
+                wlr_drm_format_set_add(&textureFormats, format.drm, mod.drmFormatModifier);
             }
-            // Il modifier deve essere anche importabile da un dmabuf.
-            const VkPhysicalDeviceImageDrmFormatModifierInfoEXT modInfo {
-                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_DRM_FORMAT_MODIFIER_INFO_EXT,
-                .drmFormatModifier = mod.drmFormatModifier,
-                .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        }
+
+        if (format.srgb != VK_FORMAT_UNDEFINED) {
+            VkDrmFormatModifierPropertiesListEXT srgbList {
+                .sType = VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_LIST_EXT,
             };
-            const VkPhysicalDeviceExternalImageFormatInfo externalInfo {
-                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
-                .pNext = &modInfo,
-                .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
-            };
-            const VkPhysicalDeviceImageFormatInfo2 imageInfo {
-                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
-                .pNext = &externalInfo,
-                .format = info.vk,
-                .type = VK_IMAGE_TYPE_2D,
-                .tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT,
-                .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-            };
-            VkExternalImageFormatProperties externalProps { .sType = VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES };
-            VkImageFormatProperties2 imageProps { .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2, .pNext = &externalProps };
-            if (vkGetPhysicalDeviceImageFormatProperties2(physical, &imageInfo, &imageProps) != VK_SUCCESS) {
-                continue;
+            VkFormatProperties2 srgbProps { .sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2, .pNext = &srgbList };
+            vkGetPhysicalDeviceFormatProperties2(physical, format.srgb, &srgbProps);
+            std::vector<VkDrmFormatModifierPropertiesEXT> srgbModifiers(srgbList.drmFormatModifierCount);
+            srgbList.pDrmFormatModifierProperties = srgbModifiers.data();
+            vkGetPhysicalDeviceFormatProperties2(physical, format.srgb, &srgbProps);
+            for (const VkDrmFormatModifierPropertiesEXT& mod : srgbModifiers) {
+                if ((mod.drmFormatModifierTilingFeatures & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT)
+                    && supportsDmabuf(format.srgb, mod.drmFormatModifier, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)) {
+                    wlr_drm_format_set_add(&renderFormats, format.drm, mod.drmFormatModifier);
+                }
             }
-            if (!(externalProps.externalMemoryProperties.externalMemoryFeatures
-                    & VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT)) {
-                continue;
-            }
-            wlr_drm_format_set_add(&renderFormats, info.drm, mod.drmFormatModifier);
+        }
+
+        // Memoria condivisa: la copiamo in un'immagine nostra.
+        const VkFormatFeatureFlags shmNeeds = sampled | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+        if ((props.formatProperties.optimalTilingFeatures & shmNeeds) == shmNeeds) {
+            shmFormats.push_back(format.drm);
         }
     }
 }
@@ -394,6 +428,95 @@ uint32_t VulkanDevice::findMemoryType(uint32_t typeBits, VkMemoryPropertyFlags f
         }
     }
     return UINT32_MAX;
+}
+
+bool VulkanDevice::importDmabuf(const wlr_dmabuf_attributes& dmabuf, VkFormat format, VkImageUsageFlags usage,
+    VkImage& image, VkDeviceMemory& memory) const
+{
+    image = VK_NULL_HANDLE;
+    memory = VK_NULL_HANDLE;
+    // Niente immagini "disjoint": i formati RGB non ne hanno bisogno.
+    struct stat first {};
+    fstat(dmabuf.fd[0], &first);
+    for (int i = 1; i < dmabuf.n_planes; ++i) {
+        struct stat other {};
+        fstat(dmabuf.fd[i], &other);
+        if (other.st_ino != first.st_ino) {
+            wlr_log(WLR_ERROR, "dmabuf con piani in buffer diversi: non supportato");
+            return false;
+        }
+    }
+
+    VkSubresourceLayout planes[WLR_DMABUF_MAX_PLANES] {};
+    for (int i = 0; i < dmabuf.n_planes; ++i) {
+        planes[i].offset = dmabuf.offset[i];
+        planes[i].rowPitch = dmabuf.stride[i];
+    }
+    const VkImageDrmFormatModifierExplicitCreateInfoEXT modifierInfo {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_EXPLICIT_CREATE_INFO_EXT,
+        .drmFormatModifier = dmabuf.modifier,
+        .drmFormatModifierPlaneCount = uint32_t(dmabuf.n_planes),
+        .pPlaneLayouts = planes,
+    };
+    const VkExternalMemoryImageCreateInfo externalInfo {
+        .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+        .pNext = &modifierInfo,
+        .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+    };
+    const VkImageCreateInfo imageInfo {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext = &externalInfo,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = format,
+        .extent = { uint32_t(dmabuf.width), uint32_t(dmabuf.height), 1 },
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT,
+        .usage = usage,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+    if (vkCreateImage(device, &imageInfo, nullptr, &image) != VK_SUCCESS) {
+        image = VK_NULL_HANDLE;
+        return false;
+    }
+
+    VkMemoryRequirements requirements {};
+    vkGetImageMemoryRequirements(device, image, &requirements);
+    VkMemoryFdPropertiesKHR fdProps { .sType = VK_STRUCTURE_TYPE_MEMORY_FD_PROPERTIES_KHR };
+    getMemoryFdProperties(device, VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT, dmabuf.fd[0], &fdProps);
+    const uint32_t memoryType = findMemoryType(requirements.memoryTypeBits & fdProps.memoryTypeBits, 0);
+
+    // Vulkan prende possesso del descrittore: gliene diamo una copia.
+    const int fd = fcntl(dmabuf.fd[0], F_DUPFD_CLOEXEC, 0);
+    const VkMemoryDedicatedAllocateInfo dedicated {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
+        .image = image,
+    };
+    const VkImportMemoryFdInfoKHR importInfo {
+        .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
+        .pNext = &dedicated,
+        .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+        .fd = fd,
+    };
+    const VkMemoryAllocateInfo allocInfo {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .pNext = &importInfo,
+        .allocationSize = requirements.size,
+        .memoryTypeIndex = memoryType,
+    };
+    if (fd < 0 || memoryType == UINT32_MAX || vkAllocateMemory(device, &allocInfo, nullptr, &memory) != VK_SUCCESS) {
+        if (fd >= 0) {
+            close(fd);
+        }
+        vkDestroyImage(device, image, nullptr);
+        image = VK_NULL_HANDLE;
+        memory = VK_NULL_HANDLE;
+        return false;
+    }
+    vkBindImageMemory(device, image, memory, 0);
+    return true;
 }
 
 VkShaderModule VulkanDevice::createShader(const uint32_t* code, size_t bytes) const

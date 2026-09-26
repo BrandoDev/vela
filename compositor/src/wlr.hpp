@@ -52,11 +52,13 @@ extern "C" {
 #include <wlr/backend/libinput.h>
 #endif
 #include <wlr/render/allocator.h>
+#include <wlr/render/interface.h>
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/types/wlr_buffer.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_cursor_shape_v1.h>
+#include <wlr/types/wlr_damage_ring.h>
 #include <wlr/types/wlr_data_control_v1.h>
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
@@ -73,11 +75,11 @@ extern "C" {
 #include <wlr/types/wlr_presentation_time.h>
 #include <wlr/types/wlr_primary_selection.h>
 #include <wlr/types/wlr_primary_selection_v1.h>
-#include <wlr/types/wlr_scene.h>
 #include <wlr/render/dmabuf.h>
 #include <wlr/render/drm_format_set.h>
 #include <wlr/render/swapchain.h>
 #include <wlr/interfaces/wlr_buffer.h>
+#include <wlr/interfaces/wlr_ext_image_capture_source_v1.h>
 #include <wlr/util/addon.h>
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_seat.h>
@@ -92,6 +94,8 @@ extern "C" {
 #include <wlr/util/box.h>
 #include <wlr/util/edges.h>
 #include <wlr/util/log.h>
+#include <wlr/util/region.h>
+#include <wlr/util/transform.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
 
 #undef namespace

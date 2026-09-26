@@ -21,8 +21,8 @@ alla volta.
 ```
 
 - **Compositor** (`compositor/`): C++20 su **wlroots 0.20**. Disegna tutto con
-  la GPU usando la scena di wlroots e il renderer **Vulkan** (se non c'è,
-  OpenGL ES), gestisce schermi, input e finestre.
+  una scena e un renderer **Vulkan 1.4** tutti suoi
+  ([docs/renderer.md](docs/renderer.md)); gestisce schermi, input e finestre.
   Le animazioni avanzano a ogni frame reale dello schermo, quindi a 180 Hz
   fanno 180 passi al secondo.
 - **Shell** (`shell/`): **Qt Quick** (scena grafica su GPU) con
@@ -88,7 +88,11 @@ alla volta.
 
 Servono CMake ≥ 3.22, un compilatore C++20, **wlroots 0.20**
 (la 0.19 dovrebbe andare, vedi sotto), Qt ≥ 6.5, LayerShellQt e, per il
-renderer di Vela, **Vulkan 1.3** con gli header, `glslc`, GBM e libdrm.
+renderer, **Vulkan 1.4** con gli header, `glslc`, GBM e libdrm.
+
+Vela disegna solo con Vulkan 1.4, senza ripieghi: serve una GPU con un driver
+recente (AMD e Intel con Mesa ≥ 25.0, NVIDIA con il driver proprietario ≥ 570
+o NVK). Se manca, Vela non parte e il log dice perché.
 
 **Arch / CachyOS / EndeavourOS**
 ```sh
@@ -174,10 +178,8 @@ resta alle app, che lo usano per aprire i propri menu.
 | `VELA_NATURAL_SCROLL=0` | scorrimento classico sul touchpad (predef. naturale, come Windows) |
 | `VELA_ICON_THEME`    | tema di icone se Qt non lo trova (predef. breeze-dark) |
 | `VELA_WALLPAPER`     | immagine di sfondo (SVG, PNG, JPEG...), riempie lo schermo tagliando i bordi |
-| `WLR_RENDERER`       | renderer: di default `vulkan` (con ripiego su OpenGL ES); `gles2` o `pixman` per forzarne un altro |
 | `VELA_DEBUG=1`       | log dettagliato di wlroots                           |
 | `VELA_OUTPUT_SIZE`   | risoluzione quando lo schermo non ne ha (finestra annidata, headless), es. `1920x1080`, con frequenza facoltativa: `1920x1080@144` |
-| `VELA_RENDERER=vela` | il nuovo renderer Vulkan di Vela ([docs/renderer.md](docs/renderer.md)); per ora mostra solo la scena di prova della tappa S0 |
 | `VELA_VULKAN_VALIDATION=1` | validation layer di Vulkan (pacchetto `vulkan-validation-layers`) |
 | `VELA_DEBUG_INPUT=1` | mouse e tastiera virtuali per `vela-input` (spento di default: permettono a qualunque programma di simulare input) |
 

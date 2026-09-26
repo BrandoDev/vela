@@ -40,6 +40,8 @@ Output::Output(Server& s, wlr_output* output)
     , wlr(output)
 {
     wlr->data = this;
+    // Tutto ciò che si disegna su questo schermo passa dal renderer di Vela,
+    // anche ciò che fa wlroots (cursore, catture).
     wlr_output_init_render(wlr, server.allocator, server.renderer);
 
     wlr_output_state state;
@@ -74,17 +76,14 @@ Output::Output(Server& s, wlr_output* output)
     wlr_output_commit_state(wlr, &state);
     wlr_output_state_finish(&state);
 
-    wlr_log(WLR_INFO, "Schermo %s: %dx%d @ %.2f Hz", wlr->name, wlr->width, wlr->height,
-        wlr->refresh / 1000.0);
+    wlr_log(WLR_INFO, "Schermo %s: %dx%d @ %.2f Hz, scala %.2f", wlr->name, wlr->width, wlr->height,
+        wlr->refresh / 1000.0, wlr->scale);
 
-    if (server.vulkan) {
-        renderer = render::OutputRenderer::create(*server.vulkan, server.velaAllocator, wlr);
-        if (!renderer) {
-            wlr_log(WLR_ERROR, "%s: renderer di Vela non disponibile, uso quello di wlroots", wlr->name);
-        }
-    }
+    sceneFrame = std::make_unique<scene::OutputFrame>(*server.sceneGraph, *server.velaRenderer, wlr);
+    sceneFrame->scheduleFrame = [this] { scheduleFrame(); };
+
     clock.setModeRefresh(wlr->refresh);
-    if (renderer && wlr_output_is_headless(wlr)) {
+    if (wlr_output_is_headless(wlr)) {
         startVirtualVblank();
     } else {
         present.connect(&wlr->events.present, [this](void* data) {
@@ -93,7 +92,7 @@ Output::Output(Server& s, wlr_output* output)
                 clock.presented(event->commit_seq, render::toNs(event->when), event->refresh);
             }
         });
-        frame.connect(&wlr->events.frame, [this](void*) { renderer ? onFrameVela() : onFrame(); });
+        frame.connect(&wlr->events.frame, [this](void*) { onFrame(); });
     }
     requestState.connect(&wlr->events.request_state, [this](void* data) {
         // Nel backend annidato: la finestra ospite è stata ridimensionata.
@@ -101,15 +100,15 @@ Output::Output(Server& s, wlr_output* output)
         wlr_output_commit_state(wlr, event->state);
         clock.setModeRefresh(wlr->refresh);
         arrangeLayers();
+        scheduleFrame();
     });
     destroy.connect(&wlr->events.destroy, [this](void*) { delete this; });
 
-    wlr_output_layout_output* layoutOutput = wlr_output_layout_add_auto(server.outputLayout, wlr);
-    sceneOutput = wlr_scene_output_create(server.scene, wlr);
-    wlr_scene_output_layout_add_output(server.sceneLayout, layoutOutput, sceneOutput);
+    wlr_output_layout_add_auto(server.outputLayout, wlr);
 
     usable = box();
     server.outputs.push_back(this);
+    scheduleFrame();
 }
 
 Output::~Output()
@@ -134,7 +133,17 @@ Output::~Output()
     if (m_vblankFd >= 0) {
         close(m_vblankFd);
     }
-    renderer.reset(); // prima che l'allocatore e il device spariscano
+    sceneFrame.reset();
+}
+
+void Output::scheduleFrame()
+{
+    if (m_vblankFd >= 0) {
+        m_frameRequested = true;
+        armVirtualVblank();
+        return;
+    }
+    wlr_output_schedule_frame(wlr);
 }
 
 // ---------------------------------------------------------- vblank virtuale --
@@ -152,10 +161,26 @@ void Output::startVirtualVblank()
             return 0;
         },
         this);
-    m_nextVblankNs = render::nowNs() + clock.periodNs();
-    const itimerspec when { .it_interval = {}, .it_value = { time_t(m_nextVblankNs / 1'000'000'000), long(m_nextVblankNs % 1'000'000'000) } };
-    timerfd_settime(m_vblankFd, TFD_TIMER_ABSTIME, &when, nullptr);
+    m_lastVblankNs = render::nowNs();
     wlr_log(WLR_INFO, "%s: vblank virtuale ogni %.3f ms", wlr->name, clock.periodNs() / 1e6);
+}
+
+// Il prossimo vblank sulla griglia esatta (ultimo vblank + multipli del
+// periodo), anche se il timer è rimasto fermo a lungo.
+void Output::armVirtualVblank()
+{
+    if (m_vblankArmed || m_vblankFd < 0) {
+        return;
+    }
+    const int64_t period = clock.periodNs();
+    const int64_t now = render::nowNs();
+    int64_t next = m_lastVblankNs + period;
+    if (next <= now) {
+        next = m_lastVblankNs + ((now - m_lastVblankNs) / period + 1) * period;
+    }
+    const itimerspec when { .it_interval = {}, .it_value = { time_t(next / 1'000'000'000), long(next % 1'000'000'000) } };
+    timerfd_settime(m_vblankFd, TFD_TIMER_ABSTIME, &when, nullptr);
+    m_vblankArmed = true;
 }
 
 void Output::onVirtualVblank()
@@ -164,28 +189,27 @@ void Output::onVirtualVblank()
     if (read(m_vblankFd, &expirations, sizeof(expirations)) < 0) {
         return;
     }
+    m_vblankArmed = false;
     const int64_t period = clock.periodNs();
-    const int64_t vblank = m_nextVblankNs;
+    const int64_t now = render::nowNs();
+    // Il vblank che ha fatto scattare il timer, sulla griglia.
+    const int64_t vblank = m_lastVblankNs + std::max<int64_t>(1, (now - m_lastVblankNs) / period) * period;
 
-    // Il frame consegnato prima di questo vblank diventa luce adesso.
+    // Il frame consegnato prima di questo vblank diventa luce adesso. Se
+    // doveva comparire a un vblank precedente, quelli nel mezzo sono persi.
     if (m_awaitingPresent) {
+        if (vblank > m_targetVblankNs) {
+            clock.missed(int((vblank - m_targetVblankNs) / period));
+        }
         clock.presented(m_awaitingSeq, vblank, period);
         m_awaitingPresent = false;
     }
+    m_lastVblankNs = vblank;
 
-    // Se siamo in ritardo di uno o più periodi, quei vblank sono persi.
-    int64_t next = vblank + period;
-    const int64_t now = render::nowNs();
-    if (now >= next) {
-        const int64_t lost = (now - vblank) / period;
-        clock.missed(int(lost));
-        next = vblank + (lost + 1) * period;
+    if (m_frameRequested) {
+        m_frameRequested = false;
+        onFrame();
     }
-    m_nextVblankNs = next;
-    const itimerspec when { .it_interval = {}, .it_value = { time_t(next / 1'000'000'000), long(next % 1'000'000'000) } };
-    timerfd_settime(m_vblankFd, TFD_TIMER_ABSTIME, &when, nullptr);
-
-    onFrameVela();
 }
 
 wlr_box Output::box() const
@@ -197,52 +221,37 @@ wlr_box Output::box() const
 
 void Output::onFrame()
 {
-    timespec now {};
-    clock_gettime(CLOCK_MONOTONIC, &now);
-
-    // Prima si fa avanzare ogni animazione al tempo di questo frame, poi si
-    // disegna. Le animazioni sono legate ai frame reali dello schermo, non a
-    // un timer: a 180 Hz ottieni 180 passi al secondo.
-    server.tickAnimations(now);
-
-    wlr_scene_output_commit(sceneOutput, nullptr);
-    wlr_scene_output_send_frame_done(sceneOutput, &now);
-}
-
-// Tappa S0 del renderer di Vela: la scena di prova, disegnata per l'istante
-// in cui il frame verrà mostrato. Le finestre non si vedono ancora.
-void Output::onFrameVela()
-{
     const int64_t now = render::nowNs();
     const int64_t presentAt = clock.predict(now);
 
-    wlr_output_state state;
-    wlr_output_state_init(&state);
-    if (renderer->render(&state, presentAt) && wlr_output_commit_state(wlr, &state)) {
+    // Prima si fa avanzare ogni animazione all'istante in cui questo frame
+    // diventerà luce (docs/renderer.md §4.2), poi si disegna.
+    server.tickAnimations(presentAt);
+
+    const wlr_box area = box();
+    if (sceneFrame->render(area.x, area.y)) {
         clock.committed(wlr->commit_seq, presentAt);
         m_awaitingPresent = true;
         m_awaitingSeq = wlr->commit_seq;
+        // Col vblank virtuale il frame va "mostrato" al prossimo battito.
+        if (m_vblankFd >= 0) {
+            const int64_t period = clock.periodNs();
+            m_targetVblankNs = m_lastVblankNs + ((now - m_lastVblankNs) / period + 1) * period;
+            armVirtualVblank();
+        }
     }
-    wlr_output_state_finish(&state);
 
-    // Le app devono continuare a ricevere i frame callback.
     timespec nowTs {};
     clock_gettime(CLOCK_MONOTONIC, &nowTs);
-    wlr_scene_output_send_frame_done(sceneOutput, &nowTs);
-
-    // La scena di prova si muove sempre: un frame dopo l'altro (col vblank
-    // virtuale è il suo timer a scandirli).
-    if (!m_vblankSource) {
-        wlr_output_schedule_frame(wlr);
-    }
+    sceneFrame->sendFrameDone(nowTs);
 
     double fps = 0.0;
     double errorMean = 0.0;
     double errorMax = 0.0;
     int missed = 0;
-    if (clock.takeStats(now, fps, errorMean, errorMax, missed)) {
-        wlr_log(WLR_INFO, "%s: %.2f fps (periodo %.3f ms, latenza %d vblank), errore di previsione "
-                          "medio %.3f ms, massimo %.3f ms, vblank persi %d",
+    if (clock.takeStats(now, fps, errorMean, errorMax, missed) && fps > 0.0) {
+        wlr_log(WLR_DEBUG, "%s: %.2f fps (periodo %.3f ms, latenza %d vblank), errore di previsione "
+                           "medio %.3f ms, massimo %.3f ms, vblank persi %d",
             wlr->name, fps, clock.periodNs() / 1e6, clock.latencyFrames(), errorMean, errorMax, missed);
     }
 }
@@ -254,25 +263,22 @@ void Output::arrangeLayers()
 
     // Prima le superfici che riservano spazio (la taskbar), poi le altre,
     // dall'alto verso il basso: è l'ordine usato da sway.
-    wlr_scene_tree* order[] = {
-        server.layers.overlay,
-        server.layers.top,
-        server.layers.bottom,
-        server.layers.background,
+    const zwlr_layer_shell_v1_layer order[] = {
+        ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY,
+        ZWLR_LAYER_SHELL_V1_LAYER_TOP,
+        ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM,
+        ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND,
     };
     for (bool exclusive : { true, false }) {
-        for (wlr_scene_tree* tree : order) {
-            for (LayerSurface* layer : server.layerSurfaces) {
-                if (layer->wlr->output != wlr || layer->sceneLayer->tree->node.parent != tree) {
+        for (zwlr_layer_shell_v1_layer layer : order) {
+            for (LayerSurface* surface : server.layerSurfaces) {
+                if (surface->wlr->output != wlr || surface->layer != layer || !surface->wlr->initialized) {
                     continue;
                 }
-                if (!layer->wlr->initialized) {
+                if ((surface->wlr->current.exclusive_zone > 0) != exclusive) {
                     continue;
                 }
-                if ((layer->wlr->current.exclusive_zone > 0) != exclusive) {
-                    continue;
-                }
-                wlr_scene_layer_surface_v1_configure(layer->sceneLayer, &full, &area);
+                surface->configure(full, area);
             }
         }
     }
