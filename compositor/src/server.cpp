@@ -213,7 +213,17 @@ bool Server::init()
     });
     on(&cursor->events.motion_absolute, [this](void* data) {
         auto* event = static_cast<wlr_pointer_motion_absolute_event*>(data);
-        wlr_cursor_warp_absolute(cursor, &event->pointer->base, event->x, event->y);
+        double x = event->x;
+        double y = event->y;
+        // Annidati: il backend divide per i pixel del buffer, che con un
+        // ospite a scala frazionaria sono più delle unità della finestra.
+        if (wlr_input_device_is_wl(&event->pointer->base)) {
+            if (Output* out = outputNamed(event->pointer->output_name); out && out->nested) {
+                x *= out->nested->pointerScaleX();
+                y *= out->nested->pointerScaleY();
+            }
+        }
+        wlr_cursor_warp_absolute(cursor, &event->pointer->base, x, y);
         onCursorMotion(event->time_msec);
     });
     on(&cursor->events.button, [this](void* data) {
@@ -275,6 +285,16 @@ bool Server::init()
         });
     }
 
+    // Per il debug del danno: `kill -USR1` fa ridisegnare tutto da capo. Se
+    // l'immagine cambia, il danno aveva lasciato pixel vecchi.
+    wl_event_loop_add_signal(loop, SIGUSR1,
+        [](int, void* data) {
+            for (Output* output : static_cast<Server*>(data)->outputs) {
+                output->sceneFrame->resetDamage();
+            }
+            return 0;
+        },
+        this);
     wl_event_loop_add_signal(loop, SIGINT, handleTerminate, display);
     wl_event_loop_add_signal(loop, SIGTERM, handleTerminate, display);
 
@@ -469,6 +489,16 @@ Output* Server::outputAt(double lx, double ly) const
 {
     wlr_output* output = wlr_output_layout_output_at(outputLayout, lx, ly);
     return output ? static_cast<Output*>(output->data) : nullptr;
+}
+
+Output* Server::outputNamed(const char* name) const
+{
+    for (Output* output : outputs) {
+        if (name && std::strcmp(output->wlr->name, name) == 0) {
+            return output;
+        }
+    }
+    return nullptr;
 }
 
 Output* Server::outputUnderCursor() const

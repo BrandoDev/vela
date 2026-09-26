@@ -42,6 +42,28 @@ vela_server_protocol(${WAYLAND_PROTOCOLS_DIR}/staging/cursor-shape/cursor-shape-
 vela_server_protocol(${PROJECT_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml
     wlr-layer-shell-unstable-v1)
 
+# Lato client, per parlare con il compositor ospite quando Vela gira in una
+# finestra (nested.cpp).
+pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
+set(VELA_CLIENT_PROTOCOL_SOURCES)
+function(vela_client_protocol xml name)
+    set(header ${VELA_GENERATED_DIR}/${name}-client-protocol.h)
+    set(code ${VELA_GENERATED_DIR}/${name}-protocol.c)
+    add_custom_command(
+        OUTPUT ${header} ${code}
+        COMMAND ${WAYLAND_SCANNER} client-header ${xml} ${header}
+        COMMAND ${WAYLAND_SCANNER} private-code ${xml} ${code}
+        DEPENDS ${xml}
+        COMMENT "Genero ${name} (client)")
+    list(APPEND VELA_CLIENT_PROTOCOL_SOURCES ${header} ${code})
+    set(VELA_CLIENT_PROTOCOL_SOURCES ${VELA_CLIENT_PROTOCOL_SOURCES} PARENT_SCOPE)
+endfunction()
+
+vela_client_protocol(${WAYLAND_PROTOCOLS_DIR}/stable/viewporter/viewporter.xml viewporter)
+vela_client_protocol(${WAYLAND_PROTOCOLS_DIR}/staging/fractional-scale/fractional-scale-v1.xml fractional-scale-v1)
+vela_client_protocol(${WAYLAND_PROTOCOLS_DIR}/unstable/keyboard-shortcuts-inhibit/keyboard-shortcuts-inhibit-unstable-v1.xml
+    keyboard-shortcuts-inhibit-unstable-v1)
+
 # Shader: GLSL -> SPIR-V durante la build, inclusi nell'eseguibile come
 # elenco di numeri ("nome.spv.inc", da mettere dentro un array uint32_t).
 set(VELA_SHADER_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
@@ -60,6 +82,7 @@ endforeach()
 
 add_executable(vela-compositor
     src/main.cpp
+    src/nested.cpp
     src/server.cpp
     src/output.cpp
     src/toplevel.cpp
@@ -76,7 +99,8 @@ add_executable(vela-compositor
     src/scene/frame.cpp
     src/scene/scene.cpp
     ${VELA_SHADERS}
-    ${VELA_PROTOCOL_HEADERS})
+    ${VELA_PROTOCOL_HEADERS}
+    ${VELA_CLIENT_PROTOCOL_SOURCES})
 
 target_include_directories(vela-compositor PRIVATE
     ${VELA_GENERATED_DIR} ${VELA_SHADER_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -88,6 +112,7 @@ target_compile_options(vela-compositor PRIVATE -Wall -Wextra -Wno-unused-paramet
 target_link_libraries(vela-compositor PRIVATE
     PkgConfig::WLROOTS
     PkgConfig::WAYLAND_SERVER
+    PkgConfig::WAYLAND_CLIENT
     PkgConfig::XKBCOMMON
     PkgConfig::PIXMAN
     PkgConfig::LIBINPUT

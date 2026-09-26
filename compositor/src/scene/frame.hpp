@@ -71,7 +71,14 @@ public:
 
     // Costruisce il frame per lo schermo che nel layout sta in (lx, ly) e fa
     // il commit se c'è qualcosa da mostrare. false: niente da fare.
-    bool render(double lx, double ly);
+    // `pending`: uno stato da applicare nello stesso commit (nuova modalità
+    // o scala): il frame si disegna già alla nuova dimensione, senza il
+    // buffer nero che wlroots metterebbe altrimenti.
+    bool render(double lx, double ly, wlr_output_state* pending = nullptr);
+
+    // Qualcuno (wlroots) ha scritto nei buffer dello schermo: nessuno di
+    // loro contiene più ciò che crediamo.
+    void resetDamage();
 
     // Dopo il frame: i frame callback alle superfici visibili scandite da
     // questo schermo.

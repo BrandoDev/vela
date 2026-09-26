@@ -385,10 +385,7 @@ void OutputFrame::updateSurfaces(const std::vector<Element>& elements)
             continue;
         }
         wlr_box onOutput {};
-        int width = 0;
-        int height = 0;
-        wlr_output_transformed_resolution(m_output, &width, &height);
-        const wlr_box bounds { 0, 0, width, height };
+        const wlr_box bounds { 0, 0, m_width, m_height };
         wlr_box_intersection(&onOutput, &e.box, &bounds);
         reportSurface(e.surface, m_output, int64_t(onOutput.width) * onOutput.height, e.visibleArea);
         if (e.visible) {
@@ -397,18 +394,52 @@ void OutputFrame::updateSurfaces(const std::vector<Element>& elements)
     }
 }
 
-bool OutputFrame::render(double lx, double ly)
+void OutputFrame::resetDamage()
+{
+    // Tutti i buffer ripartono da capo: il prossimo frame li ridisegna interi.
+    wlr_damage_ring_finish(&m_ring);
+    wlr_damage_ring_init(&m_ring);
+    m_width = 0;
+    m_height = 0;
+    if (scheduleFrame) {
+        scheduleFrame();
+    }
+}
+
+bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
 {
     if (!m_output->enabled) {
         return false;
     }
-    int width = 0;
-    int height = 0;
-    wlr_output_transformed_resolution(m_output, &width, &height);
-    if (width != m_width || height != m_height || m_output->scale != m_scale) {
+    // Dimensione e scala del frame: quelle nuove, se il commit cambia modo.
+    int width = m_output->width;
+    int height = m_output->height;
+    float scale = m_output->scale;
+    wl_output_transform transform = m_output->transform;
+    if (pending && (pending->committed & WLR_OUTPUT_STATE_MODE)) {
+        if (pending->mode_type == WLR_OUTPUT_STATE_MODE_FIXED && pending->mode) {
+            width = pending->mode->width;
+            height = pending->mode->height;
+        } else {
+            width = pending->custom_mode.width;
+            height = pending->custom_mode.height;
+        }
+    }
+    if (pending && (pending->committed & WLR_OUTPUT_STATE_SCALE)) {
+        scale = pending->scale;
+    }
+    if (pending && (pending->committed & WLR_OUTPUT_STATE_TRANSFORM)) {
+        transform = pending->transform;
+    }
+    if (transform & WL_OUTPUT_TRANSFORM_90) {
+        std::swap(width, height);
+    }
+    if (width != m_width || height != m_height || scale != m_scale) {
+        wlr_damage_ring_finish(&m_ring);
+        wlr_damage_ring_init(&m_ring);
         m_width = width;
         m_height = height;
-        m_scale = m_output->scale;
+        m_scale = scale;
         const wlr_box whole { 0, 0, width, height };
         wlr_damage_ring_add_box(&m_ring, &whole);
     }
@@ -418,7 +449,7 @@ bool OutputFrame::render(double lx, double ly)
     const BuildParams params {
         .originX = lx,
         .originY = ly,
-        .scale = m_output->scale,
+        .scale = scale,
         .bounds = { 0, 0, width, height },
     };
     buildElements(&m_scene.root(), params, elements);
@@ -463,31 +494,42 @@ bool OutputFrame::render(double lx, double ly)
     }
     wlr_damage_ring_add(&m_ring, &changed);
     pixman_region32_fini(&changed);
+    // Diagnosi: VELA_DEBUG_DAMAGE=1 ridisegna tutto a ogni frame.
+    static const bool fullDamage = std::getenv("VELA_DEBUG_DAMAGE") && *std::getenv("VELA_DEBUG_DAMAGE") == '1';
+    if (fullDamage && pixman_region32_not_empty(&m_ring.current)) {
+        wlr_damage_ring_finish(&m_ring);
+        wlr_damage_ring_init(&m_ring);
+        const wlr_box whole { 0, 0, width, height };
+        wlr_damage_ring_add_box(&m_ring, &whole);
+    }
     m_last = std::move(current);
     updateSurfaces(elements);
 
     const bool damaged = pixman_region32_not_empty(&m_ring.current);
-    if (!damaged && !m_output->needs_frame) {
+    if (!damaged && !m_output->needs_frame && !pending) {
         return false;
     }
 
-    wlr_output_state state;
-    wlr_output_state_init(&state);
+    // Lo stato del commit: quello del chiamante (cambio di modo, disegnato
+    // subito alla nuova dimensione) o uno nostro.
+    wlr_output_state own;
+    wlr_output_state_init(&own);
+    wlr_output_state& state = pending ? *pending : own;
     // Solo il cursore hardware da aggiornare: un commit senza buffer. Una
     // cattura in attesa (attach_render_locks) vuole invece un frame vero.
-    if (!damaged && m_output->attach_render_locks == 0) {
+    if (!damaged && !pending && m_output->attach_render_locks == 0) {
         const bool ok = wlr_output_commit_state(m_output, &state);
-        wlr_output_state_finish(&state);
+        wlr_output_state_finish(&own);
         return ok;
     }
 
     if (!wlr_output_configure_primary_swapchain(m_output, &state, &m_output->swapchain)) {
-        wlr_output_state_finish(&state);
+        wlr_output_state_finish(&own);
         return false;
     }
     wlr_buffer* buffer = wlr_swapchain_acquire(m_output->swapchain);
     if (!buffer) {
-        wlr_output_state_finish(&state);
+        wlr_output_state_finish(&own);
         return false;
     }
 
@@ -501,7 +543,7 @@ bool OutputFrame::render(double lx, double ly)
     pixman_region32_copy(&frameDamage, &m_ring.current);
     wlr_damage_ring_rotate_buffer(&m_ring, buffer, &bufferDamage);
 
-    const wl_output_transform toBuffer = wlr_output_transform_invert(m_output->transform);
+    const wl_output_transform toBuffer = wlr_output_transform_invert(transform);
     wlr_region_transform(&bufferDamage, &bufferDamage, toBuffer, width, height);
     wlr_region_transform(&frameDamage, &frameDamage, toBuffer, width, height);
 
@@ -509,7 +551,7 @@ bool OutputFrame::render(double lx, double ly)
     if (std::unique_ptr<render::Pass> pass = m_renderer.beginPass(buffer)) {
         // Sotto tutto, il nero (lo sfondo del desktop di solito lo copre).
         pass->addRect({ 0, 0, buffer->width, buffer->height }, { 0.0f, 0.0f, 0.0f, 1.0f }, &bufferDamage, false);
-        drawElements(*pass, elements, &bufferDamage, m_output->transform, width, height);
+        drawElements(*pass, elements, &bufferDamage, transform, width, height);
         wlr_output_add_software_cursors_to_render_pass(m_output, pass->wlr(), &bufferDamage);
         ok = pass->submit();
     }
@@ -528,10 +570,10 @@ bool OutputFrame::render(double lx, double ly)
         ok = wlr_output_commit_state(m_output, &state);
     }
     wlr_buffer_unlock(buffer);
-    wlr_output_state_finish(&state);
+    wlr_output_state_finish(&own);
     if (!ok) {
         // Il frame non è arrivato allo schermo: il suo danno va ridisegnato.
-        wlr_region_transform(&frameDamage, &frameDamage, m_output->transform, bufferWidth, bufferHeight);
+        wlr_region_transform(&frameDamage, &frameDamage, transform, bufferWidth, bufferHeight);
         wlr_damage_ring_add(&m_ring, &frameDamage);
     }
     pixman_region32_fini(&frameDamage);

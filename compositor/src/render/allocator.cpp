@@ -3,6 +3,7 @@
 #include <drm_fourcc.h>
 #include <gbm.h>
 
+#include <algorithm>
 #include <vector>
 
 namespace vela::render {
@@ -58,6 +59,12 @@ wlr_buffer* createBuffer(wlr_allocator* wlrAlloc, int width, int height, const w
     if (modifiers.empty()) {
         wlr_log(WLR_ERROR, "Allocatore: nessun modifier esplicito per il formato 0x%08x", format->format);
         return nullptr;
+    }
+    // Diagnosi: VELA_DEBUG_LINEAR=1 usa buffer lineari, senza tiling né
+    // compressione della GPU (per escludere problemi di compatibilità).
+    static const bool linearOnly = std::getenv("VELA_DEBUG_LINEAR") && *std::getenv("VELA_DEBUG_LINEAR") == '1';
+    if (linearOnly && std::find(modifiers.begin(), modifiers.end(), DRM_FORMAT_MOD_LINEAR) != modifiers.end()) {
+        modifiers = { DRM_FORMAT_MOD_LINEAR };
     }
 
     gbm_bo* bo = gbm_bo_create_with_modifiers2(alloc->gbm, uint32_t(width), uint32_t(height), format->format,

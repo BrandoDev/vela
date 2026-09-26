@@ -2,6 +2,7 @@
 
 #include "listener.hpp"
 #include "motion.hpp"
+#include "nested.hpp"
 #include "render/frame_clock.hpp"
 #include "render/renderer.hpp"
 #include "render/vulkan.hpp"
@@ -84,6 +85,12 @@ struct Output {
     // Chiede un frame: al prossimo vblank lo schermo ridisegna ciò che è
     // cambiato (e i frame callback partono).
     void scheduleFrame();
+    // Applica un cambio di modalità o di scala, con il primo frame già
+    // disegnato alla nuova dimensione.
+    void commitMode(wlr_output_state& state);
+
+    // Solo se Vela gira in una finestra dentro un'altra sessione.
+    std::unique_ptr<NestedWindow> nested;
 
     Listener frame;
     Listener requestState;
@@ -313,6 +320,7 @@ public:
 
     // Schermi
     Output* outputAt(double lx, double ly) const;
+    Output* outputNamed(const char* name) const;
     Output* outputUnderCursor() const;
     scene::Tree* layerTree(zwlr_layer_shell_v1_layer layer) const;
 

@@ -570,7 +570,10 @@ uint64_t Renderer::submit(VkCommandBuffer cmd, std::vector<int>& waitSyncFiles, 
         }
         defer([this, release] { m_freeReleaseSemaphores.push_back(release); });
     }
-    if (releaseFd && *releaseFd < 0) {
+    // Diagnosi: VELA_DEBUG_SYNC=1 fa aspettare la GPU alla CPU a ogni invio,
+    // così chi legge i nostri buffer li trova certamente finiti.
+    static const bool cpuSync = std::getenv("VELA_DEBUG_SYNC") && *std::getenv("VELA_DEBUG_SYNC") == '1';
+    if ((releaseFd && *releaseFd < 0) || cpuSync) {
         waitFor(point); // senza sync_file: la CPU aspetta la GPU
     }
     return point;

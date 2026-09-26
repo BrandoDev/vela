@@ -97,14 +97,24 @@ Output::Output(Server& s, wlr_output* output)
     requestState.connect(&wlr->events.request_state, [this](void* data) {
         // Nel backend annidato: la finestra ospite è stata ridimensionata.
         auto* event = static_cast<wlr_output_event_request_state*>(data);
-        wlr_output_commit_state(wlr, event->state);
-        clock.setModeRefresh(wlr->refresh);
-        arrangeLayers();
-        scheduleFrame();
+        const wlr_output_state* requested = event->state;
+        if (nested && (requested->committed & WLR_OUTPUT_STATE_MODE)
+            && requested->mode_type == WLR_OUTPUT_STATE_MODE_CUSTOM) {
+            nested->resize(requested->custom_mode.width, requested->custom_mode.height);
+            return;
+        }
+        wlr_output_state state;
+        wlr_output_state_init(&state);
+        wlr_output_state_copy(&state, requested);
+        commitMode(state);
+        wlr_output_state_finish(&state);
     });
     destroy.connect(&wlr->events.destroy, [this](void*) { delete this; });
 
     wlr_output_layout_add_auto(server.outputLayout, wlr);
+    if (wlr_output_is_wl(wlr)) {
+        nested = std::make_unique<NestedWindow>(*this);
+    }
 
     usable = box();
     server.outputs.push_back(this);
@@ -133,7 +143,22 @@ Output::~Output()
     if (m_vblankFd >= 0) {
         close(m_vblankFd);
     }
+    nested.reset();
     sceneFrame.reset();
+}
+
+void Output::commitMode(wlr_output_state& state)
+{
+    const wlr_box area = box();
+    if (!sceneFrame->render(area.x, area.y, &state)) {
+        // Ripiego: wlroots mette un buffer vuoto, che il nostro registro
+        // dei danni non conosce.
+        wlr_output_commit_state(wlr, &state);
+        sceneFrame->resetDamage();
+    }
+    clock.setModeRefresh(wlr->refresh);
+    arrangeLayers();
+    scheduleFrame();
 }
 
 void Output::scheduleFrame()
