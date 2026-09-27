@@ -1,0 +1,11 @@
+[Unit]
+Description=Sessione di Vela
+Documentation=https://github.com/BrandoDev/vela
+# È la sessione grafica: portali, agente polkit e app all'avvio (XDG
+# autostart) partono con lei e si fermano con lei.
+BindsTo=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target
+Wants=xdg-desktop-autostart.target
+# L'agente di KDE per le password di amministratore, se c'è.
+Wants=plasma-polkit-agent.service

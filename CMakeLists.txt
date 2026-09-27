@@ -22,9 +22,11 @@ option(VELA_BUILD_TOOLS "Compila gli strumenti di prova (vela-shot, vela-windows
 
 if(VELA_BUILD_COMPOSITOR)
     add_subdirectory(compositor)
+    add_subdirectory(session)
 endif()
 if(VELA_BUILD_SHELL)
     add_subdirectory(shell)
+    add_subdirectory(lock)
 endif()
 if(VELA_BUILD_TOOLS)
     add_subdirectory(tools)

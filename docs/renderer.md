@@ -512,6 +512,18 @@ Vela non offre decorazioni lato server. La barra di Vela è il primo
 elemento "nostro" che unisce tutto ciò che il renderer sa fare: testo,
 sfocatura, angoli, ombre, animazioni.
 
+**Prima versione (settembre 2026)**, per le sole app X11 che lasciano la
+barra al gestore di finestre (`compositor/src/decoration.*`): misure di
+§9.3, colori fissi del tema scuro di Windows 11 (niente sfocatura né tinta
+ancora), titolo con FreeType + HarfBuzz nel font di KDE rasterizzato alla
+scala fisica dello schermo, simboli dei pulsanti disegnati come segmenti
+antialiasati alla dimensione fisica. La barra fa parte della geometria
+della finestra (32 unità sopra la superficie), così snap, massimizzazione
+e posizionamento la includono; all'app X11 va solo la parte sotto. Il
+trascinamento dal titolo parte dopo 4 unità di movimento (un doppio clic
+non ripristina una finestra massimizzata). Mancano i bordi invisibili per
+ridimensionare e l'icona dell'app.
+
 ### 9.1 Chi la usa
 
 - Il protocollo `xdg-decoration` permette al compositor di dire "la
@@ -669,6 +681,14 @@ con i suoi test.
   §5.2), e per la sincronizzazione esplicita conoscere il punto di
   acquisizione di un commit ancora in sospeso, che wlroots 0.20 non espone.
   Da decidere prima delle animazioni ricche (S4).
+- **Chiusura da annidati** (emerso a settembre 2026): circa una volta su
+  dieci, chiudendo Vela annidato in KDE con un'app X11 aperta, il driver
+  amdgpu andava in crash liberando la memoria della GPU nel distruttore
+  del renderer (stato interno già rovinato; RADV e il GBM di Mesa lo
+  condividono nel processo). Causa non trovata; mitigato non smontando
+  renderer e device alla chiusura normale (il kernel recupera tutto). Con
+  `VELA_VULKAN_VALIDATION=1` si smonta tutto, per trovare risorse
+  dimenticate.
 - **Rotazione degli schermi**: il frame la gestisce (elementi nello spazio
   ruotato, danno e disegno riportati al buffer), ma non è ancora stata
   provata su uno schermo vero.

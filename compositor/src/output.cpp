@@ -1,5 +1,7 @@
 #include "server.hpp"
 
+#include "outputconfig.hpp"
+
 #include <sys/timerfd.h>
 
 namespace vela {
@@ -94,10 +96,22 @@ Output::Output(Server& s, wlr_output* output)
     // anche ciò che fa wlroots (cursore, catture).
     wlr_output_init_render(wlr, server.allocator, server.renderer);
 
+    // Nella sessione vera, ciò che l'utente ha scelto l'ultima volta per
+    // questo monitor (outputconfig.hpp).
+    const std::optional<SavedOutput> saved = server.session ? loadSavedOutput(wlr) : std::nullopt;
+    const bool enabled = !saved || saved->enabled;
+
     wlr_output_state state;
     wlr_output_state_init(&state);
-    wlr_output_state_set_enabled(&state, true);
-    if (wlr_output_mode* mode = pickMode(wlr)) {
+    wlr_output_state_set_enabled(&state, enabled);
+    wlr_output_mode* savedMode = saved && saved->width > 0
+        ? findMode(wlr, saved->width, saved->height, saved->refreshMhz)
+        : nullptr;
+    if (!enabled) {
+        // Spento, come l'ha lasciato l'utente.
+    } else if (savedMode) {
+        wlr_output_state_set_mode(&state, savedMode);
+    } else if (wlr_output_mode* mode = pickMode(wlr)) {
         wlr_output_state_set_mode(&state, mode);
     } else if (const char* size = std::getenv("VELA_OUTPUT_SIZE")) {
         // Schermo senza modalità (finestra annidata, headless): la
@@ -111,8 +125,13 @@ Output::Output(Server& s, wlr_output* output)
             wlr_output_state_set_custom_mode(&state, width, height, fields == 3 ? int32_t(hz * 1000.0) : 0);
         }
     }
+    if (saved && enabled) {
+        wlr_output_state_set_transform(&state, saved->transform);
+    }
     if (const float scale = requestedScale(wlr->name); scale > 0.0f) {
         wlr_output_state_set_scale(&state, scale);
+    } else if (saved && saved->scale > 0.0f) {
+        wlr_output_state_set_scale(&state, saved->scale);
     } else if (state.committed & WLR_OUTPUT_STATE_MODE) {
         const int width = state.mode_type == WLR_OUTPUT_STATE_MODE_FIXED ? state.mode->width : state.custom_mode.width;
         const int height = state.mode_type == WLR_OUTPUT_STATE_MODE_FIXED ? state.mode->height : state.custom_mode.height;
@@ -136,8 +155,12 @@ Output::Output(Server& s, wlr_output* output)
     wlr_output_commit_state(wlr, &state);
     wlr_output_state_finish(&state);
 
-    wlr_log(WLR_INFO, "Schermo %s: %dx%d @ %.2f Hz, scala %.2f", wlr->name, wlr->width, wlr->height,
-        wlr->refresh / 1000.0, wlr->scale);
+    if (enabled) {
+        wlr_log(WLR_INFO, "Schermo %s: %dx%d @ %.2f Hz, scala %.2f%s", wlr->name, wlr->width, wlr->height,
+            wlr->refresh / 1000.0, wlr->scale, saved ? " (come salvato)" : "");
+    } else {
+        wlr_log(WLR_INFO, "Schermo %s: spento, come salvato", wlr->name);
+    }
 
     sceneFrame = std::make_unique<scene::OutputFrame>(*server.sceneGraph, *server.velaRenderer, wlr);
     sceneFrame->scheduleFrame = [this] { scheduleFrame(); };
@@ -197,13 +220,22 @@ Output::Output(Server& s, wlr_output* output)
     });
     destroy.connect(&wlr->events.destroy, [this](void*) { delete this; });
 
-    wlr_output_layout_add_auto(server.outputLayout, wlr);
+    // Nella lista prima di entrare nel layout: il cambio del layout avvisa i
+    // programmi di configurazione degli schermi, e questo deve già esserci.
+    server.outputs.push_back(this);
+    if (!enabled) {
+        // Fuori dal layout finché qualcuno non lo riaccende.
+        server.updateOutputConfiguration();
+    } else if (saved && saved->hasPosition) {
+        wlr_output_layout_add(server.outputLayout, wlr, saved->x, saved->y);
+    } else {
+        wlr_output_layout_add_auto(server.outputLayout, wlr);
+    }
     if (wlr_output_is_wl(wlr)) {
         nested = std::make_unique<NestedWindow>(*this);
     }
 
     usable = box();
-    server.outputs.push_back(this);
     scheduleFrame();
 }
 
@@ -222,6 +254,7 @@ Output::~Output()
     }
     server.endSnapZone(false); // l'anteprima potrebbe essere su questo schermo
     server.outputs.remove(this);
+    server.updateOutputConfiguration();
     wlr->data = nullptr;
     if (m_vblankSource) {
         wl_event_source_remove(m_vblankSource);
@@ -242,18 +275,48 @@ Output::~Output()
     sceneFrame.reset();
 }
 
-void Output::commitMode(wlr_output_state& state)
+bool Output::commitMode(wlr_output_state& state)
 {
     const wlr_box area = box();
-    if (!sceneFrame->render(area.x, area.y, &state)) {
-        // Ripiego: wlroots mette un buffer vuoto, che il nostro registro
-        // dei danni non conosce.
-        wlr_output_commit_state(wlr, &state);
+    bool ok = sceneFrame->render(area.x, area.y, &state);
+    if (!ok) {
+        // Ripiego (anche per accendere o spegnere lo schermo): wlroots mette
+        // un buffer vuoto, che il nostro registro dei danni non conosce.
+        ok = wlr_output_commit_state(wlr, &state);
         sceneFrame->resetDamage();
     }
     clock.setModeRefresh(wlr->refresh);
     arrangeLayers();
     scheduleFrame();
+    return ok;
+}
+
+void Output::setPowered(bool on)
+{
+    if (on == powered) {
+        return;
+    }
+    wlr_output_state state;
+    wlr_output_state_init(&state);
+    if (!on) {
+        m_modeBeforeOff = wlr->current_mode;
+        m_customBeforeOff[0] = wlr->width;
+        m_customBeforeOff[1] = wlr->height;
+        m_customBeforeOff[2] = wlr->refresh;
+        wlr_output_state_set_enabled(&state, false);
+        wlr_output_commit_state(wlr, &state);
+    } else {
+        wlr_output_state_set_enabled(&state, true);
+        if (m_modeBeforeOff) {
+            wlr_output_state_set_mode(&state, m_modeBeforeOff);
+        } else if (m_customBeforeOff[0] > 0) {
+            wlr_output_state_set_custom_mode(&state, m_customBeforeOff[0], m_customBeforeOff[1], m_customBeforeOff[2]);
+        }
+        commitMode(state);
+    }
+    wlr_output_state_finish(&state);
+    powered = on;
+    wlr_log(WLR_INFO, "%s: schermo %s", wlr->name, on ? "riacceso" : "spento per inattività");
 }
 
 void Output::scheduleFrame()
@@ -321,6 +384,7 @@ void Output::onFrame()
 
     const wlr_box area = box();
     if (sceneFrame->render(area.x, area.y)) {
+        server.outputRendered(this);
         const scene::OutputFrame::Delivered& delivered = sceneFrame->delivered();
         const Delivery delivery { wlr->commit_seq, plan.start, now, render::nowNs(), delivered.point,
             delivered.timingSlot };

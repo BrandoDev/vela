@@ -7,8 +7,10 @@
 #include "appmodel.h"
 #include "foreigntoplevels.h"
 #include "iconprovider.h"
+#include "notifications.h"
 #include "shellcontroller.h"
 #include "taskbarmodel.h"
+#include "tray.h"
 #include "wallpaperprovider.h"
 #include "windowcapture.h"
 
@@ -83,6 +85,30 @@ void setupStartMenu(QQuickWindow* window)
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
 }
 
+void setupNotifications(QQuickWindow* window)
+{
+    // In basso a destra, sopra la taskbar (che ha riservato il suo spazio)
+    // e sopra le finestre. Non prende la tastiera.
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScope(QStringLiteral("vela-notifications"));
+    layer->setLayer(LayerWindow::LayerOverlay);
+    layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorBottom) | LayerWindow::AnchorRight);
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityNone);
+}
+
+void setupTrayMenu(QQuickWindow* window)
+{
+    // Tutto lo schermo, trasparente: il menu sta sopra l'icona e un clic
+    // fuori lo chiude. Prende la tastiera (Esc) e la perde cliccando altrove.
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScope(QStringLiteral("vela-tray-menu"));
+    layer->setLayer(LayerWindow::LayerOverlay);
+    layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorTop) | LayerWindow::AnchorBottom
+        | LayerWindow::AnchorLeft | LayerWindow::AnchorRight);
+    layer->setExclusiveZone(-1);
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -119,19 +145,28 @@ int main(int argc, char* argv[])
 
     ShellController shell;
     shell.listen();
+    shell.watchSleep();
 
     ForeignToplevelManager windows;
     TaskbarModel tasks(&apps, &windows);
     WindowCapture capture;
+    NotificationServer notifications;
+    notifications.registerService();
+    TrayModel tray;
+    tray.start();
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
     engine.addImageProvider(QStringLiteral("wallpaper"), new WallpaperProvider);
     engine.addImageProvider(QStringLiteral("thumbnail"), new ThumbnailProvider(&capture));
+    engine.addImageProvider(QStringLiteral("notification"), new NotificationImageProvider(&notifications));
+    engine.addImageProvider(QStringLiteral("tray"), new TrayImageProvider(&tray));
     engine.rootContext()->setContextProperty(QStringLiteral("Apps"), &apps);
     engine.rootContext()->setContextProperty(QStringLiteral("Shell"), &shell);
     engine.rootContext()->setContextProperty(QStringLiteral("Tasks"), &tasks);
     engine.rootContext()->setContextProperty(QStringLiteral("Capture"), &capture);
+    engine.rootContext()->setContextProperty(QStringLiteral("Notifications"), &notifications);
+    engine.rootContext()->setContextProperty(QStringLiteral("Tray"), &tray);
 
     // Le finestre QML partono invisibili: le trasformiamo in superfici
     // layer-shell PRIMA che vengano mostrate.
@@ -139,12 +174,16 @@ int main(int argc, char* argv[])
     engine.loadFromModule("Vela.Shell", "Taskbar");
     engine.loadFromModule("Vela.Shell", "StartMenu");
     engine.loadFromModule("Vela.Shell", "Switcher");
+    engine.loadFromModule("Vela.Shell", "NotificationPopups");
+    engine.loadFromModule("Vela.Shell", "TrayMenu");
 
     QQuickWindow* switcher = findWindow(engine, "switcher");
     QQuickWindow* wallpaper = findWindow(engine, "wallpaper");
     QQuickWindow* taskbar = findWindow(engine, "taskbar");
     QQuickWindow* startMenu = findWindow(engine, "startMenu");
-    if (!wallpaper || !taskbar || !startMenu || !switcher) {
+    QQuickWindow* notificationWindow = findWindow(engine, "notifications");
+    QQuickWindow* trayMenu = findWindow(engine, "trayMenu");
+    if (!wallpaper || !taskbar || !startMenu || !switcher || !notificationWindow || !trayMenu) {
         qCritical("vela-shell: impossibile caricare l'interfaccia QML");
         return 1;
     }
@@ -153,6 +192,8 @@ int main(int argc, char* argv[])
     setupTaskbar(taskbar, taskbar->height());
     setupStartMenu(startMenu);
     setupSwitcher(switcher);
+    setupNotifications(notificationWindow);
+    setupTrayMenu(trayMenu);
     wallpaper->show();
     taskbar->show();
 

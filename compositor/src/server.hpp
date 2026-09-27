@@ -114,7 +114,11 @@ struct Output {
     void scheduleFrame();
     // Applica un cambio di modalità o di scala, con il primo frame già
     // disegnato alla nuova dimensione.
-    void commitMode(wlr_output_state& state);
+    bool commitMode(wlr_output_state& state);
+    // Spegne e riaccende lo schermo (inattività) restando nel layout: la
+    // shell non perde i suoi pannelli.
+    void setPowered(bool on);
+    bool powered = true;
 
     // Solo se Vela gira in una finestra dentro un'altra sessione.
     std::unique_ptr<NestedWindow> nested;
@@ -138,6 +142,9 @@ private:
     void armLatch(int64_t when);
     // Il costo dei frame già consegnati, appena la GPU li ha finiti.
     void collectCosts();
+
+    wlr_output_mode* m_modeBeforeOff = nullptr;
+    int m_customBeforeOff[3] {}; // larghezza, altezza, mHz (schermi senza modalità)
 
     bool m_latching = true; // VELA_LATCH=0: si disegna subito, come prima di S3
     bool m_frameRequested = false;
@@ -213,8 +220,15 @@ struct Popup {
 enum class Snap { None, Left, Right };
 
 // Una finestra applicativa (xdg-shell).
+// Una finestra: di un'app Wayland (xdg-shell) o X11 (Xwayland). Tutto ciò
+// che Vela fa con le finestre (animazioni, snap, taskbar, Alt+Tab) passa da
+// qui; le poche cose che dipendono dal tipo sono nelle operazioni sotto
+// "Verso l'app".
+class Decoration;
+
 struct Toplevel : SceneOwner {
     Toplevel(Server& server, wlr_xdg_toplevel* toplevel);
+    Toplevel(Server& server, wlr_xwayland_surface* surface); // xwayland.cpp
     ~Toplevel() override;
 
     Output* output() const; // lo schermo su cui sta il centro della finestra
@@ -235,8 +249,34 @@ struct Toplevel : SceneOwner {
     bool tickOpen(double nowMs);
     void finishOpenAnimation();
 
+    // ------------------------------------------------------ verso l'app --
+    wlr_surface* surface() const; // null finché una finestra X11 non è associata
+    // La parte visibile, rispetto all'origine della superficie (le app
+    // Wayland possono disegnare un margine d'ombra attorno).
+    wlr_box geometry() const;
+    bool configurable() const; // può già ricevere dimensioni e stati
+    const char* title() const;
+    const char* appId() const;
+    Toplevel* parent() const;
+    void configureSize(int width, int height); // 0x0: la sceglie l'app
+    void sendMaximized(bool on);
+    void sendFullscreen(bool on);
+    void sendTiled(uint32_t edges);
+    void sendActivated(bool on);
+    void sendClose();
+    // X11: le app devono sapere dove sta la finestra sullo schermo (per
+    // posizionare i propri menu). Si chiama a ogni frame.
+    void syncX11Geometry();
+    // Altezza della barra del titolo di Vela (logica), 0 se la finestra non
+    // ce l'ha (finestre Wayland, X11 con barra propria, schermo intero).
+    int titleBarHeight() const;
+    // Crea o toglie la barra di Vela secondo ciò che la finestra chiede.
+    void updateDecoration();
+
     Server& server;
-    wlr_xdg_toplevel* xdg;
+    wlr_xdg_toplevel* xdg = nullptr;
+    wlr_xwayland_surface* x11 = nullptr;
+    bool activated = false; // la finestra attiva (tastiera)
     // Origine dell'albero: quella della superficie (non della geometria,
     // che può avere un margine per l'ombra).
     std::unique_ptr<scene::Tree> tree;
@@ -276,6 +316,12 @@ struct Toplevel : SceneOwner {
     Listener setAppId;
     Listener setParent;
     Listener newPopup;
+    // Solo X11.
+    Listener associate;
+    Listener dissociate;
+    Listener requestConfigure;
+    Listener requestActivate;
+    Listener setDecorations;
 
     // Richieste che arrivano dalla taskbar attraverso la maniglia.
     struct {
@@ -287,6 +333,10 @@ struct Toplevel : SceneOwner {
         Listener rectangle;
     } handleRequests;
 
+    // Massimizzata, agganciata o a schermo intero: la riallinea al suo schermo.
+    void keepInPlace();
+    wlr_box restoreBox() const; // dove torna uscendo da massimizzata o schermo intero
+
 private:
     void createHandle();
     void destroyHandle();
@@ -295,7 +345,6 @@ private:
     void onMap();
     void onUnmap();
     void onCommit();
-    void keepInPlace();
     void applyOpenFrame(double progress);
     void setOpacity(float opacity);
 
@@ -305,6 +354,19 @@ private:
     int m_openFrames = 0;
     double m_targetX = 0.0;
     double m_targetY = 0.0;
+
+    // X11: dimensione chiesta all'app (0: la sua) e ultima geometria
+    // comunicata.
+    int m_x11Width = 0;
+    int m_x11Height = 0;
+    wlr_box m_x11Sent {};
+    wlr_box m_x11Initial {}; // la geometria chiesta dall'app prima di comparire
+    void connectX11Surface(); // xwayland.cpp: quando la superficie arriva
+
+public:
+    // La barra del titolo di Vela (decoration.hpp), se la finestra la usa.
+    // Dopo `tree`: si distrugge prima di lui.
+    std::unique_ptr<Decoration> decoration;
 };
 
 // ---------------------------------------------------------- LayerSurface --
@@ -384,12 +446,15 @@ public:
 
     // Schermi
     Output* outputAt(double lx, double ly) const;
+    // Il riquadro di una finestra (globale) rimesso dentro l'area utile
+    // dello schermo: prima la dimensione, poi la posizione.
+    static wlr_box fitInto(wlr_box frame, const Output& output);
     Output* outputNamed(const char* name) const;
     Output* outputUnderCursor() const;
     scene::Tree* layerTree(zwlr_layer_shell_v1_layer layer) const;
 
     // Interazione col puntatore
-    void beginInteractive(Toplevel* toplevel, CursorMode mode, uint32_t edges);
+    void beginInteractive(Toplevel* toplevel, CursorMode mode, uint32_t edges, bool fromModifier = false);
     void updateSnapZone(); // durante il trascinamento: anteprima dello snap
     void endSnapZone(bool apply);
 
@@ -415,7 +480,10 @@ public:
     void spawn(const std::string& command);
     void sendShellCommand(const std::string& command);
     // Comandi dalla shell (e da chi sta nella sessione) al compositor, su
-    // $XDG_RUNTIME_DIR/vela-<WAYLAND_DISPLAY>.sock: per ora "logout".
+    // $XDG_RUNTIME_DIR/vela-<WAYLAND_DISPLAY>.sock: "logout", "lock".
+    // La sessione dell'utente (systemd, D-Bus): vedi session/vela-session-env.
+    void setSessionEnvironment();
+    void runSessionHook(const char* action);
     void listenForCommands();
     void stopListening();
     void handleCommand(const std::string& command);
@@ -435,6 +503,11 @@ public:
     wlr_compositor* compositor = nullptr;
     wlr_linux_dmabuf_v1* dmabuf = nullptr;
     wlr_output_layout* outputLayout = nullptr;
+    // wlr-output-management: disposizione, modalità, scala e rotazione
+    // degli schermi da programmi esterni (wlr-randr, kanshi, wdisplays).
+    wlr_output_manager_v1* outputManager = nullptr;
+    void updateOutputConfiguration();
+    void applyOutputConfiguration(wlr_output_configuration_v1* config, bool testOnly);
     std::unique_ptr<scene::Scene> sceneGraph;
     wlr_xdg_shell* xdgShell = nullptr;
     wlr_layer_shell_v1* layerShell = nullptr;
@@ -457,6 +530,43 @@ public:
     } m_commands;
     bool nested = false; // dentro un'altra sessione (finestra Wayland o X11)
 
+    // Giochi e app che vogliono il mouse tutto per sé (pointer.cpp):
+    // movimenti relativi (girare la visuale) e puntatore bloccato o
+    // confinato nella finestra.
+    wlr_relative_pointer_manager_v1* relativePointers = nullptr;
+    wlr_pointer_constraints_v1* pointerConstraints = nullptr;
+    wlr_pointer_constraint_v1* activeConstraint = nullptr;
+    void initPointerProtocols();
+    void updatePointerConstraint(wlr_surface* focused);
+    // Movimento relativo del mouse: false se il puntatore è bloccato.
+    bool constrainMotion(double& dx, double& dy);
+
+    // Un'app a fuoco può tenere per sé le scorciatoie (macchine virtuali,
+    // desktop remoto, giochi).
+    wlr_keyboard_shortcuts_inhibit_manager_v1* shortcutsInhibit = nullptr;
+    bool shortcutsInhibited() const;
+
+    // Blocco dello schermo e inattività (lock.cpp). Il blocco è quello
+    // sicuro di ext-session-lock-v1: finché il programma di blocco non
+    // sblocca, si vede solo lui; se va in crash, lo schermo resta nero e
+    // bloccato, non si scopre il desktop.
+    wlr_session_lock_manager_v1* lockManager = nullptr;
+    wlr_idle_notifier_v1* idleNotifier = nullptr;
+    wlr_idle_inhibit_manager_v1* idleInhibit = nullptr;
+    bool locked = false;
+    void initLock();
+    void lockScreen(); // Win+L, inattività, prima di sospendere: avvia vela-lock
+    void noteActivity(); // l'utente c'è: riaccende gli schermi e azzera l'attesa
+    void outputRendered(Output* output); // a ogni frame consegnato
+    void updateLockLayout(); // schermi cambiati mentre è bloccato
+
+    // Xwayland (xwayland.cpp): parte al primo client X11.
+    wlr_xwayland* xwayland = nullptr;
+    Listener xwaylandReady; // staccati prima di distruggere Xwayland
+    Listener xwaylandNewSurface;
+    void initXwayland();
+    void syncX11Windows(); // a ogni frame: le app X11 sanno dove sono
+
     // Strati della scena, dal basso verso l'alto
     struct {
         std::unique_ptr<scene::Tree> background;
@@ -464,7 +574,9 @@ public:
         std::unique_ptr<scene::Tree> windows;
         std::unique_ptr<scene::Tree> top;
         std::unique_ptr<scene::Tree> fullscreen;
+        std::unique_ptr<scene::Tree> x11Popups; // menu e tooltip delle app X11
         std::unique_ptr<scene::Tree> overlay;
+        std::unique_ptr<scene::Tree> lock; // schermata di blocco, sopra tutto
     } layers;
 
     std::list<Output*> outputs;
@@ -483,13 +595,48 @@ public:
 
     // Super premuto e rilasciato da solo = apri il menu Start
     bool superTap = false;
+    bool modifierGrab = false; // trascinamento con Super: il clic non è dell'app
+    // La barra del titolo di Vela sotto il mouse, e l'ultimo clic sul
+    // titolo (per il doppio clic).
+    Toplevel* hoveredDecoration = nullptr;
+    struct {
+        Toplevel* toplevel = nullptr;
+        uint32_t timeMsec = 0;
+    } lastTitleClick;
+    struct {
+        Toplevel* toplevel = nullptr;
+        double x = 0.0; // dove è stato premuto il titolo
+        double y = 0.0;
+    } pendingTitleDrag;
+    void onDecorationPress(Toplevel* toplevel, uint32_t timeMsec);
+
+    struct LockState {
+        wlr_session_lock_v1* lock = nullptr;
+        std::unique_ptr<scene::Tree> backdropTree; // in fondo allo strato del blocco
+        std::vector<std::unique_ptr<scene::RectNode>> backdrop; // nero, uno per schermo
+        std::vector<Output*> waitingFrames; // prima di dire all'app "bloccato"
+        std::unique_ptr<Listener> newSurface;
+        std::unique_ptr<Listener> unlock;
+        std::unique_ptr<Listener> destroy;
+        wl_event_source* respawn = nullptr; // rilancia vela-lock se sparisce
+        std::vector<int64_t> respawns; // quando, per non insistere all'infinito
+    } lockState;
+    struct IdleState {
+        wl_event_source* timer = nullptr;
+        int screenOffMs = 0; // 0: mai
+        bool lockOnIdle = true;
+        bool locking = false; // bloccato per inattività, schermi da spegnere tra poco
+        bool screensOff = false;
+    } idle;
+
+    // La tastiera a questa superficie (anche a un menu X11 che la chiede).
+    void keyboardEnter(wlr_surface* surface);
 
 private:
     Listener& on(wl_signal* signal, Listener::Callback callback);
     void onNewInput(wlr_input_device* device);
     void onCursorMotion(uint32_t timeMsec);
     void onCursorButton(wlr_pointer_button_event* event);
-    void keyboardEnter(wlr_surface* surface);
 
     // Il comando di avvio (la shell) viene rilanciato se si chiude male.
     void tickSnapshotAnimations(double nowMs);

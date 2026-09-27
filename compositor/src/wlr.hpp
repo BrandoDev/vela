@@ -73,7 +73,15 @@ extern "C" {
 #include <wlr/types/wlr_linux_drm_syncobj_v1.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_layout.h>
+#include <wlr/types/wlr_output_management_v1.h>
 #include <wlr/types/wlr_pointer.h>
+#include <wlr/types/wlr_pointer_constraints_v1.h>
+#include <wlr/types/wlr_relative_pointer_v1.h>
+#include <wlr/types/wlr_keyboard_shortcuts_inhibit_v1.h>
+#include <wlr/types/wlr_xdg_activation_v1.h>
+#include <wlr/types/wlr_session_lock_v1.h>
+#include <wlr/types/wlr_idle_notify_v1.h>
+#include <wlr/types/wlr_idle_inhibit_v1.h>
 #include <wlr/types/wlr_presentation_time.h>
 #include <wlr/types/wlr_primary_selection.h>
 #include <wlr/types/wlr_primary_selection_v1.h>
@@ -103,4 +111,12 @@ extern "C" {
 
 #undef namespace
 #undef static
+
+// Xwayland, per le app X11. La finestra X11 ha un campo `class` (WM_CLASS):
+// in C++ diventa `class_`.
+#if WLR_HAS_XWAYLAND
+#define class class_
+#include <wlr/xwayland.h>
+#undef class
+#endif
 }

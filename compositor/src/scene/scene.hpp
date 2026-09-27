@@ -58,6 +58,9 @@ public:
 
     // Chi lo possiede (per sapere cosa c'è sotto il cursore).
     void* data = nullptr;
+    // Rettangoli e immagini di solito lasciano passare i clic (anteprime,
+    // istantanee); quelli della barra del titolo no.
+    bool hittable = false;
 
 protected:
     Node(Type type, Tree* parent);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QDBusUnixFileDescriptor>
 #include <QLocalServer>
 #include <QObject>
 #include <QString>
@@ -44,6 +45,15 @@ public:
     // Esce dalla sessione: chiede al compositor di chiudersi (le app si
     // chiudono con lui). Non spegne né riavvia il computer.
     Q_INVOKABLE void logout();
+    Q_INVOKABLE void lock(); // Win+L dalla shell
+    // Blocca lo schermo prima che il computer si sospenda.
+    void watchSleep();
+    // Il computer, tramite systemd-logind (se serve, polkit chiede la
+    // password).
+    Q_INVOKABLE void suspend();
+    Q_INVOKABLE void reboot();
+    Q_INVOKABLE void powerOff();
+    Q_INVOKABLE bool canSuspend() const;
 
 signals:
     void toggleStartRequested();
@@ -54,8 +64,14 @@ signals:
     void switcherHidden();
     void startMenuOpenChanged();
 
+private Q_SLOTS:
+    void onPrepareForSleep(bool starting);
+
 private:
     void handleCommand(const QByteArray& command);
+    static bool sendToCompositor(const QByteArray& command);
+    void takeSleepDelay();
+    QDBusUnixFileDescriptor m_sleepDelay; // finché è aperto, logind aspetta a sospendere
 
     QLocalServer m_server;
     bool m_startMenuOpen = false;

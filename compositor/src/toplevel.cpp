@@ -1,5 +1,7 @@
 #include "server.hpp"
 
+#include "decoration.hpp"
+
 namespace vela {
 
 // ----------------------------------------------------------------- Popup --
@@ -114,9 +116,138 @@ Toplevel::Toplevel(Server& s, wlr_xdg_toplevel* toplevel)
 
 Toplevel::~Toplevel()
 {
+    decoration.reset();
     destroyHandle();
     capture.reset();
     server.forget(this);
+}
+
+// -------------------------------------------------------- verso l'app --
+
+wlr_surface* Toplevel::surface() const
+{
+    return xdg ? xdg->base->surface : x11->surface;
+}
+
+wlr_box Toplevel::geometry() const
+{
+    if (xdg) {
+        return xdg->base->geometry;
+    }
+    // X11: niente margini d'ombra; la barra di Vela, se c'è, sta sopra.
+    const int bar = titleBarHeight();
+    return { 0, -bar, x11->width, x11->height + bar };
+}
+
+int Toplevel::titleBarHeight() const
+{
+    return decoration && !fullscreen ? Decoration::height : 0;
+}
+
+void Toplevel::updateDecoration()
+{
+    // Solo le finestre X11 che lasciano la barra al gestore di finestre (le
+    // app con una barra propria, come Steam, dicono di no), e non gli
+    // schermi di avvio.
+    const bool wanted = x11 && !x11->override_redirect
+        && x11->decorations == WLR_XWAYLAND_SURFACE_DECORATIONS_ALL
+        && !wlr_xwayland_surface_has_window_type(x11, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_SPLASH);
+    if (wanted && !decoration) {
+        decoration = std::make_unique<Decoration>(*this);
+    } else if (!wanted && decoration) {
+        decoration.reset();
+    } else if (decoration) {
+        decoration->update();
+    }
+}
+
+bool Toplevel::configurable() const
+{
+    return xdg ? xdg->base->initialized : x11->surface != nullptr;
+}
+
+const char* Toplevel::title() const
+{
+    const char* title = xdg ? xdg->title : x11->title;
+    return title ? title : "";
+}
+
+const char* Toplevel::appId() const
+{
+    // X11: la classe della finestra (WM_CLASS), che fa da app id.
+    const char* id = xdg ? xdg->app_id : x11->class_;
+    return id ? id : "";
+}
+
+Toplevel* Toplevel::parent() const
+{
+    if (xdg) {
+        return xdg->parent ? static_cast<Toplevel*>(xdg->parent->base->data) : nullptr;
+    }
+    return x11->parent ? static_cast<Toplevel*>(x11->parent->data) : nullptr;
+}
+
+void Toplevel::configureSize(int width, int height)
+{
+    if (xdg) {
+        wlr_xdg_toplevel_set_size(xdg, width, height);
+        return;
+    }
+    // Le dimensioni sono del riquadro intero: all'app va la parte sotto la
+    // barra di Vela.
+    m_x11Width = width;
+    m_x11Height = height > 0 ? std::max(1, height - titleBarHeight()) : 0;
+    syncX11Geometry();
+}
+
+void Toplevel::sendMaximized(bool on)
+{
+    if (xdg) {
+        wlr_xdg_toplevel_set_maximized(xdg, on);
+    } else {
+        wlr_xwayland_surface_set_maximized(x11, on, on);
+    }
+}
+
+void Toplevel::sendFullscreen(bool on)
+{
+    if (xdg) {
+        wlr_xdg_toplevel_set_fullscreen(xdg, on);
+    } else {
+        wlr_xwayland_surface_set_fullscreen(x11, on);
+    }
+}
+
+void Toplevel::sendTiled(uint32_t edges)
+{
+    if (xdg) {
+        wlr_xdg_toplevel_set_tiled(xdg, edges);
+    }
+}
+
+void Toplevel::sendActivated(bool on)
+{
+    if (xdg) {
+        if (xdg->base->initialized) {
+            wlr_xdg_toplevel_set_activated(xdg, on);
+        }
+        return;
+    }
+    if (x11->surface) {
+        wlr_xwayland_surface_activate(x11, on);
+        if (on) {
+            wlr_xwayland_surface_restack(x11, nullptr, XCB_STACK_MODE_ABOVE);
+        }
+    }
+}
+
+void Toplevel::sendClose()
+{
+    if (xdg) {
+        wlr_xdg_toplevel_send_close(xdg);
+    } else {
+        wlr_xwayland_surface_close(x11);
+    }
 }
 
 wlr_ext_image_capture_source_v1* Toplevel::prepareCapture()
@@ -132,7 +263,7 @@ wlr_ext_image_capture_source_v1* Toplevel::prepareCapture()
 
 wlr_box Toplevel::frameBox() const
 {
-    const wlr_box& geometry = xdg->base->geometry;
+    const wlr_box geometry = this->geometry();
     return wlr_box {
         .x = int(std::lround(tree->x())) + geometry.x,
         .y = int(std::lround(tree->y())) + geometry.y,
@@ -163,7 +294,7 @@ Output* Toplevel::output() const
 
 void Toplevel::onCommit()
 {
-    if (xdg->base->initial_commit) {
+    if (xdg && xdg->base->initial_commit) {
         // Primo commit: diciamo al client cosa sappiamo fare e lasciamo che
         // scelga la sua dimensione (0x0), a meno che non abbia già chiesto
         // di partire massimizzato o a schermo intero.
@@ -182,6 +313,9 @@ void Toplevel::onCommit()
     if (mapped) {
         keepInPlace();
     }
+    if (decoration) {
+        decoration->update(); // dimensione e scala possono essere cambiate
+    }
 }
 
 // Le finestre massimizzate o a schermo intero possono cambiare il margine
@@ -197,7 +331,7 @@ void Toplevel::keepInPlace()
     }
     const Area area = fullscreen ? out->fullArea() : maximized ? out->usableArea() : snapArea(out, snap);
     const Placement place = out->place(area);
-    const wlr_box& geometry = xdg->base->geometry;
+    const wlr_box geometry = this->geometry();
     tree->setPosition(place.x - geometry.x, place.y - geometry.y);
 }
 
@@ -206,16 +340,22 @@ void Toplevel::onMap()
     mapped = true;
 
     Output* out = server.outputUnderCursor();
-    const wlr_box& geometry = xdg->base->geometry;
+    const wlr_box geometry = this->geometry();
     if (out && (fullscreen || maximized)) {
         const Placement place = out->place(fullscreen ? out->fullArea() : out->usableArea());
         m_targetX = place.x - geometry.x;
         m_targetY = place.y - geometry.y;
     } else if (out) {
-        // Nuove finestre al centro dell'area utile, come fa Windows.
+        // Nuove finestre al centro dell'area utile, come fa Windows; mai più
+        // grandi di lei (alcune app ricordano la dimensione che avevano su
+        // un altro schermo o in un'altra sessione).
         const wlr_box& area = out->usable;
-        m_targetX = area.x + std::max(0, (area.width - geometry.width) / 2) - geometry.x;
-        m_targetY = area.y + std::max(0, (area.height - geometry.height) / 2) - geometry.y;
+        const wlr_box frame = Server::fitInto({ 0, 0, geometry.width, geometry.height }, *out);
+        if (frame.width < geometry.width || frame.height < geometry.height) {
+            configureSize(frame.width, frame.height);
+        }
+        m_targetX = area.x + (area.width - frame.width) / 2 - geometry.x;
+        m_targetY = area.y + (area.height - frame.height) / 2 - geometry.y;
     }
 
     server.toplevels.push_front(this);
@@ -251,8 +391,8 @@ void Toplevel::updateExtHandle()
         return;
     }
     const wlr_ext_foreign_toplevel_handle_v1_state state {
-        .title = xdg->title ? xdg->title : "",
-        .app_id = xdg->app_id ? xdg->app_id : "",
+        .title = title(),
+        .app_id = appId(),
     };
     wlr_ext_foreign_toplevel_handle_v1_update_state(extHandle, &state);
 }
@@ -260,16 +400,16 @@ void Toplevel::updateExtHandle()
 void Toplevel::createHandle()
 {
     const wlr_ext_foreign_toplevel_handle_v1_state state {
-        .title = xdg->title ? xdg->title : "",
-        .app_id = xdg->app_id ? xdg->app_id : "",
+        .title = title(),
+        .app_id = appId(),
     };
     extHandle = wlr_ext_foreign_toplevel_handle_v1_create(server.extToplevels, &state);
     extHandle->data = this;
 
     handle = wlr_foreign_toplevel_handle_v1_create(server.foreignToplevels);
     handle->data = this;
-    wlr_foreign_toplevel_handle_v1_set_title(handle, xdg->title ? xdg->title : "");
-    wlr_foreign_toplevel_handle_v1_set_app_id(handle, xdg->app_id ? xdg->app_id : "");
+    wlr_foreign_toplevel_handle_v1_set_title(handle, title());
+    wlr_foreign_toplevel_handle_v1_set_app_id(handle, appId());
     wlr_foreign_toplevel_handle_v1_set_maximized(handle, maximized);
     wlr_foreign_toplevel_handle_v1_set_fullscreen(handle, fullscreen);
     updateHandleParent();
@@ -277,9 +417,7 @@ void Toplevel::createHandle()
     handleRequests.activate.connect(&handle->events.request_activate, [this](void*) {
         server.focusToplevel(this);
     });
-    handleRequests.close.connect(&handle->events.request_close, [this](void*) {
-        wlr_xdg_toplevel_send_close(xdg);
-    });
+    handleRequests.close.connect(&handle->events.request_close, [this](void*) { sendClose(); });
     handleRequests.maximize.connect(&handle->events.request_maximize, [this](void* data) {
         setMaximized(static_cast<wlr_foreign_toplevel_handle_v1_maximized_event*>(data)->maximized);
     });
@@ -337,14 +475,16 @@ void Toplevel::updateHandleParent()
     if (!handle) {
         return;
     }
-    const Toplevel* parent = xdg->parent ? static_cast<Toplevel*>(xdg->parent->base->data) : nullptr;
-    wlr_foreign_toplevel_handle_v1_set_parent(handle, parent ? parent->handle : nullptr);
+    const Toplevel* owner = parent();
+    wlr_foreign_toplevel_handle_v1_set_parent(handle, owner ? owner->handle : nullptr);
 }
 
 void Toplevel::setActivated(bool on)
 {
-    if (xdg->base->initialized) {
-        wlr_xdg_toplevel_set_activated(xdg, on);
+    activated = on;
+    sendActivated(on);
+    if (decoration) {
+        decoration->update();
     }
     if (handle) {
         wlr_foreign_toplevel_handle_v1_set_activated(handle, on);
@@ -403,14 +543,41 @@ void Toplevel::setOpacity(float opacity)
 
 // --------------------------------------------------- massimizza/fullscreen --
 
+// Dove torna la finestra quando smette di essere massimizzata o a schermo
+// intero. Se è comparsa già così (molte app ricordano lo stato), non c'è
+// una posizione salvata: si usa la dimensione che l'app X11 aveva chiesto,
+// altrimenti due terzi dello schermo, al centro.
+wlr_box Toplevel::restoreBox() const
+{
+    if (restore.width > 0 && restore.height > 0) {
+        return restore;
+    }
+    const Output* out = output();
+    if (!out) {
+        return restore;
+    }
+    const wlr_box& area = out->usable;
+    wlr_box frame { 0, 0, area.width * 2 / 3, area.height * 2 / 3 };
+    if (x11 && m_x11Initial.width > 0 && m_x11Initial.height > 0) {
+        frame.width = m_x11Initial.width;
+        frame.height = m_x11Initial.height + (decoration ? Decoration::height : 0);
+    }
+    frame = Server::fitInto(frame, *out);
+    frame.x = area.x + (area.width - frame.width) / 2;
+    frame.y = area.y + (area.height - frame.height) / 2;
+    return frame;
+}
+
 void Toplevel::setMaximized(bool on)
 {
-    if (!xdg->base->initialized) {
+    if (!configurable()) {
         return;
     }
     if (on == maximized || fullscreen) {
         // Il protocollo vuole comunque una risposta alla richiesta.
-        wlr_xdg_surface_schedule_configure(xdg->base);
+        if (xdg) {
+            wlr_xdg_surface_schedule_configure(xdg->base);
+        }
         return;
     }
     finishOpenAnimation();
@@ -421,34 +588,41 @@ void Toplevel::setMaximized(bool on)
         }
         if (snap != Snap::None) {
             snap = Snap::None;
-            wlr_xdg_toplevel_set_tiled(xdg, WLR_EDGE_NONE);
+            sendTiled(WLR_EDGE_NONE);
         }
         maximized = true;
         applyMaximized();
+        if (decoration) {
+            decoration->update(); // il pulsante diventa "ripristina"
+        }
         return;
     }
 
     maximized = false;
-    wlr_xdg_toplevel_set_maximized(xdg, false);
+    sendMaximized(false);
     if (handle) {
         wlr_foreign_toplevel_handle_v1_set_maximized(handle, false);
     }
-    wlr_xdg_toplevel_set_size(xdg, restore.width, restore.height);
-    if (mapped && restore.width > 0) {
-        const wlr_box& geometry = xdg->base->geometry;
-        tree->setPosition(restore.x - geometry.x, restore.y - geometry.y);
+    const wlr_box back = restoreBox();
+    configureSize(back.width, back.height);
+    if (mapped && back.width > 0) {
+        const wlr_box geometry = this->geometry();
+        tree->setPosition(back.x - geometry.x, back.y - geometry.y);
+    }
+    if (decoration) {
+        decoration->update();
     }
 }
 
 void Toplevel::applyMaximized()
 {
     Output* out = mapped ? output() : server.outputUnderCursor();
-    if (!out || !xdg->base->initialized) {
+    if (!out || !configurable()) {
         return;
     }
-    wlr_xdg_toplevel_set_maximized(xdg, true);
+    sendMaximized(true);
     const Placement place = out->place(out->usableArea());
-    wlr_xdg_toplevel_set_size(xdg, place.width, place.height);
+    configureSize(place.width, place.height);
     if (handle) {
         wlr_foreign_toplevel_handle_v1_set_maximized(handle, true);
     }
@@ -457,11 +631,13 @@ void Toplevel::applyMaximized()
 
 void Toplevel::setFullscreen(bool on)
 {
-    if (!xdg->base->initialized) {
+    if (!configurable()) {
         return;
     }
     if (on == fullscreen) {
-        wlr_xdg_surface_schedule_configure(xdg->base);
+        if (xdg) {
+            wlr_xdg_surface_schedule_configure(xdg->base);
+        }
         return;
     }
     finishOpenAnimation();
@@ -472,22 +648,25 @@ void Toplevel::setFullscreen(bool on)
             restore = frameBox();
         }
         fullscreen = true;
-        wlr_xdg_toplevel_set_fullscreen(xdg, true);
+        sendFullscreen(true);
         if (handle) {
             wlr_foreign_toplevel_handle_v1_set_fullscreen(handle, true);
         }
         if (out) {
             const Placement place = out->place(out->fullArea());
-            wlr_xdg_toplevel_set_size(xdg, place.width, place.height);
+            configureSize(place.width, place.height);
         }
         // Sopra taskbar e pannelli.
         tree->reparent(server.layers.fullscreen.get());
         keepInPlace();
+        if (decoration) {
+            decoration->update(); // a schermo intero la barra sparisce
+        }
         return;
     }
 
     fullscreen = false;
-    wlr_xdg_toplevel_set_fullscreen(xdg, false);
+    sendFullscreen(false);
     if (handle) {
         wlr_foreign_toplevel_handle_v1_set_fullscreen(handle, false);
     }
@@ -497,11 +676,15 @@ void Toplevel::setFullscreen(bool on)
     } else if (snap != Snap::None) {
         applySnap(output());
     } else {
-        wlr_xdg_toplevel_set_size(xdg, restore.width, restore.height);
-        if (mapped && restore.width > 0) {
-            const wlr_box& geometry = xdg->base->geometry;
-            tree->setPosition(restore.x - geometry.x, restore.y - geometry.y);
+        const wlr_box back = restoreBox();
+        configureSize(back.width, back.height);
+        if (mapped && back.width > 0) {
+            const wlr_box geometry = this->geometry();
+            tree->setPosition(back.x - geometry.x, back.y - geometry.y);
         }
+    }
+    if (decoration) {
+        decoration->update();
     }
 }
 

@@ -46,7 +46,7 @@ Area snapArea(const Output* out, Snap side)
 
 void Toplevel::setSnap(Snap side, Output* out)
 {
-    if (!mapped || fullscreen || !xdg->base->initialized) {
+    if (!mapped || fullscreen || !configurable()) {
         return;
     }
     finishOpenAnimation();
@@ -56,11 +56,12 @@ void Toplevel::setSnap(Snap side, Output* out)
             return;
         }
         snap = Snap::None;
-        wlr_xdg_toplevel_set_tiled(xdg, WLR_EDGE_NONE);
-        wlr_xdg_toplevel_set_size(xdg, restore.width, restore.height);
-        if (restore.width > 0) {
-            const wlr_box& geometry = xdg->base->geometry;
-            tree->setPosition(restore.x - geometry.x, restore.y - geometry.y);
+        sendTiled(WLR_EDGE_NONE);
+        const wlr_box back = restoreBox();
+        configureSize(back.width, back.height);
+        if (back.width > 0) {
+            const wlr_box geometry = this->geometry();
+            tree->setPosition(back.x - geometry.x, back.y - geometry.y);
         }
         return;
     }
@@ -72,7 +73,7 @@ void Toplevel::setSnap(Snap side, Output* out)
     }
     if (maximized) {
         maximized = false;
-        wlr_xdg_toplevel_set_maximized(xdg, false);
+        sendMaximized(false);
         if (handle) {
             wlr_foreign_toplevel_handle_v1_set_maximized(handle, false);
         }
@@ -89,10 +90,10 @@ void Toplevel::applySnap(Output* out)
     const Area area = snapArea(out, snap);
     // "Tiled" dice all'app di togliere ombre e angoli arrotondati sui lati
     // che toccano i bordi.
-    wlr_xdg_toplevel_set_tiled(xdg, tiledEdges(snap));
+    sendTiled(tiledEdges(snap));
     const Placement place = out->place(area);
-    wlr_xdg_toplevel_set_size(xdg, place.width, place.height);
-    const wlr_box& geometry = xdg->base->geometry;
+    configureSize(place.width, place.height);
+    const wlr_box geometry = this->geometry();
     tree->setPosition(place.x - geometry.x, place.y - geometry.y);
 }
 

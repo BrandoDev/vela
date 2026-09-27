@@ -14,6 +14,8 @@ pkg_check_modules(LIBINPUT REQUIRED IMPORTED_TARGET libinput)
 pkg_check_modules(VULKAN REQUIRED IMPORTED_TARGET vulkan>=1.4)
 pkg_check_modules(GBM REQUIRED IMPORTED_TARGET gbm)
 pkg_check_modules(LIBDRM REQUIRED IMPORTED_TARGET libdrm)
+# Il testo del compositor (titoli delle finestre): font di KDE via fontconfig.
+pkg_check_modules(FONTS REQUIRED IMPORTED_TARGET freetype2 harfbuzz fontconfig)
 find_program(GLSLC NAMES glslc REQUIRED)
 pkg_check_modules(WAYLAND_PROTOCOLS REQUIRED wayland-protocols>=1.32)
 pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
@@ -85,8 +87,15 @@ add_executable(vela-compositor
     src/nested.cpp
     src/server.cpp
     src/output.cpp
+    src/pointer.cpp
+    src/outputconfig.cpp
     src/toplevel.cpp
+    src/xwayland.cpp
     src/layer.cpp
+    src/decoration.cpp
+    src/text.cpp
+    src/render/pixelbuffer.cpp
+    src/lock.cpp
     src/keyboard.cpp
     src/snap.cpp
     src/snapshot.cpp
@@ -104,7 +113,8 @@ add_executable(vela-compositor
 
 target_include_directories(vela-compositor PRIVATE
     ${VELA_GENERATED_DIR} ${VELA_SHADER_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_compile_definitions(vela-compositor PRIVATE WLR_USE_UNSTABLE)
+target_compile_definitions(vela-compositor PRIVATE WLR_USE_UNSTABLE
+    VELA_LIBEXECDIR="${CMAKE_INSTALL_FULL_LIBEXECDIR}")
 # Con Vulkan si inizializzano le strutture indicando solo i campi che
 # servono (gli altri valgono zero): l'avviso sui campi omessi sarebbe rumore.
 target_compile_options(vela-compositor PRIVATE -Wall -Wextra -Wno-unused-parameter
@@ -118,6 +128,7 @@ target_link_libraries(vela-compositor PRIVATE
     PkgConfig::LIBINPUT
     PkgConfig::VULKAN
     PkgConfig::GBM
-    PkgConfig::LIBDRM)
+    PkgConfig::LIBDRM
+    PkgConfig::FONTS)
 
 install(TARGETS vela-compositor RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

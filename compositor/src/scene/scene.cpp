@@ -461,8 +461,27 @@ bool hitNode(const Node* node, double lx, double ly, Scene::Hit& hit)
         break;
     }
     case Node::Type::Rect:
-    case Node::Type::Buffer:
-        break; // anteprime e istantanee lasciano passare i clic
+    case Node::Type::Buffer: {
+        // Anteprime e istantanee lasciano passare i clic; la barra del
+        // titolo no (senza superficie: è del compositor).
+        if (!node->hittable) {
+            break;
+        }
+        double width = 0.0;
+        double height = 0.0;
+        if (node->type() == Node::Type::Rect) {
+            width = static_cast<const RectNode*>(node)->width();
+            height = static_cast<const RectNode*>(node)->height();
+        } else {
+            width = static_cast<const BufferNode*>(node)->width();
+            height = static_cast<const BufferNode*>(node)->height();
+        }
+        found = nx >= 0 && ny >= 0 && nx < width && ny < height;
+        if (found) {
+            hit.surface = nullptr;
+        }
+        break;
+    }
     }
     if (found && !hit.owner && node->data) {
         hit.owner = node->data;

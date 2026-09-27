@@ -1,0 +1,52 @@
+#!/bin/sh
+# Collega Vela alla sessione dell'utente (systemd --user e D-Bus), così le app
+# avviate da loro (portali, agente polkit, app all'avvio) trovano questo
+# display. Lo chiama il compositor: "start" appena il display è pronto,
+# "stop" alla chiusura.
+#
+# Il gestore systemd dell'utente è uno solo per tutte le sue sessioni: se
+# un'altra sessione grafica è già attiva (Plasma su un'altra console, mentre
+# si prova Vela da una TTY), non si tocca nulla, per non rompere quella.
+
+VARS="WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP QT_QPA_PLATFORMTHEME XDG_MENU_PREFIX"
+STATE="${XDG_RUNTIME_DIR:-/tmp}/vela-session-${WAYLAND_DISPLAY:-none}"
+
+command -v systemctl > /dev/null || exit 0
+
+case "$1" in
+start)
+    if systemctl --user -q is-active graphical-session.target; then
+        echo "vela-session-env: c'è già un'altra sessione grafica, non la tocco" >&2
+        exit 0
+    fi
+    # Solo le variabili che hanno un valore.
+    SET=""
+    for var in $VARS; do
+        eval "value=\${$var-}"
+        [ -n "$value" ] && SET="$SET $var"
+    done
+    # shellcheck disable=SC2086
+    systemctl --user import-environment $SET
+    if command -v dbus-update-activation-environment > /dev/null; then
+        # shellcheck disable=SC2086
+        dbus-update-activation-environment $SET
+    fi
+    : > "$STATE"
+    if systemctl --user cat vela-session.target > /dev/null 2>&1; then
+        systemctl --user --no-block start vela-session.target
+    fi
+    ;;
+stop)
+    [ -e "$STATE" ] || exit 0
+    rm -f "$STATE"
+    if systemctl --user cat vela-session.target > /dev/null 2>&1; then
+        systemctl --user --no-block stop vela-session.target
+    fi
+    # shellcheck disable=SC2086
+    systemctl --user unset-environment $VARS
+    ;;
+*)
+    echo "Uso: vela-session-env start|stop" >&2
+    exit 1
+    ;;
+esac

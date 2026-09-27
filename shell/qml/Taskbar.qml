@@ -112,6 +112,72 @@ Window {
         }
     }
 
+    // Area di notifica: le icone delle app (Telegram, Discord, Steam...),
+    // a sinistra dell'orologio come su Windows.
+    Row {
+        id: tray
+        anchors { right: clock.left; top: parent.top; bottom: parent.bottom; rightMargin: 4 }
+
+        Repeater {
+            model: Tray
+
+            delegate: Item {
+                id: trayItem
+                required property int index
+                required property string icon
+                required property string title
+                required property bool attention
+                width: icon !== "" ? 32 : 0
+                height: tray.height
+                visible: icon !== ""
+
+                Rectangle {
+                    anchors { fill: parent; topMargin: 8; bottomMargin: 8 }
+                    radius: Theme.radiusSmall
+                    color: trayMouse.pressed ? Theme.pressed : Theme.hover
+                    opacity: trayMouse.containsMouse ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: Theme.fast } }
+                }
+                Image {
+                    anchors.centerIn: parent
+                    width: 18
+                    height: 18
+                    source: trayItem.icon
+                    sourceSize: Qt.size(36, 36)
+                    smooth: true
+                    mipmap: true
+                }
+                // Chiede attenzione (messaggi non letti): un puntino.
+                Rectangle {
+                    visible: trayItem.attention
+                    width: 6
+                    height: 6
+                    radius: 3
+                    color: Theme.accent
+                    anchors { right: parent.right; top: parent.top; rightMargin: 6; topMargin: 12 }
+                }
+
+                MouseArea {
+                    id: trayMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                    onClicked: mouse => {
+                        const center = trayItem.mapToItem(null, trayItem.width / 2, 0).x
+                        if (mouse.button === Qt.RightButton) {
+                            Tray.requestMenu(trayItem.index, center)
+                        } else if (mouse.button === Qt.MiddleButton) {
+                            Tray.secondaryActivate(trayItem.index)
+                        } else {
+                            Tray.activate(trayItem.index, center)
+                        }
+                    }
+                    onWheel: wheel => Tray.scroll(trayItem.index, wheel.angleDelta.y)
+                }
+            }
+        }
+    }
+
     // Orologio: ora sopra, data sotto.
     Item {
         id: clock

@@ -4,6 +4,8 @@
 // Uso: vela-input AZIONE [AZIONE...]    (eseguite in ordine)
 //
 //   move X Y                 porta il cursore in (X, Y), coordinate globali
+//   rel DX DY                sposta il mouse di (DX, DY), come un mouse vero
+//                            (movimento relativo: lo vedono anche i giochi)
 //   down|up|click [TASTO]    tasto del mouse: left (predefinito), right, middle
 //   key COMBINAZIONE         es. super+Left, alt+F4, Return, super (da solo)
 //   keydown|keyup TASTO      tiene premuto / rilascia un tasto (es. alt per Alt+Tab)
@@ -129,6 +131,12 @@ static void pointerMove(int x, int y)
     x = x < layoutX1 ? layoutX1 : x >= layoutX2 ? layoutX2 - 1 : x;
     y = y < layoutY1 ? layoutY1 : y >= layoutY2 ? layoutY2 - 1 : y;
     zwlr_virtual_pointer_v1_motion_absolute(pointer, nowMs(), x - layoutX1, y - layoutY1, width, height);
+    zwlr_virtual_pointer_v1_frame(pointer);
+}
+
+static void pointerMoveBy(double dx, double dy)
+{
+    zwlr_virtual_pointer_v1_motion(pointer, nowMs(), wl_fixed_from_double(dx), wl_fixed_from_double(dy));
     zwlr_virtual_pointer_v1_frame(pointer);
 }
 
@@ -347,6 +355,9 @@ int main(int argc, char** argv)
 
         if (!strcmp(action, "move") && arg1 && arg2) {
             pointerMove(atoi(arg1), atoi(arg2));
+            i += 2;
+        } else if (!strcmp(action, "rel") && arg1 && arg2) {
+            pointerMoveBy(atof(arg1), atof(arg2));
             i += 2;
         } else if (!strcmp(action, "down") || !strcmp(action, "up") || !strcmp(action, "click")) {
             int code = buttonCode(arg1);

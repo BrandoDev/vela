@@ -1,8 +1,122 @@
 #include "server.hpp"
 
+#include <fstream>
+#include <map>
+#include <sstream>
+
 namespace vela {
 
 namespace {
+
+// Il layout della tastiera come lo conosce già il sistema. In ordine: le
+// variabili XKB_DEFAULT_* (le legge libxkbcommon da sé), le impostazioni di
+// KDE (~/.config/kxkbrc, se KDE gestisce la tastiera), quelle di
+// systemd-localed (localectl, /etc/X11/xorg.conf.d/00-keyboard.conf).
+struct KeymapNames {
+    std::string rules, model, layout, variant, options;
+};
+
+KeymapNames kdeKeymap()
+{
+    KeymapNames names;
+    const char* config = std::getenv("XDG_CONFIG_HOME");
+    const char* home = std::getenv("HOME");
+    const std::string path = config && *config ? std::string(config) + "/kxkbrc"
+        : home                                ? std::string(home) + "/.config/kxkbrc"
+                                              : std::string();
+    std::ifstream file(path);
+    std::string line;
+    bool inLayout = false;
+    std::map<std::string, std::string> values;
+    while (std::getline(file, line)) {
+        if (!line.empty() && line.front() == '[') {
+            inLayout = line == "[Layout]";
+            continue;
+        }
+        const size_t eq = line.find('=');
+        if (inLayout && eq != std::string::npos) {
+            values[line.substr(0, eq)] = line.substr(eq + 1);
+        }
+    }
+    if (values["Use"] != "true") {
+        return names; // KDE non gestisce la tastiera: decide il sistema
+    }
+    names.layout = values["LayoutList"];
+    names.variant = values["VariantList"];
+    names.model = values["Model"];
+    if (values["ResetOldOptions"] == "true") {
+        names.options = values["Options"];
+    }
+    return names;
+}
+
+KeymapNames localedKeymap()
+{
+    KeymapNames names;
+    std::ifstream file("/etc/X11/xorg.conf.d/00-keyboard.conf");
+    std::string line;
+    while (std::getline(file, line)) {
+        // Option "XkbLayout" "us"
+        std::istringstream words(line);
+        std::string option, key, value;
+        if (!(words >> option) || option != "Option") {
+            continue;
+        }
+        std::getline(words >> std::ws, line);
+        const size_t q1 = line.find('"');
+        const size_t q2 = line.find('"', q1 + 1);
+        const size_t q3 = line.find('"', q2 + 1);
+        const size_t q4 = line.find('"', q3 + 1);
+        if (q4 == std::string::npos) {
+            continue;
+        }
+        key = line.substr(q1 + 1, q2 - q1 - 1);
+        value = line.substr(q3 + 1, q4 - q3 - 1);
+        if (key == "XkbLayout") {
+            names.layout = value;
+        } else if (key == "XkbVariant") {
+            names.variant = value;
+        } else if (key == "XkbModel") {
+            names.model = value;
+        } else if (key == "XkbOptions") {
+            names.options = value;
+        }
+    }
+    return names;
+}
+
+xkb_keymap* systemKeymap(xkb_context* context)
+{
+    KeymapNames names = kdeKeymap();
+    const char* origin = "KDE";
+    if (names.layout.empty()) {
+        names = localedKeymap();
+        origin = "localectl";
+    }
+    // Le variabili d'ambiente vincono su tutto, campo per campo.
+    auto pick = [](const char* env, const std::string& fallback) -> const char* {
+        const char* value = std::getenv(env);
+        if (value && *value) {
+            return value;
+        }
+        return fallback.empty() ? nullptr : fallback.c_str();
+    };
+    const xkb_rule_names rules {
+        .rules = pick("XKB_DEFAULT_RULES", names.rules),
+        .model = pick("XKB_DEFAULT_MODEL", names.model),
+        .layout = pick("XKB_DEFAULT_LAYOUT", names.layout),
+        .variant = pick("XKB_DEFAULT_VARIANT", names.variant),
+        .options = pick("XKB_DEFAULT_OPTIONS", names.options),
+    };
+    static bool logged = false;
+    if (!logged) {
+        logged = true;
+        wlr_log(WLR_INFO, "Tastiera: layout %s, variante %s%s%s (da %s)", rules.layout ? rules.layout : "us",
+            rules.variant ? rules.variant : "-", rules.options ? ", opzioni " : "", rules.options ? rules.options : "",
+            std::getenv("XKB_DEFAULT_LAYOUT") ? "XKB_DEFAULT_*" : names.layout.empty() ? "predefinito" : origin);
+    }
+    return xkb_keymap_new_from_names(context, &rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
+}
 
 bool isSuper(xkb_keysym_t sym)
 {
@@ -23,11 +137,10 @@ Keyboard::Keyboard(Server& s, wlr_keyboard* keyboard)
     // Una tastiera virtuale (test automatici) porta il suo layout.
     const bool isVirtual = wlr_input_device_get_virtual_keyboard(&keyboard->base) != nullptr;
 
-    // Il layout arriva dalle variabili XKB_DEFAULT_LAYOUT/VARIANT/OPTIONS
-    // (es. XKB_DEFAULT_LAYOUT=it). Più avanti lo leggeremo dalle impostazioni.
+    // Il layout del sistema (vedi systemKeymap), o XKB_DEFAULT_*.
     if (!isVirtual) {
         xkb_context* context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-        xkb_keymap* keymap = xkb_keymap_new_from_names(context, nullptr, XKB_KEYMAP_COMPILE_NO_FLAGS);
+        xkb_keymap* keymap = systemKeymap(context);
         if (!keymap) {
             wlr_log(WLR_ERROR, "Layout XKB non valido, uso quello di base");
             xkb_rule_names fallback {};
@@ -70,9 +183,13 @@ void Keyboard::onKey(wlr_keyboard_key_event* event)
     const uint32_t mods = wlr_keyboard_get_modifiers(wlr);
 
     bool handled = false;
+    // Un'app a fuoco che tiene le scorciatoie (macchina virtuale, desktop
+    // remoto) riceve anche il tasto Super da solo.
+    const bool inhibited = server.shortcutsInhibited() || server.locked;
+    server.noteActivity();
     if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
         for (int i = 0; i < count; ++i) {
-            if (isSuper(syms[i])) {
+            if (isSuper(syms[i]) && !inhibited) {
                 server.superTap = (mods & ~WLR_MODIFIER_LOGO) == 0;
                 continue;
             }

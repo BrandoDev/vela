@@ -1,7 +1,7 @@
 # GuiPrivate serve per un'unica API privata (la wl_surface della taskbar, vedi
 # foreigntoplevels.cpp): dopo un aggiornamento di Qt la shell va ricompilata.
 set(QT_NO_PRIVATE_MODULE_WARNING ON)
-find_package(Qt6 6.5 REQUIRED COMPONENTS Gui GuiPrivate Qml Quick Svg WaylandClient)
+find_package(Qt6 6.5 REQUIRED COMPONENTS DBus Gui GuiPrivate Qml Quick Svg WaylandClient)
 find_package(LayerShellQt REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.5)
@@ -13,9 +13,11 @@ qt_add_executable(vela-shell
     src/foreigntoplevels.cpp
     src/foreigntoplevels.h
     src/iconprovider.h
+    src/notifications.cpp
     src/shellcontroller.cpp
     src/shellcontroller.h
     src/taskbarmodel.cpp
+    src/tray.cpp
     src/taskbarmodel.h
     src/wallpaperprovider.h
     src/windowcapture.cpp
@@ -66,7 +68,9 @@ set(VELA_QML_FILES
     qml/StartMenu.qml
     qml/AppTile.qml
     qml/Switcher.qml
-    qml/Wallpaper.qml)
+    qml/Wallpaper.qml
+    qml/NotificationPopups.qml
+    qml/TrayMenu.qml)
 
 # I file stanno in qml/ per ordine, ma nel modulo devono stare alla radice:
 # così si vedono tra loro (Theme compreso, che è un singleton) senza import.
@@ -83,6 +87,7 @@ qt_add_qml_module(vela-shell
 
 target_compile_options(vela-shell PRIVATE -Wall -Wextra)
 target_link_libraries(vela-shell PRIVATE
+    Qt6::DBus
     Qt6::Gui
     Qt6::Qml
     Qt6::Quick

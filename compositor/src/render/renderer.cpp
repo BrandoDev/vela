@@ -221,7 +221,9 @@ Renderer::~Renderer()
     }
     collect();
 
-    // Buffer ancora vivi (es. dello schermo): ci stacchiamo da tutti.
+    // Buffer ancora vivi (es. dello schermo): ci stacchiamo da tutti. (Il
+    // renderer si distrugge solo con VELA_VULKAN_VALIDATION: vedi
+    // Server::shutdown.)
     const std::vector<RenderTarget*> targets = m_targets;
     for (RenderTarget* target : targets) {
         destroyTarget(&target->addon);

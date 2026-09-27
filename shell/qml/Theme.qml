@@ -11,6 +11,7 @@ QtObject {
     readonly property color taskbar: Qt.rgba(0.10, 0.10, 0.12, 0.94)
     readonly property color surface: Qt.rgba(0.14, 0.14, 0.16, 0.97)
     readonly property color surfaceRaised: Qt.rgba(1, 1, 1, 0.06)
+    readonly property color popup: "#2a2a2f" // menu sopra altri pannelli: opaco
     readonly property color hover: Qt.rgba(1, 1, 1, 0.08)
     readonly property color pressed: Qt.rgba(1, 1, 1, 0.05)
     readonly property color stroke: Qt.rgba(1, 1, 1, 0.09)

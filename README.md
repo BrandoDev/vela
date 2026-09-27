@@ -65,6 +65,29 @@ alla volta.
   niente tocchi accidentali mentre scrivi, scorrimento naturale.
 - Se la shell va in crash il compositor la rilancia (ma si arrende se
   continua a chiudersi appena avviata).
+- **App X11** con Xwayland (Steam, molti giochi, app vecchie): parte al
+  primo client X11; le finestre X11 hanno animazioni, snap, taskbar e
+  Alt+Tab come le altre, i loro menu compaiono dove li mette l'app.
+- **Giochi**: movimenti relativi del mouse (girare la visuale), puntatore
+  bloccato o confinato nella finestra, app che tengono per sé le
+  scorciatoie (macchine virtuali, desktop remoto).
+- **Barra del titolo di Vela** per le app X11 che non ne hanno una propria
+  (prima versione della barra di [docs/renderer.md](docs/renderer.md) §9):
+  titolo nel font di KDE, riduci/massimizza/chiudi, trascinamento e doppio
+  clic, nitida alla scala dello schermo. Le finestre non sono mai più grandi
+  dello schermo e restano dentro di lui anche quando si spostano da sole.
+- **Super + trascinamento** sposta qualunque finestra, **Super + tasto
+  destro** la ridimensiona.
+- **Blocco dello schermo** sicuro (ext-session-lock-v1) con `vela-lock`,
+  in stile Windows 11: ora e data, poi utente e password (PAM). Se il
+  programma di blocco va in crash lo schermo resta nero e bloccato, e
+  viene rilanciato. Si blocca con Win+L, prima di sospendere e dopo 10
+  minuti di inattività; pochi secondi dopo gli schermi si spengono.
+  Un'app che mostra un video può impedirlo (idle-inhibit).
+- Tastiera presa dal sistema (impostazioni di KDE o `localectl`),
+  disposizione degli schermi ricordata e modificabile da programmi esterni
+  (wlr-output-management, per esempio `wlr-randr`), cambio di console con
+  Ctrl+Alt+F1…F12.
 
 **Shell**
 - Sfondo del desktop (`images/vela_splash_169.svg`, incluso nell'eseguibile),
@@ -83,6 +106,15 @@ alla volta.
   file `.desktop`, con i nomi in italiano), navigazione da tastiera e
   animazioni di apertura e chiusura: il pannello sale da dietro la taskbar.
 - Si chiude cliccando fuori o con Esc.
+- Pulsante di accensione nel menu Start: Sospendi, Esci (chiude Vela),
+  Riavvia, Arresta (tramite systemd-logind).
+- **Notifiche** delle app (org.freedesktop.Notifications) in basso a destra,
+  come su Windows 11: icona, testo con grassetto e link, pulsanti delle
+  azioni; spariscono dopo 6 secondi (non con il mouse sopra), quelle
+  critiche restano.
+- **Area di notifica** accanto all'orologio (StatusNotifierItem): le icone
+  di Telegram, Discord, Steam e simili, con clic, clic centrale, rotellina
+  e i loro menu (anche sottomenu e voci con la spunta).
 
 ## Compilare
 
@@ -138,6 +170,42 @@ Se hai wlroots 0.19 invece della 0.20:
 cmake -B build -DVELA_WLROOTS=wlroots-0.19
 ```
 
+## Usarlo come sessione
+
+Installato, Vela compare nella schermata di accesso (SDDM o Plasma Login)
+accanto a Plasma:
+
+```sh
+sudo cmake --install build        # in /usr/local (più /etc/pam.d e /etc/xdg)
+```
+
+Si installano il compositor, la shell e `vela-lock` (schermata di blocco,
+con il suo servizio PAM in `/etc/pam.d/vela-lock`), `vela-session` (avvio
+della sessione), la voce per la schermata di accesso, la configurazione
+dei portali e l'unità `vela-session.target` di systemd. Se la voce "Vela"
+non compare, il gestore di accesso non guarda in `/usr/local`:
+`sudo ln -s /usr/local/share/wayland-sessions/vela.desktop /usr/share/wayland-sessions/`.
+La sessione:
+
+- dice alle app che il desktop è Vela (`XDG_CURRENT_DESKTOP=Vela`) e che le
+  app Qt/KDE devono usare il tema di KDE (stile, colori, font, icone);
+- avvia i portali (selettore file di KDE; catture e condivisione dello
+  schermo con `xdg-desktop-portal-wlr`), l'agente di KDE per le password di
+  amministratore e le app che hai messo all'avvio;
+- usa la tastiera scelta in KDE, o quella del sistema (`localectl`);
+- ricorda la disposizione degli schermi in `~/.config/vela/schermi.conf`.
+  Per cambiarla, finché non ci sono le Impostazioni di Vela, `wlr-randr`:
+  `wlr-randr --output HDMI-A-1 --pos -1920,0`;
+- tiene il log dell'ultima sessione (e della precedente) in
+  `~/.local/state/vela/`.
+
+Pacchetti consigliati su Arch: `xdg-desktop-portal-wlr` (condivisione dello
+schermo, screenshot dalle app) e `wlr-randr`.
+
+Anche avviato da una console (Ctrl+Alt+F3) Vela si collega alla sessione,
+ma solo se non c'è già un'altra sessione grafica attiva: se Plasma è
+aperto su un'altra console, Vela non tocca l'ambiente dei suoi servizi.
+
 ## Provarlo dentro KDE
 
 Non serve uscire da Plasma: lanciato da una sessione Wayland, Vela si apre
@@ -165,6 +233,9 @@ resta alle app, che lo usano per aprire i propri menu.
 | Massimizza                       | Super+↑             | Alt+M         |
 | Ripristina, poi riduci a icona   | Super+↓             |               |
 | Aggancia a metà sinistra/destra  | Super+← / Super+→   | Alt+← / Alt+→ |
+| Blocca lo schermo                | Super+L             | Alt+L         |
+| Sposta / ridimensiona una finestra | Super+trascina / Super+tasto destro |  |
+| Cambia console                   | Ctrl+Alt+F1…F12     |               |
 | Esci da Vela                     | Alt+Shift+Esc       | Alt+Shift+Esc |
 
 ### Variabili utili
@@ -178,6 +249,9 @@ resta alle app, che lo usano per aprire i propri menu.
 | `VELA_LATCH=0`       | disegna appena arriva il vblank, invece che il più tardi possibile prima del successivo (late latching, per confronto) |
 | `VELA_LATCH_MARGIN`  | margine minimo del late latching in ms (predefinito 1; cresce da solo se un frame arriva tardi) |
 | `VELA_SCANOUT=0`     | niente scanout diretto delle app a schermo intero (per confronto e diagnosi) |
+| `VELA_SCREEN_OFF`    | minuti di inattività prima di bloccare e spegnere gli schermi (predefinito 10; 0: mai) |
+| `VELA_LOCK_ON_IDLE=0` | con l'inattività spegne gli schermi senza bloccare |
+| `VELA_LOCK`          | programma di blocco da usare al posto di `vela-lock` (es. `swaylock`) |
 | `VELA_REALTIME=0`    | niente scheduling realtime per il thread principale del compositor (attivo se `ulimit -r` > 0 o con `CAP_SYS_NICE`) |
 | `VELA_NATURAL_SCROLL=0` | scorrimento classico sul touchpad (predef. naturale, come Windows) |
 | `VELA_ICON_THEME`    | tema di icone se Qt non lo trova (predef. breeze-dark) |
@@ -267,18 +341,27 @@ scripts/           avvio annidato e headless
   anteprima.~~ Fatto (metà schermo; i quarti e i layout di Windows 11 più
   avanti).
 
+**Sessione vera** (fatto, settembre 2026): Vela come desktop da scegliere
+all'accesso.
+- ~~Sessione da SDDM/Plasma Login, collegata a systemd e D-Bus; portali;
+  agente polkit; tastiera e schermi del sistema.~~ Fatto.
+- ~~Xwayland e i protocolli per i giochi.~~ Fatto (manca tearing-control).
+- ~~Area di notifica, notifiche, menu di accensione.~~ Fatto.
+- ~~Schermata di blocco e inattività.~~ Fatto.
+- Da fare: selettore dello schermo da condividere; centro notifiche (le
+  notifiche passate); bordi per ridimensionare le finestre X11 decorate.
+
 **Milestone 2: l'aspetto**
 - Sfocatura acrilica, angoli arrotondati e ombre disegnati dal compositor,
   con una scena e un renderer Vulkan tutti nostri: vedi
   [docs/renderer.md](docs/renderer.md).
 - Barra del titolo lato server in stile Vela, uguale per tutte le app.
-- Sfondo, centro notifiche, impostazioni rapide (volume, rete, luminosità).
+- Centro notifiche, impostazioni rapide (volume, rete, luminosità).
 
 **Milestone 3: sostituire Plasma**
-- Xwayland per le app solo-X11.
 - App Impostazioni (schermi, tastiera, tema) e configurazione su file.
-- Schermata di blocco, sessione selezionabile da SDDM, portali
-  (condivisione schermo, selettore file).
+- Desktop virtuali e Visualizzazione attività, snap a quarti e layout di
+  Windows 11.
 - File manager veloce ("Esplora"), avvio a freddo sotto i 150 ms come
   obiettivo.
 

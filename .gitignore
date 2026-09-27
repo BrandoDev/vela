@@ -6,3 +6,4 @@ compile_commands.json
 
 # Script personali per le prove da TTY
 /start*.sh
+/logs/

@@ -1,9 +1,12 @@
 #include "server.hpp"
 
+#include "decoration.hpp"
+#include "outputconfig.hpp"
 #include "render/allocator.hpp"
 
 #include <algorithm>
 #include <csignal>
+#include <linux/input-event-codes.h>
 #include <sched.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -165,6 +168,19 @@ bool Server::init()
 
     outputLayout = wlr_output_layout_create(display);
     wlr_xdg_output_manager_v1_create(display, outputLayout);
+    outputManager = wlr_output_manager_v1_create(display);
+    on(&outputManager->events.apply, [this](void* data) {
+        applyOutputConfiguration(static_cast<wlr_output_configuration_v1*>(data), false);
+    });
+    on(&outputManager->events.test, [this](void* data) {
+        applyOutputConfiguration(static_cast<wlr_output_configuration_v1*>(data), true);
+    });
+    // Ogni cambiamento (schermo collegato, spostato, nuova modalità) si
+    // racconta ai programmi di configurazione.
+    on(&outputLayout->events.change, [this](void*) {
+        updateOutputConfiguration();
+        updateLockLayout();
+    });
 
     sceneGraph = std::make_unique<scene::Scene>();
     sceneGraph->watch(compositor);
@@ -178,7 +194,9 @@ bool Server::init()
     layers.windows = std::make_unique<scene::Tree>(root);
     layers.top = std::make_unique<scene::Tree>(root);
     layers.fullscreen = std::make_unique<scene::Tree>(root);
+    layers.x11Popups = std::make_unique<scene::Tree>(root);
     layers.overlay = std::make_unique<scene::Tree>(root);
+    layers.lock = std::make_unique<scene::Tree>(root);
 
     on(&backend->events.new_output, [this](void* data) {
         new Output(*this, static_cast<wlr_output*>(data));
@@ -219,14 +237,39 @@ bool Server::init()
     wlr_cursor_attach_output_layout(cursor, outputLayout);
     cursorManager = wlr_xcursor_manager_create(std::getenv("XCURSOR_THEME"),
         static_cast<uint32_t>(envInt("XCURSOR_SIZE", 24)));
+    initPointerProtocols();
+
+    // Un'app chiede di portare in primo piano una sua finestra (un link
+    // aperto in un Firefox già aperto, il clic su una notifica).
+    auto* activation = wlr_xdg_activation_v1_create(display);
+    on(&activation->events.request_activate, [this](void* data) {
+        auto* event = static_cast<wlr_xdg_activation_v1_request_activate_event*>(data);
+        for (Toplevel* toplevel : toplevels) {
+            if (toplevel->surface() == event->surface) {
+                focusToplevel(toplevel);
+                return;
+            }
+        }
+    });
 
     on(&cursor->events.motion, [this](void* data) {
         auto* event = static_cast<wlr_pointer_motion_event*>(data);
-        wlr_cursor_move(cursor, &event->pointer->base, event->delta_x, event->delta_y);
+        noteActivity();
+        // Il movimento grezzo va ai giochi anche se il cursore non si muove.
+        wlr_relative_pointer_manager_v1_send_relative_motion(relativePointers, seat,
+            uint64_t(event->time_msec) * 1000, event->delta_x, event->delta_y, event->unaccel_dx,
+            event->unaccel_dy);
+        double dx = event->delta_x;
+        double dy = event->delta_y;
+        if (!constrainMotion(dx, dy)) {
+            return; // puntatore bloccato dall'app
+        }
+        wlr_cursor_move(cursor, &event->pointer->base, dx, dy);
         onCursorMotion(event->time_msec);
     });
     on(&cursor->events.motion_absolute, [this](void* data) {
         auto* event = static_cast<wlr_pointer_motion_absolute_event*>(data);
+        noteActivity();
         double x = event->x;
         double y = event->y;
         // Annidati: il backend divide per i pixel del buffer, che con un
@@ -237,7 +280,17 @@ bool Server::init()
                 y *= out->nested->pointerScaleY();
             }
         }
-        wlr_cursor_warp_absolute(cursor, &event->pointer->base, x, y);
+        // Anche i movimenti assoluti (tavolette, Vela annidato) rispettano un
+        // puntatore bloccato o confinato dall'app.
+        double lx = 0.0;
+        double ly = 0.0;
+        wlr_cursor_absolute_to_layout_coords(cursor, &event->pointer->base, x, y, &lx, &ly);
+        double dx = lx - cursor->x;
+        double dy = ly - cursor->y;
+        if (!constrainMotion(dx, dy)) {
+            return;
+        }
+        wlr_cursor_move(cursor, &event->pointer->base, dx, dy);
         onCursorMotion(event->time_msec);
     });
     on(&cursor->events.button, [this](void* data) {
@@ -245,6 +298,7 @@ bool Server::init()
     });
     on(&cursor->events.axis, [this](void* data) {
         auto* event = static_cast<wlr_pointer_axis_event*>(data);
+        noteActivity();
         wlr_seat_pointer_notify_axis(seat, event->time_msec, event->orientation,
             event->delta, event->delta_discrete, event->source,
             event->relative_direction);
@@ -309,6 +363,9 @@ bool Server::init()
             return 0;
         },
         this);
+    initXwayland();
+    initLock();
+
     wl_event_loop_add_signal(loop, SIGINT, handleTerminate, display);
     wl_event_loop_add_signal(loop, SIGTERM, handleTerminate, display);
 
@@ -346,15 +403,27 @@ bool Server::start(const std::string& startupCommand)
     }
 
     setenv("WAYLAND_DISPLAY", socket, true);
-    // Niente Xwayland per ora: senza questa riga un'app solo-X11 lanciata da
-    // qui si aprirebbe nella sessione "ospite" (KDE) creando confusione.
-    unsetenv("DISPLAY");
+    // Solo nella sessione vera (da SDDM o da una console): annidati o
+    // headless si resta ospiti dell'ambiente che c'è.
+    if (session) {
+        setSessionEnvironment();
+    }
+    // Le app X11 lanciate da qui vanno nel nostro Xwayland, non in quello
+    // della sessione ospite (KDE) da cui magari siamo partiti.
+    if (xwayland) {
+        setenv("DISPLAY", xwayland->display_name, true);
+    } else {
+        unsetenv("DISPLAY");
+    }
     // Plasma la esporta perché le app sopravvivano a un crash di KWin. Qui
     // non serve (Vela non si riavvia da solo) e fa danni: alla chiusura di
     // Vela le app Qt provano a riconnettersi e vanno in crash dentro Qt.
     unsetenv("QT_WAYLAND_RECONNECT");
 
     listenForCommands();
+    if (session) {
+        runSessionHook("start");
+    }
 
     wlr_log(WLR_INFO, "Vela in esecuzione su WAYLAND_DISPLAY=%s", socket);
     if (nested) {
@@ -376,6 +445,18 @@ void Server::shutdown()
     // Stiamo chiudendo noi: la shell che se ne va non va rilanciata.
     stopSupervising();
     stopListening();
+    if (session) {
+        runSessionHook("stop");
+    }
+#if WLR_HAS_XWAYLAND
+    // Chiude le finestre X11 (e i loro Toplevel) prima dei client Wayland.
+    if (xwayland) {
+        xwaylandReady.disconnect();
+        xwaylandNewSurface.disconnect();
+        wlr_xwayland_destroy(xwayland);
+        xwayland = nullptr;
+    }
+#endif
 
     // Chiudere i client distrugge finestre e superfici della shell, che si
     // rimuovono da sole dalle nostre liste.
@@ -393,10 +474,22 @@ void Server::shutdown()
     // Dopo gli schermi, che la usano per disegnare.
     layers = {};
     sceneGraph.reset();
-    // Il renderer avvisa chi lo usa (wlr_compositor) e si distrugge.
-    wlr_renderer_destroy(renderer);
-    wlr_allocator_destroy(allocator);
-    vulkan.reset(); // per ultimo: tutto il resto ne usa il device
+    // Renderer, allocatore e device Vulkan si smontano solo per cercare
+    // risorse dimenticate (VELA_VULKAN_VALIDATION=1). Alla chiusura normale
+    // il processo sta per finire e il kernel recupera tutto: da annidati,
+    // ogni tanto il driver amdgpu andava in crash liberando la memoria
+    // della GPU (lo stato che RADV e il GBM di Mesa condividono nel
+    // processo risultava già rovinato), e una sessione che si chiude non
+    // deve sembrare un crash.
+    const char* validation = std::getenv("VELA_VULKAN_VALIDATION");
+    if (validation && *validation && std::strcmp(validation, "0") != 0) {
+        // Il renderer avvisa chi lo usa (wlr_compositor) e si distrugge.
+        wlr_renderer_destroy(renderer);
+        wlr_allocator_destroy(allocator);
+        vulkan.reset(); // per ultimo: tutto il resto ne usa il device
+    } else {
+        (void)vulkan.release();
+    }
     wl_display_destroy(display);
 }
 
@@ -405,8 +498,11 @@ void Server::shutdown()
 Toplevel* Server::focusedToplevel() const
 {
     wlr_surface* focused = seat->keyboard_state.focused_surface;
+    if (!focused) {
+        return nullptr;
+    }
     for (Toplevel* toplevel : toplevels) {
-        if (toplevel->xdg->base->surface == focused) {
+        if (toplevel->surface() == focused) {
             return toplevel;
         }
     }
@@ -425,7 +521,7 @@ void Server::keyboardEnter(wlr_surface* surface)
 
 void Server::focusToplevel(Toplevel* toplevel)
 {
-    if (!toplevel || !toplevel->mapped) {
+    if (!toplevel || !toplevel->mapped || locked) {
         return;
     }
     if (toplevel->minimized) {
@@ -447,7 +543,7 @@ void Server::focusToplevel(Toplevel* toplevel)
     }
     focusedLayerSurface = nullptr;
 
-    wlr_surface* surface = toplevel->xdg->base->surface;
+    wlr_surface* surface = toplevel->surface();
     if (seat->keyboard_state.focused_surface == surface) {
         return;
     }
@@ -465,7 +561,7 @@ void Server::focusLayer(LayerSurface* layer)
 {
     // Si usa lo stato della superficie: l'evento "map" arriva prima del
     // commit in cui aggiorniamo layer->mapped.
-    if (!layer || !layer->wlr->surface->mapped) {
+    if (!layer || !layer->wlr->surface->mapped || locked) {
         return;
     }
     // Come su Windows: aprendo il menu Start la finestra attiva si "spegne".
@@ -478,6 +574,9 @@ void Server::focusLayer(LayerSurface* layer)
 
 void Server::refocus()
 {
+    if (locked) {
+        return; // la tastiera è della schermata di blocco
+    }
     focusedLayerSurface = nullptr;
     for (Toplevel* toplevel : toplevels) {
         if (toplevel->mapped && !toplevel->minimized) {
@@ -491,6 +590,15 @@ void Server::refocus()
 void Server::forget(Toplevel* toplevel)
 {
     const bool wasFocused = focusedToplevel() == toplevel;
+    if (hoveredDecoration == toplevel) {
+        hoveredDecoration = nullptr;
+    }
+    if (lastTitleClick.toplevel == toplevel) {
+        lastTitleClick = {};
+    }
+    if (pendingTitleDrag.toplevel == toplevel) {
+        pendingTitleDrag = {};
+    }
     toplevels.remove(toplevel);
     std::erase(m_animating, toplevel);
     cancelSnapshotAnimations(toplevel);
@@ -522,6 +630,16 @@ Output* Server::outputAt(double lx, double ly) const
 {
     wlr_output* output = wlr_output_layout_output_at(outputLayout, lx, ly);
     return output ? static_cast<Output*>(output->data) : nullptr;
+}
+
+wlr_box Server::fitInto(wlr_box frame, const Output& output)
+{
+    const wlr_box& area = output.usable;
+    frame.width = std::min(frame.width, area.width);
+    frame.height = std::min(frame.height, area.height);
+    frame.x = std::clamp(frame.x, area.x, area.x + area.width - frame.width);
+    frame.y = std::clamp(frame.y, area.y, area.y + area.height - frame.height);
+    return frame;
 }
 
 Output* Server::outputNamed(const char* name) const
@@ -569,6 +687,7 @@ void Server::addAnimation(Toplevel* toplevel)
 
 void Server::tickAnimations(int64_t presentNs)
 {
+    syncX11Windows();
     m_animationNowMs = std::max(m_animationNowMs, double(presentNs) / 1e6);
     if (m_animating.empty() && m_snapshotAnimations.empty() && !m_snapPreview.rect) {
         return;
@@ -639,6 +758,12 @@ void Server::onNewInput(wlr_input_device* device)
 
 void Server::onCursorMotion(uint32_t timeMsec)
 {
+    if (pendingTitleDrag.toplevel
+        && std::hypot(cursor->x - pendingTitleDrag.x, cursor->y - pendingTitleDrag.y) > 4.0) {
+        Toplevel* toplevel = pendingTitleDrag.toplevel;
+        pendingTitleDrag = {};
+        beginInteractive(toplevel, CursorMode::Move, 0, /*fromModifier=*/true);
+    }
     if (cursorMode == CursorMode::Move && grabbed) {
         // Posizione esatta, anche frazionaria: al disegno la finestra si
         // aggancia al pixel fisico più vicino (§3.4). Con posizioni logiche
@@ -667,26 +792,87 @@ void Server::onCursorMotion(uint32_t timeMsec)
             right = std::max(static_cast<int>(borderX), left + 1);
         }
 
-        const wlr_box& geometry = grabbed->xdg->base->geometry;
+        const wlr_box geometry = grabbed->geometry();
         grabbed->tree->setPosition(left - geometry.x, top - geometry.y);
-        wlr_xdg_toplevel_set_size(grabbed->xdg, right - left, bottom - top);
+        grabbed->configureSize(right - left, bottom - top);
         return;
     }
 
     const Hit hit = hitTest(*sceneGraph, cursor->x, cursor->y);
+    // Sopra la barra del titolo di Vela: i pulsanti si illuminano.
+    Toplevel* decorated = hit.owner && !hit.surface && hit.owner->kind == SceneKind::Toplevel
+        ? static_cast<Toplevel*>(hit.owner)
+        : nullptr;
+    if (decorated && !decorated->decoration) {
+        decorated = nullptr;
+    }
+    if (hoveredDecoration && hoveredDecoration != decorated && hoveredDecoration->decoration) {
+        hoveredDecoration->decoration->setHover(Decoration::Part::None);
+    }
+    hoveredDecoration = decorated;
+    if (decorated) {
+        decorated->decoration->setHover(decorated->decoration->partAt(cursor->x, cursor->y));
+    }
     if (!hit.surface) {
         wlr_cursor_set_xcursor(cursor, cursorManager, "default");
         wlr_seat_pointer_clear_focus(seat);
+        updatePointerConstraint(nullptr);
         return;
     }
     wlr_seat_pointer_notify_enter(seat, hit.surface, hit.sx, hit.sy);
     wlr_seat_pointer_notify_motion(seat, timeMsec, hit.sx, hit.sy);
+    updatePointerConstraint(hit.surface);
 }
 
 void Server::onCursorButton(wlr_pointer_button_event* event)
 {
     superTap = false;
-    wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
+    noteActivity();
+    // Bloccato: il clic dà la tastiera alla schermata di blocco sotto il
+    // mouse (con più schermi) e arriva solo a lei.
+    if (locked) {
+        wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
+        if (event->state == WL_POINTER_BUTTON_STATE_PRESSED) {
+            const Hit hit = hitTest(*sceneGraph, cursor->x, cursor->y);
+            if (hit.surface) {
+                keyboardEnter(hit.surface);
+            }
+        }
+        return;
+    }
+
+    // Super + trascinamento sposta la finestra, Super + tasto destro la
+    // ridimensiona (dall'angolo più vicino), come in KDE. Serve anche alle
+    // finestre X11 senza barra del titolo propria, finché Vela non disegna
+    // la sua. Il clic non arriva all'app.
+    wlr_keyboard* keyboard = wlr_seat_get_keyboard(seat);
+    const bool super = keyboard && (wlr_keyboard_get_modifiers(keyboard) & WLR_MODIFIER_LOGO);
+    if (event->state == WL_POINTER_BUTTON_STATE_PRESSED && super && cursorMode == CursorMode::Passthrough
+        && (event->button == BTN_LEFT || event->button == BTN_RIGHT)) {
+        const Hit hit = hitTest(*sceneGraph, cursor->x, cursor->y);
+        if (hit.owner && hit.owner->kind == SceneKind::Toplevel) {
+            auto* toplevel = static_cast<Toplevel*>(hit.owner);
+            focusToplevel(toplevel);
+            uint32_t edges = 0;
+            if (event->button == BTN_RIGHT) {
+                const wlr_box frame = toplevel->frameBox();
+                edges |= cursor->x < frame.x + frame.width / 2.0 ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT;
+                edges |= cursor->y < frame.y + frame.height / 2.0 ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM;
+            }
+            beginInteractive(toplevel, event->button == BTN_LEFT ? CursorMode::Move : CursorMode::Resize, edges,
+                /*fromModifier=*/true);
+            if (cursorMode != CursorMode::Passthrough) {
+                modifierGrab = true;
+                return;
+            }
+        }
+    }
+    if (modifierGrab && event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
+        modifierGrab = false; // la pressione non era arrivata all'app
+        pendingTitleDrag = {};
+    } else {
+        wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
+    }
 
     if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
         if (cursorMode != CursorMode::Passthrough) {
@@ -704,6 +890,14 @@ void Server::onCursorButton(wlr_pointer_button_event* event)
     if (!hit.owner) {
         return;
     }
+    // La barra del titolo di Vela: pulsanti, trascinamento, doppio clic.
+    if (hit.owner->kind == SceneKind::Toplevel && !hit.surface && event->button == BTN_LEFT) {
+        auto* toplevel = static_cast<Toplevel*>(hit.owner);
+        if (toplevel->decoration) {
+            onDecorationPress(toplevel, event->time_msec);
+            return;
+        }
+    }
     if (hit.owner->kind == SceneKind::Toplevel) {
         focusToplevel(static_cast<Toplevel*>(hit.owner));
     } else {
@@ -714,11 +908,46 @@ void Server::onCursorButton(wlr_pointer_button_event* event)
     }
 }
 
-void Server::beginInteractive(Toplevel* toplevel, CursorMode mode, uint32_t edges)
+void Server::onDecorationPress(Toplevel* toplevel, uint32_t timeMsec)
 {
-    // Accetta la richiesta solo dalla finestra su cui si trova il puntatore.
+    focusToplevel(toplevel);
+    switch (toplevel->decoration->partAt(cursor->x, cursor->y)) {
+    case Decoration::Part::Close:
+        toplevel->sendClose();
+        return;
+    case Decoration::Part::Maximize:
+        toplevel->setMaximized(!toplevel->maximized);
+        return;
+    case Decoration::Part::Minimize:
+        toplevel->setMinimized(true);
+        return;
+    case Decoration::Part::Title: {
+        // Doppio clic: massimizza o ripristina, come su Windows.
+        const bool doubleClick = lastTitleClick.toplevel == toplevel && timeMsec - lastTitleClick.timeMsec < 400;
+        lastTitleClick = { toplevel, timeMsec };
+        if (doubleClick) {
+            lastTitleClick = {};
+            toplevel->setMaximized(!toplevel->maximized);
+            return;
+        }
+        // Il trascinamento parte solo se il mouse si muove davvero: un clic
+        // (o il primo di un doppio clic) non deve ripristinare una finestra
+        // massimizzata.
+        pendingTitleDrag = { toplevel, cursor->x, cursor->y };
+        modifierGrab = true; // il rilascio non va all'app
+        return;
+    }
+    case Decoration::Part::None:
+        return;
+    }
+}
+
+void Server::beginInteractive(Toplevel* toplevel, CursorMode mode, uint32_t edges, bool fromModifier)
+{
+    // Accetta la richiesta di un'app solo dalla finestra su cui si trova il
+    // puntatore.
     wlr_surface* focused = seat->pointer_state.focused_surface;
-    if (!focused || wlr_surface_get_root_surface(focused) != toplevel->xdg->base->surface) {
+    if (!fromModifier && (!focused || wlr_surface_get_root_surface(focused) != toplevel->surface())) {
         return;
     }
     if (toplevel->fullscreen) {
@@ -732,20 +961,20 @@ void Server::beginInteractive(Toplevel* toplevel, CursorMode mode, uint32_t edge
     if ((toplevel->maximized || toplevel->snap != Snap::None) && mode == CursorMode::Move) {
         const wlr_box frame = toplevel->frameBox();
         const double fraction = frame.width > 0 ? (cursor->x - frame.x) / frame.width : 0.5;
-        const int restoredWidth = toplevel->restore.width > 0 ? toplevel->restore.width : frame.width;
+        const int restoredWidth = toplevel->restoreBox().width;
         if (toplevel->maximized) {
             toplevel->setMaximized(false);
         } else {
             toplevel->setSnap(Snap::None);
         }
-        const wlr_box& geometry = toplevel->xdg->base->geometry;
+        const wlr_box geometry = toplevel->geometry();
         toplevel->tree->setPosition(static_cast<int>(cursor->x - fraction * restoredWidth) - geometry.x,
             frame.y - geometry.y);
     }
     // Ridimensionare una finestra agganciata la sgancia, lasciandola dov'è.
     if (toplevel->snap != Snap::None && mode == CursorMode::Resize) {
         toplevel->snap = Snap::None;
-        wlr_xdg_toplevel_set_tiled(toplevel->xdg, WLR_EDGE_NONE);
+        toplevel->sendTiled(WLR_EDGE_NONE);
     }
 
     grabbed = toplevel;
@@ -787,6 +1016,17 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
         }
         return true;
     }
+    // L'app a fuoco tiene le scorciatoie per sé (macchina virtuale, desktop
+    // remoto), o lo schermo è bloccato: resta solo il cambio di console
+    // qui sopra.
+    if (shortcutsInhibited() || locked) {
+        return false;
+    }
+    // Win+L blocca lo schermo, come su Windows (Alt+L dentro KDE).
+    if ((super || altNested) && (sym == XKB_KEY_l || sym == XKB_KEY_L)) {
+        lockScreen();
+        return true;
+    }
     if ((alt && shift && sym == XKB_KEY_Escape)) {
         wl_display_terminate(display);
         return true;
@@ -798,7 +1038,7 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
     }
     if ((alt && sym == XKB_KEY_F4) || (altNested && sym == XKB_KEY_q)) {
         if (Toplevel* active = focusedToplevel()) {
-            wlr_xdg_toplevel_send_close(active->xdg);
+            active->sendClose();
         }
         return true;
     }
@@ -1001,6 +1241,148 @@ void Server::stopSupervising()
     m_supervised.pid = -1;
 }
 
+// ------------------------------------------------------------ schermi --
+
+void Server::updateOutputConfiguration()
+{
+    wlr_output_configuration_v1* config = wlr_output_configuration_v1_create();
+    for (Output* output : outputs) {
+        wlr_output_configuration_head_v1* head = wlr_output_configuration_head_v1_create(config, output->wlr);
+        wlr_box box {};
+        wlr_output_layout_get_box(outputLayout, output->wlr, &box);
+        head->state.enabled = output->wlr->enabled && !wlr_box_empty(&box);
+        head->state.x = box.x;
+        head->state.y = box.y;
+    }
+    wlr_output_manager_v1_set_configuration(outputManager, config);
+}
+
+void Server::applyOutputConfiguration(wlr_output_configuration_v1* config, bool testOnly)
+{
+    bool ok = true;
+    std::vector<CurrentOutput> applied;
+    wlr_output_configuration_head_v1* head;
+    wl_list_for_each(head, &config->heads, link)
+    {
+        const wlr_output_head_v1_state& wanted = head->state;
+        auto* output = static_cast<Output*>(wanted.output->data);
+        if (!output) {
+            ok = false;
+            continue;
+        }
+        wlr_output_state state;
+        wlr_output_state_init(&state);
+        wlr_output_head_v1_state_apply(&wanted, &state);
+        if (testOnly) {
+            ok = wlr_output_test_state(wanted.output, &state) && ok;
+        } else if (wanted.enabled) {
+            // Prima la posizione: il primo frame alla nuova modalità si
+            // disegna già lì.
+            wlr_output_layout_add(outputLayout, wanted.output, wanted.x, wanted.y);
+            ok = output->commitMode(state) && ok;
+            applied.push_back({ wanted.output, true, wanted.x, wanted.y });
+        } else {
+            ok = wlr_output_commit_state(wanted.output, &state) && ok;
+            wlr_output_layout_remove(outputLayout, wanted.output);
+            applied.push_back({ wanted.output, false, 0, 0 });
+        }
+        wlr_output_state_finish(&state);
+    }
+    if (ok) {
+        wlr_output_configuration_v1_send_succeeded(config);
+    } else {
+        wlr_output_configuration_v1_send_failed(config);
+    }
+    wlr_output_configuration_v1_destroy(config);
+    if (testOnly) {
+        return;
+    }
+
+    // Le finestre rimaste fuori da ogni schermo tornano su quello principale.
+    Output* fallback = nullptr;
+    for (Output* output : outputs) {
+        if (output->wlr->enabled && !wlr_box_empty(&output->usable)) {
+            fallback = fallback ? fallback : output;
+        }
+        output->arrangeLayers();
+    }
+    for (Toplevel* toplevel : toplevels) {
+        const wlr_box frame = toplevel->frameBox();
+        if (fallback && !outputAt(frame.x + frame.width / 2.0, frame.y + frame.height / 2.0)) {
+            // Al centro dell'area utile, come una finestra appena aperta.
+            const wlr_box& area = fallback->usable;
+            const double marginX = frame.x - toplevel->tree->x(); // margine d'ombra
+            const double marginY = frame.y - toplevel->tree->y();
+            toplevel->tree->setPosition(area.x + std::max(0, (area.width - frame.width) / 2) - marginX,
+                area.y + std::max(0, (area.height - frame.height) / 2) - marginY);
+        }
+        toplevel->keepInPlace();
+    }
+    scene::Scene::changed();
+
+    // Scelte dell'utente: si ricordano (solo nella sessione vera).
+    if (session && ok) {
+        saveOutputs(applied);
+    }
+    wlr_log(WLR_INFO, "Configurazione degli schermi %s", ok ? "applicata" : "applicata solo in parte");
+}
+
+// ----------------------------------------------------------- sessione --
+
+// Nella sessione vera Vela è il desktop: lo dice alle app. Solo i valori
+// che nessuno (SDDM, l'utente) ha già scelto.
+void Server::setSessionEnvironment()
+{
+    setenv("XDG_CURRENT_DESKTOP", "Vela", false);
+    setenv("XDG_SESSION_DESKTOP", "vela", false);
+    setenv("XDG_SESSION_TYPE", "wayland", true); // da una console vale "tty"
+    // Le app Qt e KDE con il tema scelto in KDE (stile, colori, font,
+    // icone), come dentro Plasma.
+    if (access("/usr/lib/qt6/plugins/platformthemes/KDEPlasmaPlatformTheme6.so", F_OK) == 0) {
+        setenv("QT_QPA_PLATFORMTHEME", "kde", false);
+    }
+    // Il menu delle applicazioni di KDE: senza, Dolphin e gli altri non
+    // sanno con cosa aprire i file.
+    if (access("/etc/xdg/menus/plasma-applications.menu", F_OK) == 0) {
+        setenv("XDG_MENU_PREFIX", "plasma-", false);
+    }
+}
+
+void Server::runSessionHook(const char* action)
+{
+    // Accanto al compositor (cartella di build), altrimenti installato.
+    std::string hook;
+    char self[PATH_MAX] {};
+    if (const ssize_t n = readlink("/proc/self/exe", self, sizeof(self) - 1); n > 0) {
+        std::string dir(self, size_t(n));
+        dir.resize(dir.rfind('/'));
+        if (access((dir + "/vela-session-env").c_str(), X_OK) == 0) {
+            hook = dir + "/vela-session-env";
+        }
+    }
+    if (hook.empty()) {
+        hook = std::string(VELA_LIBEXECDIR) + "/vela-session-env";
+        if (access(hook.c_str(), X_OK) != 0) {
+            wlr_log(WLR_INFO, "Sessione: non trovo vela-session-env, niente collegamento a systemd");
+            return;
+        }
+    }
+    const pid_t pid = fork();
+    if (pid == 0) {
+        sigset_t none;
+        sigemptyset(&none);
+        sigprocmask(SIG_SETMASK, &none, nullptr);
+        execl(hook.c_str(), hook.c_str(), action, nullptr);
+        _exit(127);
+    }
+    if (pid > 0) {
+        int status = 0;
+        waitpid(pid, &status, 0);
+        wlr_log(WLR_INFO, "Sessione: %s %s (%s)", hook.c_str(), action,
+            WIFEXITED(status) && WEXITSTATUS(status) == 0 ? "fatto" : "fallito");
+    }
+}
+
 // ------------------------------------------------- comandi al compositor --
 
 void Server::listenForCommands()
@@ -1099,6 +1481,8 @@ void Server::handleCommand(const std::string& command)
     if (command == "logout") {
         wlr_log(WLR_INFO, "Uscita chiesta dalla shell");
         wl_display_terminate(display);
+    } else if (command == "lock") {
+        lockScreen(); // per esempio prima di sospendere il computer
     } else if (!command.empty()) {
         wlr_log(WLR_DEBUG, "Comando sconosciuto: %s", command.c_str());
     }

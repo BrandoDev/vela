@@ -15,9 +15,59 @@ Window {
     color: "transparent"
 
     property bool closing: false
+    // Chiesto una volta sola a logind: il computer sa sospendersi?
+    readonly property bool canSuspend: Shell.canSuspend()
+
+    // Una voce del menu di accensione.
+    component PowerEntry: Item {
+        id: entry
+        property string icon // del tema; vuoto: il simbolo disegnato dentro
+        property string label
+        default property alias glyph: glyphSlot.data
+        signal activated()
+        width: parent ? parent.width : 0
+        height: 36
+
+        Rectangle {
+            anchors.fill: parent
+            radius: Theme.radiusSmall
+            color: entryMouse.pressed ? Theme.pressed : Theme.hover
+            opacity: entryMouse.containsMouse ? 1 : 0
+        }
+        Image {
+            x: 10
+            anchors.verticalCenter: parent.verticalCenter
+            width: 16
+            height: 16
+            visible: entry.icon !== ""
+            source: entry.icon !== "" ? "image://icon/" + entry.icon : ""
+            sourceSize: Qt.size(32, 32)
+        }
+        Item {
+            id: glyphSlot
+            x: 10
+            anchors.verticalCenter: parent.verticalCenter
+            width: 16
+            height: 16
+        }
+        Text {
+            x: 36
+            anchors.verticalCenter: parent.verticalCenter
+            text: entry.label
+            color: Theme.text
+            font.pixelSize: Theme.fontNormal
+        }
+        MouseArea {
+            id: entryMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            onClicked: entry.activated()
+        }
+    }
 
     function open() {
         closing = false
+        powerButton.menuOpen = false
         Apps.query = ""
         search.text = ""
         grid.currentIndex = 0
@@ -266,88 +316,131 @@ Window {
                 }
             }
 
-            // Esci dalla sessione, dove Windows ha il pulsante di
-            // accensione. Chiude Vela, non il computer.
+            // Accensione, dove Windows ha il suo pulsante: sospendi, esci
+            // (chiude Vela, non il computer), riavvia, arresta.
             Item {
-                id: logoutButton
+                id: powerButton
                 anchors { right: parent.right; rightMargin: 24; verticalCenter: parent.verticalCenter }
                 width: 40
                 height: 40
+                property bool menuOpen: false
 
                 Rectangle {
                     anchors.fill: parent
                     radius: Theme.radiusSmall
-                    color: logoutMouse.pressed ? Theme.pressed : Theme.hover
-                    opacity: logoutMouse.containsMouse ? 1 : 0
+                    color: powerMouse.pressed ? Theme.pressed : Theme.hover
+                    opacity: powerMouse.containsMouse || powerButton.menuOpen ? 1 : 0
                     Behavior on opacity {
                         NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
                     }
                 }
 
-                // Una porta aperta e una freccia che esce.
+                // Il simbolo di accensione: un cerchio aperto in alto e una
+                // barra.
                 Shape {
                     anchors.centerIn: parent
                     width: 20
                     height: 20
                     preferredRendererType: Shape.CurveRenderer
-                    scale: logoutMouse.pressed ? 0.9 : 1
+                    scale: powerMouse.pressed ? 0.9 : 1
                     Behavior on scale {
                         NumberAnimation { duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
                     }
-
                     ShapePath {
                         strokeColor: Theme.text
                         strokeWidth: 1.5
                         fillColor: "transparent"
                         capStyle: ShapePath.RoundCap
-                        joinStyle: ShapePath.RoundJoin
-                        // Stipite: da destra in alto, a sinistra, giù, a destra.
-                        startX: 11; startY: 3
-                        PathLine { x: 4; y: 3 }
-                        PathLine { x: 4; y: 17 }
-                        PathLine { x: 11; y: 17 }
+                        PathAngleArc { centerX: 10; centerY: 11; radiusX: 6.5; radiusY: 6.5; startAngle: -50; sweepAngle: 280 }
                     }
                     ShapePath {
                         strokeColor: Theme.text
                         strokeWidth: 1.5
                         fillColor: "transparent"
                         capStyle: ShapePath.RoundCap
-                        joinStyle: ShapePath.RoundJoin
-                        startX: 8.5; startY: 10
-                        PathLine { x: 17; y: 10 }
-                        PathMove { x: 13.5; y: 6.5 }
-                        PathLine { x: 17; y: 10 }
-                        PathLine { x: 13.5; y: 13.5 }
-                    }
-                }
-
-                // Il nome dell'azione, al passaggio del mouse.
-                Rectangle {
-                    anchors { bottom: parent.top; bottomMargin: 6; horizontalCenter: parent.horizontalCenter }
-                    width: logoutLabel.implicitWidth + 16
-                    height: logoutLabel.implicitHeight + 8
-                    radius: Theme.radiusSmall
-                    color: Theme.surface
-                    border.width: 1
-                    border.color: Theme.stroke
-                    opacity: logoutMouse.containsMouse ? 1 : 0
-                    Behavior on opacity {
-                        NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
-                    }
-                    Text {
-                        id: logoutLabel
-                        anchors.centerIn: parent
-                        text: "Esci"
-                        color: Theme.text
-                        font.pixelSize: Theme.fontSmall
+                        startX: 10; startY: 3
+                        PathLine { x: 10; y: 10 }
                     }
                 }
 
                 MouseArea {
-                    id: logoutMouse
+                    id: powerMouse
                     anchors.fill: parent
                     hoverEnabled: true
-                    onClicked: Shell.logout()
+                    onClicked: powerButton.menuOpen = !powerButton.menuOpen
+                }
+
+                Rectangle {
+                    id: powerMenu
+                    anchors { right: parent.right; bottom: parent.top; bottomMargin: 8 }
+                    width: 200
+                    height: powerEntries.implicitHeight + 8
+                    radius: Theme.radiusLarge
+                    color: Theme.popup
+                    border.width: 1
+                    border.color: Theme.stroke
+                    opacity: powerButton.menuOpen ? 1 : 0
+                    visible: opacity > 0
+                    Behavior on opacity {
+                        NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
+                    }
+
+                    Column {
+                        id: powerEntries
+                        x: 4
+                        y: 4
+                        width: parent.width - 8
+
+                        PowerEntry {
+                            icon: "system-suspend"
+                            label: "Sospendi"
+                            visible: root.canSuspend
+                            onActivated: { root.close(); Shell.suspend() }
+                        }
+                        PowerEntry {
+                            label: "Esci"
+                            onActivated: Shell.logout()
+
+                            // Una porta aperta e una freccia che esce.
+                            Shape {
+                                anchors.fill: parent
+                                preferredRendererType: Shape.CurveRenderer
+                                ShapePath {
+                                    strokeColor: Theme.text
+                                    strokeWidth: 1.2
+                                    fillColor: "transparent"
+                                    capStyle: ShapePath.RoundCap
+                                    joinStyle: ShapePath.RoundJoin
+                                    startX: 8.5; startY: 2.5
+                                    PathLine { x: 3; y: 2.5 }
+                                    PathLine { x: 3; y: 13.5 }
+                                    PathLine { x: 8.5; y: 13.5 }
+                                }
+                                ShapePath {
+                                    strokeColor: Theme.text
+                                    strokeWidth: 1.2
+                                    fillColor: "transparent"
+                                    capStyle: ShapePath.RoundCap
+                                    joinStyle: ShapePath.RoundJoin
+                                    startX: 6.5; startY: 8
+                                    PathLine { x: 13.5; y: 8 }
+                                    PathMove { x: 10.8; y: 5.3 }
+                                    PathLine { x: 13.5; y: 8 }
+                                    PathLine { x: 10.8; y: 10.7 }
+                                }
+                            }
+                        }
+                        PowerEntry {
+                            icon: "system-reboot"
+                            label: "Riavvia"
+                            onActivated: Shell.reboot()
+                        }
+                        PowerEntry {
+                            icon: "system-shutdown"
+                            label: "Arresta"
+                            onActivated: Shell.powerOff()
+                        }
+                    }
                 }
             }
         }

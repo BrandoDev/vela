@@ -1,0 +1,41 @@
+# vela-lock: la schermata di blocco (ext-session-lock-v1 + PAM).
+
+find_package(Qt6 6.5 REQUIRED COMPONENTS Gui Svg)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LOCK_DEPS REQUIRED IMPORTED_TARGET wayland-client xkbcommon)
+pkg_get_variable(LOCK_WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
+find_program(WAYLAND_SCANNER NAMES wayland-scanner REQUIRED)
+find_library(PAM_LIBRARY pam REQUIRED)
+
+set(LOCK_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/protocols)
+file(MAKE_DIRECTORY ${LOCK_GENERATED_DIR})
+set(LOCK_PROTOCOL_SOURCES)
+foreach(xml
+        staging/ext-session-lock/ext-session-lock-v1.xml
+        staging/fractional-scale/fractional-scale-v1.xml
+        stable/viewporter/viewporter.xml)
+    get_filename_component(name ${xml} NAME_WE)
+    set(header ${LOCK_GENERATED_DIR}/${name}-client-protocol.h)
+    set(code ${LOCK_GENERATED_DIR}/${name}-protocol.c)
+    add_custom_command(
+        OUTPUT ${header} ${code}
+        COMMAND ${WAYLAND_SCANNER} client-header ${LOCK_WAYLAND_PROTOCOLS_DIR}/${xml} ${header}
+        COMMAND ${WAYLAND_SCANNER} private-code ${LOCK_WAYLAND_PROTOCOLS_DIR}/${xml} ${code}
+        DEPENDS ${LOCK_WAYLAND_PROTOCOLS_DIR}/${xml}
+        COMMENT "Genero il client di ${name}")
+    list(APPEND LOCK_PROTOCOL_SOURCES ${header} ${code})
+endforeach()
+
+qt_add_executable(vela-lock main.cpp ${LOCK_PROTOCOL_SOURCES})
+# Lo stesso sfondo predefinito della shell.
+qt_add_resources(vela-lock "images"
+    PREFIX "/vela"
+    BASE ${PROJECT_SOURCE_DIR}
+    FILES ${PROJECT_SOURCE_DIR}/images/vela_splash_169.svg)
+target_include_directories(vela-lock PRIVATE ${LOCK_GENERATED_DIR})
+target_compile_options(vela-lock PRIVATE -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
+target_link_libraries(vela-lock PRIVATE Qt6::Gui Qt6::Svg PkgConfig::LOCK_DEPS ${PAM_LIBRARY})
+
+install(TARGETS vela-lock RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# Il servizio PAM: la stessa verifica dell'accesso da console.
+install(FILES vela-lock.pam DESTINATION /etc/pam.d RENAME vela-lock)

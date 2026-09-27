@@ -1,6 +1,11 @@
 #include "shellcontroller.h"
 
+#include <QDBusConnection>
+#include <QDBusInterface>
+#include <QDBusReply>
+#include <QDBusUnixFileDescriptor>
 #include <QLocalSocket>
+#include <QTimer>
 #include <QStandardPaths>
 #include <QtDebug>
 
@@ -50,20 +55,105 @@ bool ShellController::sendToRunningInstance(const QByteArray& command)
     return true;
 }
 
-void ShellController::logout()
+// Il socket dei comandi del compositor: vedi Server::listenForCommands().
+bool ShellController::sendToCompositor(const QByteArray& command)
 {
-    // Il socket dei comandi del compositor: vedi Server::listenForCommands().
     const QString runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
     const QString display = qEnvironmentVariable("WAYLAND_DISPLAY", QStringLiteral("wayland-0"));
     QLocalSocket socket;
     socket.connectToServer(runtimeDir + QStringLiteral("/vela-") + display + QStringLiteral(".sock"));
     if (!socket.waitForConnected(300)) {
-        qWarning("vela-shell: il compositor non risponde, impossibile uscire");
-        return;
+        qWarning("vela-shell: il compositor non risponde (%s)", command.constData());
+        return false;
     }
-    socket.write("logout\n");
+    socket.write(command + '\n');
     socket.waitForBytesWritten(300);
     socket.disconnectFromServer();
+    return true;
+}
+
+void ShellController::logout()
+{
+    sendToCompositor("logout");
+}
+
+void ShellController::lock()
+{
+    sendToCompositor("lock");
+}
+
+namespace {
+
+QDBusInterface login1()
+{
+    return QDBusInterface(QStringLiteral("org.freedesktop.login1"), QStringLiteral("/org/freedesktop/login1"),
+        QStringLiteral("org.freedesktop.login1.Manager"), QDBusConnection::systemBus());
+}
+
+void callLogin1(const char* method)
+{
+    // interactive = true: se serve un'autorizzazione, polkit la chiede.
+    QDBusInterface manager = login1();
+    manager.asyncCall(QLatin1String(method), true);
+}
+
+} // namespace
+
+void ShellController::suspend()
+{
+    callLogin1("Suspend");
+}
+
+void ShellController::reboot()
+{
+    callLogin1("Reboot");
+}
+
+void ShellController::powerOff()
+{
+    callLogin1("PowerOff");
+}
+
+// Prima di sospendere, lo schermo si blocca: al risveglio il desktop non è
+// mai esposto. logind aspetta finché teniamo aperto il "ritardo".
+void ShellController::watchSleep()
+{
+    QDBusConnection::systemBus().connect(QStringLiteral("org.freedesktop.login1"),
+        QStringLiteral("/org/freedesktop/login1"), QStringLiteral("org.freedesktop.login1.Manager"),
+        QStringLiteral("PrepareForSleep"), this, SLOT(onPrepareForSleep(bool)));
+    takeSleepDelay();
+}
+
+void ShellController::takeSleepDelay()
+{
+    if (m_sleepDelay.isValid()) {
+        return;
+    }
+    QDBusInterface manager = login1();
+    const QDBusReply<QDBusUnixFileDescriptor> reply = manager.call(QStringLiteral("Inhibit"), QStringLiteral("sleep"),
+        QStringLiteral("Vela"), QStringLiteral("Blocca lo schermo prima di sospendere"), QStringLiteral("delay"));
+    if (reply.isValid()) {
+        m_sleepDelay = reply.value();
+    }
+}
+
+void ShellController::onPrepareForSleep(bool starting)
+{
+    if (!starting) {
+        takeSleepDelay(); // risvegliati: pronti per la prossima volta
+        return;
+    }
+    lock();
+    // Un momento perché la schermata di blocco compaia, poi si lascia
+    // sospendere (chiudendo il ritardo).
+    QTimer::singleShot(700, this, [this] { m_sleepDelay = QDBusUnixFileDescriptor(); });
+}
+
+bool ShellController::canSuspend() const
+{
+    QDBusInterface manager = login1();
+    const QDBusReply<QString> reply = manager.call(QStringLiteral("CanSuspend"));
+    return reply.isValid() && reply.value() != QLatin1String("no") && reply.value() != QLatin1String("na");
 }
 
 bool ShellController::listen()

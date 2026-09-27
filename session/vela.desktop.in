@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Vela
+Comment=Un desktop moderno, fluido e leggero, con la comodità di Windows 11
+Exec=@CMAKE_INSTALL_FULL_BINDIR@/vela-session
+TryExec=@CMAKE_INSTALL_FULL_BINDIR@/vela-compositor
+Type=Application
+DesktopNames=Vela

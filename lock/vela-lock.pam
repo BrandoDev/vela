@@ -1,0 +1,3 @@
+#%PAM-1.0
+# La schermata di blocco di Vela: la password si verifica come all'accesso.
+auth include login
