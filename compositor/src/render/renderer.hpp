@@ -54,6 +54,37 @@ public:
     // Comincia un disegno su `buffer` (un dmabuf in uno dei renderFormats).
     std::unique_ptr<Pass> beginPass(wlr_buffer* buffer);
 
+    // ------------------------------------------ sincronizzazione esplicita --
+
+    // Una timeline syncobj nostra (linux-drm-syncobj-v1, §7.3): ogni disegno
+    // ne fa scattare un punto quando la GPU ha finito. Sono i punti di
+    // rilascio dei buffer delle app. nullptr se il kernel non la supporta.
+    wlr_drm_syncobj_timeline* syncTimeline() const { return m_syncTimeline; }
+    // Fa scattare il prossimo punto della timeline con `syncFile` (non lo
+    // chiude; -1: il lavoro è già finito). Restituisce il punto, 0 se non
+    // c'è la timeline.
+    uint64_t signalSyncPoint(int syncFile);
+
+    // ------------------------------------------------ tempi della GPU --
+
+    // Quando la GPU ha cominciato e finito un disegno (§4.3). Con i
+    // timestamp calibrati gli istanti sono su CLOCK_MONOTONIC (absolute);
+    // altrimenti conta solo la durata.
+    struct GpuTiming {
+        int64_t startNs = 0;
+        int64_t endNs = 0;
+        bool absolute = false;
+    };
+    // Uno slot di misura per il prossimo command buffer; -1 se non ci sono
+    // i timestamp o gli slot sono tutti in uso. Gli slot girano: una misura
+    // va letta entro qualche decina di disegni.
+    int timingSlot();
+    void writeTimestamp(VkCommandBuffer cmd, int slot, bool end);
+    void timingSubmitted(int slot, uint64_t point);
+    // true se il disegno (slot, punto della timeline) è finito e la misura
+    // è ancora lì.
+    bool readTiming(int slot, uint64_t point, GpuTiming& out);
+
     // ------------------------------------------------ per Pass e Texture --
 
     RenderTarget* targetFor(wlr_buffer* buffer);
@@ -100,6 +131,7 @@ private:
     bool init();
 
     static void destroyTarget(wlr_addon* addon);
+    int64_t gpuToMonotonic(uint64_t ticks);
     void releaseTextures();
     static const wlr_addon_interface s_targetAddon;
 
@@ -142,6 +174,18 @@ private:
         uint64_t point; // ultimo invio che lo legge; UINT64_MAX: in uso da comandi non ancora inviati
     };
     std::vector<StagingChunk> m_staging;
+
+    wlr_drm_syncobj_timeline* m_syncTimeline = nullptr;
+    uint64_t m_syncPoint = 0;
+
+    static constexpr int timingSlots = 64;
+    VkQueryPool m_queryPool = VK_NULL_HANDLE;
+    uint64_t m_timing[timingSlots] {}; // punto della timeline di ogni slot; UINT64_MAX: in registrazione
+    int m_nextTiming = 0;
+    // Calibrazione: lo stesso istante letto sulla GPU e su CLOCK_MONOTONIC.
+    uint64_t m_calibrationTicks = 0;
+    int64_t m_calibrationNs = 0;
+    int64_t m_calibratedAt = 0;
 
     std::vector<RenderTarget*> m_targets;
     std::unordered_set<Texture*> m_textures;

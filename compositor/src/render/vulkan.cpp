@@ -283,6 +283,32 @@ bool VulkanDevice::createDevice()
         .pNext = &enabled13,
         .timelineSemaphore = VK_TRUE,
     };
+    // Facoltativi: i timestamp calibrati, per sapere a che ora (sul nostro
+    // orologio) la GPU finisce un frame.
+    uint32_t extCount = 0;
+    vkEnumerateDeviceExtensionProperties(physical, nullptr, &extCount, nullptr);
+    std::vector<VkExtensionProperties> exts(extCount);
+    vkEnumerateDeviceExtensionProperties(physical, nullptr, &extCount, exts.data());
+    std::vector<const char*> extensions(std::begin(requiredExtensions), std::end(requiredExtensions));
+    bool calibrated = false;
+    if (hasExtension(exts, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)) {
+        auto getDomains = reinterpret_cast<PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR>(
+            vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceCalibrateableTimeDomainsKHR"));
+        uint32_t domainCount = 0;
+        std::vector<VkTimeDomainKHR> domains;
+        if (getDomains && getDomains(physical, &domainCount, nullptr) == VK_SUCCESS) {
+            domains.resize(domainCount);
+            getDomains(physical, &domainCount, domains.data());
+        }
+        const auto has = [&](VkTimeDomainKHR domain) {
+            return std::find(domains.begin(), domains.end(), domain) != domains.end();
+        };
+        if (has(VK_TIME_DOMAIN_DEVICE_KHR) && has(VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR)) {
+            extensions.push_back(VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
+            calibrated = true;
+        }
+    }
+
     const float priority = 1.0f;
     const VkDeviceQueueCreateInfo queueInfo {
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -295,14 +321,36 @@ bool VulkanDevice::createDevice()
         .pNext = &enabled12,
         .queueCreateInfoCount = 1,
         .pQueueCreateInfos = &queueInfo,
-        .enabledExtensionCount = static_cast<uint32_t>(std::size(requiredExtensions)),
-        .ppEnabledExtensionNames = requiredExtensions,
+        .enabledExtensionCount = static_cast<uint32_t>(extensions.size()),
+        .ppEnabledExtensionNames = extensions.data(),
     };
     if (vkCreateDevice(physical, &deviceInfo, nullptr, &device) != VK_SUCCESS) {
         wlr_log(WLR_ERROR, "%s: impossibile creare il device Vulkan", name.c_str());
         return false;
     }
     vkGetDeviceQueue(device, queueFamily, 0, &queue);
+
+    uint32_t familyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(physical, &familyCount, nullptr);
+    std::vector<VkQueueFamilyProperties> familyProps(familyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical, &familyCount, familyProps.data());
+    const uint32_t validBits = familyProps[queueFamily].timestampValidBits;
+    if (validBits > 0) {
+        VkPhysicalDeviceProperties props {};
+        vkGetPhysicalDeviceProperties(physical, &props);
+        timestampPeriod = props.limits.timestampPeriod;
+        timestampMask = validBits >= 64 ? UINT64_MAX : (uint64_t(1) << validBits) - 1;
+    }
+    if (calibrated) {
+        getCalibratedTimestamps = reinterpret_cast<PFN_vkGetCalibratedTimestampsKHR>(
+            vkGetDeviceProcAddr(device, "vkGetCalibratedTimestampsKHR"));
+    }
+    if (timestampPeriod <= 0.0f) {
+        wlr_log(WLR_INFO, "%s: niente timestamp della GPU, il costo dei frame si stima dalla CPU", name.c_str());
+    } else if (!getCalibratedTimestamps) {
+        wlr_log(WLR_INFO, "%s: niente timestamp calibrati, si misura solo la durata del lavoro della GPU",
+            name.c_str());
+    }
 
     getMemoryFdProperties = reinterpret_cast<PFN_vkGetMemoryFdPropertiesKHR>(
         vkGetDeviceProcAddr(device, "vkGetMemoryFdPropertiesKHR"));

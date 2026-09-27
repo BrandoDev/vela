@@ -143,6 +143,31 @@ Output::Output(Server& s, wlr_output* output)
     sceneFrame->scheduleFrame = [this] { scheduleFrame(); };
 
     clock.setModeRefresh(wlr->refresh);
+    // Late latching (§4.3): VELA_LATCH=0 lo spegne (si disegna appena il
+    // backend dice "frame"); VELA_LATCH_MARGIN: margine minimo in ms.
+    if (const char* latch = std::getenv("VELA_LATCH"); latch && std::strcmp(latch, "0") == 0) {
+        m_latching = false;
+    }
+    if (const char* margin = std::getenv("VELA_LATCH_MARGIN"); margin && *margin) {
+        clock.setBaseMargin(int64_t(std::strtod(margin, nullptr) * 1e6));
+    }
+    m_latchFd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
+    if (m_latchFd >= 0) {
+        m_latchSource = wl_event_loop_add_fd(server.loop, m_latchFd, WL_EVENT_READABLE,
+            [](int fd, uint32_t, void* data) {
+                uint64_t expirations = 0;
+                if (read(fd, &expirations, sizeof(expirations)) < 0) {
+                    return 0;
+                }
+                auto* self = static_cast<Output*>(data);
+                self->m_latchArmed = false;
+                self->onFrame();
+                return 0;
+            },
+            this);
+    } else {
+        m_latching = false;
+    }
     if (wlr_output_is_headless(wlr)) {
         startVirtualVblank();
     } else {
@@ -151,8 +176,9 @@ Output::Output(Server& s, wlr_output* output)
             if (event->presented) {
                 clock.presented(event->commit_seq, render::toNs(event->when), event->refresh);
             }
+            collectCosts();
         });
-        frame.connect(&wlr->events.frame, [this](void*) { onFrame(); });
+        frame.connect(&wlr->events.frame, [this](void*) { onFrameEvent(); });
     }
     requestState.connect(&wlr->events.request_state, [this](void* data) {
         // Nel backend annidato: la finestra ospite è stata ridimensionata.
@@ -203,6 +229,15 @@ Output::~Output()
     if (m_vblankFd >= 0) {
         close(m_vblankFd);
     }
+    if (m_idleFrame) {
+        wl_event_source_remove(m_idleFrame);
+    }
+    if (m_latchSource) {
+        wl_event_source_remove(m_latchSource);
+    }
+    if (m_latchFd >= 0) {
+        close(m_latchFd);
+    }
     nested.reset();
     sceneFrame.reset();
 }
@@ -223,12 +258,131 @@ void Output::commitMode(wlr_output_state& state)
 
 void Output::scheduleFrame()
 {
+    m_frameRequested = true;
     if (m_vblankFd >= 0) {
-        m_frameRequested = true;
-        armVirtualVblank();
+        // Headless: come fa wlroots con DRM, se nessun frame aspetta il
+        // vblank il "frame" arriva subito; altrimenti al vblank.
+        if (!m_awaitingPresent && !m_latchArmed && !m_idleFrame) {
+            m_idleFrame = wl_event_loop_add_idle(
+                server.loop,
+                [](void* data) {
+                    auto* self = static_cast<Output*>(data);
+                    self->m_idleFrame = nullptr;
+                    self->onFrameEvent();
+                },
+                this);
+        }
         return;
     }
     wlr_output_schedule_frame(wlr);
+}
+
+// ------------------------------------------------------ il ciclo dei frame --
+
+void Output::onFrameEvent()
+{
+    if (m_latchArmed || (!m_frameRequested && !wlr->needs_frame)) {
+        return; // già pianificato, o niente da fare
+    }
+    collectCosts();
+    const int64_t now = render::nowNs();
+    m_plan = clock.plan(now, m_latching);
+    m_planned = true;
+    if (m_plan.start - now > 50'000) {
+        armLatch(m_plan.start);
+        return;
+    }
+    onFrame();
+}
+
+void Output::armLatch(int64_t when)
+{
+    const itimerspec spec { .it_interval = {}, .it_value = { time_t(when / 1'000'000'000), long(when % 1'000'000'000) } };
+    timerfd_settime(m_latchFd, TFD_TIMER_ABSTIME, &spec, nullptr);
+    m_latchArmed = true;
+}
+
+void Output::onFrame()
+{
+    // Uno scambio di pagina ancora in corso (es. dopo un cambio di modo):
+    // il suo evento "frame" ci richiamerà.
+    if (m_vblankFd < 0 && wlr->frame_pending) {
+        m_planned = false;
+        return;
+    }
+    const int64_t now = render::nowNs();
+    const render::FrameClock::Plan plan = m_planned ? m_plan : clock.plan(now, false);
+    m_planned = false;
+    m_frameRequested = false;
+
+    // Prima si fa avanzare ogni animazione all'istante in cui questo frame
+    // diventerà luce (docs/renderer.md §4.2), poi si disegna.
+    server.tickAnimations(plan.present);
+
+    const wlr_box area = box();
+    if (sceneFrame->render(area.x, area.y)) {
+        const scene::OutputFrame::Delivered& delivered = sceneFrame->delivered();
+        const Delivery delivery { wlr->commit_seq, plan.start, render::nowNs(), delivered.point,
+            delivered.timingSlot };
+        clock.committed(wlr->commit_seq, plan.start, plan.present);
+        m_deliveries.push_back(delivery);
+        if (m_deliveries.size() > 16) {
+            m_deliveries.erase(m_deliveries.begin());
+        }
+        // Col vblank virtuale il frame compare al primo battito in cui è pronto.
+        if (m_vblankFd >= 0) {
+            m_awaiting = delivery;
+            m_awaitingPresent = true;
+            armVirtualVblank();
+        }
+    }
+
+    timespec nowTs {};
+    clock_gettime(CLOCK_MONOTONIC, &nowTs);
+    sceneFrame->sendFrameDone(nowTs);
+
+    render::FrameClock::Stats stats {};
+    if (clock.takeStats(now, stats) && stats.fps > 0.0) {
+        wlr_log(WLR_DEBUG,
+            "%s: %.2f fps (periodo %.3f ms, latenza %d vblank); costo %.3f ms + margine %.3f ms; "
+            "dal disegno alla luce %.3f ms; errore di previsione medio %.3f ms, massimo %.3f ms; vblank persi %d",
+            wlr->name, stats.fps, clock.periodNs() / 1e6, clock.latencyFrames(), stats.costMs, stats.marginMs,
+            stats.latencyMs, stats.errorMeanMs, stats.errorMaxMs, stats.missed);
+    }
+}
+
+bool Output::readyTime(const Delivery& delivery, int64_t& when) const
+{
+    if (delivery.point == 0) {
+        when = delivery.committedAt;
+        return true;
+    }
+    render::Renderer& renderer = *server.velaRenderer;
+    render::Renderer::GpuTiming timing;
+    if (renderer.readTiming(delivery.timingSlot, delivery.point, timing)) {
+        // Senza timestamp calibrati si sa solo quanto ha lavorato la GPU:
+        // si suppone che abbia cominciato al commit.
+        when = timing.absolute ? std::max(delivery.committedAt, timing.endNs) : delivery.committedAt + timing.endNs;
+        return true;
+    }
+    if (delivery.point <= renderer.completed()) {
+        when = delivery.committedAt; // finito, ma senza misura
+        return true;
+    }
+    return false;
+}
+
+void Output::collectCosts()
+{
+    const int64_t now = render::nowNs();
+    std::erase_if(m_deliveries, [&](const Delivery& delivery) {
+        int64_t ready = 0;
+        if (readyTime(delivery, ready)) {
+            clock.addCost(now, ready - delivery.start);
+            return true;
+        }
+        return now - delivery.committedAt > 1'000'000'000; // misura persa
+    });
 }
 
 // ---------------------------------------------------------- vblank virtuale --
@@ -277,24 +431,32 @@ void Output::onVirtualVblank()
     m_vblankArmed = false;
     const int64_t period = clock.periodNs();
     const int64_t now = render::nowNs();
-    // Il vblank che ha fatto scattare il timer, sulla griglia.
-    const int64_t vblank = m_lastVblankNs + std::max<int64_t>(1, (now - m_lastVblankNs) / period) * period;
-
-    // Il frame consegnato prima di questo vblank diventa luce adesso. Se
-    // doveva comparire a un vblank precedente, quelli nel mezzo sono persi.
-    if (m_awaitingPresent) {
-        if (vblank > m_targetVblankNs) {
-            clock.missed(int((vblank - m_targetVblankNs) / period));
-        }
-        clock.presented(m_awaitingSeq, vblank, period);
-        m_awaitingPresent = false;
-    }
+    // L'ultimo vblank della griglia passato (il timer può svegliarci tardi).
+    const int64_t anchor = m_lastVblankNs;
+    const int64_t vblank = anchor + std::max<int64_t>(1, (now - anchor) / period) * period;
     m_lastVblankNs = vblank;
 
-    if (m_frameRequested) {
-        m_frameRequested = false;
-        onFrame();
+    if (m_awaitingPresent) {
+        // Il frame compare al primo vblank in cui era pronto: commit fatto e
+        // GPU finita. Se non lo è ancora, resta sullo schermo il precedente
+        // e si riprova al prossimo battito (vblank perso).
+        int64_t ready = 0;
+        if (!readyTime(m_awaiting, ready)) {
+            armVirtualVblank();
+            return;
+        }
+        const int64_t late = std::max<int64_t>(0, ready - anchor);
+        const int64_t shownAt = anchor + std::max<int64_t>(1, (late + period - 1) / period) * period;
+        if (shownAt > vblank) {
+            armVirtualVblank();
+            return;
+        }
+        clock.presented(m_awaiting.seq, shownAt, period);
+        m_awaitingPresent = false;
+        collectCosts();
     }
+    // Come l'evento "frame" di DRM al vblank dopo una consegna.
+    onFrameEvent();
 }
 
 wlr_box Output::box() const
@@ -416,43 +578,6 @@ Placement Output::place(const Area& area) const
     const Axis x = axis(full.x, px, pw, screenWidth, open(full.x - 0.5, midY), open(full.x + full.width + 0.5, midY));
     const Axis y = axis(full.y, py, ph, screenHeight, open(midX, full.y - 0.5), open(midX, full.y + full.height + 0.5));
     return { x.position, y.position, x.size, y.size };
-}
-
-void Output::onFrame()
-{
-    const int64_t now = render::nowNs();
-    const int64_t presentAt = clock.predict(now);
-
-    // Prima si fa avanzare ogni animazione all'istante in cui questo frame
-    // diventerà luce (docs/renderer.md §4.2), poi si disegna.
-    server.tickAnimations(presentAt);
-
-    const wlr_box area = box();
-    if (sceneFrame->render(area.x, area.y)) {
-        clock.committed(wlr->commit_seq, presentAt);
-        m_awaitingPresent = true;
-        m_awaitingSeq = wlr->commit_seq;
-        // Col vblank virtuale il frame va "mostrato" al prossimo battito.
-        if (m_vblankFd >= 0) {
-            const int64_t period = clock.periodNs();
-            m_targetVblankNs = m_lastVblankNs + ((now - m_lastVblankNs) / period + 1) * period;
-            armVirtualVblank();
-        }
-    }
-
-    timespec nowTs {};
-    clock_gettime(CLOCK_MONOTONIC, &nowTs);
-    sceneFrame->sendFrameDone(nowTs);
-
-    double fps = 0.0;
-    double errorMean = 0.0;
-    double errorMax = 0.0;
-    int missed = 0;
-    if (clock.takeStats(now, fps, errorMean, errorMax, missed) && fps > 0.0) {
-        wlr_log(WLR_DEBUG, "%s: %.2f fps (periodo %.3f ms, latenza %d vblank), errore di previsione "
-                           "medio %.3f ms, massimo %.3f ms, vblank persi %d",
-            wlr->name, fps, clock.periodNs() / 1e6, clock.latencyFrames(), errorMean, errorMax, missed);
-    }
 }
 
 void Output::arrangeLayers()

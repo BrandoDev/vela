@@ -126,6 +126,9 @@ void WindowCapture::renderFrame()
         }
         drawElements(*pass, elements, nullptr, WL_OUTPUT_TRANSFORM_NORMAL, whole.width, whole.height);
         ok = pass->submit();
+        if (ok) {
+            addReleasePoints(elements, m_renderer, pass->syncPoint());
+        }
     }
     if (ok) {
         pixman_region32_t damage;

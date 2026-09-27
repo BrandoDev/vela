@@ -129,23 +129,51 @@ struct Output {
     render::FrameClock clock;
 
 private:
+    // Il ciclo dei frame (docs/renderer.md §4.3): il backend dice "frame"
+    // (al vblank dopo una consegna, o subito se lo schermo era fermo), si
+    // pianifica il disegno il più tardi possibile prima del vblank, e al
+    // momento giusto si disegna.
+    void onFrameEvent();
     void onFrame();
+    void armLatch(int64_t when);
+    // Il costo dei frame già consegnati, appena la GPU li ha finiti.
+    void collectCosts();
+
+    bool m_latching = true; // VELA_LATCH=0: si disegna subito, come prima di S3
+    bool m_frameRequested = false;
+    int m_latchFd = -1;
+    wl_event_source* m_latchSource = nullptr;
+    bool m_latchArmed = false;
+    render::FrameClock::Plan m_plan {};
+    bool m_planned = false;
+
+    struct Delivery {
+        uint32_t seq;
+        int64_t start; // quando doveva cominciare il disegno
+        int64_t committedAt;
+        uint64_t point; // lavoro della GPU; 0: nessuno (scanout, solo cursore)
+        int timingSlot;
+    };
+    std::vector<Delivery> m_deliveries; // in attesa della misura del costo
+    // Quando il frame era pronto: commit fatto e GPU finita. false se non
+    // si sa ancora.
+    bool readyTime(const Delivery& delivery, int64_t& when) const;
 
     // Schermo headless: un vblank virtuale esatto al nanosecondo, per
     // provare qualunque frequenza (il timer del backend headless di wlroots
-    // lavora al millisecondo e non ha vblank). Batte solo se c'è un frame
-    // da fare.
+    // lavora al millisecondo e non ha vblank). Batte solo quando un frame
+    // consegnato aspetta di comparire; un frame compare al primo vblank in
+    // cui è pronto (anche la GPU deve aver finito), come su uno schermo vero.
     void startVirtualVblank();
     void armVirtualVblank();
     void onVirtualVblank();
     int m_vblankFd = -1;
     wl_event_source* m_vblankSource = nullptr;
+    wl_event_source* m_idleFrame = nullptr;
     int64_t m_lastVblankNs = 0;
-    int64_t m_targetVblankNs = 0; // il vblank a cui deve comparire il frame consegnato
     bool m_vblankArmed = false;
-    bool m_frameRequested = false;
     bool m_awaitingPresent = false; // un frame è stato consegnato e aspetta il vblank
-    uint32_t m_awaitingSeq = 0;
+    Delivery m_awaiting {};
 };
 
 // ----------------------------------------------------------------- Popup --

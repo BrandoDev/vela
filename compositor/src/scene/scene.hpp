@@ -171,6 +171,10 @@ public:
 
     // Schermi attivi (li registra OutputFrame).
     std::vector<OutputFrame*> frames;
+    // Per il feedback dmabuf per superficie (§5.3); può mancare.
+    wlr_linux_dmabuf_v1* linuxDmabuf = nullptr;
+    // Per i punti di rilascio della sincronizzazione esplicita.
+    wl_event_loop* eventLoop = nullptr;
     static Scene* instance() { return s_instance; }
 
 private:

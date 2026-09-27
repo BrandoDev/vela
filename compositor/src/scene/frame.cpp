@@ -280,7 +280,7 @@ void drawElements(render::Pass& pass, const std::vector<Element>& elements, cons
         if (!texture) {
             continue;
         }
-        pass.addTexture({
+        render::Pass::TextureDraw draw {
             .texture = texture,
             .src = e.src,
             .dst = dst,
@@ -289,7 +289,34 @@ void drawElements(render::Pass& pass, const std::vector<Element>& elements, cons
             .linear = e.linear,
             .blend = true,
             .clip = clip,
-        });
+        };
+        // Sincronizzazione esplicita: il buffer è pronto quando scatta il
+        // punto di acquisizione dell'app.
+        if (e.surface) {
+            const auto* sync = wlr_linux_drm_syncobj_v1_get_surface_state(e.surface);
+            if (sync && sync->acquire_timeline) {
+                draw.waitTimeline = sync->acquire_timeline;
+                draw.waitPoint = sync->acquire_point;
+            }
+        }
+        pass.addTexture(draw);
+    }
+}
+
+void addReleasePoints(const std::vector<Element>& elements, render::Renderer& renderer, uint64_t syncPoint)
+{
+    Scene* scene = Scene::instance();
+    if (!renderer.syncTimeline() || syncPoint == 0 || !scene || !scene->eventLoop) {
+        return;
+    }
+    for (const Element& e : elements) {
+        if (!e.visible || !e.surface) {
+            continue;
+        }
+        if (auto* sync = wlr_linux_drm_syncobj_v1_get_surface_state(e.surface)) {
+            wlr_linux_drm_syncobj_v1_state_add_release_point(sync, renderer.syncTimeline(), syncPoint,
+                scene->eventLoop);
+        }
     }
 }
 
@@ -317,6 +344,14 @@ OutputFrame::OutputFrame(Scene& scene, render::Renderer& renderer, wlr_output* o
         }
     };
     wl_signal_add(&output->events.needs_frame, &m_needsFrame);
+
+    // Scanout di buffer con sincronizzazione esplicita: serve un backend
+    // che sappia aspettare e far scattare timeline (DRM, annidato in un
+    // ospite con linux-drm-syncobj). Quello headless dice di saperlo fare,
+    // ma poi rifiuta i commit con le timeline.
+    if (output->backend->features.timeline && renderer.syncTimeline() && !wlr_output_is_headless(output)) {
+        m_scanoutTimeline = wlr_drm_syncobj_timeline_create(renderer.vk().renderFd);
+    }
 }
 
 OutputFrame::~OutputFrame()
@@ -328,6 +363,12 @@ OutputFrame::~OutputFrame()
         if (element.surface) {
             forgetSurface(element.surface, m_output);
         }
+    }
+    if (m_feedbackSurface) {
+        sendFeedback(m_feedbackSurface, false);
+    }
+    if (m_scanoutTimeline) {
+        wlr_drm_syncobj_timeline_unref(m_scanoutTimeline);
     }
     wlr_damage_ring_finish(&m_ring);
 }
@@ -383,6 +424,10 @@ void OutputFrame::surfaceCommitted(wlr_surface* surface)
 
 void OutputFrame::surfaceDestroyed(wlr_surface* surface)
 {
+    if (surface == m_feedbackSurface) {
+        m_feedbackSurface = nullptr;
+        m_feedbackDebounce = 0;
+    }
     auto it = m_last.find(surface);
     if (it == m_last.end()) {
         return;
@@ -523,10 +568,15 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
     m_last = std::move(current);
     updateSurfaces(elements);
 
+    // Un'app a schermo intero che si può mostrare così com'è.
+    const Element* candidate = pending ? nullptr : scanoutCandidate(elements, transform);
+    updateFeedback(candidate);
+
     const bool damaged = pixman_region32_not_empty(&m_ring.current);
     if (!damaged && !m_output->needs_frame && !pending) {
         return false;
     }
+    m_delivered = {};
 
     // Lo stato del commit: quello del chiamante (cambio di modo, disegnato
     // subito alla nuova dimensione) o uno nostro.
@@ -539,6 +589,28 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
         const bool ok = wlr_output_commit_state(m_output, &state);
         wlr_output_state_finish(&own);
         return ok;
+    }
+
+    // Scanout diretto: niente disegno, il buffer dell'app va sullo schermo.
+    if (candidate && tryScanout(*candidate, state)) {
+        wlr_output_state_finish(&own);
+        // Lo schermo è a posto: il danno accumulato non serve più (i
+        // nostri buffer invece sono rimasti indietro, vedi sotto).
+        pixman_region32_clear(&m_ring.current);
+        if (!m_scanout) {
+            wlr_log(WLR_DEBUG, "%s: scanout diretto attivo", m_output->name);
+        }
+        m_scanout = true;
+        m_delivered.scanout = true;
+        return true;
+    }
+    if (m_scanout) {
+        // Si torna a comporre: i nostri buffer non hanno visto i frame
+        // dello scanout, si ridisegnano interi.
+        wlr_log(WLR_DEBUG, "%s: scanout diretto finito", m_output->name);
+        m_scanout = false;
+        const wlr_box whole { 0, 0, width, height };
+        wlr_damage_ring_add_box(&m_ring, &whole);
     }
 
     if (!wlr_output_configure_primary_swapchain(m_output, &state, &m_output->swapchain)) {
@@ -571,7 +643,13 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
         pass->addRect({ 0, 0, buffer->width, buffer->height }, { 0.0f, 0.0f, 0.0f, 1.0f }, &bufferDamage, false);
         drawElements(*pass, elements, &bufferDamage, transform, width, height);
         wlr_output_add_software_cursors_to_render_pass(m_output, pass->wlr(), &bufferDamage);
+        pass->measure();
         ok = pass->submit();
+        if (ok) {
+            m_delivered.point = pass->point();
+            m_delivered.timingSlot = pass->timingSlot();
+            addReleasePoints(elements, m_renderer, pass->syncPoint());
+        }
     }
 
     const int bufferWidth = buffer->width;
@@ -597,6 +675,164 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
     pixman_region32_fini(&frameDamage);
     pixman_region32_fini(&bufferDamage);
     return ok;
+}
+
+const Element* OutputFrame::scanoutCandidate(const std::vector<Element>& elements,
+    wl_output_transform transform) const
+{
+    // VELA_SCANOUT=0: sempre composizione (diagnosi, confronti).
+    static const bool enabled = !(std::getenv("VELA_SCANOUT") && std::strcmp(std::getenv("VELA_SCANOUT"), "0") == 0);
+    if (!enabled) {
+        return nullptr;
+    }
+    const Element* found = nullptr;
+    for (const Element& e : elements) {
+        if (!e.visible) {
+            continue;
+        }
+        if (found) {
+            return nullptr; // si vede anche altro
+        }
+        found = &e;
+    }
+    if (!found || !found->surface || !found->texture) {
+        return nullptr;
+    }
+    const Element& e = *found;
+    const wlr_box whole { 0, 0, m_width, m_height };
+    if (e.opacity < 1.0f || e.linear || !sameBox(e.box, whole) || e.transform != transform) {
+        return nullptr;
+    }
+    // Opaca: formato senza alfa, o regione opaca dichiarata su tutto.
+    const render::Texture* texture = render::toTexture(e.texture);
+    bool opaque = texture && !texture->format->alpha;
+    if (!opaque) {
+        pixman_box32_t all { 0, 0, e.surface->current.width, e.surface->current.height };
+        opaque = pixman_region32_contains_rectangle(&e.surface->opaque_region, &all) == PIXMAN_REGION_IN;
+    }
+    return opaque ? found : nullptr;
+}
+
+bool OutputFrame::tryScanout(const Element& e, wlr_output_state& state)
+{
+    if (!wlr_output_is_direct_scanout_allowed(m_output)) {
+        return false; // cursore disegnato da noi, cattura in corso
+    }
+    wlr_surface* surface = e.surface;
+    wlr_client_buffer* client = surface->buffer;
+    if (!client) {
+        return false;
+    }
+    wlr_buffer* buffer = &client->base;
+    if (client->source && client->source->n_locks > 0) {
+        buffer = client->source;
+    }
+    wlr_dmabuf_attributes dmabuf {};
+    if (!wlr_buffer_get_dmabuf(buffer, &dmabuf)) {
+        return false; // il piano dello schermo legge solo dmabuf
+    }
+    if (e.src.x != 0.0 || e.src.y != 0.0 || e.src.width != double(buffer->width)
+        || e.src.height != double(buffer->height)) {
+        return false; // l'app ne mostra solo una parte
+    }
+
+    wlr_output_state attempt;
+    wlr_output_state_init(&attempt);
+    if (!wlr_output_state_copy(&attempt, &state)) {
+        return false;
+    }
+    wlr_output_state_set_buffer(&attempt, buffer);
+    auto* sync = wlr_linux_drm_syncobj_v1_get_surface_state(surface);
+    if (sync && sync->acquire_timeline) {
+        if (!m_scanoutTimeline) {
+            wlr_output_state_finish(&attempt);
+            return false;
+        }
+        wlr_output_state_set_wait_timeline(&attempt, sync->acquire_timeline, sync->acquire_point);
+        wlr_output_state_set_signal_timeline(&attempt, m_scanoutTimeline, m_scanoutPoint + 1);
+    }
+    bool ok = wlr_output_test_state(m_output, &attempt);
+    if (ok) {
+        const SurfaceState* info = surfaceState(surface);
+        if (!info || info->pacing == m_output) {
+            wlr_presentation_surface_scanned_out_on_output(surface, m_output);
+        }
+        ok = wlr_output_commit_state(m_output, &attempt);
+    }
+    if (ok && sync && sync->acquire_timeline) {
+        // Il backend fa scattare il punto quando smette di mostrare il buffer.
+        ++m_scanoutPoint;
+        wlr_linux_drm_syncobj_v1_state_add_release_point(sync, m_scanoutTimeline, m_scanoutPoint,
+            m_output->event_loop);
+    }
+    wlr_output_state_finish(&attempt);
+    return ok;
+}
+
+void OutputFrame::updateFeedback(const Element* candidate)
+{
+    // Come wlr_scene: un'app diventa (o smette di essere) candidata allo
+    // scanout per un po' di frame di fila prima di cambiarle i formati
+    // consigliati, perché ricreare i buffer costa.
+    constexpr int debounceFrames = 30;
+    if (!m_scene.linuxDmabuf) {
+        return;
+    }
+    wlr_surface* target = candidate ? candidate->surface : nullptr;
+    if (target && target == m_feedbackSurface) {
+        m_feedbackDebounce = debounceFrames;
+        return;
+    }
+    if (target) {
+        if (++m_feedbackDebounce < debounceFrames) {
+            return;
+        }
+        if (m_feedbackSurface) {
+            sendFeedback(m_feedbackSurface, false);
+        }
+        sendFeedback(target, true);
+        m_feedbackSurface = target;
+        m_feedbackDebounce = debounceFrames;
+        return;
+    }
+    if (!m_feedbackSurface) {
+        m_feedbackDebounce = 0;
+        return;
+    }
+    if (--m_feedbackDebounce > 0) {
+        return;
+    }
+    sendFeedback(m_feedbackSurface, false);
+    m_feedbackSurface = nullptr;
+    m_feedbackDebounce = 0;
+}
+
+void OutputFrame::sendFeedback(wlr_surface* surface, bool scanout)
+{
+    SurfaceState* info = surfaceState(surface);
+    if (!scanout) {
+        wlr_linux_dmabuf_v1_set_surface_feedback(m_scene.linuxDmabuf, surface, nullptr);
+        if (info) {
+            info->scanoutFeedback = nullptr;
+        }
+        wlr_log(WLR_DEBUG, "%s: feedback dmabuf predefinito a una superficie", m_output->name);
+        return;
+    }
+    const wlr_linux_dmabuf_feedback_v1_init_options options {
+        .main_renderer = m_renderer.wlr(),
+        .scanout_primary_output = m_output,
+        .output_layer_feedback_event = nullptr,
+    };
+    wlr_linux_dmabuf_feedback_v1 feedback {};
+    if (!wlr_linux_dmabuf_feedback_v1_init_with_options(&feedback, &options)) {
+        return; // lo schermo non dice quali formati legge il piano primario
+    }
+    wlr_linux_dmabuf_v1_set_surface_feedback(m_scene.linuxDmabuf, surface, &feedback);
+    wlr_linux_dmabuf_feedback_v1_finish(&feedback);
+    if (info) {
+        info->scanoutFeedback = m_output;
+    }
+    wlr_log(WLR_DEBUG, "%s: feedback dmabuf con la tranche di scanout a una superficie", m_output->name);
 }
 
 void OutputFrame::sendFrameDone(const timespec& when)

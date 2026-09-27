@@ -32,6 +32,8 @@ void passAddTexture(wlr_render_pass* wlr, const wlr_render_texture_options* opti
     draw.linear = options->filter_mode == WLR_SCALE_FILTER_BILINEAR;
     draw.blend = options->blend_mode == WLR_RENDER_BLEND_MODE_PREMULTIPLIED;
     draw.clip = options->clip;
+    draw.waitTimeline = options->wait_timeline;
+    draw.waitPoint = options->wait_point;
     Pass::from(wlr)->addTexture(draw);
 }
 
@@ -88,7 +90,36 @@ Pass::Pass(Renderer& renderer, RenderTarget* target, wlr_buffer* buffer)
 
 Pass::~Pass()
 {
+    for (Wait& wait : m_waits) {
+        wlr_drm_syncobj_timeline_unref(wait.timeline);
+    }
+    if (m_signalTimeline) {
+        if (!m_submitted) {
+            // Chi aspetta questo punto non deve restare bloccato.
+            wlr_drm_syncobj_timeline_signal(m_signalTimeline, m_signalPoint);
+        }
+        wlr_drm_syncobj_timeline_unref(m_signalTimeline);
+    }
+    if (m_timingSlot >= 0 && !m_submitted) {
+        m_renderer.timingSubmitted(m_timingSlot, 0);
+    }
     wlr_buffer_unlock(m_buffer);
+}
+
+void Pass::measure()
+{
+    if (m_timingSlot < 0 && !m_submitted) {
+        m_timingSlot = m_renderer.timingSlot();
+    }
+}
+
+void Pass::signalOnDone(wlr_drm_syncobj_timeline* timeline, uint64_t point)
+{
+    if (m_signalTimeline) {
+        wlr_drm_syncobj_timeline_unref(m_signalTimeline);
+    }
+    m_signalTimeline = wlr_drm_syncobj_timeline_ref(timeline);
+    m_signalPoint = point;
 }
 
 Pass* Pass::from(wlr_render_pass* pass)
@@ -124,6 +155,14 @@ void Pass::addTexture(const TextureDraw& in)
     Texture* texture = in.texture;
     if (!texture || !texture->view || in.dst.width <= 0 || in.dst.height <= 0 || in.alpha <= 0.0f) {
         return;
+    }
+    if (in.waitTimeline) {
+        const bool known = std::any_of(m_waits.begin(), m_waits.end(), [&](const Wait& wait) {
+            return wait.texture == texture && wait.timeline == in.waitTimeline && wait.point == in.waitPoint;
+        });
+        if (!known) {
+            m_waits.push_back({ texture, wlr_drm_syncobj_timeline_ref(in.waitTimeline), in.waitPoint });
+        }
     }
     const float texWidth = float(texture->base.width);
     const float texHeight = float(texture->base.height);
@@ -233,6 +272,7 @@ bool Pass::submit()
     if (!cmd) {
         return false;
     }
+    m_renderer.writeTimestamp(cmd, m_timingSlot, false);
 
     std::vector<VkImageMemoryBarrier2> acquire;
     std::vector<VkImageMemoryBarrier2> release;
@@ -355,11 +395,27 @@ bool Pass::submit()
         .pImageMemoryBarriers = release.data(),
     };
     vkCmdPipelineBarrier2(cmd, &releaseDep);
+    m_renderer.writeTimestamp(cmd, m_timingSlot, true);
+
+    // Sincronizzazione esplicita: le app con linux-drm-syncobj-v1 dicono
+    // loro quale punto aspettare prima di leggere il buffer.
+    std::vector<int> waits;
+    auto explicitSync = [&](const Texture* texture) {
+        return std::any_of(
+            m_waits.begin(), m_waits.end(), [texture](const Wait& wait) { return wait.texture == texture; });
+    };
+    for (const Wait& wait : m_waits) {
+        const int fd = wlr_drm_syncobj_timeline_export_sync_file(wait.timeline, wait.point);
+        if (fd >= 0) {
+            waits.push_back(fd);
+        } else {
+            wlr_log(WLR_ERROR, "Pass: impossibile aspettare il punto %" PRIu64 " di un'app", wait.point);
+        }
+    }
 
     // Sincronizzazione implicita: si aspetta chi usa ancora la destinazione
     // (lo schermo che la mostra) e chi sta ancora scrivendo le texture (le
     // app); a fine lavoro la nostra fence finisce negli stessi dmabuf.
-    std::vector<int> waits;
     auto exportFence = [&](int dmabufFd, uint32_t flags) {
         dma_buf_export_sync_file req { .flags = flags, .fd = -1 };
         if (ioctl(dmabufFd, DMA_BUF_IOCTL_EXPORT_SYNC_FILE, &req) == 0 && req.fd >= 0) {
@@ -369,15 +425,19 @@ bool Pass::submit()
     if (vk.syncFile) {
         exportFence(m_target->dmabufFd, DMA_BUF_SYNC_WRITE);
         for (Texture* texture : foreign) {
-            exportFence(texture->dmabufFd, DMA_BUF_SYNC_READ);
+            if (!explicitSync(texture)) {
+                exportFence(texture->dmabufFd, DMA_BUF_SYNC_READ);
+            }
         }
     }
 
     int releaseFd = -1;
     const uint64_t point = m_renderer.submit(cmd, waits, &releaseFd);
+    m_renderer.timingSubmitted(m_timingSlot, point);
     if (point == 0) {
         return false;
     }
+    m_point = point;
     if (releaseFd >= 0) {
         bool ok = true;
         auto importFence = [&](int dmabufFd, uint32_t flags) {
@@ -386,12 +446,29 @@ bool Pass::submit()
         };
         importFence(m_target->dmabufFd, DMA_BUF_SYNC_WRITE);
         for (Texture* texture : foreign) {
-            importFence(texture->dmabufFd, DMA_BUF_SYNC_READ);
+            if (!explicitSync(texture)) {
+                importFence(texture->dmabufFd, DMA_BUF_SYNC_READ);
+            }
         }
-        close(releaseFd);
         if (!ok) {
             m_renderer.waitFor(point); // il kernel non ha preso la fence
         }
+    }
+    // Fine lavoro anche sulle timeline syncobj: la nostra (rilascio dei
+    // buffer delle app) e quella chiesta da wlroots. releaseFd -1: la CPU ha
+    // già aspettato, i punti scattano subito.
+    m_syncPoint = m_renderer.signalSyncPoint(releaseFd);
+    if (m_signalTimeline) {
+        const bool signalled = releaseFd >= 0
+            ? wlr_drm_syncobj_timeline_import_sync_file(m_signalTimeline, m_signalPoint, releaseFd)
+            : wlr_drm_syncobj_timeline_signal(m_signalTimeline, m_signalPoint);
+        if (!signalled) {
+            m_renderer.waitFor(point);
+            wlr_drm_syncobj_timeline_signal(m_signalTimeline, m_signalPoint);
+        }
+    }
+    if (releaseFd >= 0) {
+        close(releaseFd);
     }
     m_target->initialized = true;
     m_target->lastUse = point;

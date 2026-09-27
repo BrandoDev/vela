@@ -136,6 +136,17 @@ bool Server::init()
     // Buffer GPU condivisi con le app, senza copie: i formati sono quelli
     // che il nostro device sa leggere.
     dmabuf = wlr_linux_dmabuf_v1_create_with_renderer(display, 4, renderer);
+    // Sincronizzazione esplicita (§7.3): le app dicono quando il buffer è
+    // pronto e noi quando l'abbiamo finito di leggere, con timeline del
+    // kernel invece delle fence implicite dei dmabuf. Le usano Vulkan (Mesa,
+    // NVIDIA) e i giochi. WLR_RENDER_NO_EXPLICIT_SYNC=1 la spegne, come nel
+    // resto di wlroots.
+    const char* noExplicit = std::getenv("WLR_RENDER_NO_EXPLICIT_SYNC");
+    if (renderer->features.timeline && !(noExplicit && std::strcmp(noExplicit, "0") != 0)) {
+        if (wlr_linux_drm_syncobj_manager_v1_create(display, 1, vulkan->renderFd)) {
+            wlr_log(WLR_INFO, "Sincronizzazione esplicita con le app (linux-drm-syncobj-v1) attiva");
+        }
+    }
 
     // Protocolli di base che quasi ogni applicazione moderna si aspetta.
     // Con il renderer, wlroots carica i buffer delle app nelle nostre
@@ -156,6 +167,8 @@ bool Server::init()
 
     sceneGraph = std::make_unique<scene::Scene>();
     sceneGraph->watch(compositor);
+    sceneGraph->linuxDmabuf = dmabuf;
+    sceneGraph->eventLoop = loop;
 
     // L'ordine di creazione è l'ordine di impilamento (dal basso).
     scene::Tree* root = &sceneGraph->root();

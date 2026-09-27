@@ -25,6 +25,9 @@ struct SurfaceState {
     // callback e presentazione. Nessuno: la superficie è coperta o nascosta
     // e l'app può smettere di disegnare.
     wlr_output* pacing = nullptr;
+    // Lo schermo per cui l'app ha ricevuto il feedback dmabuf con la tranche
+    // di scanout (è a schermo intero lì); null: feedback predefinito.
+    wlr_output* scanoutFeedback = nullptr;
 };
 
 SurfaceState* surfaceState(wlr_surface* surface);

@@ -1,6 +1,7 @@
 #include "server.hpp"
 
 #include <getopt.h>
+#include <sys/prctl.h>
 
 namespace {
 
@@ -18,6 +19,10 @@ void printUsage(const char* program)
         "  VELA_SCALE         scala degli schermi (es. 1.25, o DP-1=1.5,HDMI-A-1=1);\n"
         "                     senza, Vela la sceglie dai DPI di ogni schermo\n"
         "  VELA_VRR=1         attiva il refresh variabile\n"
+        "  VELA_LATCH=0       disegna appena arriva il vblank, invece che il più tardi\n"
+        "                     possibile prima del successivo (late latching)\n"
+        "  VELA_LATCH_MARGIN  margine minimo del late latching in ms (predefinito 1)\n"
+        "  VELA_SCANOUT=0     niente scanout diretto delle app a schermo intero\n"
         "  VELA_VULKAN_VALIDATION=1  validation layer di Vulkan (per lo sviluppo)\n"
         "  VELA_NATURAL_SCROLL=0  scorrimento classico sul touchpad\n"
         "  VELA_DEBUG=1       log dettagliato\n"
@@ -44,6 +49,10 @@ int main(int argc, char* argv[])
             return 1;
         }
     }
+
+    // Il late latching sveglia il compositor a un istante preciso prima del
+    // vblank: il kernel non deve arrotondare i timer (predefinito 50 µs).
+    prctl(PR_SET_TIMERSLACK, 1UL, 0UL, 0UL, 0UL);
 
     const char* debug = std::getenv("VELA_DEBUG");
     wlr_log_init(debug && *debug ? WLR_DEBUG : WLR_INFO, nullptr);

@@ -69,6 +69,7 @@ extern "C" {
 #include <wlr/types/wlr_input_device.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_linux_dmabuf_v1.h>
+#include <wlr/types/wlr_linux_drm_syncobj_v1.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_pointer.h>
@@ -76,6 +77,7 @@ extern "C" {
 #include <wlr/types/wlr_primary_selection.h>
 #include <wlr/types/wlr_primary_selection_v1.h>
 #include <wlr/render/dmabuf.h>
+#include <wlr/render/drm_syncobj.h>
 #include <wlr/render/drm_format_set.h>
 #include <wlr/render/swapchain.h>
 #include <wlr/interfaces/wlr_buffer.h>

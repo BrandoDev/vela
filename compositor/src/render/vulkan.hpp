@@ -56,6 +56,14 @@ public:
     PFN_vkGetSemaphoreFdKHR getSemaphoreFd = nullptr;
     PFN_vkImportSemaphoreFdKHR importSemaphoreFd = nullptr;
 
+    // Timestamp della GPU (§4.3: quanto costa un frame). timestampPeriod:
+    // ns per tick; 0 se la coda non li sa scrivere. Con i timestamp
+    // calibrati si sa anche *quando* la GPU ha finito, sull'orologio
+    // CLOCK_MONOTONIC.
+    float timestampPeriod = 0.0f;
+    uint64_t timestampMask = 0;
+    PFN_vkGetCalibratedTimestampsKHR getCalibratedTimestamps = nullptr;
+
 private:
     VulkanDevice() = default;
     bool init(int backendDrmFd);

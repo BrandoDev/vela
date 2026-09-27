@@ -6,9 +6,10 @@ tutto ciò che verrà dopo. Questo documento viene prima del codice: le
 decisioni si prendono qui, il codice le segue.
 
 > **Stato:** progetto discusso e approvato nelle scelte di fondo (§2,
-> riassunte anche in §13). Tappe **S0, S1 e S2 fatte** (§11): la scena e il
-> renderer di Vela sono gli unici, e a ogni scala le app arrivano sullo
-> schermo bit per bit. Prossima: S3.
+> riassunte anche in §13). Tappe **S0, S1, S2 e S3 fatte** (§11): la scena e
+> il renderer di Vela sono gli unici, a ogni scala le app arrivano sullo
+> schermo bit per bit, e ogni frame si disegna il più tardi possibile prima
+> del vblank. Prossima: S4.
 
 ## 1. Obiettivi
 
@@ -220,6 +221,49 @@ margine prima del vblank**, non subito dopo il vblank precedente. Input e
 animazioni campionati più tardi = latenza minore. Se la stima sbaglia e si
 perde un vblank, il margine cresce da solo.
 
+**Come è fatto (S3).**
+
+- **Il ciclo.** Quando il backend dice "frame" (al vblank dopo una
+  consegna, o subito se lo schermo era fermo), `FrameClock::plan` sceglie
+  il vblank per cui disegnare, il primo raggiungibile cominciando almeno
+  "costo + margine" prima, e un timer (`timerfd`, con il timer slack del
+  processo a 1 ns) sveglia il compositor a quell'istante. Le richieste che
+  arrivano nel frattempo (commit delle app, input) finiscono nello stesso
+  frame.
+- **Il costo** di un frame è misurato dall'istante in cui doveva cominciare
+  a quello in cui era pronto: commit fatto *e* GPU finita. La fine della
+  GPU si legge con i timestamp della GPU (`vkCmdWriteTimestamp2`) portati su
+  `CLOCK_MONOTONIC` con `VK_KHR_calibrated_timestamps`. Senza timestamp
+  calibrati conta la durata del lavoro della GPU sommata al commit. Il
+  costo usato è il massimo dell'ultimo secondo (almeno 8 frame): un frame
+  lento non deve far perdere il vblank a quelli dopo.
+- **Il margine** parte da 1 ms (`VELA_LATCH_MARGIN`). Un frame comparso
+  tardi lo fa crescere subito (+max(0,25 ms, periodo/10)); poi torna giù di
+  0,05 ms al secondo. Il budget (costo + margine) non supera mai "periodo −
+  min(0,5 ms, periodo/4)": subito dopo un vblank si fa sempre in tempo per
+  il successivo, quindi la frequenza non si dimezza mai.
+- **Chi è in ritardo.** Se il frame arriva tardi e il margine può ancora
+  crescere, il ritardo è nostro (margine). Se il margine è già al massimo,
+  il ritardo è dello schermo e lo impara la latenza (§4.2). Imparata una
+  latenza più alta, il margine in più si azzera.
+- **Il vblank virtuale** dell'headless simula uno schermo vero: un frame
+  compare al primo vblank in cui era pronto (anche la GPU deve aver
+  finito); se non lo era, resta il precedente e il vblank è perso.
+- **Le statistiche** (`VELA_DEBUG=1`, ogni 2 s) dicono: costo, margine,
+  tempo medio **dal disegno alla luce** (la latenza che il compositor
+  aggiunge a input e animazioni), errore della previsione, vblank persi.
+  `VELA_LATCH=0` spegne il late latching per confronto.
+
+Misure (headless, vkcube, RX 9070 XT): dal disegno alla luce 1,1–1,9 ms a
+ogni frequenza tra 60 e 360 Hz, contro un periodo intero senza late
+latching (2,78 ms a 360 Hz, 16,7 ms a 60 Hz).
+
+**Annidati in KWin** il margine si adatta all'ospite. KWin a 180 Hz compone
+subito dopo il vblank, quindi il margine sale al massimo e si disegna appena
+arriva il frame callback. I frame isolati (testo scritto in una finestra)
+ora hanno la stessa previsione esatta delle animazioni: errore 0,001 ms,
+contro fino a un periodo in S1.
+
 ### 4.4 VRR (rinviato, non dimenticato)
 
 Il VRR si tratterà dopo le prime tappe, ma il progetto non deve
@@ -278,8 +322,8 @@ nostro: posizione, effetti, animazioni.
 | Catture | finestre (`ext-image-capture`, anteprime di Alt+Tab): il renderer disegna solo quella finestra; schermi (screencopy, `ext-image-copy-capture`): via il nostro `wlr_renderer` | ✔ S1 |
 | Istantanee | buffer bloccati disegnati come nodi della scena | ✔ S1 |
 | Cursore | hardware tramite wlroots (col nostro renderer); disegnato da noi quando non c'è il piano cursore | ✔ S1 |
-| dmabuf feedback | per superficie: tranche di scanout quando la finestra è a schermo intero | S3 |
-| Direct scanout | una sola superficie opaca che copre lo schermo, 1:1, senza effetti sopra → il suo buffer va direttamente sul piano primario | S3 |
+| dmabuf feedback | per superficie: tranche di scanout quando la finestra è a schermo intero (dopo 30 frame di fila da candidata, come `wlr_scene`), di nuovo quella predefinita quando smette | ✔ S3 |
+| Direct scanout | una sola superficie visibile, opaca (formato senza alfa o regione opaca su tutto), che copre lo schermo 1:1 con la sua trasformazione, senza cursore disegnato da noi né catture in corso → il suo buffer va direttamente sul piano primario; con sincronizzazione esplicita il backend aspetta il punto di acquisizione e fa scattare il rilascio quando smette di mostrarlo | ✔ S3 |
 | Formati YUV (video) | NV12 e simili, con conversione nello shader | S7 |
 
 ## 6. Il frame, passo per passo
@@ -318,6 +362,8 @@ con kernel e client:
 - `VK_KHR_external_semaphore_fd` (sync_file, per la sincronizzazione
   implicita ed esplicita)
 - `VK_EXT_physical_device_drm` (scegliere la GPU che pilota lo schermo)
+- facoltativa: `VK_KHR_calibrated_timestamps` (a che ora la GPU finisce un
+  frame, per il late latching §4.3; senza, si misura solo la durata)
 
 In pratica: AMD GCN e successive (RADV) e Intel Gen9/Skylake e successive
 (ANV) con Mesa ≥ 25.0, NVIDIA con driver proprietario ≥ 570 o NVK. Chi non
@@ -347,9 +393,10 @@ sincronizzazione. Il codice è in `compositor/src/render/`:
 | File | Cosa fa |
 |---|---|
 | `vulkan.*` | device, formati importabili (texture, destinazioni, wl_shm), import dei dmabuf |
-| `renderer.*` | invio alla GPU con semaforo timeline, distruzione differita, memoria di appoggio per i caricamenti, destinazioni dmabuf, pipeline; il `wlr_renderer` |
+| `renderer.*` | invio alla GPU con semaforo timeline, distruzione differita, memoria di appoggio per i caricamenti, destinazioni dmabuf, pipeline; timeline syncobj per i rilasci delle app e timestamp della GPU (S3); il `wlr_renderer` |
+| `frame_clock.hpp` | il tempo di uno schermo: griglia dei vblank, latenza imparata, costo e margine del late latching, piano di ogni frame (§4) |
 | `texture.*` | texture da dmabuf (una importazione per buffer) e da memoria (caricamento solo delle zone cambiate), lettura dei pixel |
-| `pass.*` | il disegno: quad con texture o a tinta unita, ritaglio per rettangoli, barriere e sincronizzazione implicita; il `wlr_render_pass` |
+| `pass.*` | il disegno: quad con texture o a tinta unita, ritaglio per rettangoli, barriere, sincronizzazione implicita ed esplicita, misura dei tempi; il `wlr_render_pass` |
 
 La scena e il frame sono in `compositor/src/scene/` (§5, §6).
 
@@ -363,6 +410,20 @@ La scena e il frame sono in `compositor/src/scene/` (§5, §6).
 - Sincronizzazione esplicita (`linux-drm-syncobj-v1`, già in wlroots 0.20):
   punti di attesa e rilascio dei timeline del client.
 - Verso lo schermo: fence di fine rendering passata al commit.
+
+**Come è fatto (S3).** Il renderer ha una timeline syncobj sua (dal render
+node): ogni disegno ne fa scattare un punto importandovi il sync_file di
+fine lavoro. Per ogni app con `linux-drm-syncobj-v1` letta da un disegno
+(schermo o cattura), quel punto diventa un suo punto di rilascio
+(`wlr_linux_drm_syncobj_v1_state_add_release_point`): wlroots rilascia il
+buffer all'app quando tutti gli schermi che l'hanno letto hanno finito e
+l'app ne ha mandato un altro. L'attesa è il punto di acquisizione esportato
+come sync_file, al posto della fence implicita del dmabuf. Il renderer
+dichiara `features.timeline`, così anche wlroots (catture) può chiedere
+punti di attesa e di fine lavoro. Verso lo schermo resta la
+sincronizzazione implicita, che basta. `WLR_RENDER_NO_EXPLICIT_SYNC=1` spegne
+il protocollo. Provato con vkcube e mpv (Vulkan, Mesa 26): le app girano
+senza fermarsi, quindi i rilasci arrivano.
 
 ### 7.4 Shader e pipeline
 
@@ -553,7 +614,7 @@ con i suoi test.
 | **S0** Fondamenta ✔ | device Vulkan nostro, allocatore GBM, import dei buffer degli schermi, sincronizzazione implicita (sync_file), shader compilati, scena di prova; ciclo di frame per schermo con tempo di presentazione previsto e latenza imparata; vblank virtuale per l'headless | fatto: 60–360 Hz simulati esatti (0 vblank persi, errore < 10 µs); annidato in KWin a 75 e 180 Hz reali, errore ~1 µs dopo l'apprendimento; validation layer (anche della sincronizzazione): nessun messaggio |
 | **S1** Parità ✔ | scena propria con finestre, layer, popup, sottosuperfici; shm e dmabuf; damage; frame callback, presentation, enter/leave; istantanee, snap, catture portate sul nuovo renderer; Vulkan 1.4; il nostro renderer anche come `wlr_renderer` | fatto: `wlr_scene` e il renderer di wlroots rimossi. Provati headless e annidato in KWin: Konsole (shm), shell Qt Quick e Firefox (dmabuf), popup anche con sottosuperfici, menu Start, trascinamento, snap con anteprima, riduzione a icona e ripristino, chiusura, Alt+Tab con anteprime, screencopy, due schermi (enter/leave), scala 150%. Validation layer (anche della sincronizzazione): nessun messaggio. A riposo 0 CPU; trascinando una finestra a 144 Hz 17–29 ms di CPU su 3,4 s, contro 34–36 ms di `wlr_scene` |
 | **S2** Nitidezza ✔ | fractional scale, aggancio ai pixel, filtri di qualità, più schermi con scale diverse, cursore per scala, scala predefinita dai DPI | fatto: `scripts/test-sharpness.sh` bit per bit a 100, 125, 150, 175, 200 e 225% (aperta, agganciata a sinistra e a destra, massimizzata, ripristinata); schermi misti 150% + 100%, bit per bit su quello al 150%. Prima delle correzioni: fino a 134 mila pixel diversi a 150% per una finestra centrata. Filtro bicubico Catmull-Rom per gli ingrandimenti; riduzioni ancora bilineari (mipmap da fare con le animazioni di scala, S4) |
-| **S3** Tempo e latenza | late latching, scanout diretto, sincronizzazione esplicita, dmabuf feedback | latenza misurata, nessun frame perso a 360 Hz simulati |
+| **S3** Tempo e latenza ✔ | late latching, scanout diretto, sincronizzazione esplicita, dmabuf feedback | fatto: headless a 60, 75, 144, 165, 240 e 360 Hz con vkcube: 0 vblank persi, errore di previsione 0, dal disegno alla luce 1,1–1,9 ms (senza late latching un periodo intero). Shell, Konsole e una finestra trascinata a 360 Hz: un solo frame in ritardo (wlroots che alloca un buffer nuovo della swapchain), assorbito dal margine. Scanout diretto con mpv a schermo intero: headless (OpenGL, sincronizzazione implicita, costo del frame 0,02 ms) e annidato in KWin (Vulkan, sincronizzazione esplicita, con il feedback dmabuf di scanout); le catture durante lo scanout funzionano. Validation layer (anche della sincronizzazione): nessun messaggio. A riposo 0 CPU |
 | **S4** Forma | angoli arrotondati, ombre | nitidi a ogni scala |
 | **S5** Sfocatura | `ext-background-effect`, dual Kawase, cache, acrylic per la shell | taskbar e menu sfocati; costo zero quando dietro non cambia nulla |
 | **S6** Barra del titolo | `xdg-decoration`, motore di testo con il font di KDE, pulsanti, icone SVG, tinta dallo sfondo, interazioni | le app Qt/KDE con la barra di Vela, nitida a ogni scala |
@@ -573,11 +634,23 @@ con i suoi test.
 - ~~**Cursore hardware**: `wlr_output_cursor` usa il renderer di wlroots
   per preparare il buffer del piano cursore.~~ Risolto in S1: il renderer di
   wlroots, per wlroots, è il nostro (§7.2).
-- **Previsione dei frame isolati** (emerso in S1): quando i frame arrivano
-  sporadici (niente animazioni) la latenza dello schermo può essere diversa
-  da quella imparata durante le animazioni; annidati in KWin l'errore
-  arriva a un periodo. Non tocca le animazioni (lì il ritmo è continuo e la
-  previsione esatta), ma va sistemato con il late latching (S3).
+- ~~**Previsione dei frame isolati** (emerso in S1).~~ Risolto in S3: con il
+  late latching ogni frame, isolato o no, parte alla stessa distanza dal
+  vblank (annidati in KWin: errore 0,001 ms).
+- **Late latching e scanout su DRM vero** (S3): provati headless e
+  annidati, non ancora da una TTY. Da verificare: margine di 1 ms
+  sufficiente per il kernel, scanout accettato dal piano primario, feedback
+  dmabuf che fa cambiare modifier alle app.
+- **Le app lente frenano il compositor** (emerso in S3): un frame aspetta
+  (nella GPU, o nel kernel con lo scanout) che le app abbiano finito di
+  disegnare i buffer che mostra. Un'app in ritardo può quindi far perdere
+  un vblank a tutto lo schermo, cursore e animazioni compresi. KWin e
+  Mutter applicano il commit di un'app solo quando il suo buffer è pronto,
+  e intanto mostrano il precedente. Per noi vuol dire tenere, per ogni
+  superficie, l'ultimo stato pronto (oggi le superfici si leggono dal vivo,
+  §5.2), e per la sincronizzazione esplicita conoscere il punto di
+  acquisizione di un commit ancora in sospeso, che wlroots 0.20 non espone.
+  Da decidere prima delle animazioni ricche (S4).
 - **Rotazione degli schermi**: il frame la gestisce (elementi nello spazio
   ruotato, danno e disegno riportati al buffer), ma non è ancora stata
   provata su uno schermo vero.

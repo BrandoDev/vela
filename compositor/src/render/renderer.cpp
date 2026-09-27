@@ -4,6 +4,7 @@
 #include "render/texture.hpp"
 
 #include <poll.h>
+#include <xf86drm.h>
 
 namespace vela::render {
 
@@ -56,9 +57,12 @@ wlr_texture* textureFromBuffer(wlr_renderer* wlr, wlr_buffer* buffer)
     return createTexture(*Renderer::from(wlr), buffer);
 }
 
-wlr_render_pass* beginBufferPass(wlr_renderer* wlr, wlr_buffer* buffer, const wlr_buffer_pass_options*)
+wlr_render_pass* beginBufferPass(wlr_renderer* wlr, wlr_buffer* buffer, const wlr_buffer_pass_options* options)
 {
     std::unique_ptr<Pass> pass = Renderer::from(wlr)->beginPass(buffer);
+    if (pass && options && options->signal_timeline) {
+        pass->signalOnDone(options->signal_timeline, options->signal_point);
+    }
     return pass ? pass.release()->wlr() : nullptr;
 }
 
@@ -126,6 +130,31 @@ bool Renderer::init()
     };
     if (vkCreateSemaphore(m_vk.device, &timelineInfo, nullptr, &m_timeline) != VK_SUCCESS) {
         return false;
+    }
+
+    // Sincronizzazione esplicita con le app (linux-drm-syncobj-v1): serve una
+    // timeline del kernel su cui far scattare i punti di rilascio, e i
+    // sync_file per passare le fence tra Vulkan e il kernel.
+    uint64_t syncobjTimeline = 0;
+    if (m_vk.syncFile && drmGetCap(m_vk.renderFd, DRM_CAP_SYNCOBJ_TIMELINE, &syncobjTimeline) == 0
+        && syncobjTimeline) {
+        m_syncTimeline = wlr_drm_syncobj_timeline_create(m_vk.renderFd);
+    }
+    m_shim.base.features.timeline = m_syncTimeline != nullptr;
+    if (!m_syncTimeline) {
+        wlr_log(WLR_INFO, "Renderer: niente timeline syncobj, niente sincronizzazione esplicita con le app");
+    }
+
+    // Timestamp della GPU: due per disegno misurato (inizio e fine).
+    if (m_vk.timestampPeriod > 0.0f) {
+        const VkQueryPoolCreateInfo queryInfo {
+            .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+            .queryType = VK_QUERY_TYPE_TIMESTAMP,
+            .queryCount = timingSlots * 2,
+        };
+        if (vkCreateQueryPool(m_vk.device, &queryInfo, nullptr, &m_queryPool) != VK_SUCCESS) {
+            m_queryPool = VK_NULL_HANDLE;
+        }
     }
 
     // Nearest per le copie 1:1 (nitidezza esatta, §3.3); bilineare per il
@@ -221,6 +250,14 @@ Renderer::~Renderer()
     vkDestroySampler(m_vk.device, m_nearest, nullptr);
     vkDestroySampler(m_vk.device, m_linear, nullptr);
     vkDestroySemaphore(m_vk.device, m_timeline, nullptr);
+    if (m_queryPool) {
+        vkDestroyQueryPool(m_vk.device, m_queryPool, nullptr);
+    }
+    if (m_syncTimeline) {
+        // Nessuno deve restare ad aspettare un nostro punto.
+        wlr_drm_syncobj_timeline_signal(m_syncTimeline, UINT64_MAX);
+        wlr_drm_syncobj_timeline_unref(m_syncTimeline);
+    }
     vkDestroyCommandPool(m_vk.device, m_pool, nullptr);
     wlr_drm_format_set_finish(&m_shmFormats);
 }
@@ -232,6 +269,119 @@ std::unique_ptr<Pass> Renderer::beginPass(wlr_buffer* buffer)
         return nullptr;
     }
     return std::make_unique<Pass>(*this, target, buffer);
+}
+
+// ------------------------------------------ sincronizzazione esplicita --
+
+uint64_t Renderer::signalSyncPoint(int syncFile)
+{
+    if (!m_syncTimeline) {
+        return 0;
+    }
+    const uint64_t point = ++m_syncPoint;
+    const bool ok = syncFile >= 0 ? wlr_drm_syncobj_timeline_import_sync_file(m_syncTimeline, point, syncFile)
+                                  : wlr_drm_syncobj_timeline_signal(m_syncTimeline, point);
+    if (!ok) {
+        // Meglio un rilascio anticipato che un'app bloccata per sempre: la
+        // CPU aspetta la GPU e il punto scatta subito.
+        waitFor(m_lastPoint);
+        wlr_drm_syncobj_timeline_signal(m_syncTimeline, point);
+    }
+    return point;
+}
+
+// ------------------------------------------------------ tempi della GPU --
+
+int Renderer::timingSlot()
+{
+    if (!m_queryPool) {
+        return -1;
+    }
+    const uint64_t done = completed();
+    for (int i = 0; i < timingSlots; ++i) {
+        const int slot = (m_nextTiming + i) % timingSlots;
+        if (m_timing[slot] <= done) {
+            m_timing[slot] = UINT64_MAX; // in registrazione
+            m_nextTiming = (slot + 1) % timingSlots;
+            return slot;
+        }
+    }
+    return -1;
+}
+
+void Renderer::writeTimestamp(VkCommandBuffer cmd, int slot, bool end)
+{
+    if (slot < 0) {
+        return;
+    }
+    if (!end) {
+        vkCmdResetQueryPool(cmd, m_queryPool, uint32_t(slot * 2), 2);
+    }
+    vkCmdWriteTimestamp2(cmd, end ? VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT : VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+        m_queryPool, uint32_t(slot * 2 + (end ? 1 : 0)));
+}
+
+void Renderer::timingSubmitted(int slot, uint64_t point)
+{
+    if (slot >= 0) {
+        m_timing[slot] = point; // 0: invio fallito, slot di nuovo libero
+    }
+}
+
+bool Renderer::readTiming(int slot, uint64_t point, GpuTiming& out)
+{
+    // Lo slot potrebbe essere già stato riusato da un disegno successivo.
+    if (slot < 0 || point == 0 || m_timing[slot] != point || point > completed()) {
+        return false;
+    }
+    uint64_t ticks[2] {};
+    if (vkGetQueryPoolResults(m_vk.device, m_queryPool, uint32_t(slot * 2), 2, sizeof(ticks), ticks,
+            sizeof(uint64_t), VK_QUERY_RESULT_64_BIT)
+        != VK_SUCCESS) {
+        return false;
+    }
+    const uint64_t mask = m_vk.timestampMask;
+    if (m_vk.getCalibratedTimestamps) {
+        out.startNs = gpuToMonotonic(ticks[0] & mask);
+        out.endNs = gpuToMonotonic(ticks[1] & mask);
+        out.absolute = true;
+    } else {
+        out.startNs = 0;
+        out.endNs = int64_t(double((ticks[1] - ticks[0]) & mask) * m_vk.timestampPeriod);
+        out.absolute = false;
+    }
+    return true;
+}
+
+// Dai tick della GPU a CLOCK_MONOTONIC. I due orologi derivano un poco:
+// la calibrazione si rifà ogni secondo.
+int64_t Renderer::gpuToMonotonic(uint64_t ticks)
+{
+    const uint64_t mask = m_vk.timestampMask;
+    timespec now {};
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    const int64_t nowNs = int64_t(now.tv_sec) * 1'000'000'000 + now.tv_nsec;
+    if (m_calibratedAt == 0 || nowNs - m_calibratedAt > 1'000'000'000) {
+        const VkCalibratedTimestampInfoKHR infos[2] {
+            { .sType = VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_KHR, .timeDomain = VK_TIME_DOMAIN_DEVICE_KHR },
+            { .sType = VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_KHR,
+                .timeDomain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR },
+        };
+        uint64_t values[2] {};
+        uint64_t deviation = 0;
+        if (m_vk.getCalibratedTimestamps(m_vk.device, 2, infos, values, &deviation) == VK_SUCCESS) {
+            m_calibrationTicks = values[0] & mask;
+            m_calibrationNs = int64_t(values[1]);
+            m_calibratedAt = nowNs;
+        }
+    }
+    // Differenza con segno, anche se il contatore ha meno di 64 bit.
+    uint64_t diff = (ticks - m_calibrationTicks) & mask;
+    int64_t signedDiff = int64_t(diff);
+    if (mask != UINT64_MAX && diff > mask / 2) {
+        signedDiff = int64_t(diff) - int64_t(mask) - 1;
+    }
+    return m_calibrationNs + int64_t(double(signedDiff) * m_vk.timestampPeriod);
 }
 
 // ------------------------------------------------------------ texture --

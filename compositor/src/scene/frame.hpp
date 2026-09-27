@@ -57,6 +57,11 @@ void cullOccluded(std::vector<Element>& elements);
 void drawElements(render::Pass& pass, const std::vector<Element>& elements, const pixman_region32_t* clip,
     wl_output_transform outputTransform, int width, int height);
 
+// Dopo un disegno che ha letto `elements`: le app con sincronizzazione
+// esplicita riavranno i loro buffer quando scatta `syncPoint` della timeline
+// del renderer (la GPU ha finito).
+void addReleasePoints(const std::vector<Element>& elements, render::Renderer& renderer, uint64_t syncPoint);
+
 class OutputFrame {
 public:
     OutputFrame(Scene& scene, render::Renderer& renderer, wlr_output* output);
@@ -87,6 +92,15 @@ public:
     void damage(const pixman_region32_t* region);
     void damageWhole();
 
+    // L'ultimo frame consegnato da render(): per misurarne il costo (§4.3)
+    // e, col vblank virtuale, sapere quando è pronto.
+    struct Delivered {
+        uint64_t point = 0; // punto della timeline del renderer; 0: nessun disegno della GPU
+        int timingSlot = -1;
+        bool scanout = false; // il buffer di un'app direttamente sullo schermo
+    };
+    const Delivered& delivered() const { return m_delivered; }
+
     // Dalla scena.
     void surfaceCommitted(wlr_surface* surface);
     void surfaceDestroyed(wlr_surface* surface);
@@ -94,6 +108,14 @@ public:
 
 private:
     void updateSurfaces(const std::vector<Element>& elements);
+    // Scanout diretto (§5.3): una sola superficie opaca copre lo schermo,
+    // 1:1, e il suo buffer va sul piano primario senza disegnare nulla.
+    const Element* scanoutCandidate(const std::vector<Element>& elements, wl_output_transform transform) const;
+    bool tryScanout(const Element& element, wlr_output_state& state);
+    // Feedback dmabuf: all'app candidata allo scanout i formati del piano
+    // primario, dopo qualche frame di conferma; poi di nuovo quelli normali.
+    void updateFeedback(const Element* candidate);
+    void sendFeedback(wlr_surface* surface, bool scanout);
 
     Scene& m_scene;
     render::Renderer& m_renderer;
@@ -106,6 +128,15 @@ private:
     // Il frame precedente, per chiave: da qui il danno.
     std::unordered_map<const void*, Element> m_last;
     std::vector<wlr_surface*> m_visibleSurfaces;
+
+    Delivered m_delivered;
+    bool m_scanout = false; // l'ultimo frame era uno scanout diretto
+    // Sincronizzazione esplicita dello scanout: il backend fa scattare qui
+    // il rilascio del buffer di un'app quando smette di mostrarlo.
+    wlr_drm_syncobj_timeline* m_scanoutTimeline = nullptr;
+    uint64_t m_scanoutPoint = 0;
+    int m_feedbackDebounce = 0;
+    wlr_surface* m_feedbackSurface = nullptr; // chi ha il feedback di scanout da noi
 
     wl_listener m_damage {};
     wl_listener m_needsFrame {};

@@ -36,14 +36,34 @@ public:
         bool linear = true; // filtro bilineare; false: nearest (copia 1:1)
         bool blend = true;
         const pixman_region32_t* clip = nullptr; // in pixel della destinazione
+        // Sincronizzazione esplicita (linux-drm-syncobj-v1): il punto da
+        // aspettare prima di leggere la texture, al posto della fence
+        // implicita del dmabuf.
+        wlr_drm_syncobj_timeline* waitTimeline = nullptr;
+        uint64_t waitPoint = 0;
     };
     void addTexture(const TextureDraw& draw);
 
     // Colore come in wlroots: sRGB, premoltiplicato.
     void addRect(const wlr_box& box, const wlr_render_color& color, const pixman_region32_t* clip, bool blend);
 
+    // Da chiamare prima di submit(): misura i tempi della GPU di questo
+    // disegno (Renderer::readTiming con timingSlot() e point()).
+    void measure();
+    // A fine lavoro fa scattare anche questo punto (wlroots, per esempio
+    // una cattura con sincronizzazione esplicita).
+    void signalOnDone(wlr_drm_syncobj_timeline* timeline, uint64_t point);
+
     // Invia il disegno. Il Pass non si può più usare dopo.
     bool submit();
+
+    // Dopo submit(): il punto della timeline del renderer, lo slot della
+    // misura (-1 se non misurato) e il punto della timeline syncobj del
+    // renderer che scatta a fine lavoro (0 se non c'è): il rilascio dei
+    // buffer delle app lette da questo disegno.
+    uint64_t point() const { return m_point; }
+    int timingSlot() const { return m_timingSlot; }
+    uint64_t syncPoint() const { return m_syncPoint; }
 
 private:
     struct Draw {
@@ -66,6 +86,17 @@ private:
     RenderTarget* m_target;
     wlr_buffer* m_buffer; // bloccato finché il Pass esiste
     std::vector<Draw> m_draws;
+    struct Wait {
+        Texture* texture;
+        wlr_drm_syncobj_timeline* timeline; // un riferimento nostro
+        uint64_t point;
+    };
+    std::vector<Wait> m_waits;
+    wlr_drm_syncobj_timeline* m_signalTimeline = nullptr;
+    uint64_t m_signalPoint = 0;
+    int m_timingSlot = -1;
+    uint64_t m_point = 0;
+    uint64_t m_syncPoint = 0;
     bool m_submitted = false;
 };
 
