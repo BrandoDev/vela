@@ -40,7 +40,11 @@ public:
     // non ci dice il periodo vero con il feedback di presentazione.
     void setModeRefresh(int32_t refreshMhz)
     {
-        m_modePeriodNs = refreshMhz > 0 ? int64_t(1e12 / refreshMhz) : 0;
+        const int64_t period = refreshMhz > 0 ? int64_t(1e12 / refreshMhz) : 0;
+        if (period != m_modePeriodNs) {
+            m_warmupPending = true;
+        }
+        m_modePeriodNs = period;
     }
 
     int64_t periodNs() const
@@ -158,12 +162,22 @@ public:
         p.valid = false;
         const int64_t period = periodNs();
         const int64_t error = when - p.predicted;
+        // Il primo secondo dopo l'avvio o un cambio di modo non insegna nulla:
+        // allocazioni, pipeline nuove e modeset fanno arrivare tardi qualche
+        // frame una volta sola.
+        if (m_warmupPending) {
+            m_warmupUntilNs = when + 1'000'000'000;
+            m_warmupPending = false;
+        }
+        const bool warmingUp = when < m_warmupUntilNs;
         if (error > period / 2) {
             // Arrivato tardi. Se il margine può ancora crescere è colpa
             // nostra (frame lento): margine più ampio. Se non può, il ritardo
             // è dello schermo (compositor ospite): lo impara la latenza.
             m_missed += int((error + period / 2) / period);
-            if (budgetNs(when) < maxBudgetNs()) {
+            if (warmingUp) {
+                // niente da imparare
+            } else if (budgetNs(when) < maxBudgetNs()) {
                 m_extraMarginNs = std::min(m_extraMarginNs + std::max<int64_t>(250'000, period / 10), period);
                 m_shiftCandidate = 0;
                 m_shiftCount = 0;
@@ -171,9 +185,11 @@ public:
                 learnLatency(error);
             }
         } else {
-            learnLatency(error);
-            // Puntuale: il margine in più torna giù di 0,05 ms al secondo.
-            m_extraMarginNs = std::max<int64_t>(0, m_extraMarginNs - 50'000 * period / 1'000'000'000 - 1);
+            if (!warmingUp) {
+                learnLatency(error);
+            }
+            // Puntuale: il margine in più torna giù di 0,25 ms al secondo.
+            m_extraMarginNs = std::max<int64_t>(0, m_extraMarginNs - 250'000 * period / 1'000'000'000 - 1);
         }
         const double errorMs = double(error) / 1e6;
         m_errorSumMs += std::abs(errorMs);
@@ -252,6 +268,8 @@ private:
     int m_shiftCandidate = 0;
     int m_shiftCount = 0;
 
+    bool m_warmupPending = true;
+    int64_t m_warmupUntilNs = 0;
     int64_t m_baseMarginNs = 1'000'000;
     int64_t m_extraMarginNs = 0;
     static constexpr int costSlots = 64;

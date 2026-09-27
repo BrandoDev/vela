@@ -50,6 +50,22 @@ bool ShellController::sendToRunningInstance(const QByteArray& command)
     return true;
 }
 
+void ShellController::logout()
+{
+    // Il socket dei comandi del compositor: vedi Server::listenForCommands().
+    const QString runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+    const QString display = qEnvironmentVariable("WAYLAND_DISPLAY", QStringLiteral("wayland-0"));
+    QLocalSocket socket;
+    socket.connectToServer(runtimeDir + QStringLiteral("/vela-") + display + QStringLiteral(".sock"));
+    if (!socket.waitForConnected(300)) {
+        qWarning("vela-shell: il compositor non risponde, impossibile uscire");
+        return;
+    }
+    socket.write("logout\n");
+    socket.waitForBytesWritten(300);
+    socket.disconnectFromServer();
+}
+
 bool ShellController::listen()
 {
     const QString path = socketPath();

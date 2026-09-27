@@ -44,6 +44,7 @@ extern "C" {
 #include <wlr/backend.h>
 #include <wlr/backend/headless.h>
 #include <wlr/backend/multi.h>
+#include <wlr/backend/session.h>
 #include <wlr/backend/wayland.h>
 #if WLR_HAS_X11_BACKEND
 #include <wlr/backend/x11.h>

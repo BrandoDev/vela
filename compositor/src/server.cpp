@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <csignal>
+#include <sched.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
@@ -97,7 +98,7 @@ bool Server::init()
 
     // Sceglie da solo il backend: DRM/KMS da una TTY, oppure una finestra
     // Wayland se lanciato dentro un'altra sessione (es. KDE) per i test.
-    backend = wlr_backend_autocreate(loop, nullptr);
+    backend = wlr_backend_autocreate(loop, &session);
     if (!backend) {
         wlr_log(WLR_ERROR, "Impossibile creare il backend");
         return false;
@@ -311,6 +312,22 @@ bool Server::init()
     wl_event_loop_add_signal(loop, SIGINT, handleTerminate, display);
     wl_event_loop_add_signal(loop, SIGTERM, handleTerminate, display);
 
+    // Il ciclo dei frame deve svegliarsi all'istante giusto anche con la CPU
+    // piena (una compilazione, un gioco): scheduling realtime, a priorità
+    // bassa, per il thread principale, come KWin. Chi viene lanciato da
+    // Vela (shell, app) non lo eredita. Serve RLIMIT_RTPRIO o CAP_SYS_NICE;
+    // VELA_REALTIME=0 lo spegne.
+    if (const char* realtime = std::getenv("VELA_REALTIME"); !realtime || std::strcmp(realtime, "0") != 0) {
+        sched_param param {};
+        param.sched_priority = std::min(10, sched_get_priority_max(SCHED_RR));
+        if (sched_setscheduler(0, SCHED_RR | SCHED_RESET_ON_FORK, &param) == 0) {
+            wlr_log(WLR_INFO, "Thread principale in tempo reale (SCHED_RR, priorità %d)", param.sched_priority);
+        } else {
+            wlr_log(WLR_INFO, "Niente scheduling realtime (%s): sotto carico i frame possono tardare",
+                std::strerror(errno));
+        }
+    }
+
     return true;
 }
 
@@ -337,6 +354,8 @@ bool Server::start(const std::string& startupCommand)
     // Vela le app Qt provano a riconnettersi e vanno in crash dentro Qt.
     unsetenv("QT_WAYLAND_RECONNECT");
 
+    listenForCommands();
+
     wlr_log(WLR_INFO, "Vela in esecuzione su WAYLAND_DISPLAY=%s", socket);
     if (nested) {
         wlr_log(WLR_INFO, "Modalità annidata: scorciatoie Alt attive");
@@ -356,6 +375,7 @@ void Server::shutdown()
 {
     // Stiamo chiudendo noi: la shell che se ne va non va rilanciata.
     stopSupervising();
+    stopListening();
 
     // Chiudere i client distrugge finestre e superfici della shell, che si
     // rimuovono da sole dalle nostre liste.
@@ -620,7 +640,10 @@ void Server::onNewInput(wlr_input_device* device)
 void Server::onCursorMotion(uint32_t timeMsec)
 {
     if (cursorMode == CursorMode::Move && grabbed) {
-        grabbed->tree->setPosition(std::lround(cursor->x - grabX), std::lround(cursor->y - grabY));
+        // Posizione esatta, anche frazionaria: al disegno la finestra si
+        // aggancia al pixel fisico più vicino (§3.4). Con posizioni logiche
+        // intere, al 125% la finestra avanzerebbe a scatti di 1 e 2 pixel.
+        grabbed->tree->setPosition(cursor->x - grabX, cursor->y - grabY);
         updateSnapZone();
         return;
     }
@@ -756,6 +779,14 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
     // vera restano alle app, che le usano per aprire i propri menu.
     const bool altNested = alt && nested;
 
+    // Ctrl+Alt+F1...F12: un'altra console (o la sessione di Plasma). La
+    // tastiera traduce già la combinazione nel tasto XF86Switch_VT_n.
+    if (sym >= XKB_KEY_XF86Switch_VT_1 && sym <= XKB_KEY_XF86Switch_VT_12) {
+        if (session) {
+            wlr_session_change_vt(session, unsigned(sym - XKB_KEY_XF86Switch_VT_1 + 1));
+        }
+        return true;
+    }
     if ((alt && shift && sym == XKB_KEY_Escape)) {
         wl_display_terminate(display);
         return true;
@@ -968,6 +999,109 @@ void Server::stopSupervising()
         m_supervised.pidfd = -1;
     }
     m_supervised.pid = -1;
+}
+
+// ------------------------------------------------- comandi al compositor --
+
+void Server::listenForCommands()
+{
+    const char* runtimeDir = std::getenv("XDG_RUNTIME_DIR");
+    if (!runtimeDir) {
+        return;
+    }
+    m_commands.path = std::string(runtimeDir) + "/vela-" + socketName + ".sock";
+    sockaddr_un address {};
+    address.sun_family = AF_UNIX;
+    if (m_commands.path.size() >= sizeof(address.sun_path)) {
+        return;
+    }
+    std::strncpy(address.sun_path, m_commands.path.c_str(), sizeof(address.sun_path) - 1);
+    unlink(m_commands.path.c_str()); // rimasto da un'esecuzione precedente
+
+    m_commands.fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
+    if (m_commands.fd < 0 || bind(m_commands.fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0
+        || listen(m_commands.fd, 4) != 0) {
+        wlr_log_errno(WLR_ERROR, "Impossibile ascoltare i comandi su %s", m_commands.path.c_str());
+        stopListening();
+        return;
+    }
+    chmod(m_commands.path.c_str(), 0600);
+    m_commands.source = wl_event_loop_add_fd(loop, m_commands.fd, WL_EVENT_READABLE,
+        [](int fd, uint32_t, void* data) {
+            auto* self = static_cast<Server*>(data);
+            const int clientFd = accept4(fd, nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK);
+            if (clientFd < 0) {
+                return 0;
+            }
+            auto client = std::make_unique<CommandSocket::Client>(CommandSocket::Client { clientFd, nullptr, {} });
+            CommandSocket::Client* raw = client.get();
+            raw->source = wl_event_loop_add_fd(self->loop, clientFd, WL_EVENT_READABLE,
+                [](int fd, uint32_t mask, void* data) {
+                    auto* self = static_cast<Server*>(data);
+                    auto& clients = self->m_commands.clients;
+                    auto it = std::find_if(clients.begin(), clients.end(),
+                        [fd](const std::unique_ptr<CommandSocket::Client>& c) { return c->fd == fd; });
+                    if (it == clients.end()) {
+                        return 0;
+                    }
+                    CommandSocket::Client& client = **it;
+                    char chunk[256];
+                    ssize_t n = 0;
+                    while ((n = read(fd, chunk, sizeof(chunk))) > 0 && client.buffer.size() < 4096) {
+                        client.buffer.append(chunk, size_t(n));
+                    }
+                    std::vector<std::string> lines;
+                    size_t newline = 0;
+                    while ((newline = client.buffer.find('\n')) != std::string::npos) {
+                        lines.push_back(client.buffer.substr(0, newline));
+                        client.buffer.erase(0, newline + 1);
+                    }
+                    const bool closed = n == 0 || (mask & (WL_EVENT_HANGUP | WL_EVENT_ERROR))
+                        || client.buffer.size() >= 4096;
+                    if (closed) {
+                        wl_event_source_remove(client.source);
+                        close(client.fd);
+                        clients.erase(it);
+                    }
+                    // Dopo aver sistemato il client: un comando può chiudere tutto.
+                    for (const std::string& line : lines) {
+                        self->handleCommand(line);
+                    }
+                    return 0;
+                },
+                self);
+            self->m_commands.clients.push_back(std::move(client));
+            return 0;
+        },
+        this);
+}
+
+void Server::stopListening()
+{
+    for (auto& client : m_commands.clients) {
+        wl_event_source_remove(client->source);
+        close(client->fd);
+    }
+    m_commands.clients.clear();
+    if (m_commands.source) {
+        wl_event_source_remove(m_commands.source);
+        m_commands.source = nullptr;
+    }
+    if (m_commands.fd >= 0) {
+        close(m_commands.fd);
+        m_commands.fd = -1;
+        unlink(m_commands.path.c_str());
+    }
+}
+
+void Server::handleCommand(const std::string& command)
+{
+    if (command == "logout") {
+        wlr_log(WLR_INFO, "Uscita chiesta dalla shell");
+        wl_display_terminate(display);
+    } else if (!command.empty()) {
+        wlr_log(WLR_DEBUG, "Comando sconosciuto: %s", command.c_str());
+    }
 }
 
 void Server::sendShellCommand(const std::string& command)

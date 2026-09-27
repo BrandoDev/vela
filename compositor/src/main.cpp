@@ -23,8 +23,10 @@ void printUsage(const char* program)
         "                     possibile prima del successivo (late latching)\n"
         "  VELA_LATCH_MARGIN  margine minimo del late latching in ms (predefinito 1)\n"
         "  VELA_SCANOUT=0     niente scanout diretto delle app a schermo intero\n"
+        "  VELA_REALTIME=0    niente scheduling realtime per il compositor\n"
         "  VELA_VULKAN_VALIDATION=1  validation layer di Vulkan (per lo sviluppo)\n"
         "  VELA_NATURAL_SCROLL=0  scorrimento classico sul touchpad\n"
+        "  VELA_STATS=1       ogni 2 s, per schermo: fps, costo dei frame, latenza, vblank persi\n"
         "  VELA_DEBUG=1       log dettagliato\n"
         "  XKB_DEFAULT_LAYOUT layout della tastiera (es. it)\n",
         program);

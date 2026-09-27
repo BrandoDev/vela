@@ -583,13 +583,11 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
     wlr_output_state own;
     wlr_output_state_init(&own);
     wlr_output_state& state = pending ? *pending : own;
-    // Solo il cursore hardware da aggiornare: un commit senza buffer. Una
-    // cattura in attesa (attach_render_locks) vuole invece un frame vero.
-    if (!damaged && !pending && m_output->attach_render_locks == 0) {
-        const bool ok = wlr_output_commit_state(m_output, &state);
-        wlr_output_state_finish(&own);
-        return ok;
-    }
+    // Anche quando c'è solo da spostare il cursore hardware si consegna un
+    // buffer (con danno vuoto il disegno non costa quasi nulla). Con DRM un
+    // commit senza buffer è bloccante: fermerebbe il compositor fino al
+    // vblank di questo schermo, e intanto gli altri schermi perderebbero i
+    // loro (con un 75 Hz accanto, il 180 Hz scendeva sotto i 60 fps).
 
     // Scanout diretto: niente disegno, il buffer dell'app va sullo schermo.
     if (candidate && tryScanout(*candidate, state)) {

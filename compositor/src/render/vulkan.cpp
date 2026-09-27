@@ -309,9 +309,22 @@ bool VulkanDevice::createDevice()
         }
     }
 
+    // Coda ad alta priorità (§4.3): i frame del compositor passano davanti
+    // al lavoro delle app, anche di un gioco che tiene la GPU al 100%. Il
+    // kernel la concede solo a chi ha CAP_SYS_NICE (come kwin_wayland);
+    // altrimenti si resta alla priorità normale.
+    const bool globalPriority = hasExtension(exts, VK_KHR_GLOBAL_PRIORITY_EXTENSION_NAME);
+    if (globalPriority) {
+        extensions.push_back(VK_KHR_GLOBAL_PRIORITY_EXTENSION_NAME);
+    }
+    const VkDeviceQueueGlobalPriorityCreateInfoKHR highPriority {
+        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_KHR,
+        .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_HIGH_KHR,
+    };
     const float priority = 1.0f;
-    const VkDeviceQueueCreateInfo queueInfo {
+    VkDeviceQueueCreateInfo queueInfo {
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        .pNext = globalPriority ? &highPriority : nullptr,
         .queueFamilyIndex = queueFamily,
         .queueCount = 1,
         .pQueuePriorities = &priority,
@@ -324,7 +337,16 @@ bool VulkanDevice::createDevice()
         .enabledExtensionCount = static_cast<uint32_t>(extensions.size()),
         .ppEnabledExtensionNames = extensions.data(),
     };
-    if (vkCreateDevice(physical, &deviceInfo, nullptr, &device) != VK_SUCCESS) {
+    VkResult result = vkCreateDevice(physical, &deviceInfo, nullptr, &device);
+    if (globalPriority && (result == VK_ERROR_NOT_PERMITTED_KHR || result == VK_ERROR_INITIALIZATION_FAILED)) {
+        queueInfo.pNext = nullptr;
+        result = vkCreateDevice(physical, &deviceInfo, nullptr, &device);
+        wlr_log(WLR_INFO, "%s: coda della GPU a priorità normale (per quella alta serve CAP_SYS_NICE)",
+            name.c_str());
+    } else if (globalPriority && result == VK_SUCCESS) {
+        wlr_log(WLR_INFO, "%s: coda della GPU ad alta priorità", name.c_str());
+    }
+    if (result != VK_SUCCESS) {
         wlr_log(WLR_ERROR, "%s: impossibile creare il device Vulkan", name.c_str());
         return false;
     }

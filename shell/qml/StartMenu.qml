@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import QtQuick.Effects
 
 // Il menu Start: ricerca in alto, tutte le app sotto, utente in fondo.
@@ -262,6 +263,91 @@ Window {
                     text: Shell.userName
                     color: Theme.text
                     font.pixelSize: Theme.fontNormal
+                }
+            }
+
+            // Esci dalla sessione, dove Windows ha il pulsante di
+            // accensione. Chiude Vela, non il computer.
+            Item {
+                id: logoutButton
+                anchors { right: parent.right; rightMargin: 24; verticalCenter: parent.verticalCenter }
+                width: 40
+                height: 40
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.radiusSmall
+                    color: logoutMouse.pressed ? Theme.pressed : Theme.hover
+                    opacity: logoutMouse.containsMouse ? 1 : 0
+                    Behavior on opacity {
+                        NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
+                    }
+                }
+
+                // Una porta aperta e una freccia che esce.
+                Shape {
+                    anchors.centerIn: parent
+                    width: 20
+                    height: 20
+                    preferredRendererType: Shape.CurveRenderer
+                    scale: logoutMouse.pressed ? 0.9 : 1
+                    Behavior on scale {
+                        NumberAnimation { duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
+                    }
+
+                    ShapePath {
+                        strokeColor: Theme.text
+                        strokeWidth: 1.5
+                        fillColor: "transparent"
+                        capStyle: ShapePath.RoundCap
+                        joinStyle: ShapePath.RoundJoin
+                        // Stipite: da destra in alto, a sinistra, giù, a destra.
+                        startX: 11; startY: 3
+                        PathLine { x: 4; y: 3 }
+                        PathLine { x: 4; y: 17 }
+                        PathLine { x: 11; y: 17 }
+                    }
+                    ShapePath {
+                        strokeColor: Theme.text
+                        strokeWidth: 1.5
+                        fillColor: "transparent"
+                        capStyle: ShapePath.RoundCap
+                        joinStyle: ShapePath.RoundJoin
+                        startX: 8.5; startY: 10
+                        PathLine { x: 17; y: 10 }
+                        PathMove { x: 13.5; y: 6.5 }
+                        PathLine { x: 17; y: 10 }
+                        PathLine { x: 13.5; y: 13.5 }
+                    }
+                }
+
+                // Il nome dell'azione, al passaggio del mouse.
+                Rectangle {
+                    anchors { bottom: parent.top; bottomMargin: 6; horizontalCenter: parent.horizontalCenter }
+                    width: logoutLabel.implicitWidth + 16
+                    height: logoutLabel.implicitHeight + 8
+                    radius: Theme.radiusSmall
+                    color: Theme.surface
+                    border.width: 1
+                    border.color: Theme.stroke
+                    opacity: logoutMouse.containsMouse ? 1 : 0
+                    Behavior on opacity {
+                        NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
+                    }
+                    Text {
+                        id: logoutLabel
+                        anchors.centerIn: parent
+                        text: "Esci"
+                        color: Theme.text
+                        font.pixelSize: Theme.fontSmall
+                    }
+                }
+
+                MouseArea {
+                    id: logoutMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: Shell.logout()
                 }
             }
         }

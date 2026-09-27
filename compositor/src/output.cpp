@@ -259,22 +259,22 @@ void Output::commitMode(wlr_output_state& state)
 void Output::scheduleFrame()
 {
     m_frameRequested = true;
-    if (m_vblankFd >= 0) {
-        // Headless: come fa wlroots con DRM, se nessun frame aspetta il
-        // vblank il "frame" arriva subito; altrimenti al vblank.
-        if (!m_awaitingPresent && !m_latchArmed && !m_idleFrame) {
-            m_idleFrame = wl_event_loop_add_idle(
-                server.loop,
-                [](void* data) {
-                    auto* self = static_cast<Output*>(data);
-                    self->m_idleFrame = nullptr;
-                    self->onFrameEvent();
-                },
-                this);
-        }
-        return;
+    // Come fa wlroots con DRM: se nessun frame consegnato aspetta ancora il
+    // vblank, il "frame" arriva subito; altrimenti con lo scambio di pagina.
+    // Non si usa wlr_output_schedule_frame: segnerebbe lo schermo come
+    // bisognoso di un commit anche quando su di lui non cambia nulla (un
+    // commit vuoto, che con DRM blocca fino al vblank).
+    const bool waiting = m_vblankFd >= 0 ? m_awaitingPresent : wlr->frame_pending;
+    if (!waiting && !m_latchArmed && !m_idleFrame) {
+        m_idleFrame = wl_event_loop_add_idle(
+            server.loop,
+            [](void* data) {
+                auto* self = static_cast<Output*>(data);
+                self->m_idleFrame = nullptr;
+                self->onFrameEvent();
+            },
+            this);
     }
-    wlr_output_schedule_frame(wlr);
 }
 
 // ------------------------------------------------------ il ciclo dei frame --
@@ -322,7 +322,7 @@ void Output::onFrame()
     const wlr_box area = box();
     if (sceneFrame->render(area.x, area.y)) {
         const scene::OutputFrame::Delivered& delivered = sceneFrame->delivered();
-        const Delivery delivery { wlr->commit_seq, plan.start, render::nowNs(), delivered.point,
+        const Delivery delivery { wlr->commit_seq, plan.start, now, render::nowNs(), delivered.point,
             delivered.timingSlot };
         clock.committed(wlr->commit_seq, plan.start, plan.present);
         m_deliveries.push_back(delivery);
@@ -341,13 +341,25 @@ void Output::onFrame()
     clock_gettime(CLOCK_MONOTONIC, &nowTs);
     sceneFrame->sendFrameDone(nowTs);
 
+    // VELA_STATS=1: le statistiche anche senza il log dettagliato.
+    static const bool statsRequested = envFlag("VELA_STATS");
     render::FrameClock::Stats stats {};
     if (clock.takeStats(now, stats) && stats.fps > 0.0) {
-        wlr_log(WLR_DEBUG,
+        wlr_log(statsRequested ? WLR_INFO : WLR_DEBUG,
             "%s: %.2f fps (periodo %.3f ms, latenza %d vblank); costo %.3f ms + margine %.3f ms; "
             "dal disegno alla luce %.3f ms; errore di previsione medio %.3f ms, massimo %.3f ms; vblank persi %d",
             wlr->name, stats.fps, clock.periodNs() / 1e6, clock.latencyFrames(), stats.costMs, stats.marginMs,
             stats.latencyMs, stats.errorMeanMs, stats.errorMaxMs, stats.missed);
+        if (statsRequested && m_breakdown.count > 0) {
+            const Breakdown& b = m_breakdown;
+            const double n = b.count;
+            wlr_log(WLR_INFO,
+                "%s: in media (massimo) risveglio in ritardo %.3f (%.3f) ms, CPU %.3f (%.3f) ms, "
+                "attesa della GPU %.3f (%.3f) ms, lavoro della GPU %.3f (%.3f) ms",
+                wlr->name, b.sum[0] / n, b.max[0], b.sum[1] / n, b.max[1], b.sum[2] / n, b.max[2], b.sum[3] / n,
+                b.max[3]);
+        }
+        m_breakdown = {};
     }
 }
 
@@ -379,6 +391,15 @@ void Output::collectCosts()
         int64_t ready = 0;
         if (readyTime(delivery, ready)) {
             clock.addCost(now, ready - delivery.start);
+            render::Renderer::GpuTiming timing;
+            m_breakdown.add(0, double(delivery.wokeAt - delivery.start) / 1e6);
+            m_breakdown.add(1, double(delivery.committedAt - delivery.wokeAt) / 1e6);
+            if (delivery.point && server.velaRenderer->readTiming(delivery.timingSlot, delivery.point, timing)
+                && timing.absolute) {
+                m_breakdown.add(2, double(timing.startNs - delivery.committedAt) / 1e6);
+                m_breakdown.add(3, double(timing.endNs - timing.startNs) / 1e6);
+            }
+            ++m_breakdown.count;
             return true;
         }
         return now - delivery.committedAt > 1'000'000'000; // misura persa

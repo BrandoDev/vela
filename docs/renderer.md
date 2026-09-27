@@ -239,13 +239,29 @@ perde un vblank, il margine cresce da solo.
   lento non deve far perdere il vblank a quelli dopo.
 - **Il margine** parte da 1 ms (`VELA_LATCH_MARGIN`). Un frame comparso
   tardi lo fa crescere subito (+max(0,25 ms, periodo/10)); poi torna giù di
-  0,05 ms al secondo. Il budget (costo + margine) non supera mai "periodo −
+  0,25 ms al secondo. Il primo secondo dopo l'avvio o un cambio di modo non
+  conta (allocazioni e modeset fanno arrivare tardi qualche frame una volta
+  sola). Il budget (costo + margine) non supera mai "periodo −
   min(0,5 ms, periodo/4)": subito dopo un vblank si fa sempre in tempo per
   il successivo, quindi la frequenza non si dimezza mai.
 - **Chi è in ritardo.** Se il frame arriva tardi e il margine può ancora
   crescere, il ritardo è nostro (margine). Se il margine è già al massimo,
   il ritardo è dello schermo e lo impara la latenza (§4.2). Imparata una
   latenza più alta, il margine in più si azzera.
+- **Mai un commit senza buffer.** Con DRM un commit senza buffer è
+  bloccante: ferma il compositor fino al vblank di quello schermo. Quando
+  c'è solo il cursore da spostare si consegna comunque un buffer (con danno
+  vuoto il disegno non costa quasi nulla). I frame si chiedono senza
+  `wlr_output_schedule_frame`, che segnerebbe lo schermo come bisognoso di
+  un commit anche quando su di lui non cambia nulla. Emerso dalla prima
+  prova da TTY: un 75 Hz accanto al 180 Hz si bloccava ~12 ms a ogni
+  movimento e trascinava il 180 Hz sotto i 60 fps.
+- **Priorità.** Il thread principale chiede lo scheduling realtime
+  (`SCHED_RR` a priorità 10, non ereditato da shell e app; serve
+  `RLIMIT_RTPRIO` o `CAP_SYS_NICE`, `VELA_REALTIME=0` lo spegne). La coda
+  della GPU chiede la priorità alta (`VK_KHR_global_priority`), che amdgpu
+  concede solo con `CAP_SYS_NICE` (come a `kwin_wayland`); senza, resta
+  normale.
 - **Il vblank virtuale** dell'headless simula uno schermo vero: un frame
   compare al primo vblank in cui era pronto (anche la GPU deve aver
   finito); se non lo era, resta il precedente e il vblank è perso.
@@ -637,10 +653,12 @@ con i suoi test.
 - ~~**Previsione dei frame isolati** (emerso in S1).~~ Risolto in S3: con il
   late latching ogni frame, isolato o no, parte alla stessa distanza dal
   vblank (annidati in KWin: errore 0,001 ms).
-- **Late latching e scanout su DRM vero** (S3): provati headless e
-  annidati, non ancora da una TTY. Da verificare: margine di 1 ms
-  sufficiente per il kernel, scanout accettato dal piano primario, feedback
-  dmabuf che fa cambiare modifier alle app.
+- **Late latching e scanout su DRM vero** (S3): late latching provato da
+  TTY (RX 9070 XT, 2560×1440 a 180 Hz al 125% + 1920×1080 a 75 Hz):
+  trascinando una finestra 0 vblank persi, CPU 0,03 ms per frame, lavoro
+  della GPU 0,01–0,03 ms. Ancora da verificare: scanout accettato dal piano
+  primario, feedback dmabuf che fa cambiare modifier alle app, margine
+  minimo sotto 1 ms.
 - **Le app lente frenano il compositor** (emerso in S3): un frame aspetta
   (nella GPU, o nel kernel con lo scanout) che le app abbiano finito di
   disegnare i buffer che mostra. Un'app in ritardo può quindi far perdere

@@ -41,6 +41,9 @@ public:
     }
 
     Q_INVOKABLE void toggleStartMenu() { emit toggleStartRequested(); }
+    // Esce dalla sessione: chiede al compositor di chiudersi (le app si
+    // chiudono con lui). Non spegne né riavvia il computer.
+    Q_INVOKABLE void logout();
 
 signals:
     void toggleStartRequested();

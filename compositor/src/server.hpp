@@ -141,6 +141,7 @@ private:
 
     bool m_latching = true; // VELA_LATCH=0: si disegna subito, come prima di S3
     bool m_frameRequested = false;
+    wl_event_source* m_idleFrame = nullptr; // "frame" subito, se lo schermo era fermo
     int m_latchFd = -1;
     wl_event_source* m_latchSource = nullptr;
     bool m_latchArmed = false;
@@ -150,11 +151,20 @@ private:
     struct Delivery {
         uint32_t seq;
         int64_t start; // quando doveva cominciare il disegno
+        int64_t wokeAt; // quando è cominciato davvero
         int64_t committedAt;
         uint64_t point; // lavoro della GPU; 0: nessuno (scanout, solo cursore)
         int timingSlot;
     };
     std::vector<Delivery> m_deliveries; // in attesa della misura del costo
+    // Di cosa è fatto il costo (VELA_STATS): risveglio in ritardo, CPU fino
+    // al commit, attesa prima che la GPU cominci, lavoro della GPU.
+    struct Breakdown {
+        double sum[4] {};
+        double max[4] {};
+        int count = 0;
+        void add(int i, double ms) { sum[i] += ms; max[i] = std::max(max[i], ms); }
+    } m_breakdown;
     // Quando il frame era pronto: commit fatto e GPU finita. false se non
     // si sa ancora.
     bool readyTime(const Delivery& delivery, int64_t& when) const;
@@ -169,7 +179,6 @@ private:
     void onVirtualVblank();
     int m_vblankFd = -1;
     wl_event_source* m_vblankSource = nullptr;
-    wl_event_source* m_idleFrame = nullptr;
     int64_t m_lastVblankNs = 0;
     bool m_vblankArmed = false;
     bool m_awaitingPresent = false; // un frame è stato consegnato e aspetta il vblank
@@ -405,11 +414,17 @@ public:
     bool handleBinding(uint32_t modifiers, xkb_keysym_t sym);
     void spawn(const std::string& command);
     void sendShellCommand(const std::string& command);
+    // Comandi dalla shell (e da chi sta nella sessione) al compositor, su
+    // $XDG_RUNTIME_DIR/vela-<WAYLAND_DISPLAY>.sock: per ora "logout".
+    void listenForCommands();
+    void stopListening();
+    void handleCommand(const std::string& command);
 
     // --- stato wlroots ---
     wl_display* display = nullptr;
     wl_event_loop* loop = nullptr;
     wlr_backend* backend = nullptr;
+    wlr_session* session = nullptr; // solo nella sessione vera (DRM): cambio di TTY
     // Il renderer di Vela (docs/renderer.md): device Vulkan nostro, il
     // renderer (anche wlr_renderer per wlroots) e l'allocatore GBM dei
     // buffer di schermi, cursori e catture.
@@ -429,6 +444,17 @@ public:
     wlr_xcursor_manager* cursorManager = nullptr;
     wlr_seat* seat = nullptr;
     std::string socketName;
+    struct CommandSocket {
+        int fd = -1;
+        wl_event_source* source = nullptr;
+        std::string path;
+        struct Client {
+            int fd;
+            wl_event_source* source;
+            std::string buffer;
+        };
+        std::vector<std::unique_ptr<Client>> clients;
+    } m_commands;
     bool nested = false; // dentro un'altra sessione (finestra Wayland o X11)
 
     // Strati della scena, dal basso verso l'alto
