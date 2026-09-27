@@ -71,12 +71,39 @@ private:
 
 // ---------------------------------------------------------------- Output --
 
+// Un rettangolo logico i cui bordi cadono esattamente su pixel fisici di uno
+// schermo (docs/renderer.md §3.5): la posizione può essere frazionaria.
+struct Area {
+    double x, y, width, height;
+};
+
+// Dove mettere una finestra perché copra un'area: posizione logica esatta e
+// dimensione intera (quella che il client riceve nel configure).
+struct Placement {
+    double x, y;
+    int width, height;
+};
+
 struct Output {
     Output(Server& server, wlr_output* output);
     ~Output();
 
     wlr_box box() const; // posizione e dimensioni nel layout globale
     void arrangeLayers(); // posiziona pannelli/sfondi e calcola l'area utile
+
+    // Dove il compositor sistema le finestre, calcolato dai pixel fisici
+    // (§3.5): tutto lo schermo, la parte libera da pannelli, e un'area in
+    // pixel dello schermo (relativi al suo angolo) vista in logico.
+    Area fullArea() const;
+    Area usableArea() const;
+    wlr_box physicalUsable() const;
+    Area fromPhysical(const wlr_box& physical) const;
+    // Posizione e dimensione intera il cui buffer, a questa scala, copre
+    // esattamente `area`. Se i pixel esatti non si possono ottenere (a 150%
+    // 2560 pixel sarebbero 1706,67 unità), il pixel in più finisce fuori
+    // dallo schermo quando l'area ne tocca un bordo; altrimenti si resta
+    // un pixel dentro, senza sovrapporsi ad altro.
+    Placement place(const Area& area) const;
 
     Server& server;
     wlr_output* wlr;
@@ -239,8 +266,8 @@ private:
     bool m_closeAnimated = false; // istantanea di chiusura già scattata
     Tween m_openTween;
     int m_openFrames = 0;
-    int m_targetX = 0;
-    int m_targetY = 0;
+    double m_targetX = 0.0;
+    double m_targetY = 0.0;
 };
 
 // ---------------------------------------------------------- LayerSurface --
@@ -301,7 +328,7 @@ enum class CursorMode { Passthrough, Move, Resize };
 enum class SnapZone { None, Left, Right, Maximize };
 
 // L'area utile di uno schermo divisa a metà.
-wlr_box snapArea(const Output* out, Snap side);
+Area snapArea(const Output* out, Snap side);
 
 class Server {
 public:
@@ -439,7 +466,7 @@ private:
         SnapZone zone = SnapZone::None;
         Output* output = nullptr;
         std::unique_ptr<scene::RectNode> rect;
-        wlr_box target {};
+        Area target {};
         Tween tween;
     } m_snapPreview;
     void tickSnapPreview(double nowMs);

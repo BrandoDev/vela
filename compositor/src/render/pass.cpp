@@ -136,6 +136,14 @@ void Pass::addTexture(const TextureDraw& in)
     draw.kind = Renderer::PipelineKind::Texture;
     draw.texture = texture;
     draw.linear = in.linear;
+    // Un ingrandimento vero (non una copia 1:1 né una riduzione): filtro
+    // bicubico invece del bilineare, che ammorbidisce.
+    const bool swapped = in.transform & WL_OUTPUT_TRANSFORM_90;
+    const double shownWidth = swapped ? in.dst.height : in.dst.width;
+    const double shownHeight = swapped ? in.dst.width : in.dst.height;
+    if (in.linear && shownWidth > src.width * 1.01 && shownHeight > src.height * 1.01) {
+        draw.push.flags |= 1u;
+    }
     // Un quad opaco non ha bisogno di fondersi con ciò che c'è sotto.
     draw.blend = in.blend && (texture->format->alpha || in.alpha < 1.0f);
 

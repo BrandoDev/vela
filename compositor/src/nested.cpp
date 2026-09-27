@@ -15,7 +15,7 @@ NestedWindow::NestedWindow(Output& output)
     , m_width(output.wlr->width)
     , m_height(output.wlr->height)
 {
-    if (const char* scale = std::getenv("VELA_SCALE"); scale && *scale) {
+    if (const char* scale = std::getenv("VELA_SCALE"); scale && *scale && !std::strchr(scale, '=')) {
         m_extraScale = std::max(0.25, std::strtod(scale, nullptr));
     }
     // I proxy stanno nella coda predefinita: i loro eventi li smista il

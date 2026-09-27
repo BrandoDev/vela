@@ -173,7 +173,7 @@ resta alle app, che lo usano per aprire i propri menu.
 |----------------------|------------------------------------------------------|
 | `XKB_DEFAULT_LAYOUT` | layout tastiera (lo script usa `it` di default)      |
 | `VELA_TERMINAL`      | terminale da usare (predefinito: konsole)            |
-| `VELA_SCALE`         | scala dello schermo, es. `1.25`                      |
+| `VELA_SCALE`         | scala degli schermi, es. `1.25`, o per schermo: `DP-1=1.5,HDMI-A-1=1`. Senza, Vela la sceglie dai DPI di ogni schermo (come Windows) |
 | `VELA_VRR=1`         | attiva il refresh variabile (spento di default)      |
 | `VELA_NATURAL_SCROLL=0` | scorrimento classico sul touchpad (predef. naturale, come Windows) |
 | `VELA_ICON_THEME`    | tema di icone se Qt non lo trova (predef. breeze-dark) |
@@ -204,7 +204,8 @@ build/tools/vela-windows list                          # finestre e stato
 build/tools/vela-shot cattura.png                      # screenshot PNG
 ```
 
-- `vela-shot FILE.png [X Y L A]`: cattura lo schermo o una zona.
+- `vela-shot FILE.png [X Y L A]`: cattura lo schermo o una zona
+  (`VELA_SHOT_OUTPUT=N` per l'N-esimo schermo).
 - `vela-windows [list] | AZIONE APP_ID`: activate, minimize, restore,
   maximize, unmaximize, close.
 - `vela-input AZIONE...`: `move X Y`, `down`/`up`/`click [left|right|middle]`,
@@ -213,8 +214,16 @@ build/tools/vela-shot cattura.png                      # screenshot PNG
   trascinamento va fatto in un solo comando: quando `vela-input` termina,
   i tasti rimasti premuti vengono rilasciati.
 
+- `vela-pattern [--scala1] [L A]`: finestra di prova della nitidezza; ogni
+  pixel del suo buffer codifica le proprie coordinate.
+
 Funzionano anche con Vela annidato in KDE (per `vela-input` serve
 `VELA_DEBUG_INPUT=1`).
+
+**Test della nitidezza:** `sh scripts/test-sharpness.sh` prova le scale
+100–200% (o quelle passate come argomenti): la finestra di `vela-pattern`,
+appena aperta, agganciata, massimizzata e ripristinata, deve arrivare sullo
+schermo **bit per bit**. Serve Python con numpy e Pillow.
 
 ## Struttura
 

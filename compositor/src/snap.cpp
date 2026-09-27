@@ -30,14 +30,16 @@ uint32_t tiledEdges(Snap side)
 
 } // namespace
 
-wlr_box snapArea(const Output* out, Snap side)
+// La metà si prende in pixel fisici: le due metà si toccano senza fessure
+// né sovrapposizioni a qualunque scala.
+Area snapArea(const Output* out, Snap side)
 {
-    const wlr_box& area = out->usable;
+    const wlr_box area = out->physicalUsable();
     const int half = area.width / 2;
     if (side == Snap::Right) {
-        return { area.x + half, area.y, area.width - half, area.height };
+        return out->fromPhysical({ area.x + half, area.y, area.width - half, area.height });
     }
-    return { area.x, area.y, half, area.height };
+    return out->fromPhysical({ area.x, area.y, half, area.height });
 }
 
 // -------------------------------------------------------------- Toplevel --
@@ -84,13 +86,14 @@ void Toplevel::applySnap(Output* out)
     if (!out || snap == Snap::None) {
         return;
     }
-    const wlr_box area = snapArea(out, snap);
+    const Area area = snapArea(out, snap);
     // "Tiled" dice all'app di togliere ombre e angoli arrotondati sui lati
     // che toccano i bordi.
     wlr_xdg_toplevel_set_tiled(xdg, tiledEdges(snap));
-    wlr_xdg_toplevel_set_size(xdg, area.width, area.height);
+    const Placement place = out->place(area);
+    wlr_xdg_toplevel_set_size(xdg, place.width, place.height);
     const wlr_box& geometry = xdg->base->geometry;
-    tree->setPosition(area.x - geometry.x, area.y - geometry.y);
+    tree->setPosition(place.x - geometry.x, place.y - geometry.y);
 }
 
 // ---------------------------------------------------- anteprima (Server) --
@@ -121,7 +124,7 @@ void Server::updateSnapZone()
     }
 
     m_snapPreview.target = zone == SnapZone::Maximize
-        ? out->usable
+        ? out->usableArea()
         : snapArea(out, zone == SnapZone::Left ? Snap::Left : Snap::Right);
     if (!m_snapPreview.rect) {
         m_snapPreview.rect = std::make_unique<scene::RectNode>(grabbed->tree->parent(), 0, 0,
@@ -142,7 +145,7 @@ void Server::tickSnapPreview(double nowMs)
     // Cresce dal centro dell'area e si accende.
     const double p = nowMs > 0.0 ? m_snapPreview.tween.progress(nowMs) : 0.0;
     const double scale = 0.9 + 0.1 * p;
-    const wlr_box& t = m_snapPreview.target;
+    const Area& t = m_snapPreview.target;
     const double width = t.width * scale;
     const double height = t.height * scale;
     m_snapPreview.rect->setSize(width, height);

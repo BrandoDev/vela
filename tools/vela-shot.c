@@ -32,7 +32,12 @@ static void registryGlobal(void* data, struct wl_registry* registry, uint32_t na
     if (!strcmp(interface, wl_shm_interface.name)) {
         shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
     } else if (!strcmp(interface, wl_output_interface.name) && !output) {
-        output = wl_registry_bind(registry, name, &wl_output_interface, 1);
+        // VELA_SHOT_OUTPUT=N sceglie l'N-esimo schermo (da 0); altrimenti il primo.
+        static int seen = 0;
+        const char* wanted = getenv("VELA_SHOT_OUTPUT");
+        if (seen++ == (wanted ? atoi(wanted) : 0)) {
+            output = wl_registry_bind(registry, name, &wl_output_interface, 1);
+        }
     } else if (!strcmp(interface, zwlr_screencopy_manager_v1_interface.name)) {
         manager = wl_registry_bind(registry, name, &zwlr_screencopy_manager_v1_interface, 1);
     }

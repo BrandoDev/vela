@@ -195,9 +195,10 @@ void Toplevel::keepInPlace()
     if (!out) {
         return;
     }
-    const wlr_box area = fullscreen ? out->box() : maximized ? out->usable : snapArea(out, snap);
+    const Area area = fullscreen ? out->fullArea() : maximized ? out->usableArea() : snapArea(out, snap);
+    const Placement place = out->place(area);
     const wlr_box& geometry = xdg->base->geometry;
-    tree->setPosition(area.x - geometry.x, area.y - geometry.y);
+    tree->setPosition(place.x - geometry.x, place.y - geometry.y);
 }
 
 void Toplevel::onMap()
@@ -206,13 +207,10 @@ void Toplevel::onMap()
 
     Output* out = server.outputUnderCursor();
     const wlr_box& geometry = xdg->base->geometry;
-    if (out && fullscreen) {
-        const wlr_box area = out->box();
-        m_targetX = area.x - geometry.x;
-        m_targetY = area.y - geometry.y;
-    } else if (out && maximized) {
-        m_targetX = out->usable.x - geometry.x;
-        m_targetY = out->usable.y - geometry.y;
+    if (out && (fullscreen || maximized)) {
+        const Placement place = out->place(fullscreen ? out->fullArea() : out->usableArea());
+        m_targetX = place.x - geometry.x;
+        m_targetY = place.y - geometry.y;
     } else if (out) {
         // Nuove finestre al centro dell'area utile, come fa Windows.
         const wlr_box& area = out->usable;
@@ -392,8 +390,7 @@ void Toplevel::applyOpenFrame(double progress)
 {
     // Massimizzate e a schermo intero compaiono solo in dissolvenza.
     const int rise = (maximized || fullscreen) ? 0 : motion::windowOpenRisePx;
-    const int y = m_targetY + static_cast<int>(std::lround((1.0 - progress) * rise));
-    tree->setPosition(m_targetX, y);
+    tree->setPosition(m_targetX, m_targetY + std::round((1.0 - progress) * rise));
     // L'opacità arriva a 1 un po' prima del movimento: la finestra risulta
     // leggibile subito, il movimento finale è solo "assestamento".
     setOpacity(static_cast<float>(std::min(1.0, progress * 1.4)));
@@ -450,7 +447,8 @@ void Toplevel::applyMaximized()
         return;
     }
     wlr_xdg_toplevel_set_maximized(xdg, true);
-    wlr_xdg_toplevel_set_size(xdg, out->usable.width, out->usable.height);
+    const Placement place = out->place(out->usableArea());
+    wlr_xdg_toplevel_set_size(xdg, place.width, place.height);
     if (handle) {
         wlr_foreign_toplevel_handle_v1_set_maximized(handle, true);
     }
@@ -479,8 +477,8 @@ void Toplevel::setFullscreen(bool on)
             wlr_foreign_toplevel_handle_v1_set_fullscreen(handle, true);
         }
         if (out) {
-            const wlr_box area = out->box();
-            wlr_xdg_toplevel_set_size(xdg, area.width, area.height);
+            const Placement place = out->place(out->fullArea());
+            wlr_xdg_toplevel_set_size(xdg, place.width, place.height);
         }
         // Sopra taskbar e pannelli.
         tree->reparent(server.layers.fullscreen.get());

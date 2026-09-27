@@ -33,6 +33,56 @@ bool envFlag(const char* name)
     return value && *value && std::strcmp(value, "0") != 0;
 }
 
+// La scala scelta a mano: VELA_SCALE=1.25 per tutti gli schermi, oppure
+// per nome: VELA_SCALE=DP-1=1.5,HDMI-A-1=1. 0 se non c'è.
+float requestedScale(const char* name)
+{
+    const char* value = std::getenv("VELA_SCALE");
+    if (!value || !*value) {
+        return 0.0f;
+    }
+    if (!std::strchr(value, '=')) {
+        return std::strtof(value, nullptr);
+    }
+    const std::string list = value;
+    size_t start = 0;
+    while (start < list.size()) {
+        const size_t end = std::min(list.find(',', start), list.size());
+        const std::string item = list.substr(start, end - start);
+        const size_t eq = item.find('=');
+        if (eq != std::string::npos && item.substr(0, eq) == name) {
+            return std::strtof(item.c_str() + eq + 1, nullptr);
+        }
+        start = end + 1;
+    }
+    return 0.0f;
+}
+
+// La scala predefinita, come fa Windows (docs/renderer.md §3.8): dai DPI
+// dello schermo, a passi del 25%, tra 100% e 300%. I pannelli dei portatili
+// si guardano più da vicino: riferimento 105,6 DPI invece di 96.
+float defaultScale(const wlr_output* output, int width, int height, double& dpi)
+{
+    dpi = 0.0;
+    const double physWidth = output->phys_width; // mm, dall'EDID
+    const double physHeight = output->phys_height;
+    if (physWidth <= 0.0 || physHeight <= 0.0 || width <= 0 || height <= 0) {
+        return 1.0f;
+    }
+    // Misure assurde (proiettori, TV, adattatori che inventano l'EDID):
+    // diagonale fuori da 8"–100", o proporzioni diverse da quelle dei pixel.
+    const double diagonalMm = std::hypot(physWidth, physHeight);
+    const double aspectError = std::abs((physWidth / physHeight) / (double(width) / height) - 1.0);
+    if (diagonalMm < 8 * 25.4 || diagonalMm > 100 * 25.4 || aspectError > 0.1) {
+        return 1.0f;
+    }
+    dpi = std::hypot(width, height) / (diagonalMm / 25.4);
+    const std::string name = output->name;
+    const bool internal = name.starts_with("eDP") || name.starts_with("LVDS") || name.starts_with("DSI");
+    const double reference = internal ? 105.6 : 96.0;
+    return float(std::clamp(std::round(dpi / reference * 4.0) / 4.0, 1.0, 3.0));
+}
+
 } // namespace
 
 Output::Output(Server& s, wlr_output* output)
@@ -61,8 +111,18 @@ Output::Output(Server& s, wlr_output* output)
             wlr_output_state_set_custom_mode(&state, width, height, fields == 3 ? int32_t(hz * 1000.0) : 0);
         }
     }
-    if (const char* scale = std::getenv("VELA_SCALE")) {
-        wlr_output_state_set_scale(&state, std::strtof(scale, nullptr));
+    if (const float scale = requestedScale(wlr->name); scale > 0.0f) {
+        wlr_output_state_set_scale(&state, scale);
+    } else if (state.committed & WLR_OUTPUT_STATE_MODE) {
+        const int width = state.mode_type == WLR_OUTPUT_STATE_MODE_FIXED ? state.mode->width : state.custom_mode.width;
+        const int height = state.mode_type == WLR_OUTPUT_STATE_MODE_FIXED ? state.mode->height : state.custom_mode.height;
+        double dpi = 0.0;
+        const float scale = defaultScale(wlr, width, height, dpi);
+        wlr_output_state_set_scale(&state, scale);
+        if (dpi > 0.0) {
+            wlr_log(WLR_INFO, "%s: %.0f DPI (%d×%d mm), scala predefinita %.0f%%", wlr->name, dpi, wlr->phys_width,
+                wlr->phys_height, scale * 100.0);
+        }
     }
     // VRR: utile nei giochi, ma su alcuni monitor fa sfarfallare il desktop.
     // Spento di default, come su Windows; VELA_VRR=1 per provarlo.
@@ -242,6 +302,120 @@ wlr_box Output::box() const
     wlr_box result {};
     wlr_output_layout_get_box(server.outputLayout, wlr, &result);
     return result;
+}
+
+// ------------------------------------------------ aree in pixel fisici --
+
+Area Output::fromPhysical(const wlr_box& physical) const
+{
+    const wlr_box full = box();
+    const double scale = wlr->scale;
+    return { full.x + physical.x / scale, full.y + physical.y / scale, physical.width / scale,
+        physical.height / scale };
+}
+
+Area Output::fullArea() const
+{
+    int width = 0;
+    int height = 0;
+    wlr_output_transformed_resolution(wlr, &width, &height);
+    return fromPhysical({ 0, 0, width, height });
+}
+
+// L'area libera dai pannelli in pixel dello schermo: i bordi che toccano
+// quelli dello schermo restano esattamente sui suoi pixel.
+wlr_box Output::physicalUsable() const
+{
+    const wlr_box full = box();
+    int width = 0;
+    int height = 0;
+    wlr_output_transformed_resolution(wlr, &width, &height);
+    const double scale = wlr->scale;
+    auto edge = [scale](int logical, int fullStart, int fullEnd, int pixels) {
+        if (logical <= fullStart) {
+            return 0;
+        }
+        if (logical >= fullEnd) {
+            return pixels;
+        }
+        return int(std::lround((logical - fullStart) * scale));
+    };
+    const int x1 = edge(usable.x, full.x, full.x + full.width, width);
+    const int x2 = edge(usable.x + usable.width, full.x, full.x + full.width, width);
+    const int y1 = edge(usable.y, full.y, full.y + full.height, height);
+    const int y2 = edge(usable.y + usable.height, full.y, full.y + full.height, height);
+    return { x1, y1, std::max(0, x2 - x1), std::max(0, y2 - y1) };
+}
+
+Area Output::usableArea() const
+{
+    return fromPhysical(physicalUsable());
+}
+
+// Il client disegna un buffer di round(dimensione × scala) pixel
+// (fractional-scale-v1, scala in 120esimi): per ogni asse si cerca la
+// dimensione logica che dà esattamente i pixel dell'area.
+Placement Output::place(const Area& area) const
+{
+    const wlr_box full = box();
+    int screenWidth = 0;
+    int screenHeight = 0;
+    wlr_output_transformed_resolution(wlr, &screenWidth, &screenHeight);
+    const double scale = wlr->scale;
+    const int64_t scale120 = std::lround(scale * 120.0);
+    auto buffer = [scale120](int64_t logical) { return (logical * scale120 + 60) / 120; };
+
+    // Un bordo dello schermo senza un altro schermo accanto: ciò che sborda
+    // lì non si vede.
+    auto open = [&](double lx, double ly) {
+        return !wlr_output_layout_output_at(server.outputLayout, lx, ly);
+    };
+    const double midX = full.x + full.width / 2.0;
+    const double midY = full.y + full.height / 2.0;
+
+    struct Axis {
+        double position;
+        int size;
+    };
+    auto axis = [&](double origin, int start, int size, int screen, bool openBefore, bool openAfter) -> Axis {
+        const bool touchesStart = start <= 0 && openBefore;
+        const bool touchesEnd = start + size >= screen && openAfter;
+        int exact = 0;
+        int above = 0; // il più piccolo che sfora
+        int below = 1; // il più grande che resta dentro
+        for (int64_t w = int64_t(std::floor(size / scale)) - 1; w <= int64_t(std::ceil(size / scale)) + 1; ++w) {
+            if (w <= 0) {
+                continue;
+            }
+            const int64_t pixels = buffer(w);
+            if (pixels == size) {
+                exact = int(w);
+            } else if (pixels > size && !above) {
+                above = int(w);
+            } else if (pixels < size) {
+                below = int(w);
+            }
+        }
+        if (exact) {
+            return { origin + start / scale, exact };
+        }
+        if ((touchesStart || touchesEnd) && above) {
+            // Si sfora dal lato dello schermo: oltre la fine, o prima
+            // dell'inizio se è lì il bordo libero.
+            const int64_t excess = buffer(above) - size;
+            const double first = touchesEnd ? start : double(start - excess);
+            return { origin + first / scale, above };
+        }
+        return { origin + start / scale, below };
+    };
+
+    const int px = int(std::lround((area.x - full.x) * scale));
+    const int py = int(std::lround((area.y - full.y) * scale));
+    const int pw = int(std::lround(area.width * scale));
+    const int ph = int(std::lround(area.height * scale));
+    const Axis x = axis(full.x, px, pw, screenWidth, open(full.x - 0.5, midY), open(full.x + full.width + 0.5, midY));
+    const Axis y = axis(full.y, py, ph, screenHeight, open(midX, full.y - 0.5), open(midX, full.y + full.height + 0.5));
+    return { x.position, y.position, x.size, y.size };
 }
 
 void Output::onFrame()

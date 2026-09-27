@@ -72,7 +72,25 @@ void addSurface(wlr_surface* surface, double lx, double ly, float opacity, const
     }
     const double width = surface->current.width;
     const double height = surface->current.height;
-    const wlr_box box = toPixels(lx, ly, width, height, p);
+    wlr_fbox src {};
+    wlr_surface_get_buffer_source_box(surface, &src);
+    const wl_output_transform transform = wlr_output_transform_invert(surface->current.transform);
+    wlr_box box = toPixels(lx, ly, width, height, p);
+
+    // Nitidezza (§3.3, §3.4): se l'app ha disegnato alla scala di questo
+    // schermo (buffer grande quanto la sua area fisica, a meno
+    // dell'arrotondamento), la superficie si aggancia a un pixel fisico e
+    // occupa esattamente i pixel del buffer: copia 1:1, senza filtri, anche
+    // se la posizione logica cade a metà di un pixel.
+    const bool swapped = transform & WL_OUTPUT_TRANSFORM_90;
+    const double bufferWidth = swapped ? src.height : src.width;
+    const double bufferHeight = swapped ? src.width : src.height;
+    const bool whole = src.x == std::floor(src.x) && src.y == std::floor(src.y)
+        && bufferWidth == std::floor(bufferWidth) && bufferHeight == std::floor(bufferHeight);
+    if (whole && std::abs(bufferWidth - width * p.scale) < 1.0 && std::abs(bufferHeight - height * p.scale) < 1.0) {
+        box.width = int(bufferWidth);
+        box.height = int(bufferHeight);
+    }
     if (!onScreen(box, p)) {
         return;
     }
@@ -80,8 +98,8 @@ void addSurface(wlr_surface* surface, double lx, double ly, float opacity, const
     e.key = surface;
     e.surface = surface;
     e.texture = texture;
-    wlr_surface_get_buffer_source_box(surface, &e.src);
-    e.transform = wlr_output_transform_invert(surface->current.transform);
+    e.src = src;
+    e.transform = transform;
     e.box = box;
     e.opacity = opacity;
     e.linear = !isOneToOne(e.src, box, e.transform);

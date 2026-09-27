@@ -6,8 +6,9 @@ tutto ciò che verrà dopo. Questo documento viene prima del codice: le
 decisioni si prendono qui, il codice le segue.
 
 > **Stato:** progetto discusso e approvato nelle scelte di fondo (§2,
-> riassunte anche in §13). Tappe **S0 e S1 fatte** (§11): la scena e il
-> renderer di Vela sono gli unici, `wlr_scene` è stato rimosso. Prossima: S2.
+> riassunte anche in §13). Tappe **S0, S1 e S2 fatte** (§11): la scena e il
+> renderer di Vela sono gli unici, e a ogni scala le app arrivano sullo
+> schermo bit per bit. Prossima: S3.
 
 ## 1. Obiettivi
 
@@ -90,6 +91,13 @@ adiacenti in fisico, sempre.
 
 ### 3.4 Posizioni agganciate ai pixel fisici
 
+**Come è fatto (S2).** Una superficie il cui buffer è grande quanto la sua
+area fisica (a meno dell'arrotondamento) si aggancia al pixel fisico più
+vicino e occupa esattamente i pixel del buffer: copia 1:1, campionamento
+nearest. Arrotondare i due bordi separatamente, a 150%, dava a volte un
+riquadro di un pixel più grande del buffer, e tutta la finestra passava
+dal filtro.
+
 La posizione **fisica** di ogni finestra (origine della superficie
 principale) è intera. Le animazioni calcolano posizioni logiche frazionarie,
 ma a ogni frame l'origine viene agganciata al pixel fisico più vicino:
@@ -98,6 +106,15 @@ trasformazioni di scala (apertura, riduzione a icona) ricampionano, e per
 la loro breve durata.
 
 ### 3.5 Dimensioni logiche scelte bene
+
+**Come è fatto (S2).** Snap, massimizzazione e schermo intero partono
+dall'area in pixel fisici (le metà si dividono in pixel); la posizione
+logica della finestra è quella esatta, anche frazionaria, e la dimensione
+intera si sceglie perché il buffer del client (round(dimensione × scala)
+in 120esimi) copra esattamente quei pixel. Quando è impossibile (a 150%
+2560 pixel sarebbero 1706,67 unità) il pixel in più sborda **fuori dallo
+schermo**, se l'area ne tocca un bordo senza un altro schermo accanto;
+altrimenti si resta un pixel dentro, senza sovrapporsi ad altro.
 
 Con scale frazionarie una finestra può avere una dimensione logica che non
 diventa un numero intero di pixel fisici. Il compositor, quando **decide**
@@ -116,6 +133,9 @@ vediamo".
   caricato per ogni scala in uso).
 
 ### 3.7 La shell
+
+(S2: Qt 6 usa già `fractional-scale-v1` e l'arrotondamento PassThrough di
+default; verificato nitido al 125% annidato in KDE.)
 
 La shell Qt usa `fractional-scale-v1` e `viewporter` anche per le
 superfici layer-shell (Qt ≥ 6.5), con
@@ -532,7 +552,7 @@ con i suoi test.
 |---|---|---|
 | **S0** Fondamenta ✔ | device Vulkan nostro, allocatore GBM, import dei buffer degli schermi, sincronizzazione implicita (sync_file), shader compilati, scena di prova; ciclo di frame per schermo con tempo di presentazione previsto e latenza imparata; vblank virtuale per l'headless | fatto: 60–360 Hz simulati esatti (0 vblank persi, errore < 10 µs); annidato in KWin a 75 e 180 Hz reali, errore ~1 µs dopo l'apprendimento; validation layer (anche della sincronizzazione): nessun messaggio |
 | **S1** Parità ✔ | scena propria con finestre, layer, popup, sottosuperfici; shm e dmabuf; damage; frame callback, presentation, enter/leave; istantanee, snap, catture portate sul nuovo renderer; Vulkan 1.4; il nostro renderer anche come `wlr_renderer` | fatto: `wlr_scene` e il renderer di wlroots rimossi. Provati headless e annidato in KWin: Konsole (shm), shell Qt Quick e Firefox (dmabuf), popup anche con sottosuperfici, menu Start, trascinamento, snap con anteprima, riduzione a icona e ripristino, chiusura, Alt+Tab con anteprime, screencopy, due schermi (enter/leave), scala 150%. Validation layer (anche della sincronizzazione): nessun messaggio. A riposo 0 CPU; trascinando una finestra a 144 Hz 17–29 ms di CPU su 3,4 s, contro 34–36 ms di `wlr_scene` |
-| **S2** Nitidezza | fractional scale, aggancio ai pixel, filtri di qualità, più schermi con scale diverse, cursore per scala, scala predefinita dai DPI | test bit per bit verdi a ogni scala |
+| **S2** Nitidezza ✔ | fractional scale, aggancio ai pixel, filtri di qualità, più schermi con scale diverse, cursore per scala, scala predefinita dai DPI | fatto: `scripts/test-sharpness.sh` bit per bit a 100, 125, 150, 175, 200 e 225% (aperta, agganciata a sinistra e a destra, massimizzata, ripristinata); schermi misti 150% + 100%, bit per bit su quello al 150%. Prima delle correzioni: fino a 134 mila pixel diversi a 150% per una finestra centrata. Filtro bicubico Catmull-Rom per gli ingrandimenti; riduzioni ancora bilineari (mipmap da fare con le animazioni di scala, S4) |
 | **S3** Tempo e latenza | late latching, scanout diretto, sincronizzazione esplicita, dmabuf feedback | latenza misurata, nessun frame perso a 360 Hz simulati |
 | **S4** Forma | angoli arrotondati, ombre | nitidi a ogni scala |
 | **S5** Sfocatura | `ext-background-effect`, dual Kawase, cache, acrylic per la shell | taskbar e menu sfocati; costo zero quando dietro non cambia nulla |

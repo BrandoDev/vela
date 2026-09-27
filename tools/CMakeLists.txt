@@ -41,6 +41,11 @@ vela_client_protocol(proto-xdg-output
     ${TOOLS_WAYLAND_PROTOCOLS_DIR}/unstable/xdg-output/xdg-output-unstable-v1.xml
     xdg-output-unstable-v1)
 
+vela_client_protocol(proto-xdg-shell ${TOOLS_WAYLAND_PROTOCOLS_DIR}/stable/xdg-shell/xdg-shell.xml xdg-shell)
+vela_client_protocol(proto-viewporter ${TOOLS_WAYLAND_PROTOCOLS_DIR}/stable/viewporter/viewporter.xml viewporter)
+vela_client_protocol(proto-fractional-scale
+    ${TOOLS_WAYLAND_PROTOCOLS_DIR}/staging/fractional-scale/fractional-scale-v1.xml fractional-scale-v1)
+
 add_executable(vela-shot vela-shot.c)
 target_link_libraries(vela-shot PRIVATE proto-screencopy PkgConfig::TOOLS_ZLIB)
 
@@ -51,6 +56,10 @@ add_executable(vela-input vela-input.c)
 target_link_libraries(vela-input PRIVATE
     proto-virtual-pointer proto-virtual-keyboard proto-xdg-output PkgConfig::TOOLS_XKBCOMMON)
 
-foreach(tool vela-shot vela-windows vela-input)
+# Client di prova della nitidezza (scripts/test-sharpness.sh).
+add_executable(vela-pattern vela-pattern.c)
+target_link_libraries(vela-pattern PRIVATE proto-xdg-shell proto-viewporter proto-fractional-scale)
+
+foreach(tool vela-shot vela-windows vela-input vela-pattern)
     target_compile_options(${tool} PRIVATE -Wall -Wextra -Wno-unused-parameter)
 endforeach()

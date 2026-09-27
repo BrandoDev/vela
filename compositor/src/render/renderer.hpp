@@ -162,7 +162,7 @@ struct QuadPush {
     float dst[4]; // x, y, larghezza, altezza in pixel della destinazione
     float target[2]; // dimensioni della destinazione
     float alpha;
-    uint32_t flags;
+    uint32_t flags; // bit 0: ingrandimento bicubico
     float uvOrigin[2]; // coordinate texture dell'angolo in alto a sinistra
     float uvX[2]; // spostamento lungo il bordo superiore
     float uvY[2]; // spostamento lungo il bordo sinistro
