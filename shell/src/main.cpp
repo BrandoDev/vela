@@ -5,15 +5,18 @@
 // riserva spazio sullo schermo.
 
 #include "appmodel.h"
+#include "desktopmodel.h"
 #include "foreigntoplevels.h"
 #include "iconprovider.h"
 #include "jumplists.h"
 #include "notifications.h"
+#include "servicemenus.h"
 #include "shellcontroller.h"
 #include "systemactions.h"
 #include "taskbarmodel.h"
 #include "tray.h"
 #include "wallpaperprovider.h"
+#include "wallpapers.h"
 #include "windowcapture.h"
 
 #include <LayerShellQt/Window>
@@ -51,17 +54,6 @@ void setupTaskbar(QQuickWindow* window, int height)
     layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorBottom) | LayerWindow::AnchorLeft
         | LayerWindow::AnchorRight);
     layer->setExclusiveZone(height); // le finestre massimizzate non la coprono
-    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityNone);
-}
-
-void setupWallpaper(QQuickWindow* window)
-{
-    LayerWindow* layer = LayerWindow::get(window);
-    layer->setScope(QStringLiteral("vela-wallpaper"));
-    layer->setLayer(LayerWindow::LayerBackground);
-    layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorTop) | LayerWindow::AnchorBottom
-        | LayerWindow::AnchorLeft | LayerWindow::AnchorRight);
-    layer->setExclusiveZone(-1); // tutto lo schermo, anche sotto la taskbar
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityNone);
 }
 
@@ -127,11 +119,21 @@ void setupRunDialog(QQuickWindow* window)
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
 }
 
-// Sfondo e taskbar ci devono essere sempre. Il compositor chiude le
-// superfici della shell quando il loro schermo sparisce: un monitor
-// scollegato, o il cambio di console (wlroots toglie tutti gli schermi e li
-// ricrea al ritorno). Qui le si rimette sullo schermo principale appena ce
-// n'è uno vero.
+void setupConfirmDialog(QQuickWindow* window)
+{
+    // Le domande (es. "Svuota Cestino"): al centro dello schermo, sopra le finestre.
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScope(QStringLiteral("vela-confirm"));
+    layer->setLayer(LayerWindow::LayerOverlay);
+    layer->setAnchors(LayerWindow::Anchors());
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
+}
+
+// La taskbar ci deve essere sempre (gli sfondi li segue Wallpapers). Il
+// compositor chiude le superfici della shell quando il loro schermo
+// sparisce: un monitor scollegato, o il cambio di console (wlroots toglie
+// tutti gli schermi e li ricrea al ritorno). Qui la si rimette sullo
+// schermo principale appena ce n'è uno vero.
 void keepShown(QGuiApplication& app, const QList<QQuickWindow*>& windows)
 {
     auto* timer = new QTimer(&app);
@@ -214,6 +216,8 @@ int main(int argc, char* argv[])
     tray.start();
     SystemActions system;
     JumpLists jumps(&apps);
+    DesktopModel desktop(&apps);
+    ServiceMenus serviceMenus;
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
@@ -229,39 +233,44 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("Tray"), &tray);
     engine.rootContext()->setContextProperty(QStringLiteral("System"), &system);
     engine.rootContext()->setContextProperty(QStringLiteral("Jumps"), &jumps);
+    engine.rootContext()->setContextProperty(QStringLiteral("Desktop"), &desktop);
+    engine.rootContext()->setContextProperty(QStringLiteral("ServiceMenus"), &serviceMenus);
 
     // Le finestre QML partono invisibili: le trasformiamo in superfici
     // layer-shell PRIMA che vengano mostrate.
-    engine.loadFromModule("Vela.Shell", "Wallpaper");
     engine.loadFromModule("Vela.Shell", "Taskbar");
     engine.loadFromModule("Vela.Shell", "StartMenu");
     engine.loadFromModule("Vela.Shell", "Switcher");
     engine.loadFromModule("Vela.Shell", "NotificationPopups");
     engine.loadFromModule("Vela.Shell", "ContextMenu");
     engine.loadFromModule("Vela.Shell", "RunDialog");
+    engine.loadFromModule("Vela.Shell", "ConfirmDialog");
 
     QQuickWindow* switcher = findWindow(engine, "switcher");
-    QQuickWindow* wallpaper = findWindow(engine, "wallpaper");
     QQuickWindow* taskbar = findWindow(engine, "taskbar");
     QQuickWindow* startMenu = findWindow(engine, "startMenu");
     QQuickWindow* notificationWindow = findWindow(engine, "notifications");
     QQuickWindow* contextMenu = findWindow(engine, "contextMenu");
     QQuickWindow* runDialog = findWindow(engine, "runDialog");
-    if (!wallpaper || !taskbar || !startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog) {
+    QQuickWindow* confirmDialog = findWindow(engine, "confirmDialog");
+    if (!taskbar || !startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog || !confirmDialog) {
         qCritical("vela-shell: impossibile caricare l'interfaccia QML");
         return 1;
     }
 
-    setupWallpaper(wallpaper);
     setupTaskbar(taskbar, taskbar->height());
     setupStartMenu(startMenu);
     setupSwitcher(switcher);
     setupNotifications(notificationWindow);
     setupContextMenu(contextMenu);
     setupRunDialog(runDialog);
-    wallpaper->show();
+    setupConfirmDialog(confirmDialog);
     taskbar->show();
-    keepShown(app, { wallpaper, taskbar });
+    keepShown(app, { taskbar });
+    Wallpapers wallpapers(&engine);
+    if (!wallpapers.start()) {
+        return 1;
+    }
 
     return app.exec();
 }

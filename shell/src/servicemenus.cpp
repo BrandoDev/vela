@@ -1,0 +1,215 @@
+#include "servicemenus.h"
+
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QHash>
+#include <QLocale>
+#include <QMimeDatabase>
+#include <QProcess>
+#include <QSet>
+#include <QStandardPaths>
+#include <QTextStream>
+#include <QUrl>
+#include <QtDebug>
+
+namespace {
+
+using Group = QHash<QString, QString>;
+
+QHash<QString, Group> readGroups(const QString& path)
+{
+    QHash<QString, Group> groups;
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return groups;
+    }
+    QString group;
+    QTextStream stream(&file);
+    QString line;
+    while (stream.readLineInto(&line)) {
+        if (line.isEmpty() || line.startsWith(u'#')) {
+            continue;
+        }
+        if (line.startsWith(u'[')) {
+            group = line.trimmed().mid(1).chopped(1);
+        } else if (const qsizetype eq = line.indexOf(u'='); eq > 0 && !group.isEmpty()) {
+            groups[group].insert(line.left(eq).trimmed(), line.mid(eq + 1).trimmed());
+        }
+    }
+    return groups;
+}
+
+QString localized(const Group& group, const QString& key)
+{
+    const QString locale = QLocale().name();
+    for (const QString& name : { QStringLiteral("%1[%2]").arg(key, locale),
+             QStringLiteral("%1[%2]").arg(key, locale.section(u'_', 0, 0)), key }) {
+        if (group.contains(name)) {
+            return group.value(name);
+        }
+    }
+    return {};
+}
+
+QString quote(QString text)
+{
+    text.replace(u'\'', QStringLiteral("'\\''"));
+    return u'\'' + text + u'\'';
+}
+
+// Un file è di un tipo (o dei suoi genitori), con i jolly di KDE.
+bool matches(const QString& pattern, const QMimeType& type, bool isDir)
+{
+    if (pattern == QLatin1String("all/all")) {
+        return true;
+    }
+    if (pattern == QLatin1String("all/allfiles")) {
+        return !isDir;
+    }
+    if (pattern.endsWith(QLatin1String("/*"))) {
+        const QString prefix = pattern.chopped(1);
+        if (type.name().startsWith(prefix)) {
+            return true;
+        }
+        const QStringList ancestors = type.allAncestors();
+        return std::any_of(ancestors.cbegin(), ancestors.cend(), [&](const QString& a) { return a.startsWith(prefix); });
+    }
+    return type.inherits(pattern);
+}
+
+} // namespace
+
+ServiceMenus::ServiceMenus(QObject* parent)
+    : QObject(parent)
+{
+}
+
+void ServiceMenus::load()
+{
+    m_loaded = true;
+    // Prima quelli dell'utente: lo stesso nome nasconde quello di sistema.
+    QSet<QString> seen;
+    QStringList dirs;
+    for (const QString& data : QStandardPaths::standardLocations(QStandardPaths::GenericDataLocation)) {
+        dirs << data + QStringLiteral("/kio/servicemenus") << data + QStringLiteral("/kservices5/ServiceMenus");
+    }
+    for (const QString& dir : std::as_const(dirs)) {
+        for (const QFileInfo& info : QDir(dir).entryInfoList({ QStringLiteral("*.desktop") }, QDir::Files)) {
+            if (seen.contains(info.fileName())) {
+                continue;
+            }
+            seen.insert(info.fileName());
+            const QHash<QString, Group> groups = readGroups(info.absoluteFilePath());
+            const Group main = groups.value(QStringLiteral("Desktop Entry"));
+            // Condizioni che Vela non sa valutare (una chiamata D-Bus che dice
+            // se mostrarla): meglio non mostrare una voce che potrebbe non
+            // funzionare. X-KDE-AuthorizeAction invece è per i sistemi
+            // bloccati (kiosk): di norma è concesso, come in KDE.
+            if (main.contains(QStringLiteral("X-KDE-ShowIfDBusCall"))
+                || main.value(QStringLiteral("Hidden")) == QLatin1String("true")) {
+                continue;
+            }
+            const QString protocols = main.value(QStringLiteral("X-KDE-Protocols"));
+            if (!protocols.isEmpty() && !protocols.split(u',').contains(QStringLiteral("file"))) {
+                continue;
+            }
+            Action base;
+            base.mimeTypes = main.value(QStringLiteral("MimeType")).split(u';', Qt::SkipEmptyParts);
+            base.submenu = localized(main, QStringLiteral("X-KDE-Submenu"));
+            base.minUrls = main.value(QStringLiteral("X-KDE-MinNumberOfUrls"), QStringLiteral("1")).toInt();
+            base.maxUrls = main.value(QStringLiteral("X-KDE-MaxNumberOfUrls"), QStringLiteral("-1")).toInt();
+            for (const QString& n : main.value(QStringLiteral("X-KDE-RequiredNumberOfUrls")).split(u',', Qt::SkipEmptyParts)) {
+                base.requiredUrls.append(n.trimmed().toInt());
+            }
+            if (base.mimeTypes.isEmpty()) {
+                continue;
+            }
+            for (const QString& id : main.value(QStringLiteral("Actions")).split(u';', Qt::SkipEmptyParts)) {
+                if (id == QLatin1String("_SEPARATOR_")) {
+                    continue;
+                }
+                const Group group = groups.value(QStringLiteral("Desktop Action ") + id);
+                Action action = base;
+                action.name = localized(group, QStringLiteral("Name"));
+                action.icon = group.value(QStringLiteral("Icon"));
+                action.exec = group.value(QStringLiteral("Exec"));
+                if (!action.name.isEmpty() && !action.exec.isEmpty()) {
+                    m_actions.append(action);
+                }
+            }
+        }
+    }
+    qInfo("vela-shell: %lld voci dei service menu di KDE", static_cast<long long>(m_actions.size()));
+}
+
+QVariantList ServiceMenus::actionsFor(const QStringList& paths)
+{
+    if (!m_loaded) {
+        load();
+    }
+    QVariantList out;
+    if (paths.isEmpty()) {
+        return out;
+    }
+    static const QMimeDatabase mimes;
+    QList<QPair<QMimeType, bool>> types;
+    for (const QString& path : paths) {
+        const QFileInfo info(path);
+        types.append({ mimes.mimeTypeForFile(info), info.isDir() });
+    }
+    const int count = int(paths.size());
+    for (qsizetype i = 0; i < m_actions.size(); ++i) {
+        const Action& a = m_actions.at(i);
+        if (count < a.minUrls || (a.maxUrls >= 0 && count > a.maxUrls)
+            || (!a.requiredUrls.isEmpty() && !a.requiredUrls.contains(count))) {
+            continue;
+        }
+        // Deve valere per tutti i file scelti.
+        const bool fits = std::all_of(types.cbegin(), types.cend(), [&](const QPair<QMimeType, bool>& t) {
+            return std::any_of(a.mimeTypes.cbegin(), a.mimeTypes.cend(),
+                [&](const QString& pattern) { return matches(pattern, t.first, t.second); });
+        });
+        if (fits) {
+            out.append(QVariantMap { { QStringLiteral("id"), int(i) }, { QStringLiteral("text"), a.name },
+                { QStringLiteral("icon"), a.icon }, { QStringLiteral("submenu"), a.submenu } });
+        }
+    }
+    return out;
+}
+
+void ServiceMenus::run(int id, const QStringList& paths) const
+{
+    if (id < 0 || id >= m_actions.size() || paths.isEmpty()) {
+        return;
+    }
+    const Action& a = m_actions.at(id);
+    QStringList files;
+    QStringList urls;
+    for (const QString& path : paths) {
+        files << quote(path);
+        urls << quote(QUrl::fromLocalFile(path).toString());
+    }
+    // I field code della specifica Desktop Entry.
+    QString command;
+    for (qsizetype i = 0; i < a.exec.size(); ++i) {
+        const QChar c = a.exec.at(i);
+        if (c != u'%' || i + 1 >= a.exec.size()) {
+            command += c;
+            continue;
+        }
+        switch (a.exec.at(++i).unicode()) {
+        case 'f': command += files.first(); break;
+        case 'F': command += files.join(u' '); break;
+        case 'u': command += urls.first(); break;
+        case 'U': command += urls.join(u' '); break;
+        case 'i': command += a.icon.isEmpty() ? QString() : QStringLiteral("--icon ") + quote(a.icon); break;
+        case 'c': command += quote(a.name); break;
+        case '%': command += u'%'; break;
+        default: break; // %k, %d... non servono qui
+        }
+    }
+    const QString directory = QFileInfo(paths.first()).absolutePath();
+    qInfo("vela-shell: service menu: %s", qPrintable(command));
+    QProcess::startDetached(QStringLiteral("/bin/sh"), { QStringLiteral("-c"), command }, directory);
+}

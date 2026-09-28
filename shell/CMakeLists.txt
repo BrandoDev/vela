@@ -10,6 +10,8 @@ qt_add_executable(vela-shell
     src/main.cpp
     src/appmodel.cpp
     src/appmodel.h
+    src/desktopmodel.cpp
+    src/desktopmodel.h
     src/foreigntoplevels.cpp
     src/foreigntoplevels.h
     src/iconprovider.h
@@ -18,12 +20,16 @@ qt_add_executable(vela-shell
     src/notifications.cpp
     src/shellcontroller.cpp
     src/shellcontroller.h
+    src/servicemenus.cpp
+    src/servicemenus.h
     src/systemactions.cpp
     src/systemactions.h
     src/taskbarmodel.cpp
     src/tray.cpp
     src/taskbarmodel.h
     src/wallpaperprovider.h
+    src/wallpapers.cpp
+    src/wallpapers.h
     src/windowcapture.cpp
     src/windowcapture.h)
 
@@ -78,7 +84,8 @@ set(VELA_QML_FILES
     qml/ContextMenu.qml
     qml/MenuPanel.qml
     qml/MenuTextField.qml
-    qml/RunDialog.qml)
+    qml/RunDialog.qml
+    qml/ConfirmDialog.qml)
 
 # I file stanno in qml/ per ordine, ma nel modulo devono stare alla radice:
 # così si vedono tra loro (Theme compreso, che è un singleton) senza import.
