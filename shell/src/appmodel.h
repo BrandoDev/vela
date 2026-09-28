@@ -3,6 +3,7 @@
 #include <QAbstractListModel>
 #include <QList>
 #include <QString>
+#include <QStringList>
 #include <QVariantMap>
 
 // Elenco delle applicazioni installate, letto dai file .desktop standard
@@ -20,8 +21,20 @@ public:
         CommentRole,
     };
 
+    // Un'azione dichiarata dall'app ([Desktop Action ...]): "Nuova finestra"...
+    struct Action {
+        QString id;
+        QString name;
+        QString icon;
+        QString exec; // con i field code
+    };
+
     struct Entry {
         QString id; // es. org.kde.dolphin.desktop
+        QString path; // il file .desktop
+        QString rawExec; // con i field code (%f, %u...)
+        QList<Action> actions;
+        QStringList mimeTypes; // i tipi di file che sa aprire
         QString name;
         QString genericName;
         QString comment;
@@ -47,6 +60,26 @@ public:
     Q_INVOKABLE bool launchId(const QString& id);
     // Dati di una singola app per id (per le icone fissate sulla taskbar).
     Q_INVOKABLE QVariantMap entry(const QString& id) const;
+    // Le azioni dell'app per la jump list: [{id, name, icon}].
+    Q_INVOKABLE QVariantList actions(const QString& id) const;
+    Q_INVOKABLE bool launchAction(const QString& id, const QString& actionId);
+    // Apre un file (o un URL) con quell'app.
+    Q_INVOKABLE bool launchWithFile(const QString& id, const QString& url);
+    Q_INVOKABLE QString desktopFile(const QString& id) const;
+    Q_INVOKABLE QString name(const QString& id) const;
+    // Il programma che l'app avvia (es. "kate"), per riconoscerla altrove.
+    QString program(const QString& id) const;
+    const Entry* find(const QString& id) const;
+    // "Apri con": le app che sanno aprire quel tipo di file (e i suoi
+    // genitori, es. text/plain per il C++), la predefinita per prima:
+    // [{id, name, icon, isDefault}].
+    Q_INVOKABLE QVariantList appsForFile(const QString& path) const;
+    // Un collegamento .desktop fuori dal menu (es. sul desktop): lo avvia.
+    Q_INVOKABLE bool launchDesktopFile(const QString& path) const;
+    // L'id nel menu di un .desktop che sta altrove (es. steam.desktop sul
+    // desktop), se è la stessa app; vuoto altrimenti.
+    Q_INVOKABLE QString idForDesktopFile(const QString& path) const;
+    const QList<Entry>& all() const { return m_all; }
     // Il file .desktop di una finestra aperta, a partire dal suo app_id
     // (es. "org.kde.konsole" -> "org.kde.konsole.desktop"). Vuoto se ignoto.
     QString findDesktopId(const QString& appId) const;

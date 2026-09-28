@@ -7,8 +7,10 @@
 #include "appmodel.h"
 #include "foreigntoplevels.h"
 #include "iconprovider.h"
+#include "jumplists.h"
 #include "notifications.h"
 #include "shellcontroller.h"
+#include "systemactions.h"
 #include "taskbarmodel.h"
 #include "tray.h"
 #include "wallpaperprovider.h"
@@ -100,16 +102,28 @@ void setupNotifications(QQuickWindow* window)
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityNone);
 }
 
-void setupTrayMenu(QQuickWindow* window)
+void setupContextMenu(QQuickWindow* window)
 {
-    // Tutto lo schermo, trasparente: il menu sta sopra l'icona e un clic
-    // fuori lo chiude. Prende la tastiera (Esc) e la perde cliccando altrove.
+    // I menu del tasto destro: tutto lo schermo, trasparente, sopra a tutto.
+    // I menu stanno dentro, e un clic fuori li chiude. Prende la tastiera
+    // (frecce, Invio, Esc) e la perde cliccando altrove.
     LayerWindow* layer = LayerWindow::get(window);
-    layer->setScope(QStringLiteral("vela-tray-menu"));
+    layer->setScope(QStringLiteral("vela-context-menu"));
     layer->setLayer(LayerWindow::LayerOverlay);
     layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorTop) | LayerWindow::AnchorBottom
         | LayerWindow::AnchorLeft | LayerWindow::AnchorRight);
     layer->setExclusiveZone(-1);
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
+}
+
+void setupRunDialog(QQuickWindow* window)
+{
+    // "Esegui", in basso a sinistra sopra la taskbar, come in Windows.
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScope(QStringLiteral("vela-run"));
+    layer->setLayer(LayerWindow::LayerTop);
+    layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorBottom) | LayerWindow::AnchorLeft);
+    layer->setMargins(QMargins(12, 0, 0, 12));
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
 }
 
@@ -198,6 +212,8 @@ int main(int argc, char* argv[])
     notifications.registerService();
     TrayModel tray;
     tray.start();
+    SystemActions system;
+    JumpLists jumps(&apps);
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
@@ -211,6 +227,8 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("Capture"), &capture);
     engine.rootContext()->setContextProperty(QStringLiteral("Notifications"), &notifications);
     engine.rootContext()->setContextProperty(QStringLiteral("Tray"), &tray);
+    engine.rootContext()->setContextProperty(QStringLiteral("System"), &system);
+    engine.rootContext()->setContextProperty(QStringLiteral("Jumps"), &jumps);
 
     // Le finestre QML partono invisibili: le trasformiamo in superfici
     // layer-shell PRIMA che vengano mostrate.
@@ -219,15 +237,17 @@ int main(int argc, char* argv[])
     engine.loadFromModule("Vela.Shell", "StartMenu");
     engine.loadFromModule("Vela.Shell", "Switcher");
     engine.loadFromModule("Vela.Shell", "NotificationPopups");
-    engine.loadFromModule("Vela.Shell", "TrayMenu");
+    engine.loadFromModule("Vela.Shell", "ContextMenu");
+    engine.loadFromModule("Vela.Shell", "RunDialog");
 
     QQuickWindow* switcher = findWindow(engine, "switcher");
     QQuickWindow* wallpaper = findWindow(engine, "wallpaper");
     QQuickWindow* taskbar = findWindow(engine, "taskbar");
     QQuickWindow* startMenu = findWindow(engine, "startMenu");
     QQuickWindow* notificationWindow = findWindow(engine, "notifications");
-    QQuickWindow* trayMenu = findWindow(engine, "trayMenu");
-    if (!wallpaper || !taskbar || !startMenu || !switcher || !notificationWindow || !trayMenu) {
+    QQuickWindow* contextMenu = findWindow(engine, "contextMenu");
+    QQuickWindow* runDialog = findWindow(engine, "runDialog");
+    if (!wallpaper || !taskbar || !startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog) {
         qCritical("vela-shell: impossibile caricare l'interfaccia QML");
         return 1;
     }
@@ -237,7 +257,8 @@ int main(int argc, char* argv[])
     setupStartMenu(startMenu);
     setupSwitcher(switcher);
     setupNotifications(notificationWindow);
-    setupTrayMenu(trayMenu);
+    setupContextMenu(contextMenu);
+    setupRunDialog(runDialog);
     wallpaper->show();
     taskbar->show();
     keepShown(app, { wallpaper, taskbar });

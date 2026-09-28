@@ -11,6 +11,7 @@ Item {
     property bool current: false
 
     signal activated()
+    signal contextRequested(real x, real y) // tasto destro, in coordinate della casella
 
     Rectangle {
         anchors.fill: parent
@@ -62,6 +63,7 @@ Item {
         id: mouse
         anchors.fill: parent
         hoverEnabled: true
-        onClicked: root.activated()
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onClicked: mouse => mouse.button === Qt.RightButton ? root.contextRequested(mouse.x, mouse.y) : root.activated()
     }
 }

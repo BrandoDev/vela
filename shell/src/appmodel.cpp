@@ -5,13 +5,16 @@
 #include <QDirIterator>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileInfo>
 #include <QHash>
 #include <QLocale>
+#include <QMimeDatabase>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSet>
 #include <QStandardPaths>
 #include <QTextStream>
+#include <QUrl>
 #include <QtDebug>
 
 #include <algorithm>
@@ -57,6 +60,12 @@ QString cleanExec(const QString& exec)
     return result.simplified();
 }
 
+QString shellQuote(QString text)
+{
+    text.replace(u'\'', QStringLiteral("'\\''"));
+    return u'\'' + text + u'\'';
+}
+
 bool listContains(const QString& list, const QString& item)
 {
     const auto parts = list.split(u';', Qt::SkipEmptyParts);
@@ -73,8 +82,10 @@ bool parseDesktopFile(const QString& path, const QStringList& localeKeys, AppMod
         return false;
     }
 
-    QHash<QString, QString> values;
-    bool inMainGroup = false;
+    // Ogni gruppo ([Desktop Entry], [Desktop Action nuova-finestra], ...)
+    // con le sue chiavi.
+    QHash<QString, QHash<QString, QString>> groups;
+    QString group;
     QTextStream stream(&file);
     QString line;
     while (stream.readLineInto(&line)) {
@@ -82,21 +93,16 @@ bool parseDesktopFile(const QString& path, const QStringList& localeKeys, AppMod
             continue;
         }
         if (line.startsWith(u'[')) {
-            if (inMainGroup) {
-                break; // le azioni aggiuntive non ci servono
-            }
-            inMainGroup = line.trimmed() == QLatin1String("[Desktop Entry]");
-            continue;
-        }
-        if (!inMainGroup) {
+            group = line.trimmed().mid(1).chopped(1);
             continue;
         }
         const qsizetype eq = line.indexOf(u'=');
-        if (eq <= 0) {
+        if (eq <= 0 || group.isEmpty()) {
             continue;
         }
-        values.insert(line.left(eq).trimmed(), line.mid(eq + 1).trimmed());
+        groups[group].insert(line.left(eq).trimmed(), line.mid(eq + 1).trimmed());
     }
+    const QHash<QString, QString> values = groups.value(QStringLiteral("Desktop Entry"));
 
     if (values.value(QStringLiteral("Type")) != QLatin1String("Application")) {
         return false;
@@ -122,7 +128,7 @@ bool parseDesktopFile(const QString& path, const QStringList& localeKeys, AppMod
     }
 
     // Prima la versione tradotta (Name[it_IT], Name[it]), poi quella base.
-    const auto localized = [&](const QString& key) {
+    const auto localizedIn = [&](const QHash<QString, QString>& values, const QString& key) {
         for (const QString& locale : localeKeys) {
             const auto it = values.constFind(QStringLiteral("%1[%2]").arg(key, locale));
             if (it != values.constEnd()) {
@@ -131,14 +137,27 @@ bool parseDesktopFile(const QString& path, const QStringList& localeKeys, AppMod
         }
         return unescape(values.value(key));
     };
+    const auto localized = [&](const QString& key) { return localizedIn(values, key); };
 
     entry.name = localized(QStringLiteral("Name"));
     entry.genericName = localized(QStringLiteral("GenericName"));
     entry.comment = localized(QStringLiteral("Comment"));
     entry.keywords = localized(QStringLiteral("Keywords"));
     entry.icon = values.value(QStringLiteral("Icon"));
-    entry.exec = cleanExec(unescape(values.value(QStringLiteral("Exec"))));
+    entry.rawExec = unescape(values.value(QStringLiteral("Exec")));
+    entry.exec = cleanExec(entry.rawExec);
+    entry.path = path;
+    // Le azioni dell'app (le "attività" della jump list), nell'ordine dato.
+    for (const QString& id : values.value(QStringLiteral("Actions")).split(u';', Qt::SkipEmptyParts)) {
+        const QHash<QString, QString> action = groups.value(QStringLiteral("Desktop Action ") + id);
+        AppModel::Action a { id, localizedIn(action, QStringLiteral("Name")), action.value(QStringLiteral("Icon")),
+            unescape(action.value(QStringLiteral("Exec"))) };
+        if (!a.name.isEmpty() && !a.exec.isEmpty()) {
+            entry.actions.append(a);
+        }
+    }
     entry.wmClass = values.value(QStringLiteral("StartupWMClass"));
+    entry.mimeTypes = values.value(QStringLiteral("MimeType")).split(u';', Qt::SkipEmptyParts);
     entry.terminal = isTrue("Terminal");
     return !entry.name.isEmpty() && !entry.exec.isEmpty();
 }
@@ -359,6 +378,173 @@ QString AppModel::iconForAppId(const QString& appId) const
     const QString desktopId = findDesktopId(appId);
     const QString icon = desktopId.isEmpty() ? QString() : entry(desktopId).value(QStringLiteral("iconName")).toString();
     return icon.isEmpty() ? appId : icon; // spesso il tema ha un'icona col nome dell'app_id
+}
+
+const AppModel::Entry* AppModel::find(const QString& id) const
+{
+    for (const Entry& e : m_all) {
+        if (e.id == id) {
+            return &e;
+        }
+    }
+    return nullptr;
+}
+
+QVariantList AppModel::actions(const QString& id) const
+{
+    QVariantList out;
+    if (const Entry* e = find(id)) {
+        for (const Action& a : e->actions) {
+            out.append(QVariantMap { { QStringLiteral("id"), a.id }, { QStringLiteral("name"), a.name },
+                { QStringLiteral("icon"), a.icon.isEmpty() ? e->icon : a.icon } });
+        }
+    }
+    return out;
+}
+
+bool AppModel::launchAction(const QString& id, const QString& actionId)
+{
+    const Entry* e = find(id);
+    if (!e) {
+        return false;
+    }
+    for (const Action& a : e->actions) {
+        if (a.id == actionId) {
+            Entry copy = *e;
+            copy.exec = cleanExec(a.exec);
+            return launchEntry(copy);
+        }
+    }
+    return false;
+}
+
+bool AppModel::launchWithFile(const QString& id, const QString& url)
+{
+    const Entry* e = find(id);
+    if (!e) {
+        return false;
+    }
+    // Il file prende il posto dei field code (%f, %u...); se l'app non ne
+    // ha, va in fondo alla riga di comando.
+    const QUrl fileUrl(url);
+    const QString quoted = shellQuote(fileUrl.isLocalFile() ? fileUrl.toLocalFile() : url);
+    const QString quotedUrl = shellQuote(url);
+    static const QRegularExpression fileCodes(QStringLiteral("%[fF]"));
+    static const QRegularExpression urlCodes(QStringLiteral("%[uU]"));
+    QString exec = e->rawExec;
+    if (exec.contains(fileCodes)) {
+        exec.replace(fileCodes, quoted);
+    } else if (exec.contains(urlCodes)) {
+        exec.replace(urlCodes, quotedUrl);
+    } else {
+        exec += u' ' + quoted;
+    }
+    Entry copy = *e;
+    copy.exec = cleanExec(exec);
+    return launchEntry(copy);
+}
+
+namespace {
+
+// L'app predefinita per un tipo di file, da mimeapps.list (prima quello
+// dell'utente, poi quelli di sistema), come fa xdg-mime.
+QString defaultAppFor(const QString& mime)
+{
+    QStringList files;
+    const QString config = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+    files << config + QStringLiteral("/mimeapps.list") << config + QStringLiteral("/kde-mimeapps.list");
+    for (const QString& dir : QStandardPaths::standardLocations(QStandardPaths::GenericConfigLocation)) {
+        files << dir + QStringLiteral("/mimeapps.list");
+    }
+    for (const QString& dir : QStandardPaths::standardLocations(QStandardPaths::ApplicationsLocation)) {
+        files << dir + QStringLiteral("/mimeapps.list");
+    }
+    for (const QString& path : std::as_const(files)) {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            continue;
+        }
+        bool inDefaults = false;
+        QTextStream stream(&file);
+        QString line;
+        while (stream.readLineInto(&line)) {
+            if (line.startsWith(u'[')) {
+                inDefaults = line.trimmed() == QLatin1String("[Default Applications]");
+            } else if (inDefaults && line.startsWith(mime + u'=')) {
+                const QString first = line.mid(mime.size() + 1).section(u';', 0, 0).trimmed();
+                if (!first.isEmpty()) {
+                    return first;
+                }
+            }
+        }
+    }
+    return {};
+}
+
+} // namespace
+
+QVariantList AppModel::appsForFile(const QString& path) const
+{
+    static const QMimeDatabase mimes;
+    const QMimeType type = mimes.mimeTypeForFile(path);
+    QStringList accepted { type.name() };
+    accepted << type.allAncestors();
+    accepted << type.aliases();
+    const QString preferred = defaultAppFor(type.name());
+
+    QVariantList out;
+    QSet<QString> names;
+    for (const Entry& e : m_all) {
+        const bool opens = std::any_of(e.mimeTypes.cbegin(), e.mimeTypes.cend(),
+            [&](const QString& m) { return accepted.contains(m); });
+        if (!opens || names.contains(e.name)) {
+            continue;
+        }
+        names.insert(e.name);
+        const QVariantMap app { { QStringLiteral("id"), e.id }, { QStringLiteral("name"), e.name },
+            { QStringLiteral("icon"), e.icon }, { QStringLiteral("isDefault"), e.id == preferred } };
+        if (e.id == preferred) {
+            out.prepend(app);
+        } else {
+            out.append(app);
+        }
+    }
+    return out;
+}
+
+bool AppModel::launchDesktopFile(const QString& path) const
+{
+    const QString localeName = QLocale().name();
+    QStringList localeKeys { localeName, localeName.section(u'_', 0, 0) };
+    Entry entry;
+    if (!parseDesktopFile(path, localeKeys, entry)) {
+        return false;
+    }
+    return launchEntry(entry);
+}
+
+QString AppModel::idForDesktopFile(const QString& path) const
+{
+    const QString id = QFileInfo(path).fileName();
+    return find(id) ? id : QString();
+}
+
+QString AppModel::desktopFile(const QString& id) const
+{
+    const Entry* e = find(id);
+    return e ? e->path : QString();
+}
+
+QString AppModel::name(const QString& id) const
+{
+    const Entry* e = find(id);
+    return e ? e->name : QString();
+}
+
+QString AppModel::program(const QString& id) const
+{
+    const Entry* e = find(id);
+    return e ? e->exec.section(u' ', 0, 0).section(u'/', -1) : QString();
 }
 
 bool AppModel::launchEntry(const Entry& entry) const

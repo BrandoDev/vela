@@ -1,5 +1,7 @@
 #include "shellcontroller.h"
 
+#include <QSettings>
+
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusReply>
@@ -12,8 +14,30 @@
 #include <pwd.h>
 #include <unistd.h>
 
+namespace {
+
+// Al primo avvio: le app di tutti i giorni, se installate (la Start salta
+// quelle che non ci sono).
+const QStringList defaultStartPins {
+    QStringLiteral("firefox.desktop"),
+    QStringLiteral("org.mozilla.firefox.desktop"),
+    QStringLiteral("chromium.desktop"),
+    QStringLiteral("org.kde.dolphin.desktop"),
+    QStringLiteral("org.kde.konsole.desktop"),
+    QStringLiteral("org.kde.kate.desktop"),
+    QStringLiteral("org.kde.okular.desktop"),
+    QStringLiteral("org.kde.gwenview.desktop"),
+    QStringLiteral("org.kde.spectacle.desktop"),
+    QStringLiteral("org.kde.kcalc.desktop"),
+    QStringLiteral("org.kde.plasma-systemmonitor.desktop"),
+    QStringLiteral("systemsettings.desktop"),
+};
+
+} // namespace
+
 ShellController::ShellController(QObject* parent)
     : QObject(parent)
+    , m_startPins(QSettings().value(QStringLiteral("start/pinned"), defaultStartPins).toStringList())
 {
     connect(&m_server, &QLocalServer::newConnection, this, [this] {
         while (QLocalSocket* socket = m_server.nextPendingConnection()) {
@@ -184,6 +208,16 @@ void ShellController::handleCommand(const QByteArray& command)
         emit switcherSelected(parts.at(1).toInt());
     } else if (command == "switcher-hide") {
         emit switcherHidden();
+    } else if (command == "winx") {
+        emit winXRequested();
+    } else if (command == "run") {
+        emit runRequested();
+    } else if (command == "show-desktop") {
+        emit showDesktopRequested();
+    } else if (parts.first() == "window-menu" && parts.size() == 8) {
+        // window-menu <id> <schermo> <x> <y> <massimizzata> <ridimensionabile> <da tastiera>
+        emit windowMenuRequested(QString::fromLatin1(parts.at(1)), QString::fromUtf8(parts.at(2)), parts.at(3).toInt(),
+            parts.at(4).toInt(), parts.at(5) == "1", parts.at(6) == "1", parts.at(7) == "1");
     } else if (!command.isEmpty() && command != "ping") {
         qWarning("vela-shell: comando sconosciuto '%s'", command.constData());
     }
@@ -212,4 +246,63 @@ QString ShellController::userInitial() const
 {
     const QString name = userName();
     return name.isEmpty() ? QStringLiteral("?") : name.left(1).toUpper();
+}
+
+// ------------------------------------------------------- app nella Start --
+
+
+void ShellController::saveStartPins()
+{
+    QSettings().setValue(QStringLiteral("start/pinned"), m_startPins);
+    emit startPinsChanged();
+}
+
+void ShellController::pinToStart(const QString& id)
+{
+    if (!id.isEmpty() && !m_startPins.contains(id)) {
+        m_startPins.append(id); // in fondo, come Windows
+        saveStartPins();
+    }
+}
+
+void ShellController::unpinFromStart(const QString& id)
+{
+    if (m_startPins.removeAll(id) > 0) {
+        saveStartPins();
+    }
+}
+
+void ShellController::moveStartPinToFront(const QString& id)
+{
+    if (m_startPins.removeAll(id) > 0) {
+        m_startPins.prepend(id);
+        saveStartPins();
+    }
+}
+
+bool ShellController::endTaskEnabled() const
+{
+    return QSettings().value(QStringLiteral("taskbar/endTask"), true).toBool();
+}
+
+void ShellController::windowAction(const QString& window, const QString& action)
+{
+    sendToCompositor("window " + window.toLatin1() + ' ' + action.toLatin1());
+}
+
+bool ShellController::shiftHeld() const
+{
+    const QString runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+    const QString display = qEnvironmentVariable("WAYLAND_DISPLAY", QStringLiteral("wayland-0"));
+    QLocalSocket socket;
+    socket.connectToServer(runtimeDir + QStringLiteral("/vela-") + display + QStringLiteral(".sock"));
+    if (!socket.waitForConnected(100)) {
+        return false;
+    }
+    socket.write("modifiers\n");
+    if (!socket.waitForBytesWritten(100) || !socket.waitForReadyRead(100)) {
+        return false;
+    }
+    constexpr int shift = 1; // WLR_MODIFIER_SHIFT
+    return socket.readLine().trimmed().toInt() & shift;
 }

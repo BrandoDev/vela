@@ -23,6 +23,7 @@ QtObject {
     // --- forme ---
     readonly property int radiusSmall: 6
     readonly property int radiusLarge: 10
+    readonly property int radiusMenu: 8 // menu del tasto destro, come Windows 11
     readonly property int taskbarHeight: 48
 
     // --- tipografia ---

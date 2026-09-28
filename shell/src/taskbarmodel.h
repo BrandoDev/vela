@@ -7,6 +7,7 @@
 #include <QRect>
 #include <QString>
 #include <QStringList>
+#include <QVariantMap>
 #include <QWindow>
 
 class AppModel;
@@ -19,6 +20,8 @@ class ForeignToplevelManager;
 class TaskbarModel : public QAbstractListModel {
     Q_OBJECT
     Q_PROPERTY(QStringList pinnedIds READ pinnedIds WRITE setPinnedIds NOTIFY pinnedIdsChanged)
+    // Le app fissate sono già state salvate (altrimenti si parte da quelle predefinite).
+    Q_PROPERTY(bool pinsSaved READ pinsSaved CONSTANT)
 
 public:
     enum Role {
@@ -28,6 +31,7 @@ public:
         PinnedRole,
         WindowCountRole,
         WindowActiveRole,
+        DesktopIdRole,
     };
 
     TaskbarModel(AppModel* apps, ForeignToplevelManager* windows, QObject* parent = nullptr);
@@ -38,12 +42,28 @@ public:
 
     QStringList pinnedIds() const { return m_pinnedIds; }
     void setPinnedIds(const QStringList& ids);
+    bool pinsSaved() const { return m_pinsSaved; }
+    Q_INVOKABLE bool isPinned(const QString& desktopId) const { return m_pinnedIds.contains(desktopId); }
+    Q_INVOKABLE void pin(const QString& desktopId);
+    Q_INVOKABLE void unpin(const QString& desktopId);
 
     // Clic sul pulsante: avvia l'app, oppure porta davanti la sua finestra,
     // oppure (se è già quella attiva) la riduce a icona.
     Q_INVOKABLE void activate(int row);
     // Clic centrale: una nuova finestra dell'app.
     Q_INVOKABLE void launchNew(int row);
+    // "Chiudi finestra" / "Chiudi tutte le finestre".
+    Q_INVOKABLE void closeWindows(int row);
+    // "Termina attività": il compositor chiude i processi delle sue finestre.
+    Q_INVOKABLE void endTask(int row);
+    // Il menu della finestra dal pulsante (Maiusc+clic destro), sulla sua
+    // finestra più recente: {maximized, minimized}; e le sue azioni
+    // (restore, move, resize, minimize, maximize, close).
+    Q_INVOKABLE QVariantMap windowState(int row) const;
+    Q_INVOKABLE void windowAction(int row, const QString& action);
+    // Win+D e "Desktop" nel menu Win+X: riduce tutto a icona, e la volta
+    // dopo rimette com'era.
+    Q_INVOKABLE void toggleDesktop();
     // Posizione del pulsante nella finestra della taskbar.
     Q_INVOKABLE void setButtonGeometry(int row, QWindow* panel, const QRectF& rect);
 
@@ -62,6 +82,7 @@ private:
 
     void rebuild();
     QList<Item> buildItems();
+    ForeignToplevel* recentWindow(int row) const;
     void sendButtonRects();
 
     AppModel* m_apps;
@@ -71,4 +92,6 @@ private:
     QList<Item> m_items;
     QPointer<QWindow> m_panel;
     QHash<QString, QRect> m_buttonRects; // per chiave dell'app
+    bool m_pinsSaved = false;
+    QList<QPointer<ForeignToplevel>> m_hiddenByDesktop; // ridotte a icona da "Mostra desktop"
 };

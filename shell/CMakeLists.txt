@@ -13,9 +13,13 @@ qt_add_executable(vela-shell
     src/foreigntoplevels.cpp
     src/foreigntoplevels.h
     src/iconprovider.h
+    src/jumplists.cpp
+    src/jumplists.h
     src/notifications.cpp
     src/shellcontroller.cpp
     src/shellcontroller.h
+    src/systemactions.cpp
+    src/systemactions.h
     src/taskbarmodel.cpp
     src/tray.cpp
     src/taskbarmodel.h
@@ -70,7 +74,11 @@ set(VELA_QML_FILES
     qml/Switcher.qml
     qml/Wallpaper.qml
     qml/NotificationPopups.qml
-    qml/TrayMenu.qml)
+    qml/Menus.qml
+    qml/ContextMenu.qml
+    qml/MenuPanel.qml
+    qml/MenuTextField.qml
+    qml/RunDialog.qml)
 
 # I file stanno in qml/ per ordine, ma nel modulo devono stare alla radice:
 # così si vedono tra loro (Theme compreso, che è un singleton) senza import.
@@ -78,7 +86,7 @@ foreach(file IN LISTS VELA_QML_FILES)
     get_filename_component(name ${file} NAME)
     set_source_files_properties(${file} PROPERTIES QT_RESOURCE_ALIAS ${name})
 endforeach()
-set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Theme.qml qml/Menus.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(vela-shell
     URI Vela.Shell

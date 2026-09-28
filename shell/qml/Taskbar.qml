@@ -24,11 +24,167 @@ Window {
         "org.kde.kate.desktop",
         "systemsettings.desktop"
     ]
-    Component.onCompleted: Tasks.pinnedIds = pinnedIds
+    // Solo al primo avvio: poi valgono quelle salvate (aggiunte e tolte dai menu).
+    Component.onCompleted: {
+        if (!Tasks.pinsSaved) {
+            Tasks.pinnedIds = pinnedIds
+        }
+    }
+
+    // --- menu del tasto destro (docs/renderer.md §14.4-14.6) ---
+
+    // La taskbar sta in fondo allo schermo: da coordinate sue a quelle dello schermo.
+    function screenPoint(item, x, y) {
+        const p = item.mapToItem(null, x, y)
+        return Qt.point(p.x, Screen.height - root.height + p.y)
+    }
+    // I menu della taskbar salgono dal suo bordo superiore.
+    readonly property real menuBottom: Screen.height - root.height - 4
+
+    function openAbove(entries, item, centered, options) {
+        const p = screenPoint(item, centered ? item.width / 2 : 0, 0)
+        Menus.open(entries, p.x, menuBottom, Object.assign({ above: true, centered: centered }, options || {}))
+    }
+
+    // La jump list di un pulsante: file fissati e recenti, attività
+    // dell'app, poi l'app, fissa/togli, chiudi.
+    function jumpList(task) {
+        const id = task.desktopId
+        const entries = []
+        if (id !== "") {
+            const fileEntry = (file, pinned) => ({
+                text: file.name.replace(/&/g, "&&"),
+                icon: file.icon,
+                action: () => Apps.launchWithFile(id, file.url),
+                pin: { pinned: pinned, toggle: () => Jumps.setPinned(id, file.url, !pinned) },
+                context: [
+                    { text: "&Apri", icon: task.iconName, action: () => Apps.launchWithFile(id, file.url) },
+                    pinned
+                        ? { text: "&Rimuovi da questo elenco", icon: "window-unpin", action: () => Jumps.setPinned(id, file.url, false) }
+                        : { text: "A&ggiungi a questo elenco", icon: "window-pin", action: () => Jumps.setPinned(id, file.url, true) },
+                    { text: "Rimuovi dall'&elenco", icon: "list-remove", action: () => Jumps.forget(id, file.url) }
+                ]
+            })
+            const pinned = Jumps.pinned(id)
+            if (pinned.length > 0) {
+                entries.push({ header: "Aggiunti" })
+                pinned.forEach(f => entries.push(fileEntry(f, true)))
+            }
+            const recent = Jumps.recent(id, 10)
+            if (recent.length > 0) {
+                entries.push({ header: "Recenti" })
+                recent.forEach(f => entries.push(fileEntry(f, false)))
+            }
+            const actions = Apps.actions(id)
+            if (actions.length > 0) {
+                entries.push({ header: "Attività" })
+                actions.forEach(a => entries.push({ text: a.name.replace(/&/g, "&&"), icon: a.icon, action: () => Apps.launchAction(id, a.id) }))
+            }
+            if (entries.length > 0) {
+                entries.push({ separator: true })
+            }
+            entries.push({ text: task.name.replace(/&/g, "&&"), icon: task.iconName, action: () => Apps.launchId(id) })
+            entries.push(Tasks.isPinned(id)
+                ? { text: "Rimuovi dalla barra delle applicazioni", icon: "window-unpin", action: () => Tasks.unpin(id) }
+                : { text: "Aggiungi alla barra delle applicazioni", icon: "window-pin", action: () => Tasks.pin(id) })
+        }
+        if (task.windowCount > 0 && Shell.endTaskEnabled) {
+            entries.push({ text: "Termina attività", icon: "process-stop", action: () => Tasks.endTask(task.index) })
+        }
+        if (task.windowCount > 0) {
+            entries.push({
+                text: task.windowCount > 1 ? "Chiudi tutte le finestre" : "Chiudi finestra",
+                icon: "window-close",
+                action: () => Tasks.closeWindows(task.index)
+            })
+        }
+        return entries
+    }
+
+    // Win+X: il menu del pulsante Start.
+    function winXEntries() {
+        const item = (text, icon, name) => ({ text: text, icon: icon, enabled: System.available(name), action: () => System.trigger(name) })
+        const entries = [item("App insta&llate", "system-software-install", "installed-apps")]
+        if (System.isLaptop()) {
+            entries.push(item("Centro PC &portatile", "computer-laptop", "mobility"))
+        }
+        entries.push(
+            item("&Opzioni risparmio energia", "preferences-system-power-management", "power"),
+            item("Visuali&zzatore eventi", "text-x-log", "events"),
+            item("Siste&ma", "computer", "system"),
+            item("Gestione dispositi&vi", "preferences-devices-tree", "devices"),
+            item("Conn&essioni di rete", "preferences-system-network", "network"),
+            item("Gestio&ne disco", "drive-harddisk", "disks"),
+            item("&Gestione computer", "computer", "computer"),
+            { separator: true },
+            item("Te&rminale", "utilities-terminal", "terminal"),
+            item("Terminale (A&dmin)", "utilities-terminal", "terminal-admin"),
+            { separator: true },
+            item("Gestione attivi&tà", "utilities-system-monitor", "task-manager"),
+            item("&Impostazioni", "preferences-system", "settings"),
+            item("&Esplora file", "system-file-manager", "files"),
+            { text: "&Cerca", icon: "search", action: () => { if (!Shell.startMenuOpen) Shell.toggleStartMenu() } },
+            { text: "E&segui", icon: "system-run", action: () => Shell.runRequested() },
+            { separator: true },
+            { text: "&Arresta il sistema o disconnetti", icon: "system-shutdown", children: [
+                { text: "&Disconnetti", icon: "system-log-out", action: () => Shell.logout() },
+                { text: "&Sospendi", icon: "system-suspend", enabled: Shell.canSuspend(), action: () => Shell.suspend() },
+                { text: "&Arresta il sistema", icon: "system-shutdown", action: () => Shell.powerOff() },
+                { text: "&Riavvia il sistema", icon: "system-reboot", action: () => Shell.reboot() }
+            ] },
+            { text: "Des&ktop", icon: "user-desktop", action: () => Tasks.toggleDesktop() }
+        )
+        return entries
+    }
+
+    Connections {
+        target: Shell
+        function onWinXRequested() {
+            root.openWinX(true)
+        }
+        function onShowDesktopRequested() {
+            Tasks.toggleDesktop()
+        }
+    }
+    function openWinX(keyboard) {
+        const p = screenPoint(startButton, 0, 0)
+        Menus.open(winXEntries(), p.x, menuBottom, { above: true, keyboard: keyboard })
+    }
+
+    // Il menu di un'icona dell'area di notifica (lo decide l'app).
+    Connections {
+        target: Tray
+        function onMenuReady(row, anchorX, entries) {
+            const convert = list => list.map(e => e.separator ? { separator: true } : {
+                text: e.label,
+                icon: e.icon,
+                enabled: e.enabled,
+                checked: e.checkable ? e.checked : undefined,
+                radio: e.radio,
+                children: e.children.length > 0 ? convert(e.children) : undefined,
+                action: () => Tray.activateMenuEntry(row, e.id)
+            })
+            Menus.open(convert(entries), anchorX, root.menuBottom, { above: true, centered: true })
+        }
+    }
 
     Rectangle {
         anchors.fill: parent
         color: Theme.taskbar
+
+        // Spazio vuoto: Gestione attività e impostazioni della taskbar.
+        MouseArea {
+            id: emptyArea
+            anchors.fill: parent
+            acceptedButtons: Qt.RightButton
+            onClicked: mouse => {
+                const p = root.screenPoint(emptyArea, mouse.x, 0)
+                Menus.open([
+                    { text: "Gestione &attività", icon: "utilities-system-monitor", enabled: System.available("task-manager"), action: () => System.trigger("task-manager") },
+                    { text: "&Impostazioni della barra delle applicazioni", icon: "configure", enabled: System.available("taskbar-settings"), action: () => System.trigger("taskbar-settings") }
+                ], p.x, root.menuBottom, { above: true })
+            }
+        }
 
         // Sottile riga di luce sul bordo superiore, come un vetro.
         Rectangle {
@@ -65,8 +221,10 @@ Window {
         }
 
         TaskbarButton {
+            id: startButton
             active: Shell.startMenuOpen
             onClicked: Shell.toggleStartMenu()
+            onRightClicked: root.openWinX(false)
             StartGlyph { anchors.centerIn: parent }
         }
 
@@ -80,12 +238,22 @@ Window {
                 required property string iconName
                 required property int windowCount
                 required property bool windowActive
+                required property string desktopId
 
                 tooltip: name
                 running: windowCount > 0
                 active: windowActive
                 onClicked: Tasks.activate(index)
                 onMiddleClicked: Tasks.launchNew(index)
+                onRightClicked: shift => {
+                    if ((shift || Shell.shiftHeld()) && windowCount > 0) {
+                        const state = Tasks.windowState(index)
+                        root.openAbove(Menus.windowEntries(state.maximized, state.minimized, true,
+                            action => Tasks.windowAction(task.index, action)), task, true)
+                    } else {
+                        root.openAbove(root.jumpList(task), task, true, { minWidth: 256, rebuild: () => root.jumpList(task) })
+                    }
+                }
 
                 // Il compositor fa volare qui le finestre ridotte a icona.
                 function reportGeometry() {
@@ -224,6 +392,14 @@ Window {
             id: clockMouse
             anchors.fill: parent
             hoverEnabled: true
+            acceptedButtons: Qt.RightButton
+            onClicked: mouse => {
+                const p = root.screenPoint(clock, mouse.x, 0)
+                Menus.open([
+                    { text: "&Regola data e ora", icon: "preferences-system-time", enabled: System.available("datetime"), action: () => System.trigger("datetime") },
+                    { text: "Impostazioni di &notifica", icon: "preferences-desktop-notification", enabled: System.available("notification-settings"), action: () => System.trigger("notification-settings") }
+                ], p.x, root.menuBottom, { above: true })
+            }
         }
     }
 }

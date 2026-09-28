@@ -2,6 +2,9 @@
 
 #include "appmodel.h"
 #include "foreigntoplevels.h"
+#include "shellcontroller.h"
+
+#include <QSettings>
 
 #include <algorithm>
 
@@ -11,6 +14,12 @@ TaskbarModel::TaskbarModel(AppModel* apps, ForeignToplevelManager* windows, QObj
     , m_windows(windows)
 {
     connect(m_windows, &ForeignToplevelManager::windowsChanged, this, &TaskbarModel::rebuild);
+    QSettings settings;
+    if (settings.contains(QStringLiteral("taskbar/pinned"))) {
+        m_pinsSaved = true;
+        m_pinnedIds = settings.value(QStringLiteral("taskbar/pinned")).toStringList();
+        rebuild();
+    }
 }
 
 void TaskbarModel::setPinnedIds(const QStringList& ids)
@@ -19,8 +28,24 @@ void TaskbarModel::setPinnedIds(const QStringList& ids)
         return;
     }
     m_pinnedIds = ids;
+    QSettings().setValue(QStringLiteral("taskbar/pinned"), m_pinnedIds);
     emit pinnedIdsChanged();
     rebuild();
+}
+
+void TaskbarModel::pin(const QString& desktopId)
+{
+    if (!desktopId.isEmpty() && !m_pinnedIds.contains(desktopId)) {
+        setPinnedIds(m_pinnedIds + QStringList { desktopId });
+    }
+}
+
+void TaskbarModel::unpin(const QString& desktopId)
+{
+    QStringList ids = m_pinnedIds;
+    if (ids.removeAll(desktopId) > 0) {
+        setPinnedIds(ids);
+    }
 }
 
 QList<TaskbarModel::Item> TaskbarModel::buildItems()
@@ -192,6 +217,7 @@ QVariant TaskbarModel::data(const QModelIndex& index, int role) const
     case IconRole: return item.icon;
     case PinnedRole: return item.pinned;
     case WindowCountRole: return int(item.windows.size());
+    case DesktopIdRole: return item.desktopId;
     case WindowActiveRole:
         return std::any_of(item.windows.cbegin(), item.windows.cend(),
             [](const ForeignToplevel* window) { return window->activated; });
@@ -208,6 +234,7 @@ QHash<int, QByteArray> TaskbarModel::roleNames() const
         { PinnedRole, "pinned" },
         { WindowCountRole, "windowCount" },
         { WindowActiveRole, "windowActive" },
+        { DesktopIdRole, "desktopId" },
     };
 }
 
@@ -245,4 +272,94 @@ void TaskbarModel::launchNew(int row)
     if (row >= 0 && row < m_items.size() && !m_items.at(row).desktopId.isEmpty()) {
         m_apps->launchId(m_items.at(row).desktopId);
     }
+}
+
+ForeignToplevel* TaskbarModel::recentWindow(int row) const
+{
+    if (row < 0 || row >= m_items.size() || m_items.at(row).windows.isEmpty()) {
+        return nullptr;
+    }
+    const QList<ForeignToplevel*>& windows = m_items.at(row).windows;
+    return *std::max_element(windows.cbegin(), windows.cend(),
+        [](const ForeignToplevel* a, const ForeignToplevel* b) { return a->lastActivated < b->lastActivated; });
+}
+
+void TaskbarModel::closeWindows(int row)
+{
+    if (row >= 0 && row < m_items.size()) {
+        for (ForeignToplevel* window : m_items.at(row).windows) {
+            window->close();
+        }
+    }
+}
+
+void TaskbarModel::endTask(int row)
+{
+    if (ForeignToplevel* window = recentWindow(row); window && !window->appId.isEmpty()) {
+        ShellController::sendToCompositor("end-task " + window->appId.toUtf8());
+    }
+}
+
+QVariantMap TaskbarModel::windowState(int row) const
+{
+    const ForeignToplevel* window = recentWindow(row);
+    if (!window) {
+        return {};
+    }
+    return { { QStringLiteral("maximized"), window->maximized }, { QStringLiteral("minimized"), window->minimized } };
+}
+
+void TaskbarModel::windowAction(int row, const QString& action)
+{
+    ForeignToplevel* window = recentWindow(row);
+    if (!window) {
+        return;
+    }
+    if (action == QLatin1String("restore")) {
+        if (window->minimized) {
+            window->requestActivate();
+        } else if (window->maximized) {
+            window->unset_maximized();
+        }
+    } else if (action == QLatin1String("minimize")) {
+        window->requestMinimize();
+    } else if (action == QLatin1String("maximize")) {
+        window->set_maximized();
+    } else if (action == QLatin1String("close")) {
+        window->close();
+    } else if (action == QLatin1String("move") || action == QLatin1String("resize")) {
+        // Da tastiera, come su Windows: la finestra va davanti e il
+        // compositor la fa muovere con le frecce.
+        window->requestActivate();
+        ShellController::sendToCompositor("window active " + action.toLatin1());
+    }
+}
+
+void TaskbarModel::toggleDesktop()
+{
+    QList<ForeignToplevel*> visible;
+    for (ForeignToplevel* window : m_windows->windows()) {
+        if (!window->minimized) {
+            visible.append(window);
+        }
+    }
+    if (!visible.isEmpty()) {
+        m_hiddenByDesktop.clear();
+        for (ForeignToplevel* window : std::as_const(visible)) {
+            m_hiddenByDesktop.append(window);
+            window->requestMinimize();
+        }
+        return;
+    }
+    // Tutto già ridotto: tornano quelle di prima, la più recente per ultima (davanti).
+    std::sort(m_hiddenByDesktop.begin(), m_hiddenByDesktop.end(),
+        [](const QPointer<ForeignToplevel>& a, const QPointer<ForeignToplevel>& b) {
+            return (a ? a->lastActivated : 0) < (b ? b->lastActivated : 0);
+        });
+    for (const QPointer<ForeignToplevel>& window : std::as_const(m_hiddenByDesktop)) {
+        if (window) {
+            window->requestActivate();
+        }
+    }
+    m_hiddenByDesktop.clear();
 }

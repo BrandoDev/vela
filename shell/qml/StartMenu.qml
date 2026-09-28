@@ -18,6 +18,73 @@ Window {
     // Chiesto una volta sola a logind: il computer sa sospendersi?
     readonly property bool canSuspend: Shell.canSuspend()
 
+    // Le app aggiunte alla Start, installate, senza doppioni (stessa app
+    // come pacchetto e come Flatpak).
+    readonly property var pinned: {
+        const seen = {}
+        const out = []
+        for (const id of Shell.startPins) {
+            const e = Apps.entry(id)
+            if (e.name && !seen[e.name]) {
+                seen[e.name] = true
+                out.push({ id: id, name: e.name, iconName: e.iconName })
+            }
+        }
+        return out
+    }
+    readonly property bool showPinned: search.text.length === 0 && pinned.length > 0
+
+    // Il menu Start sta centrato sopra la taskbar: da coordinate sue a
+    // quelle dello schermo, per i menu del tasto destro.
+    function screenPoint(item, x, y) {
+        const p = item.mapToItem(null, x, y)
+        return Qt.point((Screen.width - root.width) / 2 + p.x, Screen.height - Theme.taskbarHeight - root.height + p.y)
+    }
+
+    // Il menu di un'app (docs/renderer.md §14.7): in cima i file recenti e
+    // le attività, come la jump list; poi le voci della Start.
+    function appMenu(id, pinnedTile) {
+        const entries = []
+        const recent = Jumps.recent(id, 5)
+        if (recent.length > 0) {
+            entries.push({ header: "Recenti" })
+            recent.forEach(f => entries.push({ text: f.name.replace(/&/g, "&&"), icon: f.icon, action: () => { Apps.launchWithFile(id, f.url); root.close() } }))
+        }
+        const actions = Apps.actions(id)
+        if (actions.length > 0) {
+            entries.push({ header: "Attività" })
+            actions.forEach(a => entries.push({ text: a.name.replace(/&/g, "&&"), icon: a.icon, action: () => { Apps.launchAction(id, a.id); root.close() } }))
+        }
+        if (entries.length > 0) {
+            entries.push({ separator: true })
+        }
+        const inStart = Shell.startPins.indexOf(id) >= 0
+        const taskbar = Tasks.isPinned(id)
+            ? { text: "Rimuovi dalla &barra delle applicazioni", icon: "window-unpin", action: () => Tasks.unpin(id) }
+            : { text: "Aggiungi alla &barra delle applicazioni", icon: "window-pin", action: () => Tasks.pin(id) }
+        const folder = { text: "Apri &percorso file", icon: "document-open-folder", action: () => { System.showInFolder(Apps.desktopFile(id)); root.close() } }
+        const uninstall = { text: "&Disinstalla", icon: "edit-delete", enabled: System.canUninstall(Apps.desktopFile(id)), action: () => { System.uninstall(Apps.desktopFile(id)); root.close() } }
+        if (pinnedTile) {
+            entries.push(
+                { text: "&Rimuovi da Start", icon: "window-unpin", action: () => Shell.unpinFromStart(id) },
+                { text: "&Sposta all'inizio", icon: "go-top", enabled: Shell.startPins.indexOf(id) > 0, action: () => Shell.moveStartPinToFront(id) },
+                taskbar, folder, uninstall)
+        } else {
+            entries.push(
+                inStart
+                    ? { text: "&Rimuovi da Start", icon: "window-unpin", action: () => Shell.unpinFromStart(id) }
+                    : { text: "&Aggiungi a Start", icon: "window-pin", action: () => Shell.pinToStart(id) },
+                { text: "A&ltro", children: [taskbar, folder] },
+                uninstall)
+        }
+        return entries
+    }
+
+    function openAppMenu(item, x, y, id, pinnedTile) {
+        const p = screenPoint(item, x, y)
+        Menus.open(appMenu(id, pinnedTile), p.x, p.y)
+    }
+
     // Una voce del menu di accensione.
     component PowerEntry: Item {
         id: entry
@@ -109,8 +176,30 @@ Window {
 
     // Clic su una finestra o altrove: il menu perde il focus e si chiude,
     // come su Windows.
+    // Un menu del tasto destro aperto da qui prende la tastiera: il menu
+    // Start resta aperto, e la riavrà quando il menu si chiude.
+    // Chiuso il menu, la tastiera torna qui; se invece è andata altrove (una
+    // finestra nuova, un clic), si chiude anche questo pannello.
+    Connections {
+        target: Menus
+        function onIsOpenChanged() {
+            if (!Menus.isOpen && root.visible) {
+                focusCheck.restart()
+            }
+        }
+    }
+    Timer {
+        id: focusCheck
+        interval: 200
+        onTriggered: {
+            if (!root.active && root.visible && !Menus.isOpen) {
+                root.close()
+            }
+        }
+    }
+
     onActiveChanged: {
-        if (!active && visible) {
+        if (!active && visible && !Menus.isOpen) {
             close()
         }
     }
@@ -209,13 +298,10 @@ Window {
                 font.pixelSize: Theme.fontNormal
             }
 
-            TextInput {
+            MenuTextField {
                 id: search
                 anchors { left: parent.left; right: parent.right; leftMargin: 18; rightMargin: 18; verticalCenter: parent.verticalCenter }
-                color: Theme.text
-                selectionColor: Theme.accent
-                font.pixelSize: Theme.fontNormal
-                clip: true
+                mapToScreen: (x, y) => root.screenPoint(search, x, y)
 
                 onTextChanged: {
                     Apps.query = text
@@ -237,7 +323,7 @@ Window {
         Text {
             id: sectionTitle
             anchors { top: searchBox.bottom; left: parent.left; topMargin: 20; leftMargin: 32 }
-            text: search.text.length > 0 ? qsTr("Risultati") : qsTr("Tutte le app")
+            text: search.text.length > 0 ? qsTr("Risultati") : root.showPinned ? qsTr("Aggiunte") : qsTr("Tutte le app")
             color: Theme.text
             font.pixelSize: Theme.fontNormal
             font.weight: Font.DemiBold
@@ -263,10 +349,53 @@ Window {
             onCurrentIndexChanged: positionViewAtIndex(currentIndex, GridView.Contain)
 
             delegate: AppTile {
+                id: tile
+                required property string appId
                 width: grid.cellWidth
                 height: grid.cellHeight
                 current: index === grid.currentIndex && search.text.length > 0
                 onActivated: root.launch(index)
+                onContextRequested: (x, y) => root.openAppMenu(tile, x, y, tile.appId, false)
+            }
+
+            // Sopra tutte le app, quelle aggiunte alla Start.
+            header: Item {
+                width: grid.width
+                height: root.showPinned ? pinnedGrid.height + allTitle.height + 24 : 0
+                visible: root.showPinned
+
+                Grid {
+                    id: pinnedGrid
+                    columns: 6
+
+                    Repeater {
+                        model: root.pinned
+
+                        delegate: AppTile {
+                            id: pinnedTile
+                            required property var modelData
+                            width: grid.cellWidth
+                            height: grid.cellHeight
+                            name: modelData.name
+                            iconName: modelData.iconName
+                            comment: ""
+                            onActivated: {
+                                if (Apps.launchId(modelData.id)) {
+                                    root.close()
+                                }
+                            }
+                            onContextRequested: (x, y) => root.openAppMenu(pinnedTile, x, y, modelData.id, true)
+                        }
+                    }
+                }
+                Text {
+                    id: allTitle
+                    anchors { top: pinnedGrid.bottom; topMargin: 16; left: parent.left; leftMargin: 12 }
+                    text: qsTr("Tutte le app")
+                    color: Theme.text
+                    font.pixelSize: Theme.fontNormal
+                    font.weight: Font.DemiBold
+                }
             }
 
             Text {

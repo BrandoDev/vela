@@ -13,6 +13,7 @@ Item {
 
     signal clicked()
     signal middleClicked()
+    signal rightClicked(bool shift) // Maiusc+clic destro: il menu della finestra
 
     width: 44
     height: 40
@@ -66,7 +67,15 @@ Item {
         id: mouse
         anchors.fill: parent
         hoverEnabled: true
-        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-        onClicked: mouse => mouse.button === Qt.MiddleButton ? root.middleClicked() : root.clicked()
+        acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+        onClicked: mouse => {
+            if (mouse.button === Qt.MiddleButton) {
+                root.middleClicked()
+            } else if (mouse.button === Qt.RightButton) {
+                root.rightClicked(mouse.modifiers & Qt.ShiftModifier)
+            } else {
+                root.clicked()
+            }
+        }
     }
 }
