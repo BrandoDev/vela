@@ -90,9 +90,33 @@ alla volta.
   Ctrl+Alt+F1…F12.
 
 **Shell**
-- Sfondo del desktop (`images/vela_splash_169.svg`, incluso nell'eseguibile),
-  disegnato già alla dimensione esatta dello schermo: in memoria c'è solo
-  ciò che si vede. Un altro sfondo con `VELA_WALLPAPER`.
+- Sfondo del desktop (`images/vela_splash_169.svg`, incluso nell'eseguibile)
+  su ogni schermo, disegnato già alla dimensione esatta dello schermo: in
+  memoria c'è solo ciò che si vede. Un altro sfondo con `VELA_WALLPAPER`.
+- **Icone del desktop** sullo schermo principale, come in Windows 11: i file
+  della cartella Desktop (`XDG_DESKTOP_DIR`, per esempio `~/Scrivania`) e il
+  Cestino, in colonne dall'alto a sinistra. Si aggiornano da sole quando la
+  cartella cambia.
+  - Selezione con clic, Ctrl+clic, Maiusc+clic, riquadro, Ctrl+A, frecce;
+    doppio clic o Invio apre; trascinate restano dove le lasci (sulla
+    griglia, se "Allinea icone alla griglia").
+  - Rinomina sul posto (F2), Canc sposta nel Cestino, Ctrl+C/X/V, Ctrl+Z
+    annulla (rinomina, eliminazione, nuovo, incolla), F5 aggiorna,
+    Ctrl+Maiusc+2/3/4 per la dimensione.
+  - Il menu del desktop: Visualizza (grandi, medie, piccole, disposizione
+    automatica, griglia, mostra icone), Ordina per, Aggiorna, Annulla,
+    Incolla, Nuovo (cartella, documento di testo e i modelli di
+    `XDG_TEMPLATES_DIR`); quello dei file: la riga di icone (Taglia, Copia,
+    Rinomina, Elimina), Apri, Apri con, Apri in Terminale, Aggiungi a
+    Start, Comprimi in ZIP, 7z o TAR, Copia come percorso; il Cestino si
+    apre e si svuota (con conferma).
+  - **Mostra altre opzioni** (anche Maiusc+clic destro e Maiusc+F10): il
+    menu completo, con le voci che le app aggiungono ai file (i service
+    menu di KDE, per esempio Filelight o "Esegui in Konsole").
+  - **Trascinare file** dal desktop alle app (un documento in Kate, un
+    allegato in un'email) e dalle app al desktop, su una cartella o sul
+    Cestino: spostati se sono sullo stesso disco, altrimenti copiati, come
+    in Windows.
 - Taskbar in stile Windows 11: pulsante Start, app fissate e app aperte al
   centro, orologio a destra, effetti di hover e pressione animati.
   - Le finestre della stessa app stanno sotto un solo pulsante; sotto
@@ -105,6 +129,7 @@ alla volta.
 - Menu Start con ricerca istantanea tra le app installate (legge i normali
   file `.desktop`, con i nomi in italiano), navigazione da tastiera e
   animazioni di apertura e chiusura: il pannello sale da dietro la taskbar.
+  In cima le app **aggiunte** alla Start, poi tutte le app.
 - Si chiude cliccando fuori o con Esc.
 - Pulsante di accensione nel menu Start: Sospendi, Esci (chiude Vela),
   Riavvia, Arresta (tramite systemd-logind).
@@ -115,6 +140,29 @@ alla volta.
 - **Area di notifica** accanto all'orologio (StatusNotifierItem): le icone
   di Telegram, Discord, Steam e simili, con clic, clic centrale, rotellina
   e i loro menu (anche sottomenu e voci con la spunta).
+- **Menu del tasto destro** copiati da Windows 11, tutti con lo stesso
+  componente (stile, sottomenu, tastiera: [docs/renderer.md §14](docs/renderer.md)):
+  - pulsanti della taskbar: la **jump list**, con i file recenti dell'app
+    (dal registro condiviso `recently-used.xbel`), i file fissati con la
+    puntina, le azioni dell'app (es. Firefox: "Nuova finestra anonima"),
+    aggiungi o togli dalla taskbar, "Termina attività" (chiude subito il
+    processo; si spegne con `endTask=false` nel gruppo `[taskbar]` di
+    `~/.config/Vela/vela-shell.conf`), chiudi le finestre; Maiusc+clic
+    destro: il menu della finestra;
+  - pulsante Start e **Win+X**: App installate, Sistema, Terminale (Admin),
+    Gestione attività, Esegui, Arresta il sistema o disconnetti…, ognuna
+    affidata al programma Linux che fa la stessa cosa (le voci senza
+    programma installato sono spente);
+  - spazio vuoto della taskbar, orologio, area di notifica;
+  - app del menu Start: file recenti e azioni, Aggiungi/Rimuovi da Start,
+    Sposta all'inizio, Aggiungi alla taskbar, Apri percorso file,
+    Disinstalla (Flatpak, oppure il gestore dei pacchetti in un terminale);
+  - **menu della finestra** (clic destro sulla barra del titolo, Alt+Spazio,
+    app GTK con la barra propria): Ripristina, Sposta e Ridimensiona anche da
+    tastiera come in Windows, Riduci a icona, Ingrandisci, Chiudi;
+  - desktop e file (vedi le icone del desktop sopra) e campi di testo.
+- **Esegui** (Win+R), in basso a sinistra come in Windows, con i comandi
+  già usati; **Win+D** riduce tutto a icona e la volta dopo rimette com'era.
 
 ## Compilare
 
@@ -234,6 +282,10 @@ resta alle app, che lo usano per aprire i propri menu.
 | Ripristina, poi riduci a icona   | Super+↓             |               |
 | Aggancia a metà sinistra/destra  | Super+← / Super+→   | Alt+← / Alt+→ |
 | Blocca lo schermo                | Super+L             | Alt+L         |
+| Menu Win+X                       | Super+X             | Alt+X         |
+| Esegui                           | Super+R             | Alt+R         |
+| Mostra il desktop                | Super+D             | Alt+D         |
+| Menu della finestra              | Alt+Spazio          | Alt+Spazio    |
 | Sposta / ridimensiona una finestra | Super+trascina / Super+tasto destro |  |
 | Cambia console                   | Ctrl+Alt+F1…F12     |               |
 | Esci da Vela                     | Alt+Shift+Esc       | Alt+Shift+Esc |
@@ -357,11 +409,21 @@ all'accesso.
   [docs/renderer.md](docs/renderer.md).
 - Barra del titolo lato server in stile Vela, uguale per tutte le app.
 - Centro notifiche, impostazioni rapide (volume, rete, luminosità).
+- ~~Menu del tasto destro copiati in toto da Windows 11, tutti con lo stesso
+  componente della shell ([docs/renderer.md §14](docs/renderer.md)).~~ Fatto
+  (settembre 2026); restano quelli che aspettano le loro funzioni (icone
+  sul desktop, Visualizzazione attività) e le voci che aspettano l'app
+  Impostazioni.
 
 **Milestone 3: sostituire Plasma**
 - App Impostazioni (schermi, tastiera, tema) e configurazione su file.
 - Desktop virtuali e Visualizzazione attività, snap a quarti e layout di
-  Windows 11.
+  Windows 11, con i loro menu del tasto destro.
+- ~~Icone sul desktop con il menu del desktop e dei file di Windows 11.~~
+  Fatto (settembre 2026), con "Mostra altre opzioni" (service menu di KDE)
+  e il trascinamento di file da e verso le app; restano Proprietà,
+  Collegamento, Preferiti, Condividi e le miniature delle immagini. Lo
+  stesso menu dei file lo userà Esplora.
 - File manager veloce ("Esplora"), avvio a freddo sotto i 150 ms come
   obiettivo.
 
@@ -370,5 +432,6 @@ all'accesso.
 Per non perdere di vista "più leggero di Windows":
 
 - Menu Start: primo frame visibile entro un frame dopo il tasto.
+- Menu del tasto destro: visibile al frame successivo al clic.
 - Nessuna animazione legata a timer: sempre ai frame reali dello schermo.
 - Memoria della shell tenuta sotto controllo a ogni milestone.

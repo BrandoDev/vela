@@ -568,7 +568,7 @@ l'overlay di debug (§10) e per altra interfaccia del compositor.
   un solo rettangolo arrotondato, con l'ombra attorno all'insieme. Da
   massimizzata o agganciata, niente angoli sui lati che toccano i bordi.
 - **Interazioni**: trascina per spostare (con lo snap), doppio clic per
-  massimizzare, clic destro per il menu della finestra; più avanti, col
+  massimizzare, clic destro per il menu della finestra (§14.8); più avanti, col
   mouse sul pulsante "massimizza", i layout di snap di Windows 11.
 
 ### 9.4 La tinta, dallo sfondo del desktop
@@ -709,5 +709,246 @@ con i suoi test.
 - Tinta derivata dallo sfondo → §9.4
 - Font di KDE, per ora → §9.5
 - Icone sempre SVG → §9.6
+- Menu del tasto destro copiati da Windows 11, disegnati dalla shell → §14
 
 Nuove domande emergeranno scrivendo il codice: si aggiungono qui.
+
+## 14. I menu del tasto destro
+
+Vela copia **in toto** i menu contestuali di Windows 11: stesse voci, stesso
+ordine, stessi gruppi, stesso comportamento. Dove una voce non ha senso su
+Linux la si traduce nell'equivalente più vicino (tabella in §14.11); la si
+toglie solo se un equivalente non esiste.
+
+> **Stato (settembre 2026):** fatti il componente (`Menus`, `ContextMenu`,
+> `MenuPanel` nella shell), la jump list, lo spazio vuoto della taskbar,
+> l'orologio, l'area di notifica, Win+X, i menu del menu Start (con la
+> sezione "Aggiunte", che prima non c'era), il menu della finestra con
+> Sposta e Ridimensiona da tastiera, il desktop, i campi di testo, Esegui
+> (Win+R) e Win+D; poi le icone del desktop (la cartella Scrivania) con
+> il menu del desktop e dei file, riga di icone compresa, e "Mostra altre
+> opzioni" con i service menu di KDE. Ci sono ma spente le voci che
+> aspettano la loro funzione: Proprietà, Collegamento, Aggiungi a
+> Preferiti, "Scegli un'altra app" e
+> l'app Impostazioni (impostazioni della taskbar e di notifica,
+> Personalizza). Mancano i menu di ciò che non esiste ancora: la sezione
+> Consigliati della Start, il menu "…" delle notifiche, la
+> Visualizzazione attività. Tolte
+> perché senza equivalente: "Esegui come amministratore" (le app grafiche
+> come root sotto Wayland di norma non partono), "Impostazioni app",
+> "Condividi".
+
+### 14.1 Chi li disegna: la shell
+
+Tutti i menu li disegna **la shell**, con un solo componente Qt Quick
+(`VelaMenu`: menu, voce, separatore, sottomenu) usato ovunque, così che
+ogni menu di Vela sia identico agli altri. Il compositor non disegna menu:
+quando serve il menu di una finestra (§14.8) lo chiede alla shell. Il menu
+attuale dell'area di notifica (`TrayMenu.qml`) passerà a questo
+componente.
+
+La superficie: per ora **una finestra trasparente a tutto schermo** nello
+strato overlay (quella che aveva il menu dell'area di notifica), su cui i
+menu e i sottomenu sono pannelli; un clic fuori li chiude. Funziona uguale
+da qualunque parte nasca il menu (taskbar, Start, sfondo, compositor) e su
+qualunque schermo. Il popup xdg con *grab* resta l'alternativa se servirà
+(per esempio per non coprire lo schermo col trasparente): da rivalutare
+con la sfocatura (S5).
+
+Due dettagli che Wayland rende necessari:
+
+- **La tastiera torna al pannello.** Il menu prende la tastiera; quando si
+  chiude, il compositor la ridà alla superficie della shell che l'aveva
+  prima (es. il menu Start), non alla finestra attiva.
+- **Maiusc lo sa il compositor.** Cliccando la taskbar la tastiera è di
+  un'altra app, e la shell non vede i modificatori: per Maiusc+clic destro
+  li chiede al compositor (`modifiers` sul suo socket, con risposta).
+
+### 14.2 Aspetto
+
+Come i menu di Windows 11 (WinUI), in tema scuro:
+
+- angoli arrotondati (8), bordo sottile, ombra; sfondo acrilico quando ci
+  sarà la sfocatura (S5), fino ad allora il colore `popup` del tema;
+- ogni riga: icona 16×16 a sinistra (colonna vuota se nessuna voce del
+  gruppo ha icona), testo nel font di KDE, scorciatoia a destra in grigio,
+  freccia `›` per i sottomenu; spunte e pallini per le voci a scelta;
+- evidenziazione: rettangolo arrotondato (4) staccato dai bordi del menu;
+  voci disattivate in grigio;
+- separatori sottili a tutta larghezza tra i gruppi;
+- nei menu dei file (§14.9) una **riga di icone** in cima o in fondo (vicino
+  al punto del clic): Taglia, Copia, Rinomina, Condividi, Elimina;
+- nitidi a ogni scala come tutto il resto (§3).
+
+### 14.3 Comportamento
+
+- **Apertura**: al punto del clic, con l'angolo in alto a sinistra sotto il
+  cursore; se non c'è spazio si ribalta a sinistra o verso l'alto. Dalla
+  taskbar sale verso l'alto, sopra il pulsante. Col tasto Menu o
+  Maiusc+F10 si apre sull'elemento che ha il fuoco.
+- **Animazione**: entra con una dissolvenza e un breve scorrimento dal lato
+  da cui si apre, ai frame reali dello schermo (§4.2); esce subito.
+- **Sottomenu**: si aprono al passaggio del mouse dopo un breve ritardo
+  (400 ms, come Windows), al clic o con la freccia destra; restano aperti
+  se il mouse ci va in diagonale attraversando altre voci.
+- **Tastiera**: frecce, Home/Fine, Invio o Spazio per eseguire, Esc chiude
+  un livello, freccia sinistra torna al menu padre; lettera sottolineata
+  (se aperto da tastiera) o iniziale per saltare alla voce.
+- **Mouse**: il tasto destro su una voce la esegue come il sinistro; un
+  clic fuori chiude il menu.
+- **Tocco**: una pressione lunga vale come tasto destro.
+
+### 14.4 Taskbar: pulsante di un'app (jump list)
+
+Il menu che sale dal pulsante, dall'alto in basso:
+
+- **Aggiunti**: file fissati per quell'app (con la puntina al passaggio del
+  mouse per toglierli);
+- **Recenti**: gli ultimi file aperti con quell'app (puntina per fissarli;
+  tasto destro sul file: Apri, Aggiungi a questo elenco / Rimuovi da questo
+  elenco, Rimuovi dall'elenco);
+- **Attività**: le azioni dichiarate dall'app (es. Firefox: "Nuova
+  finestra", "Nuova finestra anonima");
+- ---
+- nome dell'app con la sua icona: apre un'altra istanza;
+- "Aggiungi alla barra delle applicazioni" / "Rimuovi dalla barra delle
+  applicazioni";
+- "Chiudi finestra", o "Chiudi tutte le finestre" se sono più d'una;
+- "Termina attività": chiude il processo senza chiedere. In Windows 11
+  24H2 va attivata nelle impostazioni; in Vela è accesa di default
+  (scelta dell'utente), e si spegne con `endTask=false`.
+
+Maiusc+clic destro sul pulsante apre invece il menu della finestra (§14.8).
+
+### 14.5 Taskbar: spazio vuoto, orologio, icone
+
+- **Spazio vuoto**: "Gestione attività", "Impostazioni della barra delle
+  applicazioni".
+- **Data e ora**: "Regola data e ora", "Impostazioni di notifica".
+- **Icone di sistema** (con le impostazioni rapide, milestone 2): volume →
+  "Apri mixer volume", "Impostazioni audio", "Risolvi i problemi audio";
+  rete → "Diagnostica problemi di rete", "Impostazioni di rete e Internet";
+  batteria → "Opzioni risparmio energia e sospensione".
+- **Icone delle app nell'area di notifica**: il menu lo decide l'app
+  (dbusmenu, già fatto), disegnato con `VelaMenu`.
+
+### 14.6 Pulsante Start (Win+X)
+
+Clic destro sul pulsante Start o Win+X, con i gruppi di Windows 11:
+
+- "App installate", "Centro PC portatile" (solo portatili), "Opzioni
+  risparmio energia", "Visualizzatore eventi", "Sistema", "Gestione
+  dispositivi", "Connessioni di rete", "Gestione disco", "Gestione
+  computer"
+- ---
+- "Terminale", "Terminale (Admin)"
+- ---
+- "Gestione attività", "Impostazioni", "Esplora file", "Cerca", "Esegui"
+- ---
+- "Arresta il sistema o disconnetti" › "Disconnetti", "Sospendi",
+  "Arresta il sistema", "Riavvia il sistema"
+- "Desktop"
+
+Win+X seguito dalla lettera sottolineata apre direttamente la voce.
+
+### 14.7 Menu Start
+
+- **App aggiunte**: le voci della jump list (§14.4, recenti e attività),
+  poi "Rimuovi da Start", "Sposta all'inizio", "Aggiungi alla barra delle
+  applicazioni" / "Rimuovi dalla barra delle applicazioni", "Esegui come
+  amministratore", "Apri percorso file", "Disinstalla". Sulle cartelle di
+  app aggiunte: "Rinomina", "Rimuovi da Start".
+- **Tutte le app** e **risultati della ricerca**: "Aggiungi a Start",
+  "Altro" › ("Aggiungi alla barra delle applicazioni", "Esegui come
+  amministratore", "Apri percorso file", "Impostazioni app"),
+  "Disinstalla".
+- **Consigliati**: "Apri percorso file", "Rimuovi dall'elenco".
+- **Casella di ricerca** (e ogni campo di testo della shell): "Annulla",
+  "Taglia", "Copia", "Incolla", "Seleziona tutto".
+
+### 14.8 Il menu della finestra
+
+Clic destro sulla barra del titolo (o sulla sua icona), Alt+Spazio, o
+Maiusc+clic destro sul pulsante della taskbar:
+
+- "Ripristina", "Sposta", "Ridimensiona", "Riduci a icona", "Ingrandisci"
+- ---
+- "Chiudi" (Alt+F4)
+
+Le voci che non valgono sono disattivate (es. "Ripristina" su una finestra
+non ingrandita). "Sposta" e "Ridimensiona" funzionano con le frecce e
+Invio, come in Windows. Il doppio clic sull'icona della barra chiude la
+finestra.
+
+Lo chiede il compositor: per la barra di Vela (§9), per Alt+Spazio, e per
+le app con la barra propria che mandano `xdg_toplevel.show_window_menu`
+(GTK/libadwaita lo fanno col clic destro sulla loro barra). Il compositor
+passa alla shell la finestra e il punto (socket della shell), la shell
+disegna il menu; ciò che non sa fare da sé attraverso foreign-toplevel
+(Sposta e Ridimensiona da tastiera) lo rimanda al compositor sul socket dei
+comandi.
+
+### 14.9 Desktop
+
+Le icone sono i file della cartella Desktop (`XDG_DESKTOP_DIR`) più il
+Cestino, sullo schermo principale (`DesktopModel` e `Wallpaper.qml`).
+Trascinarle è un trascinamento vero tra app (wl_data_device, gestito dal
+compositor con la sua icona): finisce in un'altra app, su una cartella,
+sul Cestino o di nuovo sul desktop, dove le icone si spostano. Il
+compositor tiene anche la **presa implicita** di Wayland: finché un tasto
+è premuto, il puntatore resta alla superficie su cui è stato premuto,
+anche su un altro schermo (senza, un riquadro di selezione che esce dallo
+schermo non riceveva mai il rilascio).
+
+- **Sfondo**: "Visualizza" › ("Icone grandi", "Icone medie", "Icone
+  piccole", "Disponi icone automaticamente", "Allinea icone alla griglia",
+  "Mostra icone del desktop"); "Ordina per" › ("Nome", "Dimensione", "Tipo
+  elemento", "Data ultima modifica"); "Aggiorna"; "Annulla …" (l'ultima
+  azione, Ctrl+Z); "Nuovo" › ("Cartella", "Collegamento", poi i tipi di
+  documento); "Impostazioni schermo"; "Personalizza"; "Apri in Terminale";
+  "Mostra altre opzioni".
+- **Icone (file e cartelle)**: riga di icone (Taglia, Copia, Rinomina,
+  Condividi, Elimina), poi "Apri", "Apri con" ›, "Aggiungi a Start",
+  "Aggiungi a Preferiti", "Comprimi in" › ("File ZIP", "File 7z", "File
+  TAR"), "Copia come percorso", "Apri in Terminale" (cartelle),
+  "Proprietà", "Mostra altre opzioni".
+- **"Mostra altre opzioni"** (anche Maiusc+F10 o Maiusc+clic destro): il
+  menu completo, con tutte le voci aggiunte dalle app. Su Linux sono i
+  *service menu* di KDE (e le azioni che le app dichiarano per i tipi di
+  file); nel menu moderno compaiono solo quelli che lo chiedono, come le
+  app registrate in Windows 11.
+
+Lo stesso menu dei file lo userà Esplora (milestone 3).
+
+### 14.10 Visualizzazione attività e notifiche
+
+Con i desktop virtuali (milestone 3):
+
+- **Anteprima di una finestra**: "Aggancia a sinistra", "Aggancia a
+  destra", "Sposta in" › (i desktop, "Nuovo desktop"), "Mostra questa
+  finestra su tutti i desktop", "Mostra le finestre di questa app su tutti
+  i desktop", "Chiudi".
+- **Anteprima di un desktop**: "Rinomina", "Scegli sfondo", "Sposta a
+  sinistra", "Sposta a destra", "Chiudi".
+
+Notifiche (menu "…" del popup e del centro notifiche): "Disattiva tutte le
+notifiche per <app>", "Vai alle impostazioni di notifica".
+
+### 14.11 Da Windows a Linux
+
+| Voce di Windows | In Vela |
+|---|---|
+| App installate, Disinstalla | l'elenco delle app e la disinstallazione via PackageKit (pacchetti) o Flatpak |
+| Centro PC portatile, Opzioni risparmio energia | le impostazioni di energia (powerdevil finché non c'è l'app Impostazioni) |
+| Visualizzatore eventi | il visualizzatore del journal di systemd |
+| Sistema, Gestione dispositivi | le informazioni sul sistema (kinfocenter per ora) |
+| Connessioni di rete | le impostazioni di rete (NetworkManager) |
+| Gestione disco, Gestione computer | il gestore delle partizioni; "Gestione computer" apre le informazioni sul sistema |
+| Terminale / Terminale (Admin) | il terminale predefinito / lo stesso con una shell di root chiesta a polkit |
+| Esegui come amministratore | solo per le app che lo supportano (polkit); le app grafiche come root sotto Wayland di norma non partono, quindi altrove la voce non c'è |
+| Gestione attività | il monitor di sistema (poi quello di Vela) |
+| Esegui | una casella di comando piccola, come Win+R |
+| Aggiunti, Recenti (jump list) | file fissati salvati da Vela; recenti da `recently-used.xbel`, che registra quale app ha aperto ogni file |
+| Attività (jump list) | le azioni `[Desktop Action …]` del file `.desktop` dell'app |
+| Condividi | il portale di condivisione, quando ci sarà; fino ad allora la voce non c'è |
+| Mostra altre opzioni | il menu completo con i service menu di KDE |
