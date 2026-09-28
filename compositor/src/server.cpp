@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
+#include <utility>
 
 // glibc (almeno fino alla 2.44) non racchiude questo header in extern "C".
 extern "C" {
@@ -196,6 +197,8 @@ bool Server::init()
     layers.fullscreen = std::make_unique<scene::Tree>(root);
     layers.x11Popups = std::make_unique<scene::Tree>(root);
     layers.overlay = std::make_unique<scene::Tree>(root);
+    layers.drag = std::make_unique<scene::Tree>(root);
+    layers.drag->ignoresInput = true;
     layers.lock = std::make_unique<scene::Tree>(root);
 
     on(&backend->events.new_output, [this](void* data) {
@@ -326,6 +329,37 @@ bool Server::init()
     on(&seat->events.request_set_primary_selection, [this](void* data) {
         auto* event = static_cast<wlr_seat_request_set_primary_selection_event*>(data);
         wlr_seat_set_primary_selection(seat, event->source, event->serial);
+    });
+    // Trascinare tra app: si accetta solo da chi ha davvero il tasto premuto
+    // sulla propria superficie (serial del clic).
+    on(&seat->events.request_start_drag, [this](void* data) {
+        auto* event = static_cast<wlr_seat_request_start_drag_event*>(data);
+        if (wlr_seat_validate_pointer_grab_serial(seat, event->origin, event->serial)) {
+            wlr_seat_start_pointer_drag(seat, event->drag, event->serial);
+        } else if (event->drag->source) {
+            wlr_data_source_destroy(event->drag->source);
+        }
+    });
+    on(&seat->events.start_drag, [this](void* data) {
+        auto* drag = static_cast<wlr_drag*>(data);
+        implicitGrab = {}; // da qui il puntatore lo guida il trascinamento
+        if (!drag->icon) {
+            return;
+        }
+        wlr_surface* surface = drag->icon->surface;
+        auto icon = std::make_unique<DragIcon>();
+        icon->tree = std::make_unique<scene::Tree>(layers.drag.get());
+        icon->node = std::make_unique<scene::SurfaceNode>(icon->tree.get(), surface);
+        icon->commit.connect(&surface->events.commit, [this, surface](void*) {
+            if (dragIcon) {
+                dragIcon->dx += surface->current.dx;
+                dragIcon->dy += surface->current.dy;
+                updateDragIcon();
+            }
+        });
+        icon->destroy.connect(&drag->icon->events.destroy, [this](void*) { dragIcon.reset(); });
+        dragIcon = std::move(icon);
+        updateDragIcon();
     });
 
     // Le app Qt/GTK recenti chiedono la forma del cursore per nome invece
@@ -542,6 +576,7 @@ void Server::focusToplevel(Toplevel* toplevel)
         return;
     }
     focusedLayerSurface = nullptr;
+    previousLayerSurface = nullptr;
 
     wlr_surface* surface = toplevel->surface();
     if (seat->keyboard_state.focused_surface == surface) {
@@ -568,6 +603,11 @@ void Server::focusLayer(LayerSurface* layer)
     if (Toplevel* active = focusedToplevel()) {
         active->setActivated(false);
     }
+    // Un menu aperto da un pannello (es. dal menu Start): chiuso il menu, la
+    // tastiera torna al pannello.
+    if (focusedLayerSurface && focusedLayerSurface != layer) {
+        previousLayerSurface = focusedLayerSurface;
+    }
     focusedLayerSurface = layer;
     keyboardEnter(layer->wlr->surface);
 }
@@ -578,6 +618,11 @@ void Server::refocus()
         return; // la tastiera è della schermata di blocco
     }
     focusedLayerSurface = nullptr;
+    LayerSurface* previous = std::exchange(previousLayerSurface, nullptr);
+    if (previous && previous->wlr->surface->mapped && previous->wantsKeyboard()) {
+        focusLayer(previous);
+        return;
+    }
     for (Toplevel* toplevel : toplevels) {
         if (toplevel->mapped && !toplevel->minimized) {
             focusToplevel(toplevel);
@@ -599,6 +644,9 @@ void Server::forget(Toplevel* toplevel)
     if (pendingTitleDrag.toplevel == toplevel) {
         pendingTitleDrag = {};
     }
+    if (m_keyboardGrab.toplevel == toplevel) {
+        m_keyboardGrab = {};
+    }
     toplevels.remove(toplevel);
     std::erase(m_animating, toplevel);
     cancelSnapshotAnimations(toplevel);
@@ -619,6 +667,9 @@ void Server::forget(Toplevel* toplevel)
 void Server::forget(LayerSurface* layer)
 {
     layerSurfaces.remove(layer);
+    if (previousLayerSurface == layer) {
+        previousLayerSurface = nullptr;
+    }
     if (focusedLayerSurface == layer) {
         refocus();
     }
@@ -756,8 +807,16 @@ void Server::onNewInput(wlr_input_device* device)
     wlr_seat_set_capabilities(seat, caps);
 }
 
+void Server::updateDragIcon()
+{
+    if (dragIcon) {
+        dragIcon->tree->setPosition(cursor->x + dragIcon->dx, cursor->y + dragIcon->dy);
+    }
+}
+
 void Server::onCursorMotion(uint32_t timeMsec)
 {
+    updateDragIcon();
     if (pendingTitleDrag.toplevel
         && std::hypot(cursor->x - pendingTitleDrag.x, cursor->y - pendingTitleDrag.y) > 4.0) {
         Toplevel* toplevel = pendingTitleDrag.toplevel;
@@ -796,6 +855,18 @@ void Server::onCursorMotion(uint32_t timeMsec)
         grabbed->tree->setPosition(left - geometry.x, top - geometry.y);
         grabbed->configureSize(right - left, bottom - top);
         return;
+    }
+
+    // Un tasto premuto su una superficie: il movimento resta suo finché non
+    // lo si rilascia (la selezione a riquadro che esce dallo schermo, una
+    // barra di scorrimento trascinata fuori dalla finestra).
+    if (implicitGrab.surface && !seat->drag) {
+        if (seat->pointer_state.button_count > 0 && seat->pointer_state.focused_surface == implicitGrab.surface) {
+            wlr_seat_pointer_notify_motion(
+                seat, timeMsec, cursor->x - implicitGrab.originX, cursor->y - implicitGrab.originY);
+            return;
+        }
+        implicitGrab = {};
     }
 
     const Hit hit = hitTest(*sceneGraph, cursor->x, cursor->y);
@@ -841,6 +912,13 @@ void Server::onCursorButton(wlr_pointer_button_event* event)
         return;
     }
 
+    // "Sposta" o "Ridimensiona" da tastiera in corso: un clic conferma.
+    if (keyboardGrabActive() && event->state == WL_POINTER_BUTTON_STATE_PRESSED) {
+        finishKeyboardGrab(true);
+        modifierGrab = true; // nemmeno il rilascio arriva all'app
+        return;
+    }
+
     // Super + trascinamento sposta la finestra, Super + tasto destro la
     // ridimensiona (dall'angolo più vicino), come in KDE. Serve anche alle
     // finestre X11 senza barra del titolo propria, finché Vela non disegna
@@ -871,10 +949,23 @@ void Server::onCursorButton(wlr_pointer_button_event* event)
         modifierGrab = false; // la pressione non era arrivata all'app
         pendingTitleDrag = {};
     } else {
+        // Il primo tasto premuto su una superficie la "prende" (vedi implicitGrab).
+        if (event->state == WL_POINTER_BUTTON_STATE_PRESSED && seat->pointer_state.button_count == 0
+            && seat->pointer_state.focused_surface && !seat->drag) {
+            implicitGrab = { seat->pointer_state.focused_surface, cursor->x - seat->pointer_state.sx,
+                cursor->y - seat->pointer_state.sy };
+        }
         wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
     }
 
     if (event->state == WL_POINTER_BUTTON_STATE_RELEASED) {
+        // Rilasciati tutti i tasti: il puntatore torna a ciò che ha sotto.
+        if (implicitGrab.surface && seat->pointer_state.button_count == 0) {
+            implicitGrab = {};
+            if (cursorMode == CursorMode::Passthrough) {
+                onCursorMotion(event->time_msec);
+            }
+        }
         if (cursorMode != CursorMode::Passthrough) {
             if (cursorMode == CursorMode::Move) {
                 endSnapZone(true); // rilasciata su un bordo: si aggancia
@@ -890,11 +981,18 @@ void Server::onCursorButton(wlr_pointer_button_event* event)
     if (!hit.owner) {
         return;
     }
-    // La barra del titolo di Vela: pulsanti, trascinamento, doppio clic.
-    if (hit.owner->kind == SceneKind::Toplevel && !hit.surface && event->button == BTN_LEFT) {
+    // La barra del titolo di Vela: pulsanti, trascinamento, doppio clic;
+    // col tasto destro il menu della finestra.
+    if (hit.owner->kind == SceneKind::Toplevel && !hit.surface) {
         auto* toplevel = static_cast<Toplevel*>(hit.owner);
-        if (toplevel->decoration) {
+        if (toplevel->decoration && event->button == BTN_LEFT) {
             onDecorationPress(toplevel, event->time_msec);
+            return;
+        }
+        if (toplevel->decoration && event->button == BTN_RIGHT
+            && toplevel->decoration->partAt(cursor->x, cursor->y) == Decoration::Part::Title) {
+            focusToplevel(toplevel);
+            showWindowMenu(toplevel, cursor->x, cursor->y);
             return;
         }
     }
@@ -1086,6 +1184,30 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
     if (altNested && sym == XKB_KEY_s) {
         sendShellCommand("toggle-start");
         return true;
+    }
+    // Win+X: il menu del pulsante Start; Win+R: Esegui; Win+D: il desktop.
+    // Dentro KDE con Alt.
+    const xkb_keysym_t lower = xkb_keysym_to_lower(sym);
+    if ((super || altNested) && lower == XKB_KEY_x) {
+        sendShellCommand("winx");
+        return true;
+    }
+    if ((super || altNested) && lower == XKB_KEY_r) {
+        sendShellCommand("run");
+        return true;
+    }
+    if ((super || altNested) && lower == XKB_KEY_d) {
+        sendShellCommand("show-desktop");
+        return true;
+    }
+    // Alt+Spazio: il menu della finestra, sotto la sua barra del titolo.
+    if (alt && !super && sym == XKB_KEY_space) {
+        if (Toplevel* active = focusedToplevel()) {
+            const wlr_box frame = active->frameBox();
+            const int bar = active->titleBarHeight() > 0 ? active->titleBarHeight() : 36;
+            showWindowMenu(active, frame.x + 4, frame.y + bar, /*keyboard=*/true);
+            return true;
+        }
     }
     return false;
 }
@@ -1438,6 +1560,17 @@ void Server::listenForCommands()
                         lines.push_back(client.buffer.substr(0, newline));
                         client.buffer.erase(0, newline + 1);
                     }
+                    // "modifiers": una domanda, con risposta. La shell non ha la
+                    // tastiera quando si clicca la taskbar, quindi non sa se Maiusc è
+                    // premuto (Maiusc+clic destro: il menu della finestra).
+                    for (const std::string& line : lines) {
+                        if (line == "modifiers") {
+                            wlr_keyboard* keyboard = wlr_seat_get_keyboard(self->seat);
+                            const std::string reply
+                                = std::to_string(keyboard ? wlr_keyboard_get_modifiers(keyboard) : 0) + "\n";
+                            (void)!write(fd, reply.data(), reply.size());
+                        }
+                    }
                     const bool closed = n == 0 || (mask & (WL_EVENT_HANGUP | WL_EVENT_ERROR))
                         || client.buffer.size() >= 4096;
                     if (closed) {
@@ -1481,11 +1614,177 @@ void Server::handleCommand(const std::string& command)
     if (command == "logout") {
         wlr_log(WLR_INFO, "Uscita chiesta dalla shell");
         wl_display_terminate(display);
+    } else if (command == "modifiers") {
+        // già risposto a chi l'ha chiesto (listenForCommands)
     } else if (command == "lock") {
         lockScreen(); // per esempio prima di sospendere il computer
+    } else if (command.rfind("window ", 0) == 0) {
+        // window <identificativo ext-foreign-toplevel | active> <azione>: dal
+        // menu della finestra.
+        const size_t space = command.find(' ', 7);
+        if (space == std::string::npos) {
+            return;
+        }
+        const std::string id = command.substr(7, space - 7);
+        const std::string action = command.substr(space + 1);
+        Toplevel* target = nullptr;
+        if (id == "active") {
+            target = focusedToplevel();
+        } else {
+            for (Toplevel* toplevel : toplevels) {
+                if (toplevel->extHandle && id == toplevel->extHandle->identifier) {
+                    target = toplevel;
+                }
+            }
+        }
+        if (target && !locked) {
+            windowAction(target, action);
+        }
+    } else if (command.rfind("end-task ", 0) == 0) {
+        // "Termina attività": chiude subito i processi delle finestre di
+        // quell'app, senza chiedere (come Windows).
+        const std::string appId = command.substr(9);
+        std::vector<pid_t> pids;
+        for (Toplevel* toplevel : toplevels) {
+            const pid_t pid = toplevel->pid();
+            if (appId == toplevel->appId() && pid > 1 && pid != getpid()
+                && std::find(pids.begin(), pids.end(), pid) == pids.end()) {
+                pids.push_back(pid);
+            }
+        }
+        for (pid_t pid : pids) {
+            wlr_log(WLR_INFO, "Termina attività: %s (processo %d)", appId.c_str(), int(pid));
+            kill(pid, SIGKILL);
+        }
     } else if (!command.empty()) {
         wlr_log(WLR_DEBUG, "Comando sconosciuto: %s", command.c_str());
     }
+}
+
+void Server::showWindowMenu(Toplevel* toplevel, double lx, double ly, bool keyboard)
+{
+    if (!toplevel || !toplevel->extHandle || locked) {
+        return;
+    }
+    Output* out = outputAt(lx, ly);
+    if (!out) {
+        out = toplevel->output();
+    }
+    if (!out) {
+        return;
+    }
+    // Alla shell: la finestra, lo schermo e il punto in coordinate dello schermo.
+    const wlr_box box = out->box();
+    char line[512];
+    snprintf(line, sizeof line, "window-menu %s %s %d %d %d %d %d", toplevel->extHandle->identifier, out->wlr->name,
+        int(std::lround(lx - box.x)), int(std::lround(ly - box.y)), toplevel->maximized ? 1 : 0,
+        toplevel->resizable() ? 1 : 0, keyboard ? 1 : 0);
+    sendShellCommand(line);
+}
+
+void Server::windowAction(Toplevel* toplevel, const std::string& action)
+{
+    if (action == "restore") {
+        if (toplevel->minimized) {
+            toplevel->setMinimized(false);
+            focusToplevel(toplevel);
+        } else if (toplevel->maximized) {
+            toplevel->setMaximized(false);
+        } else if (toplevel->snap != Snap::None) {
+            toplevel->setSnap(Snap::None);
+        }
+    } else if (action == "minimize") {
+        toplevel->setMinimized(true);
+    } else if (action == "maximize") {
+        toplevel->setMaximized(true);
+    } else if (action == "close") {
+        toplevel->sendClose();
+    } else if (action == "move") {
+        beginKeyboardGrab(toplevel, CursorMode::Move);
+    } else if (action == "resize") {
+        beginKeyboardGrab(toplevel, CursorMode::Resize);
+    }
+}
+
+void Server::beginKeyboardGrab(Toplevel* toplevel, CursorMode mode)
+{
+    if (toplevel->minimized || toplevel->maximized || toplevel->fullscreen || cursorMode != CursorMode::Passthrough) {
+        return;
+    }
+    if (toplevel->snap != Snap::None) {
+        toplevel->setSnap(Snap::None);
+    }
+    focusToplevel(toplevel);
+    toplevel->finishOpenAnimation();
+    const wlr_box frame = toplevel->frameBox();
+    m_keyboardGrab = { toplevel, mode, false, toplevel->tree->x(), toplevel->tree->y(), toplevel->geometry() };
+    // Come Windows: il puntatore va sulla barra del titolo (spostare) o al
+    // centro della finestra (ridimensionare), e da lì la segue.
+    if (mode == CursorMode::Move) {
+        wlr_cursor_warp(cursor, nullptr, frame.x + frame.width / 2.0, frame.y + std::min(16, frame.height / 2));
+        beginInteractive(toplevel, CursorMode::Move, 0, /*fromModifier=*/true);
+    } else {
+        wlr_cursor_warp(cursor, nullptr, frame.x + frame.width / 2.0, frame.y + frame.height / 2.0);
+    }
+    wlr_seat_pointer_clear_focus(seat);
+    wlr_cursor_set_xcursor(cursor, cursorManager, mode == CursorMode::Move ? "move" : "all-scroll");
+}
+
+void Server::keyboardGrabKey(xkb_keysym_t sym, uint32_t modifiers)
+{
+    Toplevel* toplevel = m_keyboardGrab.toplevel;
+    const double step = (modifiers & WLR_MODIFIER_CTRL) ? 1.0 : 10.0;
+    double dx = 0.0;
+    double dy = 0.0;
+    uint32_t edge = 0;
+    switch (sym) {
+    case XKB_KEY_Left: dx = -step; edge = WLR_EDGE_LEFT; break;
+    case XKB_KEY_Right: dx = step; edge = WLR_EDGE_RIGHT; break;
+    case XKB_KEY_Up: dy = -step; edge = WLR_EDGE_TOP; break;
+    case XKB_KEY_Down: dy = step; edge = WLR_EDGE_BOTTOM; break;
+    case XKB_KEY_Return:
+    case XKB_KEY_KP_Enter:
+        finishKeyboardGrab(true);
+        return;
+    case XKB_KEY_Escape:
+        finishKeyboardGrab(false);
+        return;
+    default:
+        return;
+    }
+    if (m_keyboardGrab.mode == CursorMode::Resize && !m_keyboardGrab.edgeChosen) {
+        // Il primo tasto freccia sceglie il bordo da muovere.
+        const wlr_box frame = toplevel->frameBox();
+        const double x = edge == WLR_EDGE_LEFT ? frame.x : edge == WLR_EDGE_RIGHT ? frame.x + frame.width : frame.x + frame.width / 2.0;
+        const double y = edge == WLR_EDGE_TOP ? frame.y : edge == WLR_EDGE_BOTTOM ? frame.y + frame.height : frame.y + frame.height / 2.0;
+        wlr_cursor_warp(cursor, nullptr, x, y);
+        beginInteractive(toplevel, CursorMode::Resize, edge, /*fromModifier=*/true);
+        m_keyboardGrab.edgeChosen = true;
+        return;
+    }
+    wlr_cursor_move(cursor, nullptr, dx, dy);
+    onCursorMotion(0);
+}
+
+void Server::finishKeyboardGrab(bool confirm)
+{
+    Toplevel* toplevel = m_keyboardGrab.toplevel;
+    if (!toplevel) {
+        return;
+    }
+    if (!confirm) {
+        // Esc: torna com'era.
+        toplevel->tree->setPosition(m_keyboardGrab.treeX, m_keyboardGrab.treeY);
+        if (m_keyboardGrab.mode == CursorMode::Resize && m_keyboardGrab.edgeChosen) {
+            toplevel->configureSize(m_keyboardGrab.geometry.width, m_keyboardGrab.geometry.height);
+        }
+    }
+    endSnapZone(false);
+    m_keyboardGrab = {};
+    cursorMode = CursorMode::Passthrough;
+    grabbed = nullptr;
+    wlr_cursor_set_xcursor(cursor, cursorManager, "default");
+    onCursorMotion(0);
 }
 
 void Server::sendShellCommand(const std::string& command)

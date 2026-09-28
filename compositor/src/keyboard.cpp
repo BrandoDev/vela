@@ -182,6 +182,16 @@ void Keyboard::onKey(wlr_keyboard_key_event* event)
     // I modificatori qui sono quelli PRIMA di questo tasto.
     const uint32_t mods = wlr_keyboard_get_modifiers(wlr);
 
+    // "Sposta"/"Ridimensiona" da tastiera: i tasti sono tutti del compositor.
+    if (server.keyboardGrabActive()) {
+        if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+            for (int i = 0; i < count; ++i) {
+                server.keyboardGrabKey(syms[i], mods);
+            }
+        }
+        return;
+    }
+
     bool handled = false;
     // Un'app a fuoco che tiene le scorciatoie (macchina virtuale, desktop
     // remoto) riceve anche il tasto Super da solo.

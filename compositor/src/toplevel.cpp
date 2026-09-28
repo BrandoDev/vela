@@ -88,6 +88,12 @@ Toplevel::Toplevel(Server& s, wlr_xdg_toplevel* toplevel)
     requestMinimize.connect(&xdg->events.request_minimize, [this](void*) {
         setMinimized(true);
     });
+    // Le app con la barra propria (GTK, libadwaita) chiedono il menu della
+    // finestra col clic destro sulla loro barra.
+    requestWindowMenu.connect(&xdg->events.request_show_window_menu, [this](void* data) {
+        auto* event = static_cast<wlr_xdg_toplevel_show_window_menu_event*>(data);
+        server.showWindowMenu(this, tree->x() + event->x, tree->y() + event->y);
+    });
     setTitle.connect(&xdg->events.set_title, [this](void*) {
         if (handle) {
             wlr_foreign_toplevel_handle_v1_set_title(handle, xdg->title ? xdg->title : "");
@@ -735,6 +741,36 @@ void Toplevel::finishRestore()
     if (mapped && !minimized) {
         tree->setEnabled(true);
     }
+}
+
+bool Toplevel::resizable() const
+{
+    if (xdg) {
+        const wlr_xdg_toplevel_state& state = xdg->current;
+        const bool fixedWidth = state.max_width > 0 && state.min_width == state.max_width;
+        const bool fixedHeight = state.max_height > 0 && state.min_height == state.max_height;
+        return !(fixedWidth && fixedHeight);
+    }
+    if (x11 && x11->size_hints) {
+        const xcb_size_hints_t* hints = x11->size_hints;
+        const bool hasMin = hints->flags & XCB_ICCCM_SIZE_HINT_P_MIN_SIZE;
+        const bool hasMax = hints->flags & XCB_ICCCM_SIZE_HINT_P_MAX_SIZE;
+        return !(hasMin && hasMax && hints->min_width == hints->max_width && hints->min_height == hints->max_height);
+    }
+    return true;
+}
+
+pid_t Toplevel::pid() const
+{
+    if (x11) {
+        return x11->pid;
+    }
+    if (xdg && xdg->resource) {
+        pid_t pid = 0;
+        wl_client_get_credentials(wl_resource_get_client(xdg->resource), &pid, nullptr, nullptr);
+        return pid;
+    }
+    return 0;
 }
 
 } // namespace vela

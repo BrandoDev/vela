@@ -436,7 +436,7 @@ namespace {
 
 bool hitNode(const Node* node, double lx, double ly, Scene::Hit& hit)
 {
-    if (!node->enabled()) {
+    if (!node->enabled() || node->ignoresInput) {
         return false;
     }
     const double nx = lx - node->x();

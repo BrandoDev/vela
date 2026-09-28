@@ -61,6 +61,9 @@ public:
     // Rettangoli e immagini di solito lasciano passare i clic (anteprime,
     // istantanee); quelli della barra del titolo no.
     bool hittable = false;
+    // Si vede ma non prende input, lui e i figli (es. l'icona trascinata,
+    // che sta sotto il cursore e non deve coprire dove la si lascia).
+    bool ignoresInput = false;
 
 protected:
     Node(Type type, Tree* parent);

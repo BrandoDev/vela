@@ -270,6 +270,8 @@ struct Toplevel : SceneOwner {
     // Altezza della barra del titolo di Vela (logica), 0 se la finestra non
     // ce l'ha (finestre Wayland, X11 con barra propria, schermo intero).
     int titleBarHeight() const;
+    bool resizable() const; // no se l'app ha dimensione minima uguale alla massima
+    pid_t pid() const; // il processo dell'app (per "Termina attività")
     // Crea o toglie la barra di Vela secondo ciò che la finestra chiede.
     void updateDecoration();
 
@@ -312,6 +314,7 @@ struct Toplevel : SceneOwner {
     Listener requestMaximize;
     Listener requestFullscreen;
     Listener requestMinimize;
+    Listener requestWindowMenu;
     Listener setTitle;
     Listener setAppId;
     Listener setParent;
@@ -479,6 +482,19 @@ public:
     bool handleBinding(uint32_t modifiers, xkb_keysym_t sym);
     void spawn(const std::string& command);
     void sendShellCommand(const std::string& command);
+
+    // Il menu della finestra (docs/renderer.md §14.8): lo disegna la shell,
+    // nel punto (lx, ly) del layout.
+    void showWindowMenu(Toplevel* toplevel, double lx, double ly, bool keyboard = false);
+    // Le azioni del menu della finestra: restore, move, resize, minimize,
+    // maximize, close.
+    void windowAction(Toplevel* toplevel, const std::string& action);
+    // "Sposta" e "Ridimensiona" da tastiera, come in Windows: frecce (con Ctrl
+    // di un'unità), Invio conferma, Esc annulla; anche il mouse muove.
+    void beginKeyboardGrab(Toplevel* toplevel, CursorMode mode);
+    bool keyboardGrabActive() const { return m_keyboardGrab.toplevel != nullptr; }
+    void keyboardGrabKey(xkb_keysym_t sym, uint32_t modifiers);
+    void finishKeyboardGrab(bool confirm);
     // Comandi dalla shell (e da chi sta nella sessione) al compositor, su
     // $XDG_RUNTIME_DIR/vela-<WAYLAND_DISPLAY>.sock: "logout", "lock".
     // La sessione dell'utente (systemd, D-Bus): vedi session/vela-session-env.
@@ -576,14 +592,38 @@ public:
         std::unique_ptr<scene::Tree> fullscreen;
         std::unique_ptr<scene::Tree> x11Popups; // menu e tooltip delle app X11
         std::unique_ptr<scene::Tree> overlay;
+        std::unique_ptr<scene::Tree> drag; // l'icona di ciò che si trascina tra le app
         std::unique_ptr<scene::Tree> lock; // schermata di blocco, sopra tutto
     } layers;
+
+    // Trascinamento tra app (wl_data_device): file, testo, immagini. L'icona
+    // segue il cursore spostata di quanto chiede l'app.
+    struct DragIcon {
+        std::unique_ptr<scene::Tree> tree;
+        std::unique_ptr<scene::SurfaceNode> node;
+        Listener commit;
+        Listener destroy;
+        double dx = 0.0;
+        double dy = 0.0;
+    };
+    std::unique_ptr<DragIcon> dragIcon;
+    void updateDragIcon();
+
+    // Presa implicita, come vuole Wayland: finché un tasto resta premuto,
+    // il puntatore resta alla superficie su cui è stato premuto (anche fuori
+    // da lei, anche su un altro schermo), che riceve così anche il rilascio.
+    struct {
+        wlr_surface* surface = nullptr;
+        double originX = 0.0; // dove sta la sua origine nel layout
+        double originY = 0.0;
+    } implicitGrab;
 
     std::list<Output*> outputs;
     std::list<Toplevel*> toplevels; // ordine MRU: il primo è quello attivo
     std::list<LayerSurface*> layerSurfaces;
     std::list<Keyboard*> keyboards;
     LayerSurface* focusedLayerSurface = nullptr;
+    LayerSurface* previousLayerSurface = nullptr; // a cui torna la tastiera quando quello sopra si chiude
 
     // Trascinamento/ridimensionamento in corso
     CursorMode cursorMode = CursorMode::Passthrough;
@@ -661,6 +701,15 @@ private:
         float fromOpacity, toOpacity;
     };
     std::list<SnapshotAnimation> m_snapshotAnimations;
+
+    struct {
+        Toplevel* toplevel = nullptr;
+        CursorMode mode = CursorMode::Passthrough;
+        bool edgeChosen = false; // ridimensionare: il primo tasto freccia sceglie il bordo
+        double treeX = 0.0; // com'era, per Esc
+        double treeY = 0.0;
+        wlr_box geometry {};
+    } m_keyboardGrab;
 
     // Anteprima dello snap mentre trascini una finestra verso un bordo.
     struct {
