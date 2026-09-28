@@ -21,7 +21,11 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickWindow>
+#include <QScreen>
+#include <QTimer>
 #include <QtDebug>
+
+#include <memory>
 
 namespace {
 
@@ -107,6 +111,46 @@ void setupTrayMenu(QQuickWindow* window)
         | LayerWindow::AnchorLeft | LayerWindow::AnchorRight);
     layer->setExclusiveZone(-1);
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
+}
+
+// Sfondo e taskbar ci devono essere sempre. Il compositor chiude le
+// superfici della shell quando il loro schermo sparisce: un monitor
+// scollegato, o il cambio di console (wlroots toglie tutti gli schermi e li
+// ricrea al ritorno). Qui le si rimette sullo schermo principale appena ce
+// n'è uno vero.
+void keepShown(QGuiApplication& app, const QList<QQuickWindow*>& windows)
+{
+    auto* timer = new QTimer(&app);
+    timer->setSingleShot(true);
+    timer->setInterval(100); // gli schermi tornano uno alla volta: si aspetta che arrivino
+    auto retries = std::make_shared<int>(0);
+    QObject::connect(timer, &QTimer::timeout, &app, [windows] {
+        QScreen* screen = QGuiApplication::primaryScreen();
+        if (!screen || screen->name().isEmpty()) {
+            return; // solo il segnaposto di Qt: nessuno schermo vero, si aspetta screenAdded
+        }
+        for (QQuickWindow* window : windows) {
+            if (!window->isVisible()) {
+                qInfo("vela-shell: %s di nuovo su %s", qPrintable(window->objectName()), qPrintable(screen->name()));
+                window->setScreen(screen);
+                window->show();
+            }
+        }
+    });
+    for (QQuickWindow* window : windows) {
+        QObject::connect(window, &QWindow::visibleChanged, timer, [timer, retries](bool visible) {
+            // Pochi tentativi senza uno schermo nuovo: se il compositor la
+            // richiude subito, non si insiste all'infinito.
+            if (!visible && *retries < 5) {
+                ++*retries;
+                timer->start();
+            }
+        });
+    }
+    QObject::connect(&app, &QGuiApplication::screenAdded, timer, [timer, retries] {
+        *retries = 0;
+        timer->start();
+    });
 }
 
 } // namespace
@@ -196,6 +240,7 @@ int main(int argc, char* argv[])
     setupTrayMenu(trayMenu);
     wallpaper->show();
     taskbar->show();
+    keepShown(app, { wallpaper, taskbar });
 
     return app.exec();
 }

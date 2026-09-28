@@ -253,6 +253,8 @@ Output::~Output()
         wlr_layer_surface_v1_destroy(layer->wlr);
     }
     server.endSnapZone(false); // l'anteprima potrebbe essere su questo schermo
+    // Un blocco in corso non deve più aspettare il nero su questo schermo.
+    server.outputRendered(this);
     server.outputs.remove(this);
     server.updateOutputConfiguration();
     wlr->data = nullptr;
