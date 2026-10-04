@@ -1,0 +1,27 @@
+#pragma once
+
+// Le impostazioni di Vela che non riguardano gli schermi, in
+// ~/.config/vela/vela.conf: righe chiave=valore (# per i commenti). Le
+// scrive l'app Impostazioni, che poi manda "reload-config" al compositor.
+//
+//   spegni-schermo=10        minuti di inattività (0: mai)
+//   blocca=sì                bloccare prima di spegnere
+//   tastiera-layout=it,us    layout XKB (Win+Spazio passa al successivo)
+//   tastiera-variante=,
+//   tastiera-opzioni=
+//   tastiera-ritardo=400     ms prima che un tasto premuto si ripeta
+//   tastiera-velocita=30     ripetizioni al secondo
+
+#include <map>
+#include <string>
+
+namespace vela {
+
+using Settings = std::map<std::string, std::string>;
+
+Settings readSettings();
+
+// Il valore della chiave, o `fallback` se manca.
+std::string setting(const Settings& settings, const std::string& key, const std::string& fallback = {});
+
+} // namespace vela

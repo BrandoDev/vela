@@ -6,6 +6,7 @@
 
 #include "appmodel.h"
 #include "backgroundeffects.h"
+#include "config.h"
 #include "desktopmodel.h"
 #include "fileproperties.h"
 #include "filethumbnails.h"
@@ -87,6 +88,16 @@ void setupStartMenu(QQuickWindow* window)
     // tagliato lì e sembra uscire da dietro la taskbar, come su Windows 11.
     layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorBottom));
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
+}
+
+// Con la taskbar allineata a sinistra la Start si apre in basso a sinistra.
+void placeStartMenu(QQuickWindow* window, const QString& alignment)
+{
+    LayerWindow* layer = LayerWindow::get(window);
+    const bool left = alignment == QLatin1String("left");
+    layer->setAnchors(left ? LayerWindow::Anchors(LayerWindow::AnchorBottom) | LayerWindow::AnchorLeft
+                           : LayerWindow::Anchors(LayerWindow::AnchorBottom));
+    layer->setMargins(QMargins(left ? 12 : 0, 0, 0, 0));
 }
 
 void setupNotifications(QQuickWindow* window)
@@ -252,9 +263,11 @@ int main(int argc, char* argv[])
     AppModel apps;
     apps.reload();
 
+    Config config;
     ShellController shell;
     shell.listen();
-    shell.sendWallpaperTint();
+    shell.sendWallpaperTint(config.wallpaper());
+    QObject::connect(&config, &Config::wallpaperChanged, &shell, [&] { shell.sendWallpaperTint(config.wallpaper()); });
     shell.watchSleep();
 
     ForeignToplevelManager windows;
@@ -262,9 +275,12 @@ int main(int argc, char* argv[])
     WindowCapture capture;
     NotificationServer notifications;
     notifications.registerService();
+    notifications.setDoNotDisturb(config.doNotDisturb());
+    QObject::connect(&config, &Config::doNotDisturbChanged, &notifications, &NotificationServer::setDoNotDisturb);
     TrayModel tray;
     tray.start();
     SystemActions system;
+    QObject::connect(&shell, &ShellController::settingsRequested, &system, [&system] { system.trigger(QStringLiteral("settings")); });
     JumpLists jumps(&apps);
     DesktopModel desktop(&apps);
     ServiceMenus serviceMenus;
@@ -281,6 +297,7 @@ int main(int argc, char* argv[])
     engine.addImageProvider(QStringLiteral("tray"), new TrayImageProvider(&tray));
     engine.rootContext()->setContextProperty(QStringLiteral("Apps"), &apps);
     engine.rootContext()->setContextProperty(QStringLiteral("Shell"), &shell);
+    engine.rootContext()->setContextProperty(QStringLiteral("Config"), &config);
     engine.rootContext()->setContextProperty(QStringLiteral("Tasks"), &tasks);
     engine.rootContext()->setContextProperty(QStringLiteral("Capture"), &capture);
     engine.rootContext()->setContextProperty(QStringLiteral("Notifications"), &notifications);
@@ -326,6 +343,10 @@ int main(int argc, char* argv[])
 
     setupTaskbar(taskbar, taskbar->height());
     setupStartMenu(startMenu);
+    placeStartMenu(startMenu, config.taskbarAlignment());
+    QObject::connect(&config, &Config::taskbarChanged, startMenu, [&config, startMenu] {
+        placeStartMenu(startMenu, config.taskbarAlignment());
+    });
     setupSwitcher(switcher);
     setupNotifications(notificationWindow);
     setupContextMenu(contextMenu);

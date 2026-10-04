@@ -1,4 +1,5 @@
 #include "server.hpp"
+#include "settings.hpp"
 
 #include "scene/effects.hpp"
 
@@ -1340,6 +1341,11 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
         sendShellCommand("notification-center");
         return true;
     }
+    // Win+I: le Impostazioni.
+    if ((super || altNested) && lower == XKB_KEY_i) {
+        sendShellCommand("settings");
+        return true;
+    }
     // Alt+Spazio: il menu della finestra, sotto la sua barra del titolo.
     if (alt && !super && sym == XKB_KEY_space) {
         if (Toplevel* active = focusedToplevel()) {
@@ -1773,6 +1779,17 @@ void Server::handleCommand(const std::string& command)
         }
     } else if (command == "modifiers") {
         // già risposto a chi l'ha chiesto (listenForCommands)
+    } else if (command == "reload-config") {
+        // Le Impostazioni hanno cambiato vela.conf.
+        wlr_log(WLR_INFO, "Impostazioni: rileggo vela.conf");
+        loadIdleSettings();
+        const Settings settings = readSettings();
+        for (Keyboard* keyboard : keyboards) {
+            keyboard->applySettings(settings);
+        }
+        if (seat->keyboard_state.keyboard) {
+            wlr_seat_set_keyboard(seat, seat->keyboard_state.keyboard); // il layout nuovo alle app
+        }
     } else if (command == "lock") {
         lockScreen(); // per esempio prima di sospendere il computer
     } else if (command.rfind("window ", 0) == 0) {

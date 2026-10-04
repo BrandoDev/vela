@@ -277,14 +277,36 @@ void SystemStatus::refreshPowerProfile()
         QStringLiteral("ActiveProfile"));
     m_powerProfilesAvailable = profile.isValid();
     m_powerProfile = profile.toString();
+    // I profili offerti: aa{sv}, ognuno con la chiave "Profile".
+    m_powerProfiles.clear();
+    if (m_powerProfilesAvailable) {
+        const QVariant profiles = dbusGet(QDBusConnection::systemBus(), QStringLiteral("org.freedesktop.UPower.PowerProfiles"),
+            QStringLiteral("/org/freedesktop/UPower/PowerProfiles"), QStringLiteral("org.freedesktop.UPower.PowerProfiles"),
+            QStringLiteral("Profiles"));
+        const QDBusArgument list = profiles.value<QDBusArgument>();
+        if (list.currentType() == QDBusArgument::ArrayType) {
+            list.beginArray();
+            while (!list.atEnd()) {
+                QVariantMap entry;
+                list >> entry;
+                m_powerProfiles << entry.value(QStringLiteral("Profile")).toString();
+            }
+            list.endArray();
+        }
+    }
     emit powerProfileChanged();
 }
 
 void SystemStatus::setPowerSaver(bool on)
 {
+    setPowerProfile(on ? QStringLiteral("power-saver") : QStringLiteral("balanced"));
+}
+
+void SystemStatus::setPowerProfile(const QString& profile)
+{
     dbusSet(QDBusConnection::systemBus(), QStringLiteral("org.freedesktop.UPower.PowerProfiles"),
         QStringLiteral("/org/freedesktop/UPower/PowerProfiles"), QStringLiteral("org.freedesktop.UPower.PowerProfiles"),
-        QStringLiteral("ActiveProfile"), on ? QStringLiteral("power-saver") : QStringLiteral("balanced"));
+        QStringLiteral("ActiveProfile"), profile);
 }
 
 // -------------------------------------------------------------- luminosità --

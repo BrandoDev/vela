@@ -23,8 +23,9 @@ QtObject {
     readonly property color stroke: Qt.rgba(1, 1, 1, 0.09)
     readonly property color text: "#f3f3f6"
     readonly property color textDim: "#a4a4ae"
-    readonly property color accent: "#5b8cff"
-    readonly property color accentLight: "#9ab8ff"
+    // L'accento lo sceglie l'utente (Impostazioni > Personalizzazione > Colori).
+    readonly property color accent: Config.accent
+    readonly property color accentLight: Qt.lighter(Config.accent, 1.45)
 
     // --- forme ---
     readonly property int radiusSmall: 6

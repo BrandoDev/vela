@@ -22,7 +22,7 @@ Window {
         "org.mozilla.firefox.desktop",
         "chromium.desktop",
         "org.kde.kate.desktop",
-        "systemsettings.desktop"
+        "vela-settings.desktop"
     ]
     // Solo al primo avvio: poi valgono quelle salvate (aggiunte e tolte dai menu).
     Component.onCompleted: {
@@ -96,7 +96,7 @@ Window {
                 ? { text: "Rimuovi dalla barra delle applicazioni", icon: "window-unpin", action: () => Tasks.unpin(id) }
                 : { text: "Aggiungi alla barra delle applicazioni", icon: "window-pin", action: () => Tasks.pin(id) })
         }
-        if (task.windowCount > 0 && Shell.endTaskEnabled) {
+        if (task.windowCount > 0 && Config.endTask) {
             entries.push({ text: "Termina attività", icon: "process-stop", action: () => Tasks.endTask(task.index) })
         }
         if (task.windowCount > 0) {
@@ -206,7 +206,8 @@ Window {
         id: buttons
         // Centrata a mano invece che con anchors: così, quando un'app si
         // apre o si chiude, la fila scivola al nuovo centro invece di saltare.
-        x: Math.round((parent.width - width) / 2)
+        // Oppure a sinistra, come le versioni precedenti di Windows.
+        x: Config.taskbarAlignment === "left" ? 12 : Math.round((parent.width - width) / 2)
         anchors.verticalCenter: parent.verticalCenter
         spacing: 4
 

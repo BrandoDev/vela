@@ -1,5 +1,7 @@
 #include "notifications.h"
 
+#include <QSettings>
+
 #include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
@@ -309,6 +311,10 @@ void NotificationServer::setDoNotDisturb(bool on)
 {
     if (on != m_doNotDisturb) {
         m_doNotDisturb = on;
+        // Ricordato, e condiviso con le Impostazioni (vedi config.cpp).
+        if (QSettings().value(QStringLiteral("notifications/doNotDisturb"), false).toBool() != on) {
+            QSettings().setValue(QStringLiteral("notifications/doNotDisturb"), on);
+        }
         Q_EMIT doNotDisturbChanged();
     }
 }

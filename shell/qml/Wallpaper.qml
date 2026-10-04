@@ -23,7 +23,7 @@ Window {
         sourceSize: Qt.size(Math.round(width * Screen.devicePixelRatio),
                             Math.round(height * Screen.devicePixelRatio))
         source: width > 0 && height > 0
-            ? "image://wallpaper/" + encodeURIComponent(Shell.wallpaper)
+            ? "image://wallpaper/" + encodeURIComponent(Config.wallpaper)
             : ""
         asynchronous: true
         cache: false

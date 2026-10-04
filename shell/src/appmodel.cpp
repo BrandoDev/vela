@@ -444,8 +444,6 @@ bool AppModel::launchWithFile(const QString& id, const QString& url)
     return launchEntry(copy);
 }
 
-namespace {
-
 // L'app predefinita per un tipo di file, da mimeapps.list (prima quello
 // dell'utente, poi quelli di sistema), come fa xdg-mime.
 QString defaultAppFor(const QString& mime)
@@ -480,8 +478,6 @@ QString defaultAppFor(const QString& mime)
     }
     return {};
 }
-
-} // namespace
 
 QVariantList AppModel::appsForFile(const QString& path) const
 {

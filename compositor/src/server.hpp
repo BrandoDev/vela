@@ -428,6 +428,9 @@ struct Keyboard {
     Listener key;
     Listener destroy;
 
+    // Layout e ripetizione dei tasti da vela.conf (vedi settings.hpp).
+    void applySettings(const std::map<std::string, std::string>& settings);
+
 private:
     void onKey(wlr_keyboard_key_event* event);
 };
@@ -583,6 +586,7 @@ public:
     void initLock();
     void lockScreen(); // Win+L, inattività, prima di sospendere: avvia vela-lock
     void noteActivity(); // l'utente c'è: riaccende gli schermi e azzera l'attesa
+    void loadIdleSettings(); // da ~/.config/vela/vela.conf (comando "reload-config")
     void outputRendered(Output* output); // a ogni frame consegnato
     void updateLockLayout(); // schermi cambiati mentre è bloccato
 

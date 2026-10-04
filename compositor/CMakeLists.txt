@@ -120,6 +120,7 @@ add_executable(vela-compositor
     src/render/pixelbuffer.cpp
     src/lock.cpp
     src/keyboard.cpp
+    src/settings.cpp
     src/snap.cpp
     src/snapshot.cpp
     src/render/allocator.cpp

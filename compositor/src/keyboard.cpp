@@ -1,4 +1,5 @@
 #include "server.hpp"
+#include "settings.hpp"
 
 #include <fstream>
 #include <map>
@@ -8,9 +9,9 @@ namespace vela {
 
 namespace {
 
-// Il layout della tastiera come lo conosce già il sistema. In ordine: le
-// variabili XKB_DEFAULT_* (le legge libxkbcommon da sé), le impostazioni di
-// KDE (~/.config/kxkbrc, se KDE gestisce la tastiera), quelle di
+// Il layout della tastiera. In ordine: le variabili XKB_DEFAULT_* (le legge
+// libxkbcommon da sé), la scelta fatta nelle Impostazioni di Vela
+// (~/.config/vela/vela.conf), le impostazioni di KDE (~/.config/kxkbrc, se KDE gestisce la tastiera), quelle di
 // systemd-localed (localectl, /etc/X11/xorg.conf.d/00-keyboard.conf).
 struct KeymapNames {
     std::string rules, model, layout, variant, options;
@@ -85,10 +86,27 @@ KeymapNames localedKeymap()
     return names;
 }
 
-xkb_keymap* systemKeymap(xkb_context* context)
+KeymapNames velaKeymap(const Settings& settings)
 {
-    KeymapNames names = kdeKeymap();
-    const char* origin = "KDE";
+    KeymapNames names;
+    names.layout = setting(settings, "tastiera-layout");
+    names.variant = setting(settings, "tastiera-variante");
+    names.options = setting(settings, "tastiera-opzioni");
+    // Più layout: Win+Spazio passa al successivo, come su Windows.
+    if (names.layout.find(',') != std::string::npos && names.options.find("grp:") == std::string::npos) {
+        names.options += names.options.empty() ? "grp:win_space_toggle" : ",grp:win_space_toggle";
+    }
+    return names;
+}
+
+xkb_keymap* systemKeymap(xkb_context* context, const Settings& settings)
+{
+    KeymapNames names = velaKeymap(settings);
+    const char* origin = "Impostazioni di Vela";
+    if (names.layout.empty()) {
+        names = kdeKeymap();
+        origin = "KDE";
+    }
     if (names.layout.empty()) {
         names = localedKeymap();
         origin = "localectl";
@@ -108,9 +126,11 @@ xkb_keymap* systemKeymap(xkb_context* context)
         .variant = pick("XKB_DEFAULT_VARIANT", names.variant),
         .options = pick("XKB_DEFAULT_OPTIONS", names.options),
     };
-    static bool logged = false;
-    if (!logged) {
-        logged = true;
+    static std::string logged;
+    const std::string description = std::string(rules.layout ? rules.layout : "") + '/'
+        + (rules.variant ? rules.variant : "") + '/' + (rules.options ? rules.options : "");
+    if (description != logged) {
+        logged = description;
         wlr_log(WLR_INFO, "Tastiera: layout %s, variante %s%s%s (da %s)", rules.layout ? rules.layout : "us",
             rules.variant ? rules.variant : "-", rules.options ? ", opzioni " : "", rules.options ? rules.options : "",
             std::getenv("XKB_DEFAULT_LAYOUT") ? "XKB_DEFAULT_*" : names.layout.empty() ? "predefinito" : origin);
@@ -134,27 +154,7 @@ Keyboard::Keyboard(Server& s, wlr_keyboard* keyboard)
     : server(s)
     , wlr(keyboard)
 {
-    // Una tastiera virtuale (test automatici) porta il suo layout.
-    const bool isVirtual = wlr_input_device_get_virtual_keyboard(&keyboard->base) != nullptr;
-
-    // Il layout del sistema (vedi systemKeymap), o XKB_DEFAULT_*.
-    if (!isVirtual) {
-        xkb_context* context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-        xkb_keymap* keymap = systemKeymap(context);
-        if (!keymap) {
-            wlr_log(WLR_ERROR, "Layout XKB non valido, uso quello di base");
-            xkb_rule_names fallback {};
-            fallback.layout = "us";
-            keymap = xkb_keymap_new_from_names(context, &fallback, XKB_KEYMAP_COMPILE_NO_FLAGS);
-        }
-        wlr_keyboard_set_keymap(wlr, keymap);
-        xkb_keymap_unref(keymap);
-        xkb_context_unref(context);
-
-        // Ripetizione tasti: ritardo 400 ms, 30 caratteri/s (valori simili a
-        // quelli predefiniti di Windows).
-        wlr_keyboard_set_repeat_info(wlr, 30, 400);
-    }
+    applySettings(readSettings());
 
     modifiers.connect(&wlr->events.modifiers, [this](void*) {
         wlr_seat_set_keyboard(server.seat, wlr);
@@ -172,6 +172,33 @@ Keyboard::Keyboard(Server& s, wlr_keyboard* keyboard)
 Keyboard::~Keyboard()
 {
     server.keyboards.remove(this);
+}
+
+void Keyboard::applySettings(const Settings& settings)
+{
+    // Una tastiera virtuale (test automatici) porta il suo layout.
+    if (wlr_input_device_get_virtual_keyboard(&wlr->base)) {
+        return;
+    }
+
+    // Il layout scelto (vedi systemKeymap), o XKB_DEFAULT_*.
+    xkb_context* context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    xkb_keymap* keymap = systemKeymap(context, settings);
+    if (!keymap) {
+        wlr_log(WLR_ERROR, "Layout XKB non valido, uso quello di base");
+        xkb_rule_names fallback {};
+        fallback.layout = "us";
+        keymap = xkb_keymap_new_from_names(context, &fallback, XKB_KEYMAP_COMPILE_NO_FLAGS);
+    }
+    wlr_keyboard_set_keymap(wlr, keymap);
+    xkb_keymap_unref(keymap);
+    xkb_context_unref(context);
+
+    // Ripetizione tasti: predefiniti ritardo 400 ms e 30 caratteri/s (simili
+    // a quelli di Windows).
+    const int delay = std::atoi(setting(settings, "tastiera-ritardo", "400").c_str());
+    const int rate = std::atoi(setting(settings, "tastiera-velocita", "30").c_str());
+    wlr_keyboard_set_repeat_info(wlr, std::clamp(rate, 1, 100), std::clamp(delay, 100, 2000));
 }
 
 void Keyboard::onKey(wlr_keyboard_key_event* event)

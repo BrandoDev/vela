@@ -16,16 +16,10 @@ class ShellController : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString userName READ userName CONSTANT)
     Q_PROPERTY(QString userInitial READ userInitial CONSTANT)
-    // Percorso dello sfondo: VELA_WALLPAPER, oppure quello di Vela (16:9).
-    Q_PROPERTY(QString wallpaper READ wallpaper CONSTANT)
     // Stato del menu Start, condiviso tra la finestra del menu e la taskbar.
     Q_PROPERTY(bool startMenuOpen READ startMenuOpen WRITE setStartMenuOpen NOTIFY startMenuOpenChanged)
     // Le app aggiunte alla Start (id dei .desktop), nell'ordine scelto.
     Q_PROPERTY(QStringList startPins READ startPins NOTIFY startPinsChanged)
-    // "Termina attività" nella jump list: accesa (su Windows va accesa a mano);
-    // si spegne con endTask=false nel gruppo [taskbar] di
-    // ~/.config/Vela/vela-shell.conf.
-    Q_PROPERTY(bool endTaskEnabled READ endTaskEnabled CONSTANT)
 
 public:
     explicit ShellController(QObject* parent = nullptr);
@@ -51,7 +45,6 @@ public:
 
     QString userName() const;
     QString userInitial() const;
-    QString wallpaper() const;
 
     bool startMenuOpen() const { return m_startMenuOpen; }
     void setStartMenuOpen(bool open)
@@ -68,7 +61,6 @@ public:
     Q_INVOKABLE void pinToStart(const QString& id);
     Q_INVOKABLE void unpinFromStart(const QString& id);
     Q_INVOKABLE void moveStartPinToFront(const QString& id);
-    bool endTaskEnabled() const;
 
     // Il menu della finestra: un'azione (restore, move, resize, minimize,
     // maximize, close) sulla finestra con quell'identificativo, o su
@@ -80,7 +72,7 @@ public:
     Q_INVOKABLE void lock(); // Win+L dalla shell
     // Il colore medio dello sfondo al compositor: la tinta delle barre del
     // titolo (Mica, docs/renderer.md §9.4).
-    void sendWallpaperTint() const;
+    void sendWallpaperTint(const QString& wallpaper) const;
     // Blocca lo schermo prima che il computer si sospenda.
     void watchSleep();
     // Il computer, tramite systemd-logind (se serve, polkit chiede la
@@ -107,6 +99,7 @@ signals:
     void showDesktopRequested(); // Win+D
     void quickSettingsRequested(); // Win+A
     void notificationCenterRequested(); // Win+N
+    void settingsRequested(); // Win+I
     // Il menu della finestra (clic destro sulla barra del titolo,
     // Alt+Spazio): su quale schermo e dove, in coordinate dello schermo.
     void windowMenuRequested(const QString& window, const QString& output, int x, int y, bool maximized,

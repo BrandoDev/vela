@@ -1,0 +1,78 @@
+import QtQuick
+
+// Personalizzazione: l'anteprima del desktop in cima, poi le sezioni.
+Page {
+    DesktopPreview {}
+
+    CardGroup {
+        LinkCard {
+            icon: "preferences-desktop-wallpaper"
+            title: "Sfondo"
+            description: "Immagine di sfondo del desktop"
+            onClicked: root.navigate("background")
+        }
+        LinkCard {
+            icon: "preferences-desktop-color"
+            title: "Colori"
+            description: "Colore principale, modalità chiara o scura delle app"
+            onClicked: root.navigate("colors")
+        }
+        LinkCard {
+            icon: "preferences-system-windows"
+            title: "Barra delle applicazioni"
+            description: "Allineamento, comportamenti della barra delle applicazioni"
+            onClicked: root.navigate("taskbar")
+        }
+    }
+
+    // L'anteprima: lo sfondo con una finestra e la taskbar in miniatura.
+    component DesktopPreview: Item {
+        width: parent.width
+        height: 210
+        Rectangle {
+            id: frame
+            width: 320
+            height: 196
+            radius: 8
+            color: "#101010"
+            border.width: 1
+            border.color: Qt.rgba(1, 1, 1, 0.12)
+            Item {
+                anchors { fill: parent; margins: 6 }
+                clip: true
+                Image {
+                    anchors.fill: parent
+                    source: Prefs.wallpaper.startsWith(":") ? "qrc" + Prefs.wallpaper : "file://" + Prefs.wallpaper
+                    sourceSize: Qt.size(616, 368)
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                }
+                Rectangle {
+                    x: parent.width * 0.22
+                    y: parent.height * 0.18
+                    width: parent.width * 0.56
+                    height: parent.height * 0.52
+                    radius: 3
+                    color: Qt.rgba(0.13, 0.13, 0.13, 0.96)
+                    Rectangle { x: 8; y: 8; width: parent.width * 0.4; height: 5; radius: 2; color: Theme.accentFill }
+                    Rectangle { x: 8; y: 20; width: parent.width * 0.7; height: 4; radius: 2; color: Qt.rgba(1, 1, 1, 0.2) }
+                    Rectangle { x: 8; y: 30; width: parent.width * 0.55; height: 4; radius: 2; color: Qt.rgba(1, 1, 1, 0.2) }
+                }
+                Rectangle {
+                    anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+                    height: 14
+                    color: Qt.rgba(0.11, 0.11, 0.13, 0.85)
+                    Row {
+                        x: Prefs.taskbarAlignment === "left" ? 6 : (parent.width - width) / 2
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 3
+                        Repeater {
+                            model: 5
+                            Rectangle { width: 8; height: 8; radius: 2; color: index === 0 ? Theme.accentFill : Qt.rgba(1, 1, 1, 0.45) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

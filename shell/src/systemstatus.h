@@ -36,6 +36,9 @@ class SystemStatus : public QObject {
     // Risparmio energia
     Q_PROPERTY(bool powerSaverAvailable READ powerSaverAvailable NOTIFY powerProfileChanged)
     Q_PROPERTY(bool powerSaver READ powerSaver NOTIFY powerProfileChanged)
+    // "power-saver", "balanced" o "performance" (se il sistema lo offre)
+    Q_PROPERTY(QString powerProfile READ powerProfile WRITE setPowerProfile NOTIFY powerProfileChanged)
+    Q_PROPERTY(QStringList powerProfiles READ powerProfiles NOTIFY powerProfileChanged)
     // Le icone del tema per rete e volume, e la modalità aereo.
     Q_PROPERTY(QString networkIconName READ networkIcon NOTIFY networkChanged)
     Q_PROPERTY(QString volumeIconName READ volumeIcon NOTIFY volumeChanged)
@@ -77,6 +80,9 @@ public:
     bool powerSaverAvailable() const { return m_powerProfilesAvailable; }
     bool powerSaver() const { return m_powerProfile == QLatin1String("power-saver"); }
     Q_INVOKABLE void setPowerSaver(bool on);
+    QString powerProfile() const { return m_powerProfile; }
+    void setPowerProfile(const QString& profile);
+    QStringList powerProfiles() const { return m_powerProfiles; }
 
     bool brightnessAvailable() const { return !m_backlight.isEmpty(); }
     double brightness() const { return m_brightness; }
@@ -128,6 +134,7 @@ private:
 
     bool m_powerProfilesAvailable = false;
     QString m_powerProfile;
+    QStringList m_powerProfiles;
 
     QString m_backlight; // nome in /sys/class/backlight
     double m_brightness = 0.0;

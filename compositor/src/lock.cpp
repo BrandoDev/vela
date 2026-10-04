@@ -8,12 +8,16 @@
 // resta nero e bloccato, e un nuovo programma di blocco può prenderne il
 // posto.
 //
-// Inattività: dopo VELA_SCREEN_OFF minuti senza input (predefinito 10;
-// 0: mai) lo schermo si blocca e, pochi secondi dopo, si spegne. Un'app
+// Inattività: dopo alcuni minuti senza input (predefinito 10; 0: mai) lo
+// schermo si blocca e, pochi secondi dopo, si spegne. I minuti e il blocco
+// stanno in ~/.config/vela/vela.conf, che scrive l'app Impostazioni e che si
+// rilegge al comando "reload-config"; VELA_SCREEN_OFF e VELA_LOCK_ON_IDLE,
+// se ci sono, hanno la precedenza. Un'app
 // può impedirlo mentre mostra qualcosa (un video: idle-inhibit). Le app
 // sanno quando l'utente è inattivo con ext-idle-notify (stato "assente").
 
 #include "server.hpp"
+#include "settings.hpp"
 
 #include "scene/surface.hpp"
 
@@ -73,12 +77,6 @@ std::vector<scene::Tree*> unlockedLayers(Server& server)
     auto& l = server.layers;
     return { l.background.get(), l.bottom.get(), l.windows.get(), l.top.get(), l.fullscreen.get(),
         l.x11Popups.get(), l.overlay.get() };
-}
-
-int envMinutes(const char* name, int fallback)
-{
-    const char* value = std::getenv(name);
-    return value && *value ? std::atoi(value) : fallback;
 }
 
 } // namespace
@@ -196,9 +194,6 @@ void Server::initLock()
     if (!session) {
         return;
     }
-    idle.screenOffMs = std::max(0, envMinutes("VELA_SCREEN_OFF", 10)) * 60 * 1000;
-    const char* lockOnIdle = std::getenv("VELA_LOCK_ON_IDLE");
-    idle.lockOnIdle = !(lockOnIdle && std::strcmp(lockOnIdle, "0") == 0);
     idle.timer = wl_event_loop_add_timer(
         loop,
         [](void* data) {
@@ -229,9 +224,30 @@ void Server::initLock()
             return 0;
         },
         this);
-    if (idle.screenOffMs > 0) {
-        wl_event_source_timer_update(idle.timer, idle.screenOffMs);
+    loadIdleSettings();
+}
+
+void Server::loadIdleSettings()
+{
+    if (!idle.timer) {
+        return; // annidati o headless non si spegne nulla
     }
+    const auto settings = readSettings();
+    auto value = [&](const char* key, const char* env) -> std::string {
+        if (const char* v = std::getenv(env); v && *v) {
+            return v;
+        }
+        return setting(settings, key);
+    };
+    const std::string minutes = value("spegni-schermo", "VELA_SCREEN_OFF");
+    idle.screenOffMs = std::max(0, minutes.empty() ? 10 : std::atoi(minutes.c_str())) * 60 * 1000;
+    const std::string lockOnIdle = value("blocca", "VELA_LOCK_ON_IDLE");
+    idle.lockOnIdle = lockOnIdle != "0" && lockOnIdle != "no";
+    wlr_log(WLR_INFO, "Inattività: schermo spento dopo %d minuti%s", idle.screenOffMs / 60000,
+        idle.lockOnIdle ? ", con blocco" : "");
+    // L'attesa riparte da adesso, con i minuti nuovi.
+    idle.locking = false;
+    wl_event_source_timer_update(idle.timer, idle.screenOffMs);
 }
 
 void Server::lockScreen()

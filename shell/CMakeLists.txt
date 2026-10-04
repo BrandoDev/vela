@@ -12,6 +12,8 @@ qt_add_executable(vela-shell
     src/appmodel.h
     src/backgroundeffects.cpp
     src/backgroundeffects.h
+    src/config.cpp
+    src/config.h
     src/filethumbnails.cpp
     src/filethumbnails.h
     src/fileproperties.cpp

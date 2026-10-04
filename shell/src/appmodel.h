@@ -98,3 +98,6 @@ private:
     QList<int> m_visible; // indici in m_all che corrispondono alla ricerca
     QString m_query;
 };
+
+// L'app predefinita per un tipo MIME (id del .desktop), da mimeapps.list.
+QString defaultAppFor(const QString& mime);

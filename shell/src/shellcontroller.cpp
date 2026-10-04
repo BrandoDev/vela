@@ -1,5 +1,7 @@
 #include "shellcontroller.h"
 
+#include "mica.h"
+
 #include <QImage>
 #include <QImageReader>
 #include <QSettings>
@@ -32,6 +34,7 @@ const QStringList defaultStartPins {
     QStringLiteral("org.kde.spectacle.desktop"),
     QStringLiteral("org.kde.kcalc.desktop"),
     QStringLiteral("org.kde.plasma-systemmonitor.desktop"),
+    QStringLiteral("vela-settings.desktop"),
     QStringLiteral("systemsettings.desktop"),
 };
 
@@ -268,6 +271,8 @@ void ShellController::handleCommand(const QByteArray& command)
         emit quickSettingsRequested();
     } else if (command == "notification-center") {
         emit notificationCenterRequested();
+    } else if (command == "settings") {
+        emit settingsRequested();
     } else if (parts.first() == "window-menu" && parts.size() == 8) {
         // window-menu <id> <schermo> <x> <y> <massimizzata> <ridimensionabile> <da tastiera>
         emit windowMenuRequested(QString::fromLatin1(parts.at(1)), QString::fromUtf8(parts.at(2)), parts.at(3).toInt(),
@@ -290,16 +295,10 @@ QString ShellController::userName() const
     return qEnvironmentVariable("USER");
 }
 
-QString ShellController::wallpaper() const
-{
-    // Quello predefinito è incluso nell'eseguibile (images/ nel sorgente).
-    return qEnvironmentVariable("VELA_WALLPAPER", QStringLiteral(":/vela/images/vela_splash_169.svg"));
-}
-
-void ShellController::sendWallpaperTint() const
+void ShellController::sendWallpaperTint(const QString& wallpaper) const
 {
     // Ridotto a pochi pixel già in lettura (anche gli SVG): poi la media.
-    QImageReader reader(wallpaper());
+    QImageReader reader(wallpaper);
     reader.setScaledSize(QSize(32, 18));
     const QImage image = reader.read().convertToFormat(QImage::Format_RGB32);
     if (image.isNull()) {
@@ -315,6 +314,7 @@ void ShellController::sendWallpaperTint() const
         }
     }
     const qint64 count = qint64(image.width()) * image.height();
+    saveWallpaperTint(QColor(int(sum[0] / count), int(sum[1] / count), int(sum[2] / count)));
     sendToCompositor(QByteArray("wallpaper-tint ") + QByteArray::number(sum[0] / count) + ' '
         + QByteArray::number(sum[1] / count) + ' ' + QByteArray::number(sum[2] / count));
 }
@@ -355,11 +355,6 @@ void ShellController::moveStartPinToFront(const QString& id)
         m_startPins.prepend(id);
         saveStartPins();
     }
-}
-
-bool ShellController::endTaskEnabled() const
-{
-    return QSettings().value(QStringLiteral("taskbar/endTask"), true).toBool();
 }
 
 void ShellController::windowAction(const QString& window, const QString& action)

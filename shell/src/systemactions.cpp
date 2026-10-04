@@ -1,10 +1,12 @@
 #include "systemactions.h"
 
+#include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QProcess>
 #include <QSettings>
 #include <QStandardPaths>
@@ -36,6 +38,27 @@ bool spawn(const QString& command, const QString& directory = QDir::homePath())
 {
     qInfo("vela-shell: avvio %s", qPrintable(command));
     return QProcess::startDetached(QStringLiteral("/bin/sh"), { QStringLiteral("-c"), command }, directory);
+}
+
+// Le Impostazioni di Vela: installate, accanto alla shell, o nella
+// cartella di build (settings/ accanto a shell/). Vuoto dentro le
+// Impostazioni stesse, che non devono rimandare a sé.
+QString velaSettings()
+{
+    if (QCoreApplication::applicationName() == QLatin1String("vela-settings")) {
+        return {};
+    }
+    const QString installed = QStandardPaths::findExecutable(QStringLiteral("vela-settings"));
+    if (!installed.isEmpty()) {
+        return installed;
+    }
+    const QString here = QCoreApplication::applicationDirPath();
+    for (const QString& candidate : { here + QStringLiteral("/vela-settings"), here + QStringLiteral("/../settings/vela-settings") }) {
+        if (QFileInfo(candidate).isExecutable()) {
+            return QFileInfo(candidate).canonicalFilePath();
+        }
+    }
+    return {};
 }
 
 // Un comando in un terminale che resta aperto a mostrare com'è andata.
@@ -78,6 +101,28 @@ QString SystemActions::command(const QString& name) const
         }
         return QLatin1String("");
     };
+    // Le voci che hanno una pagina nelle Impostazioni di Vela.
+    static const QHash<QString, QString> settingsPages {
+        { QStringLiteral("settings"), QString() },
+        { QStringLiteral("display"), QStringLiteral("display") },
+        { QStringLiteral("personalize"), QStringLiteral("personalization") },
+        { QStringLiteral("taskbar-settings"), QStringLiteral("taskbar") },
+        { QStringLiteral("notification-settings"), QStringLiteral("notifications") },
+        { QStringLiteral("power"), QStringLiteral("power") },
+        { QStringLiteral("mobility"), QStringLiteral("power") },
+        { QStringLiteral("network"), QStringLiteral("network") },
+        { QStringLiteral("datetime"), QStringLiteral("datetime") },
+        { QStringLiteral("installed-apps"), QStringLiteral("installed-apps") },
+        { QStringLiteral("system"), QStringLiteral("about") },
+        { QStringLiteral("sound-settings"), QStringLiteral("sound") },
+    };
+    if (settingsPages.contains(name)) {
+        const QString program = velaSettings();
+        if (!program.isEmpty()) {
+            const QString page = settingsPages.value(name);
+            return quote(program) + (page.isEmpty() ? QString() : QStringLiteral(" --page ") + page);
+        }
+    }
     if (name == QLatin1String("terminal")) {
         return terminalProgram();
     }
@@ -138,8 +183,8 @@ QString SystemActions::command(const QString& name) const
         // Programmi che parlano wlr-output-management, come Vela.
         return first({ { "nwg-displays", "nwg-displays" }, { "wdisplays", "wdisplays" } });
     }
-    // Impostazioni di notifica, della taskbar, Personalizza: arriveranno
-    // con l'app Impostazioni di Vela.
+    // Impostazioni di notifica, della taskbar, Personalizza: solo con le
+    // Impostazioni di Vela (sopra).
     return {};
 }
 
