@@ -6,10 +6,12 @@ tutto ciò che verrà dopo. Questo documento viene prima del codice: le
 decisioni si prendono qui, il codice le segue.
 
 > **Stato:** progetto discusso e approvato nelle scelte di fondo (§2,
-> riassunte anche in §13). Tappe **S0, S1, S2 e S3 fatte** (§11): la scena e
-> il renderer di Vela sono gli unici, a ogni scala le app arrivano sullo
-> schermo bit per bit, e ogni frame si disegna il più tardi possibile prima
-> del vblank. Prossima: S4.
+> riassunte anche in §13). Tappe **S0–S6 fatte** (§11): la scena e il
+> renderer di Vela sono gli unici, a ogni scala le app arrivano sullo
+> schermo bit per bit, ogni frame si disegna il più tardi possibile prima
+> del vblank, le finestre hanno angoli arrotondati e ombre, i pannelli
+> della shell la sfocatura acrylic, e le app Qt/KDE la barra del titolo di
+> Vela. Prossima: S7.
 
 ## 1. Obiettivi
 
@@ -471,6 +473,15 @@ shader, in **pixel fisici**, con antialiasing di esattamente un pixel
 fisico. Nitido a ogni scala. Si applica al riquadro della finestra (non ai
 margini d'ombra disegnati dall'app).
 
+Com'è fatto: un albero della scena può avere una **forma** (`scene::Shape`:
+rettangolo, raggio, ombra); gli elementi dei suoi figli ereditano il
+ritaglio (i popup no: `Node::unclipped`). La finestra calcola la sua a ogni
+frame (`Toplevel::updateShape`): raggio 8, niente da massimizzata, a
+schermo intero o agganciata, né per le app con margini d'ombra propri
+(GTK). Gli angoli non contano come opachi; con gli angoli niente scanout
+diretto. Le istantanee delle animazioni portano con sé la forma. Il test
+di nitidezza resta bit per bit fuori dai quadrati degli angoli.
+
 ### 8.2 Ombre
 
 Ombra analitica di un rettangolo arrotondato (formula chiusa
@@ -479,6 +490,11 @@ texture, nessuna sfocatura. Due strati come Windows 11 (ombra ampia e
 morbida + ombra di contatto stretta), più marcate per la finestra attiva.
 Le app con decorazioni proprie disegnano già la loro ombra: se la geometria
 xdg indica margini d'ombra, la nostra non si disegna.
+
+Com'è fatto: due elementi per finestra (ampia: sigma 14, scostata di 8 in
+basso; di contatto: sigma 2), più scuri per quella attiva, sotto il
+contenuto. Lo shader non disegna sotto la finestra, e il suo ritaglio
+esclude l'interno (tranne gli angoli): costa una cornice, non tutta l'area.
 
 ### 8.3 Sfocatura dal vivo
 
@@ -501,6 +517,20 @@ xdg indica margini d'ombra, la nostra non si disegna.
     (è così che la sfocatura "segue" ciò che si muove dietro).
 - Sfocature una sopra l'altra (menu Start sopra la taskbar) si compongono
   nell'ordine giusto perché si disegna dal fondo verso l'alto.
+
+Com'è fatto: il protocollo lo implementa Vela (`scene/effects.cpp`, wlroots
+non lo ha). Nel disegno, arrivati a un pannello con una regione da
+sfocare, si chiude il render pass, si legge ciò che è già disegnato sotto
+(il buffer dello schermo, importato anche come texture se il formato lo
+permette), si fanno quattro riduzioni e tre ingrandimenti dual Kawase in
+immagini a 16 bit lineari che crescono quando serve e si riusano, poi si
+compone la ricetta acrylic e si riprende. La forma la dà l'alfa del
+pannello: la shell chiede rettangoli, gli angoli arrotondati restano. Il
+danno che tocca una zona (col raggio) la fa ridisegnare tutta, raggio
+compreso. Costo misurato: 0,05–0,13 ms di GPU per frame con il menu Start
+che si apre sopra la taskbar. La cache dello sfondo sfocato (tenerlo tra
+un frame e l'altro se dietro non cambia nulla) non è ancora servita: a
+riposo non si ridisegna niente comunque.
 - **Anche a batteria, tutto al massimo**: nessuna riduzione automatica
   degli effetti. Il risparmio viene dal non disegnare ciò che non cambia,
   non dal togliere gli effetti.
@@ -511,6 +541,19 @@ Oggi le app Qt/KDE disegnano da sé la barra "di ripiego" di Qt, perché
 Vela non offre decorazioni lato server. La barra di Vela è il primo
 elemento "nostro" che unisce tutto ciò che il renderer sa fare: testo,
 sfocatura, angoli, ombre, animazioni.
+
+**Seconda versione (ottobre 2026)**: anche per le app Wayland, con
+`xdg-decoration` (Vela chiede sempre la barra lato server; Qt e KDE la
+accettano, GTK4 no). La barra fa parte della geometria anche per loro, e
+alle app va la parte sotto. A sinistra l'icona dell'app (dal `.desktop`
+via `app_id` o `StartupWMClass`, dal tema di icone di KDE, SVG disegnato
+con librsvg alla dimensione fisica; senza librsvg, facoltativa, niente
+icona): un clic apre il menu della finestra, un doppio clic la chiude. Lo
+sfondo è la tinta Mica: la shell manda al compositor il colore medio
+dello sfondo del desktop (`wallpaper-tint`), reso sicuro per il testo e
+mescolato al grigio di Windows 11 (di più da inattiva). La sfocatura dal
+vivo dietro la barra (§9.4, ultimo punto) è rinviata: la tinta piena è già
+vicina a Mica, che su Windows non mostra le finestre dietro.
 
 **Prima versione (settembre 2026)**, per le sole app X11 che lasciano la
 barra al gestore di finestre (`compositor/src/decoration.*`): misure di
@@ -643,9 +686,9 @@ con i suoi test.
 | **S1** Parità ✔ | scena propria con finestre, layer, popup, sottosuperfici; shm e dmabuf; damage; frame callback, presentation, enter/leave; istantanee, snap, catture portate sul nuovo renderer; Vulkan 1.4; il nostro renderer anche come `wlr_renderer` | fatto: `wlr_scene` e il renderer di wlroots rimossi. Provati headless e annidato in KWin: Konsole (shm), shell Qt Quick e Firefox (dmabuf), popup anche con sottosuperfici, menu Start, trascinamento, snap con anteprima, riduzione a icona e ripristino, chiusura, Alt+Tab con anteprime, screencopy, due schermi (enter/leave), scala 150%. Validation layer (anche della sincronizzazione): nessun messaggio. A riposo 0 CPU; trascinando una finestra a 144 Hz 17–29 ms di CPU su 3,4 s, contro 34–36 ms di `wlr_scene` |
 | **S2** Nitidezza ✔ | fractional scale, aggancio ai pixel, filtri di qualità, più schermi con scale diverse, cursore per scala, scala predefinita dai DPI | fatto: `scripts/test-sharpness.sh` bit per bit a 100, 125, 150, 175, 200 e 225% (aperta, agganciata a sinistra e a destra, massimizzata, ripristinata); schermi misti 150% + 100%, bit per bit su quello al 150%. Prima delle correzioni: fino a 134 mila pixel diversi a 150% per una finestra centrata. Filtro bicubico Catmull-Rom per gli ingrandimenti; riduzioni ancora bilineari (mipmap da fare con le animazioni di scala, S4) |
 | **S3** Tempo e latenza ✔ | late latching, scanout diretto, sincronizzazione esplicita, dmabuf feedback | fatto: headless a 60, 75, 144, 165, 240 e 360 Hz con vkcube: 0 vblank persi, errore di previsione 0, dal disegno alla luce 1,1–1,9 ms (senza late latching un periodo intero). Shell, Konsole e una finestra trascinata a 360 Hz: un solo frame in ritardo (wlroots che alloca un buffer nuovo della swapchain), assorbito dal margine. Scanout diretto con mpv a schermo intero: headless (OpenGL, sincronizzazione implicita, costo del frame 0,02 ms) e annidato in KWin (Vulkan, sincronizzazione esplicita, con il feedback dmabuf di scanout); le catture durante lo scanout funzionano. Validation layer (anche della sincronizzazione): nessun messaggio. A riposo 0 CPU |
-| **S4** Forma | angoli arrotondati, ombre | nitidi a ogni scala |
-| **S5** Sfocatura | `ext-background-effect`, dual Kawase, cache, acrylic per la shell | taskbar e menu sfocati; costo zero quando dietro non cambia nulla |
-| **S6** Barra del titolo | `xdg-decoration`, motore di testo con il font di KDE, pulsanti, icone SVG, tinta dallo sfondo, interazioni | le app Qt/KDE con la barra di Vela, nitida a ogni scala |
+| **S4** Forma ✔ | angoli arrotondati, ombre | fatto: SDF in pixel fisici e ombra analitica a due strati; `scripts/test-sharpness.sh` bit per bit a 100–225% fuori dagli angoli; validation layer: nessun messaggio |
+| **S5** Sfocatura ✔ | `ext-background-effect`, dual Kawase, acrylic per la shell | fatto: taskbar, menu Start, menu, Alt+Tab e notifiche sfocati; 0,05–0,13 ms di GPU per frame mentre il menu Start si apre; a riposo niente; validation layer: nessun messaggio. Rinviata la cache dello sfondo sfocato |
+| **S6** Barra del titolo ✔ | `xdg-decoration`, motore di testo con il font di KDE, pulsanti, icone SVG, tinta dallo sfondo, interazioni | fatto: le app che accettano xdg-decoration (Qt/KDE) hanno la barra di Vela, con l'icona dell'app (SVG del tema di KDE con librsvg, alla dimensione fisica) e la tinta Mica dello sfondo; bordi invisibili per ridimensionare. Rinviati: sfocatura dal vivo dietro la barra (per ora tinta piena), passaggio del mouse animato, resvg al posto di librsvg |
 | **S7** Colore | 10 bit, HDR, `color-management-v1` | |
 | (poi) VRR | politica di frequenza durante le animazioni | §4.4 |
 
@@ -680,7 +723,12 @@ con i suoi test.
   superficie, l'ultimo stato pronto (oggi le superfici si leggono dal vivo,
   §5.2), e per la sincronizzazione esplicita conoscere il punto di
   acquisizione di un commit ancora in sospeso, che wlroots 0.20 non espone.
-  Da decidere prima delle animazioni ricche (S4).
+  **Deciso (S4):** rinviato a una tappa a sé dopo S6. wlroots 0.20 ha il
+  modo di trattenere un commit (`wlr_surface_lock_pending`), ma non dice il
+  punto di acquisizione di un commit in sospeso con la sincronizzazione
+  esplicita, che è proprio quella delle app moderne (Mesa, Firefox): farlo
+  solo per l'implicita coprirebbe le app sbagliate. Nelle prove da TTY
+  nessun vblank perso per colpa di un'app.
 - **Chiusura da annidati** (emerso a settembre 2026): circa una volta su
   dieci, chiudendo Vela annidato in KDE con un'app X11 aperta, il driver
   amdgpu andava in crash liberando la memoria della GPU nel distruttore
@@ -727,13 +775,15 @@ toglie solo se un equivalente non esiste.
 > Sposta e Ridimensiona da tastiera, il desktop, i campi di testo, Esegui
 > (Win+R) e Win+D; poi le icone del desktop (la cartella Scrivania) con
 > il menu del desktop e dei file, riga di icone compresa, e "Mostra altre
-> opzioni" con i service menu di KDE. Ci sono ma spente le voci che
-> aspettano la loro funzione: Proprietà, Collegamento, Aggiungi a
-> Preferiti, "Scegli un'altra app" e
-> l'app Impostazioni (impostazioni della taskbar e di notifica,
-> Personalizza). Mancano i menu di ciò che non esiste ancora: la sezione
-> Consigliati della Start, il menu "…" delle notifiche, la
-> Visualizzazione attività. Tolte
+> opzioni" con i service menu di KDE, e la finestra Proprietà (Generale,
+> Autorizzazioni, Dettagli). Le voci delle impostazioni (Personalizza,
+> Impostazioni schermo, della taskbar e di notifica, Sistema, Win+I) aprono
+> la pagina giusta dell'app Impostazioni (`vela-settings --page …`). Esplora
+> (`vela-files`) usa lo stesso componente (`MenuPanel.qml`) dentro la sua
+> finestra, con i menu dei file e dello spazio vuoto della cartella. Ci sono
+> ma spente le voci che aspettano la loro funzione: Collegamento, Aggiungi a
+> Preferiti, "Scegli un'altra app". Mancano i menu di ciò che non esiste ancora: la sezione
+> Consigliati della Start, il menu "…" delle notifiche. Tolte
 > perché senza equivalente: "Esegui come amministratore" (le app grafiche
 > come root sotto Wayland di norma non partono), "Impostazioni app",
 > "Condividi".
@@ -825,10 +875,12 @@ Maiusc+clic destro sul pulsante apre invece il menu della finestra (§14.8).
 - **Spazio vuoto**: "Gestione attività", "Impostazioni della barra delle
   applicazioni".
 - **Data e ora**: "Regola data e ora", "Impostazioni di notifica".
-- **Icone di sistema** (con le impostazioni rapide, milestone 2): volume →
-  "Apri mixer volume", "Impostazioni audio", "Risolvi i problemi audio";
-  rete → "Diagnostica problemi di rete", "Impostazioni di rete e Internet";
-  batteria → "Opzioni risparmio energia e sospensione".
+- **Icone di sistema** (fatte con le impostazioni rapide): volume →
+  "Apri mixer volume", "Impostazioni audio" ("Risolvi i problemi audio"
+  non ha un equivalente); rete → "Diagnostica problemi di rete" (spenta),
+  "Impostazioni di rete e Internet"; batteria → "Opzioni risparmio energia
+  e sospensione" (da fare insieme alla batteria nella taskbar dei
+  portatili).
 - **Icone delle app nell'area di notifica**: il menu lo decide l'app
   (dbusmenu, già fatto), disegnato con `VelaMenu`.
 
@@ -922,7 +974,8 @@ Lo stesso menu dei file lo userà Esplora (milestone 3).
 
 ### 14.10 Visualizzazione attività e notifiche
 
-Con i desktop virtuali (milestone 3):
+Con i desktop virtuali (milestone 3, fatti: `shell/qml/TaskView.qml`,
+`compositor/src/workspaces.cpp`):
 
 - **Anteprima di una finestra**: "Aggancia a sinistra", "Aggancia a
   destra", "Sposta in" › (i desktop, "Nuovo desktop"), "Mostra questa
@@ -938,11 +991,13 @@ notifiche per <app>", "Vai alle impostazioni di notifica".
 
 | Voce di Windows | In Vela |
 |---|---|
-| App installate, Disinstalla | l'elenco delle app e la disinstallazione via PackageKit (pacchetti) o Flatpak |
-| Centro PC portatile, Opzioni risparmio energia | le impostazioni di energia (powerdevil finché non c'è l'app Impostazioni) |
+| Impostazioni e le sue pagine | l'app Impostazioni di Vela (`vela-settings`), aperta sulla pagina giusta |
+| App installate, Disinstalla | Impostazioni > App installate; la disinstallazione via Flatpak, Discover o il gestore dei pacchetti |
+| Centro PC portatile, Opzioni risparmio energia | Impostazioni > Alimentazione |
 | Visualizzatore eventi | il visualizzatore del journal di systemd |
-| Sistema, Gestione dispositivi | le informazioni sul sistema (kinfocenter per ora) |
-| Connessioni di rete | le impostazioni di rete (NetworkManager) |
+| Sistema | Impostazioni > Informazioni |
+| Gestione dispositivi | le informazioni sul sistema (kinfocenter) |
+| Connessioni di rete | Impostazioni > Rete e Internet (NetworkManager) |
 | Gestione disco, Gestione computer | il gestore delle partizioni; "Gestione computer" apre le informazioni sul sistema |
 | Terminale / Terminale (Admin) | il terminale predefinito / lo stesso con una shell di root chiesta a polkit |
 | Esegui come amministratore | solo per le app che lo supportano (polkit); le app grafiche come root sotto Wayland di norma non partono, quindi altrove la voce non c'è |
