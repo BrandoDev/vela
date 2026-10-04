@@ -67,6 +67,7 @@ private:
     std::unique_ptr<scene::Tree> m_tree;
     wlr_box m_frame;
     std::vector<Piece> m_pieces;
+    scene::Shape m_shape; // quella della finestra (angoli, ombra), da scalare con lei
 };
 
 // ---------------------------------------------------------------- Output --
@@ -270,6 +271,10 @@ struct Toplevel : SceneOwner {
     // Altezza della barra del titolo di Vela (logica), 0 se la finestra non
     // ce l'ha (finestre Wayland, X11 con barra propria, schermo intero).
     int titleBarHeight() const;
+    // Angoli arrotondati e ombra (docs/renderer.md §8), come Windows 11:
+    // non da massimizzata, a schermo intero o agganciata, né per le app che
+    // disegnano da sé ombra e bordi (margini fuori dalla geometria, es. GTK).
+    void updateShape();
     bool resizable() const; // no se l'app ha dimensione minima uguale alla massima
     pid_t pid() const; // il processo dell'app (per "Termina attività")
     // Crea o toglie la barra di Vela secondo ciò che la finestra chiede.

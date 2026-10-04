@@ -78,8 +78,17 @@ Window {
         }
     }
 
+    // Lo sfondo sfocato solo sotto il pannello (la finestra copre lo schermo).
+    function updateBlur() {
+        Effects.setBlur(root, [Qt.rect(panel.x, panel.y, panel.width, panel.height)])
+    }
+
     Rectangle {
         id: panel
+        onXChanged: root.updateBlur()
+        onYChanged: root.updateBlur()
+        onWidthChanged: root.updateBlur()
+        onHeightChanged: root.updateBlur()
         anchors.centerIn: parent
         width: flow.width + 32
         height: flow.height + 32

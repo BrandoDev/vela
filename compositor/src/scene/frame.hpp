@@ -28,6 +28,15 @@ struct Element {
     // Dalla superficie ai pixel: pixel = origin + scale * coordinata logica.
     double originX, originY;
     double scaleX, scaleY;
+    // La forma (§8.1): ritaglio arrotondato in pixel; raggio 0, nessuno.
+    wlr_box shapeRect;
+    float shapeRadius;
+    // Ombra (§8.2) se sigma > 0: proiettata da shapeRect, non sotto shadowWindow.
+    wlr_box shadowWindow;
+    float shadowSigma;
+    // Sfocatura dietro la superficie (ext-background-effect, §8.3): dove,
+    // in pixel (vuoto: niente).
+    wlr_box blurBox;
     bool visible; // non del tutto coperto
     int64_t visibleArea; // pixel non coperti
     size_t order; // posizione nella lista, dal basso
@@ -50,6 +59,10 @@ void buildElements(Node* root, const BuildParams& params, std::vector<Element>& 
 
 // Scarta ciò che è coperto da superfici opache (dall'alto verso il basso).
 void cullOccluded(std::vector<Element>& elements);
+
+// Le zone sfocate leggono ciò che sta loro attorno: se il danno ne tocca una
+// (col raggio della sfocatura) si ridisegna tutta, raggio compreso.
+void expandDamageForBlur(const std::vector<Element>& elements, pixman_region32_t* damage);
 
 // Disegna gli elementi visibili dentro `clip` (in pixel del buffer). Gli
 // elementi sono nello spazio dello schermo ruotato (width x height); il

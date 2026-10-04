@@ -1,5 +1,7 @@
 #include "server.hpp"
 
+#include "scene/effects.hpp"
+
 #include "decoration.hpp"
 #include "outputconfig.hpp"
 #include "render/allocator.hpp"
@@ -231,6 +233,8 @@ bool Server::init()
     });
 
     layerShell = wlr_layer_shell_v1_create(display, 4);
+    // La sfocatura dietro i pannelli e le app che la chiedono (§8.3).
+    scene::initBackgroundEffects(display);
     on(&layerShell->events.new_surface, [this](void* data) {
         LayerSurface::create(*this, static_cast<wlr_layer_surface_v1*>(data));
     });
@@ -739,6 +743,9 @@ void Server::addAnimation(Toplevel* toplevel)
 void Server::tickAnimations(int64_t presentNs)
 {
     syncX11Windows();
+    for (Toplevel* toplevel : toplevels) {
+        toplevel->updateShape(); // angoli e ombra secondo lo stato di adesso
+    }
     m_animationNowMs = std::max(m_animationNowMs, double(presentNs) / 1e6);
     if (m_animating.empty() && m_snapshotAnimations.empty() && !m_snapPreview.rect) {
         return;

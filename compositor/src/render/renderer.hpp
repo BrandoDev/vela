@@ -35,6 +35,7 @@ struct RenderTarget {
     uint32_t width;
     uint32_t height;
     bool initialized; // il contenuto va conservato tra un disegno e l'altro
+    bool sampleable; // si può anche leggere come texture (la sfocatura legge ciò che c'è dietro)
     uint64_t lastUse; // punto della timeline dell'ultimo disegno
 };
 
@@ -121,10 +122,29 @@ public:
     void collect();
 
     // Pipeline: una per (formato di destinazione, tipo, fusione).
-    enum class PipelineKind { Texture, Rect };
+    enum class PipelineKind { Texture, Rect, Shadow, BlurDown, BlurUp, BlurMix };
     VkPipeline pipeline(VkFormat target, PipelineKind kind, bool blend);
     VkPipelineLayout pipelineLayout() const { return m_layout; }
     VkSampler sampler(bool linear) const { return linear ? m_linear : m_nearest; }
+
+    // ------------------------------------------- sfocatura (§8.3) --
+
+    // Le immagini di lavoro della sfocatura: una catena di livelli, ognuno a
+    // metà risoluzione del precedente (il primo a metà dello schermo), in
+    // virgola mobile a 16 bit: lineare, senza bande. Crescono quando serve
+    // e si riusano da un disegno all'altro.
+    static constexpr int blurLevels = 4;
+    static constexpr VkFormat blurFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+    struct BlurImage {
+        VkImage image = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE;
+        uint32_t width = 0;
+        uint32_t height = 0;
+    };
+    // Livelli abbastanza grandi per sfocare una zona di width x height pixel.
+    bool prepareBlur(uint32_t width, uint32_t height);
+    const BlurImage& blurImage(int level) const { return m_blur[level]; }
 
 private:
     explicit Renderer(VulkanDevice& vk);
@@ -198,21 +218,30 @@ private:
     VkShaderModule m_vert = VK_NULL_HANDLE;
     VkShaderModule m_textureFrag = VK_NULL_HANDLE;
     VkShaderModule m_rectFrag = VK_NULL_HANDLE;
+    VkShaderModule m_shadowFrag = VK_NULL_HANDLE;
     std::map<std::tuple<VkFormat, PipelineKind, bool>, VkPipeline> m_pipelines;
+    VkShaderModule m_blurDownFrag = VK_NULL_HANDLE;
+    VkShaderModule m_blurUpFrag = VK_NULL_HANDLE;
+    VkShaderModule m_blurMixFrag = VK_NULL_HANDLE;
+    BlurImage m_blur[blurLevels];
+    void destroyBlurImage(BlurImage& image);
 };
 
-// Le costanti di ogni disegno (vedi shaders/quad.vert): 80 byte.
+// Le costanti di ogni disegno (vedi shaders/push.glsl): 112 byte, sotto i
+// 128 che ogni GPU garantisce.
 struct QuadPush {
     float dst[4]; // x, y, larghezza, altezza in pixel della destinazione
     float target[2]; // dimensioni della destinazione
     float alpha;
-    uint32_t flags; // bit 0: ingrandimento bicubico
+    uint32_t flags; // bit 0: ingrandimento bicubico; bit 1: ritaglio arrotondato
     float uvOrigin[2]; // coordinate texture dell'angolo in alto a sinistra
     float uvX[2]; // spostamento lungo il bordo superiore
     float uvY[2]; // spostamento lungo il bordo sinistro
     float pad[2];
-    float color[4]; // rettangoli: colore lineare premoltiplicato
+    float color[4]; // rettangoli e ombre: colore lineare premoltiplicato
+    float shapeRect[4]; // rettangolo arrotondato (ritaglio, o chi proietta l'ombra)
+    float shape[4]; // raggio degli angoli, sigma dell'ombra
 };
-static_assert(sizeof(QuadPush) == 80);
+static_assert(sizeof(QuadPush) == 112);
 
 } // namespace vela::render

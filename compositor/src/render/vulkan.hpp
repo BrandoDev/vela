@@ -26,6 +26,8 @@ public:
     VulkanDevice& operator=(const VulkanDevice&) = delete;
 
     uint32_t findMemoryType(uint32_t typeBits, VkMemoryPropertyFlags flags) const;
+    // Un dmabuf di quel formato e modifier si può importare per quell'uso.
+    bool supportsDmabuf(VkFormat format, uint64_t modifier, VkImageUsageFlags usage) const;
     // Un dmabuf come VkImage, senza copie (tutti i piani nello stesso dmabuf).
     bool importDmabuf(const wlr_dmabuf_attributes& dmabuf, VkFormat format, VkImageUsageFlags usage,
         VkImage& image, VkDeviceMemory& memory) const;
@@ -71,7 +73,6 @@ private:
     bool createDevice();
     bool openRenderNode();
     void queryFormats();
-    bool supportsDmabuf(VkFormat format, uint64_t modifier, VkImageUsageFlags usage) const;
 
     VkDebugUtilsMessengerEXT m_messenger = VK_NULL_HANDLE;
     VkPhysicalDeviceDrmPropertiesEXT m_drm {};

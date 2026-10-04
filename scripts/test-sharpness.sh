@@ -15,6 +15,8 @@ FAILED=0
 
 for scale in $SCALES; do
     echo "== scala $scale"
+    # Gli angoli arrotondati (raggio 8 logici) toccano solo quei quadrati.
+    CORNER=$(python3 -c "import math; print(math.ceil(8 * $scale) + 1)")
     WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 VELA_DEBUG_INPUT=1 VELA_SCALE=$scale \
         VELA_OUTPUT_SIZE=2560x1440@60 $BUILD/compositor/vela-compositor > "$TMP/log" 2>&1 &
     PID=$!
@@ -31,7 +33,7 @@ for scale in $SCALES; do
     check() {
         sleep 0.8
         $BUILD/tools/vela-shot "$TMP/shot.png" || { echo "cattura fallita"; FAILED=1; return; }
-        python3 scripts/sharpness-check.py "$TMP/shot.png" "$1" || FAILED=1
+        python3 scripts/sharpness-check.py "$TMP/shot.png" "$1" "$CORNER" || FAILED=1
     }
     check aperta
     $BUILD/tools/vela-input key super+Left; check "agganciata a sinistra"

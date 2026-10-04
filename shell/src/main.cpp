@@ -5,6 +5,7 @@
 // riserva spazio sullo schermo.
 
 #include "appmodel.h"
+#include "backgroundeffects.h"
 #include "desktopmodel.h"
 #include "foreigntoplevels.h"
 #include "iconprovider.h"
@@ -218,6 +219,7 @@ int main(int argc, char* argv[])
     JumpLists jumps(&apps);
     DesktopModel desktop(&apps);
     ServiceMenus serviceMenus;
+    BackgroundEffects effects;
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
@@ -235,6 +237,7 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("Jumps"), &jumps);
     engine.rootContext()->setContextProperty(QStringLiteral("Desktop"), &desktop);
     engine.rootContext()->setContextProperty(QStringLiteral("ServiceMenus"), &serviceMenus);
+    engine.rootContext()->setContextProperty(QStringLiteral("Effects"), &effects);
 
     // Le finestre QML partono invisibili: le trasformiamo in superfici
     // layer-shell PRIMA che vengano mostrate.

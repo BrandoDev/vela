@@ -214,21 +214,12 @@ Item {
     }
 
     // --- aspetto ---
-    Rectangle {
-        id: shadowShape
-        anchors.fill: parent
+    PanelShadow {
+        target: panel
         radius: Theme.radiusMenu
-        color: "black"
-        visible: false
-    }
-    MultiEffect {
-        source: shadowShape
-        anchors.fill: shadowShape
-        shadowEnabled: true
-        shadowColor: "#000000"
-        shadowOpacity: 0.45
-        shadowBlur: 0.6
-        shadowVerticalOffset: 4
+        blur: 16
+        offset: Qt.vector2d(0, 4)
+        color: Qt.rgba(0, 0, 0, 0.4)
     }
 
     Rectangle {

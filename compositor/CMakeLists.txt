@@ -44,6 +44,25 @@ vela_server_protocol(${WAYLAND_PROTOCOLS_DIR}/staging/cursor-shape/cursor-shape-
 vela_server_protocol(${PROJECT_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml
     wlr-layer-shell-unstable-v1)
 
+# Protocolli che wlroots non implementa: li implementiamo noi, quindi serve
+# anche il codice delle interfacce.
+set(VELA_OWN_PROTOCOL_SOURCES)
+function(vela_own_protocol xml name)
+    set(header ${VELA_GENERATED_DIR}/${name}-protocol.h)
+    set(code ${VELA_GENERATED_DIR}/${name}-protocol.c)
+    add_custom_command(
+        OUTPUT ${header} ${code}
+        COMMAND ${WAYLAND_SCANNER} server-header ${xml} ${header}
+        COMMAND ${WAYLAND_SCANNER} private-code ${xml} ${code}
+        DEPENDS ${xml}
+        COMMENT "Genero ${name} (server)")
+    list(APPEND VELA_OWN_PROTOCOL_SOURCES ${header} ${code})
+    set(VELA_OWN_PROTOCOL_SOURCES ${VELA_OWN_PROTOCOL_SOURCES} PARENT_SCOPE)
+endfunction()
+
+vela_own_protocol(${WAYLAND_PROTOCOLS_DIR}/staging/ext-background-effect/ext-background-effect-v1.xml
+    ext-background-effect-v1)
+
 # Lato client, per parlare con il compositor ospite quando Vela gira in una
 # finestra (nested.cpp).
 pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
@@ -71,13 +90,14 @@ vela_client_protocol(${WAYLAND_PROTOCOLS_DIR}/unstable/keyboard-shortcuts-inhibi
 set(VELA_SHADER_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
 file(MAKE_DIRECTORY ${VELA_SHADER_DIR})
 set(VELA_SHADERS)
-foreach(shader quad.vert texture.frag rect.frag)
+foreach(shader quad.vert texture.frag rect.frag shadow.frag blur_down.frag blur_up.frag blur_mix.frag)
     set(source ${CMAKE_CURRENT_SOURCE_DIR}/src/render/shaders/${shader})
     set(output ${VELA_SHADER_DIR}/${shader}.spv.inc)
     add_custom_command(
         OUTPUT ${output}
         COMMAND ${GLSLC} --target-env=vulkan1.4 -O -mfmt=num -o ${output} ${source}
         DEPENDS ${source} ${CMAKE_CURRENT_SOURCE_DIR}/src/render/shaders/push.glsl
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/render/shaders/shape.glsl
         COMMENT "Compilo lo shader ${shader}")
     list(APPEND VELA_SHADERS ${output})
 endforeach()
@@ -105,11 +125,13 @@ add_executable(vela-compositor
     src/render/texture.cpp
     src/render/vulkan.cpp
     src/scene/capture.cpp
+    src/scene/effects.cpp
     src/scene/frame.cpp
     src/scene/scene.cpp
     ${VELA_SHADERS}
     ${VELA_PROTOCOL_HEADERS}
-    ${VELA_CLIENT_PROTOCOL_SOURCES})
+    ${VELA_CLIENT_PROTOCOL_SOURCES}
+    ${VELA_OWN_PROTOCOL_SOURCES})
 
 target_include_directories(vela-compositor PRIVATE
     ${VELA_GENERATED_DIR} ${VELA_SHADER_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)

@@ -1,5 +1,6 @@
 #include "scene/frame.hpp"
 
+#include "scene/effects.hpp"
 #include "scene/surface.hpp"
 
 #include <algorithm>
@@ -63,8 +64,89 @@ bool isOneToOne(const wlr_fbox& src, const wlr_box& box, wl_output_transform tra
         && height == double(box.height);
 }
 
+// L'ampiezza della sfocatura in pixel dello schermo: il raggio è in unità
+// logiche, quindi la stessa sfocatura a ogni scala (§8.3).
+float blurStrength(double scale)
+{
+    return std::clamp(float(1.25 * scale), 1.0f, 3.0f);
+}
+
+// Una regione della superficie (coordinate sue) in pixel, allargata verso
+// l'esterno: per la sfocatura conta coprire tutto.
+void surfaceRegionToPixels(const Element& e, const pixman_region32_t* region, pixman_region32_t* out)
+{
+    pixman_region32_clear(out);
+    int count = 0;
+    const pixman_box32_t* rects = pixman_region32_rectangles(region, &count);
+    for (int i = 0; i < count; ++i) {
+        const int x1 = int(std::floor(e.originX + rects[i].x1 * e.scaleX));
+        const int y1 = int(std::floor(e.originY + rects[i].y1 * e.scaleY));
+        const int x2 = int(std::ceil(e.originX + rects[i].x2 * e.scaleX));
+        const int y2 = int(std::ceil(e.originY + rects[i].y2 * e.scaleY));
+        if (x2 > x1 && y2 > y1) {
+            pixman_region32_union_rect(out, out, x1, y1, uint32_t(x2 - x1), uint32_t(y2 - y1));
+        }
+    }
+    pixman_region32_intersect_rect(out, out, e.box.x, e.box.y, uint32_t(e.box.width), uint32_t(e.box.height));
+}
+
+// Il ritaglio arrotondato ereditato dalla forma di un antenato (§8.1).
+struct Clip {
+    wlr_box rect {};
+    float radius = 0.0f;
+};
+
+void applyClip(Element& e, const Clip& clip)
+{
+    if (clip.radius > 0.0f) {
+        e.shapeRect = clip.rect;
+        e.shapeRadius = clip.radius;
+    }
+}
+
+// Le ombre di una forma, come Windows 11: una ampia e morbida più una
+// stretta "di contatto", più marcate per la finestra attiva (§8.2).
+void addShadows(const Tree* tree, const wlr_box& window, float radius, float opacity, bool active,
+    const BuildParams& p, std::vector<Element>& out)
+{
+    struct Layer {
+        double offsetY; // logici
+        double sigma; // logici
+        float activeAlpha;
+        float inactiveAlpha;
+    };
+    static constexpr Layer layers[] = {
+        { 8.0, 14.0, 0.42f, 0.24f },
+        { 1.0, 2.0, 0.30f, 0.16f },
+    };
+    for (size_t i = 0; i < std::size(layers); ++i) {
+        const Layer& layer = layers[i];
+        const float sigma = float(layer.sigma * p.scale);
+        wlr_box caster = window;
+        caster.y += int(std::lround(layer.offsetY * p.scale));
+        const int reach = int(std::ceil(3.0f * sigma)) + 1;
+        const wlr_box box { caster.x - reach, caster.y - reach, caster.width + 2 * reach, caster.height + 2 * reach };
+        if (!onScreen(box, p)) {
+            continue;
+        }
+        const float alpha = (active ? layer.activeAlpha : layer.inactiveAlpha) * opacity;
+        Element e {};
+        // Un nome per strato, dentro l'albero stesso (nessun altro nodo o
+        // superficie può avere quell'indirizzo).
+        e.key = static_cast<const void*>(reinterpret_cast<const char*>(tree) + 1 + i);
+        e.color = { 0.0f, 0.0f, 0.0f, alpha };
+        e.box = box;
+        e.opacity = 1.0f;
+        e.shapeRect = caster;
+        e.shapeRadius = radius;
+        e.shadowWindow = window;
+        e.shadowSigma = sigma;
+        out.push_back(e);
+    }
+}
+
 void addSurface(wlr_surface* surface, double lx, double ly, float opacity, const BuildParams& p,
-    std::vector<Element>& out)
+    std::vector<Element>& out, const Clip& clip)
 {
     wlr_texture* texture = wlr_surface_get_texture(surface);
     if (!texture) {
@@ -107,11 +189,22 @@ void addSurface(wlr_surface* surface, double lx, double ly, float opacity, const
     e.originY = (ly - p.originY) * p.scale;
     e.scaleX = width > 0 ? box.width / width : p.scale;
     e.scaleY = height > 0 ? box.height / height : p.scale;
+    applyClip(e, clip);
+    if (const pixman_region32_t* blur = blurRegion(surface)) {
+        pixman_region32_t pixels;
+        pixman_region32_init(&pixels);
+        surfaceRegionToPixels(e, blur, &pixels);
+        if (pixman_region32_not_empty(&pixels)) {
+            const pixman_box32_t* ext = pixman_region32_extents(&pixels);
+            e.blurBox = { ext->x1, ext->y1, ext->x2 - ext->x1, ext->y2 - ext->y1 };
+        }
+        pixman_region32_fini(&pixels);
+    }
     out.push_back(e);
 }
 
 void visit(Node* node, double lx, double ly, float opacity, const BuildParams& p, std::vector<Element>& out,
-    bool isRoot)
+    bool isRoot, Clip clip)
 {
     const bool captured = isRoot && p.captureRoot;
     if (!node->enabled() && !captured) {
@@ -127,18 +220,33 @@ void visit(Node* node, double lx, double ly, float opacity, const BuildParams& p
     }
 
     switch (node->type()) {
-    case Node::Type::Tree:
-        for (Node* child : static_cast<Tree*>(node)->children()) {
-            visit(child, lx, ly, opacity, p, out, false);
+    case Node::Type::Tree: {
+        auto* tree = static_cast<Tree*>(node);
+        if (node->unclipped) {
+            clip = {};
+        }
+        const Shape& shape = tree->shape();
+        if (shape.enabled && shape.width > 0.0 && shape.height > 0.0) {
+            const wlr_box rect = toPixels(lx + shape.x, ly + shape.y, shape.width, shape.height, p);
+            const float radius = float(shape.radius * p.scale);
+            // Nelle catture di una finestra l'ombra non c'entra.
+            if (shape.shadow && !captured) {
+                addShadows(tree, rect, radius, opacity, shape.active, p, out);
+            }
+            clip = { rect, radius };
+        }
+        for (Node* child : tree->children()) {
+            visit(child, lx, ly, opacity, p, out, false, clip);
         }
         break;
+    }
     case Node::Type::Surface: {
         wlr_surface* root = static_cast<SurfaceNode*>(node)->surface();
         if (!root->mapped) {
             break;
         }
         forEachSurface(root, [&](wlr_surface* surface, int sx, int sy) {
-            addSurface(surface, lx + sx, ly + sy, opacity, p, out);
+            addSurface(surface, lx + sx, ly + sy, opacity, p, out, clip);
         });
         break;
     }
@@ -157,6 +265,7 @@ void visit(Node* node, double lx, double ly, float opacity, const BuildParams& p
         e.color.a *= opacity;
         e.box = box;
         e.opacity = 1.0f;
+        applyClip(e, clip);
         out.push_back(e);
         break;
     }
@@ -174,23 +283,44 @@ void visit(Node* node, double lx, double ly, float opacity, const BuildParams& p
         e.box = box;
         e.opacity = opacity;
         e.linear = !isOneToOne(e.src, box, e.transform);
+        applyClip(e, clip);
         out.push_back(e);
         break;
     }
     }
 }
 
+// Gli angoli arrotondati non sono opachi: si tolgono quattro quadrati.
+void subtractCorners(const Element& e, pixman_region32_t* region)
+{
+    if (e.shapeRadius <= 0.0f) {
+        return;
+    }
+    const wlr_box& r = e.shapeRect;
+    pixman_region32_intersect_rect(region, region, r.x, r.y, uint32_t(r.width), uint32_t(r.height));
+    const int c = int(std::ceil(e.shapeRadius));
+    pixman_region32_t corners;
+    pixman_region32_init(&corners);
+    pixman_region32_union_rect(&corners, &corners, r.x, r.y, uint32_t(c), uint32_t(c));
+    pixman_region32_union_rect(&corners, &corners, r.x + r.width - c, r.y, uint32_t(c), uint32_t(c));
+    pixman_region32_union_rect(&corners, &corners, r.x, r.y + r.height - c, uint32_t(c), uint32_t(c));
+    pixman_region32_union_rect(&corners, &corners, r.x + r.width - c, r.y + r.height - c, uint32_t(c), uint32_t(c));
+    pixman_region32_subtract(region, region, &corners);
+    pixman_region32_fini(&corners);
+}
+
 // La parte certamente opaca di un elemento, in pixel.
 void opaqueRegion(const Element& e, pixman_region32_t* out)
 {
     pixman_region32_clear(out);
-    if (e.opacity < 1.0f) {
+    if (e.opacity < 1.0f || e.shadowSigma > 0.0f) {
         return;
     }
     if (!e.texture) {
         if (e.color.a >= 1.0f) {
             pixman_region32_union_rect(out, out, e.box.x, e.box.y, uint32_t(e.box.width), uint32_t(e.box.height));
         }
+        subtractCorners(e, out);
         return;
     }
     if (!e.surface) {
@@ -198,6 +328,7 @@ void opaqueRegion(const Element& e, pixman_region32_t* out)
         if (texture && !texture->format->alpha) {
             pixman_region32_union_rect(out, out, e.box.x, e.box.y, uint32_t(e.box.width), uint32_t(e.box.height));
         }
+        subtractCorners(e, out);
         return;
     }
     // Regione opaca dichiarata dall'app, in coordinate della superficie:
@@ -214,6 +345,7 @@ void opaqueRegion(const Element& e, pixman_region32_t* out)
         }
     }
     pixman_region32_intersect_rect(out, out, e.box.x, e.box.y, uint32_t(e.box.width), uint32_t(e.box.height));
+    subtractCorners(e, out);
 }
 
 } // namespace
@@ -225,7 +357,9 @@ bool Element::sameLook(const Element& o) const
     // nostri anche la texture.
     const bool sameTexture = surface ? true : texture == o.texture;
     return surface == o.surface && sameTexture && sameBox(box, o.box) && sameFbox(src, o.src)
-        && transform == o.transform && opacity == o.opacity && linear == o.linear && sameColor(color, o.color);
+        && transform == o.transform && opacity == o.opacity && linear == o.linear && sameColor(color, o.color)
+        && sameBox(shapeRect, o.shapeRect) && shapeRadius == o.shapeRadius && sameBox(shadowWindow, o.shadowWindow)
+        && shadowSigma == o.shadowSigma && sameBox(blurBox, o.blurBox);
 }
 
 void buildElements(Node* root, const BuildParams& params, std::vector<Element>& out)
@@ -235,7 +369,7 @@ void buildElements(Node* root, const BuildParams& params, std::vector<Element>& 
     if (root->parent()) {
         root->parent()->coords(lx, ly);
     }
-    visit(root, lx, ly, 1.0f, params, out, true);
+    visit(root, lx, ly, 1.0f, params, out, true, {});
 }
 
 void cullOccluded(std::vector<Element>& elements)
@@ -262,6 +396,35 @@ void cullOccluded(std::vector<Element>& elements)
     pixman_region32_fini(&opaque);
 }
 
+void expandDamageForBlur(const std::vector<Element>& elements, pixman_region32_t* damage)
+{
+    // Più giri: una zona allargata può toccarne un'altra (menu Start sopra la taskbar).
+    for (int round = 0; round < 3; ++round) {
+        bool grown = false;
+        for (const Element& e : elements) {
+            if (!e.visible || wlr_box_empty(&e.blurBox)) {
+                continue;
+            }
+            const int reach = render::Pass::blurReach(blurStrength(e.scaleX));
+            const pixman_box32_t zone { e.blurBox.x - reach, e.blurBox.y - reach, e.blurBox.x + e.blurBox.width + reach,
+                e.blurBox.y + e.blurBox.height + reach };
+            pixman_region32_t inside;
+            pixman_region32_init_rect(&inside, zone.x1, zone.y1, uint32_t(zone.x2 - zone.x1), uint32_t(zone.y2 - zone.y1));
+            pixman_region32_intersect(&inside, &inside, damage);
+            const bool touched = pixman_region32_not_empty(&inside);
+            pixman_region32_fini(&inside);
+            if (touched && pixman_region32_contains_rectangle(damage, &zone) != PIXMAN_REGION_IN) {
+                pixman_region32_union_rect(damage, damage, zone.x1, zone.y1, uint32_t(zone.x2 - zone.x1),
+                    uint32_t(zone.y2 - zone.y1));
+                grown = true;
+            }
+        }
+        if (!grown) {
+            return;
+        }
+    }
+}
+
 void drawElements(render::Pass& pass, const std::vector<Element>& elements, const pixman_region32_t* clip,
     wl_output_transform outputTransform, int width, int height)
 {
@@ -272,8 +435,36 @@ void drawElements(render::Pass& pass, const std::vector<Element>& elements, cons
         }
         wlr_box dst {};
         wlr_box_transform(&dst, &e.box, toBuffer, width, height);
+        wlr_box shape {};
+        if (e.shapeRadius > 0.0f) {
+            wlr_box_transform(&shape, &e.shapeRect, toBuffer, width, height);
+        }
+        if (e.shadowSigma > 0.0f) {
+            wlr_box window {};
+            wlr_box_transform(&window, &e.shadowWindow, toBuffer, width, height);
+            // Sotto la finestra l'ombra non si vede: lo shader lavora solo
+            // sulla cornice attorno (gli angoli restano, sono arrotondati).
+            pixman_region32_t ring;
+            pixman_region32_init_rect(&ring, dst.x, dst.y, uint32_t(dst.width), uint32_t(dst.height));
+            if (clip) {
+                pixman_region32_intersect(&ring, &ring, clip);
+            }
+            const int inset = int(std::ceil(e.shapeRadius));
+            if (window.width > 2 * inset && window.height > 2 * inset) {
+                pixman_region32_t inner;
+                pixman_region32_init_rect(&inner, window.x + inset, window.y, uint32_t(window.width - 2 * inset),
+                    uint32_t(window.height));
+                pixman_region32_union_rect(&inner, &inner, window.x, window.y + inset, uint32_t(window.width),
+                    uint32_t(window.height - 2 * inset));
+                pixman_region32_subtract(&ring, &ring, &inner);
+                pixman_region32_fini(&inner);
+            }
+            pass.addShadow(dst, shape, window, e.shapeRadius, e.shadowSigma, e.color, &ring);
+            pixman_region32_fini(&ring);
+            continue;
+        }
         if (!e.texture) {
-            pass.addRect(dst, e.color, clip, true);
+            pass.addRect(dst, e.color, clip, true, shape, e.shapeRadius);
             continue;
         }
         render::Texture* texture = render::toTexture(e.texture);
@@ -289,6 +480,8 @@ void drawElements(render::Pass& pass, const std::vector<Element>& elements, cons
             .linear = e.linear,
             .blend = true,
             .clip = clip,
+            .shapeRect = shape,
+            .shapeRadius = e.shapeRadius,
         };
         // Sincronizzazione esplicita: il buffer è pronto quando scatta il
         // punto di acquisizione dell'app.
@@ -297,6 +490,24 @@ void drawElements(render::Pass& pass, const std::vector<Element>& elements, cons
             if (sync && sync->acquire_timeline) {
                 draw.waitTimeline = sync->acquire_timeline;
                 draw.waitPoint = sync->acquire_point;
+            }
+        }
+        // Sotto la superficie, lo sfondo sfocato che ha chiesto (§8.3).
+        if (e.surface && !wlr_box_empty(&e.blurBox)) {
+            if (const pixman_region32_t* blur = blurRegion(e.surface)) {
+                pixman_region32_t region;
+                pixman_region32_init(&region);
+                surfaceRegionToPixels(e, blur, &region);
+                wlr_region_transform(&region, &region, toBuffer, width, height);
+                if (clip) {
+                    pixman_region32_intersect(&region, &region, clip);
+                }
+                if (pixman_region32_not_empty(&region)) {
+                    render::Pass::TextureDraw panel = draw;
+                    panel.clip = nullptr;
+                    pass.addBlur(panel, &region, blurStrength(e.scaleX));
+                }
+                pixman_region32_fini(&region);
             }
         }
         pass.addTexture(draw);
@@ -557,6 +768,7 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
     }
     wlr_damage_ring_add(&m_ring, &changed);
     pixman_region32_fini(&changed);
+    expandDamageForBlur(elements, &m_ring.current);
     // Diagnosi: VELA_DEBUG_DAMAGE=1 ridisegna tutto a ogni frame.
     static const bool fullDamage = std::getenv("VELA_DEBUG_DAMAGE") && *std::getenv("VELA_DEBUG_DAMAGE") == '1';
     if (fullDamage && pixman_region32_not_empty(&m_ring.current)) {
@@ -630,6 +842,7 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
     pixman_region32_init(&bufferDamage);
     pixman_region32_copy(&frameDamage, &m_ring.current);
     wlr_damage_ring_rotate_buffer(&m_ring, buffer, &bufferDamage);
+    expandDamageForBlur(elements, &bufferDamage);
 
     const wl_output_transform toBuffer = wlr_output_transform_invert(transform);
     wlr_region_transform(&bufferDamage, &bufferDamage, toBuffer, width, height);
@@ -693,8 +906,8 @@ const Element* OutputFrame::scanoutCandidate(const std::vector<Element>& element
         }
         found = &e;
     }
-    if (!found || !found->surface || !found->texture) {
-        return nullptr;
+    if (!found || !found->surface || !found->texture || found->shapeRadius > 0.0f) {
+        return nullptr; // con gli angoli arrotondati serve comporre
     }
     const Element& e = *found;
     const wlr_box whole { 0, 0, m_width, m_height };

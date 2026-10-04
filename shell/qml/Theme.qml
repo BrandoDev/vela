@@ -8,10 +8,16 @@ import QtQuick
 QtObject {
     // --- colori (tema scuro) ---
     readonly property color desktop: "#06182d" // sotto lo sfondo, il suo blu più scuro
-    readonly property color taskbar: Qt.rgba(0.10, 0.10, 0.12, 0.94)
-    readonly property color surface: Qt.rgba(0.14, 0.14, 0.16, 0.97)
+    // Con la sfocatura del compositor (docs/renderer.md §8.3) i pannelli sono
+    // acrylic come su Windows 11: semitrasparenti sopra lo sfondo sfocato.
+    // Senza, opachi.
+    readonly property bool acrylic: Effects.blurAvailable
+    readonly property color taskbar: acrylic ? Qt.rgba(0.11, 0.11, 0.13, 0.62) : Qt.rgba(0.10, 0.10, 0.12, 0.94)
+    readonly property color surface: acrylic ? Qt.rgba(0.14, 0.14, 0.16, 0.72) : Qt.rgba(0.14, 0.14, 0.16, 0.97)
+    // Finestre di dialogo (Esegui, Proprietà, conferme): sempre piene.
+    readonly property color dialog: Qt.rgba(0.14, 0.14, 0.16, 0.98)
     readonly property color surfaceRaised: Qt.rgba(1, 1, 1, 0.06)
-    readonly property color popup: "#2a2a2f" // menu sopra altri pannelli: opaco
+    readonly property color popup: acrylic ? Qt.rgba(0.17, 0.17, 0.19, 0.78) : "#2a2a2f" // menu
     readonly property color hover: Qt.rgba(1, 1, 1, 0.08)
     readonly property color pressed: Qt.rgba(1, 1, 1, 0.05)
     readonly property color stroke: Qt.rgba(1, 1, 1, 0.09)

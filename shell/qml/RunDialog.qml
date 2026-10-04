@@ -83,7 +83,7 @@ Window {
     Rectangle {
         anchors.fill: parent
         radius: Theme.radiusLarge
-        color: Theme.surface
+        color: Theme.dialog
         border.width: 1
         border.color: Theme.stroke
 

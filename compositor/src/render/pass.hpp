@@ -41,11 +41,31 @@ public:
         // implicita del dmabuf.
         wlr_drm_syncobj_timeline* waitTimeline = nullptr;
         uint64_t waitPoint = 0;
+        // Ritaglio arrotondato (docs/renderer.md §8.1), in pixel della
+        // destinazione: raggio 0 o rettangolo vuoto, niente ritaglio.
+        wlr_box shapeRect {};
+        float shapeRadius = 0.0f;
     };
     void addTexture(const TextureDraw& draw);
 
     // Colore come in wlroots: sRGB, premoltiplicato.
-    void addRect(const wlr_box& box, const wlr_render_color& color, const pixman_region32_t* clip, bool blend);
+    void addRect(const wlr_box& box, const wlr_render_color& color, const pixman_region32_t* clip, bool blend,
+        const wlr_box& shapeRect = {}, float shapeRadius = 0.0f);
+
+    // Ombra di un rettangolo arrotondato (§8.2) dentro `box`: proiettata da
+    // `caster`, non disegnata sotto `window`. Colore sRGB premoltiplicato.
+    void addShadow(const wlr_box& box, const wlr_box& caster, const wlr_box& window, float radius, float sigma,
+        const wlr_render_color& color, const pixman_region32_t* clip);
+
+    // Sfocatura dal vivo (§8.3) sotto un pannello: legge ciò che è già stato
+    // disegnato dietro `region` (pixel della destinazione, clip compreso), lo
+    // sfoca (dual Kawase) e lo disegna con la ricetta acrylic. La forma la dà
+    // l'alfa di `panel`, la superficie che va sopra (da aggiungere dopo,
+    // come al solito). `strength`: l'ampiezza dei passaggi, in pixel.
+    // Niente, se la destinazione non si può leggere.
+    void addBlur(const TextureDraw& panel, const pixman_region32_t* region, float strength);
+    // Fin dove legge la sfocatura attorno a una zona, in pixel.
+    static int blurReach(float strength);
 
     // Da chiamare prima di submit(): misura i tempi della GPU di questo
     // disegno (Renderer::readTiming con timingSlot() e point()).
@@ -73,8 +93,17 @@ private:
         Texture* texture;
         QuadPush push;
         VkRect2D scissor;
+        int blurOp = -1; // prima di disegnarlo, la sfocatura m_blurOps[blurOp]
+    };
+    // Una sfocatura da calcolare: la zona dello schermo da leggere.
+    struct BlurOp {
+        wlr_box source;
+        float strength;
     };
     void addDraw(const Draw& draw, const wlr_box& dst, const pixman_region32_t* clip);
+    bool prepareTexture(const TextureDraw& in, Draw& draw);
+    void runBlur(VkCommandBuffer cmd, const BlurOp& op);
+    std::vector<BlurOp> m_blurOps;
 
     struct Shim {
         wlr_render_pass base;

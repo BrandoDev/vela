@@ -152,9 +152,17 @@ void Pass::addDraw(const Draw& draw, const wlr_box& dst, const pixman_region32_t
 
 void Pass::addTexture(const TextureDraw& in)
 {
+    Draw draw {};
+    if (prepareTexture(in, draw)) {
+        addDraw(draw, in.dst, in.clip);
+    }
+}
+
+bool Pass::prepareTexture(const TextureDraw& in, Draw& draw)
+{
     Texture* texture = in.texture;
     if (!texture || !texture->view || in.dst.width <= 0 || in.dst.height <= 0 || in.alpha <= 0.0f) {
-        return;
+        return false;
     }
     if (in.waitTimeline) {
         const bool known = std::any_of(m_waits.begin(), m_waits.end(), [&](const Wait& wait) {
@@ -171,7 +179,7 @@ void Pass::addTexture(const TextureDraw& in)
         src = { 0, 0, texWidth, texHeight };
     }
 
-    Draw draw {};
+    draw = {};
     draw.kind = Renderer::PipelineKind::Texture;
     draw.texture = texture;
     draw.linear = in.linear;
@@ -183,8 +191,18 @@ void Pass::addTexture(const TextureDraw& in)
     if (in.linear && shownWidth > src.width * 1.01 && shownHeight > src.height * 1.01) {
         draw.push.flags |= 1u;
     }
-    // Un quad opaco non ha bisogno di fondersi con ciò che c'è sotto.
-    draw.blend = in.blend && (texture->format->alpha || in.alpha < 1.0f);
+    // Un quad opaco non ha bisogno di fondersi con ciò che c'è sotto
+    // (ritagliato agli angoli invece sì).
+    const bool shaped = in.shapeRadius > 0.0f && !wlr_box_empty(&in.shapeRect);
+    draw.blend = in.blend && (texture->format->alpha || in.alpha < 1.0f || shaped);
+    if (shaped) {
+        draw.push.flags |= 2u;
+        draw.push.shapeRect[0] = float(in.shapeRect.x);
+        draw.push.shapeRect[1] = float(in.shapeRect.y);
+        draw.push.shapeRect[2] = float(in.shapeRect.width);
+        draw.push.shapeRect[3] = float(in.shapeRect.height);
+        draw.push.shape[0] = in.shapeRadius;
+    }
 
     QuadPush& p = draw.push;
     p.dst[0] = float(in.dst.x);
@@ -219,19 +237,28 @@ void Pass::addTexture(const TextureDraw& in)
     p.uvX[1] = right[1] - origin[1];
     p.uvY[0] = down[0] - origin[0];
     p.uvY[1] = down[1] - origin[1];
-
-    addDraw(draw, in.dst, in.clip);
+    return true;
 }
 
-void Pass::addRect(const wlr_box& box, const wlr_render_color& color, const pixman_region32_t* clip, bool blend)
+void Pass::addRect(const wlr_box& box, const wlr_render_color& color, const pixman_region32_t* clip, bool blend,
+    const wlr_box& shapeRect, float shapeRadius)
 {
     if (box.width <= 0 || box.height <= 0) {
         return;
     }
     Draw draw {};
     draw.kind = Renderer::PipelineKind::Rect;
-    draw.blend = blend && color.a < 1.0f;
+    const bool shaped = shapeRadius > 0.0f && !wlr_box_empty(&shapeRect);
+    draw.blend = blend && (color.a < 1.0f || shaped);
     QuadPush& p = draw.push;
+    if (shaped) {
+        p.flags |= 2u;
+        p.shapeRect[0] = float(shapeRect.x);
+        p.shapeRect[1] = float(shapeRect.y);
+        p.shapeRect[2] = float(shapeRect.width);
+        p.shapeRect[3] = float(shapeRect.height);
+        p.shape[0] = shapeRadius;
+    }
     p.dst[0] = float(box.x);
     p.dst[1] = float(box.y);
     p.dst[2] = float(box.width);
@@ -248,6 +275,223 @@ void Pass::addRect(const wlr_box& box, const wlr_render_color& color, const pixm
     }
     p.color[3] = a;
     addDraw(draw, box, clip);
+}
+
+void Pass::addShadow(const wlr_box& box, const wlr_box& caster, const wlr_box& window, float radius, float sigma,
+    const wlr_render_color& color, const pixman_region32_t* clip)
+{
+    if (box.width <= 0 || box.height <= 0 || color.a <= 0.0f) {
+        return;
+    }
+    Draw draw {};
+    draw.kind = Renderer::PipelineKind::Shadow;
+    draw.blend = true;
+    QuadPush& p = draw.push;
+    p.dst[0] = float(box.x);
+    p.dst[1] = float(box.y);
+    p.dst[2] = float(box.width);
+    p.dst[3] = float(box.height);
+    p.target[0] = float(m_target->width);
+    p.target[1] = float(m_target->height);
+    p.alpha = 1.0f;
+    const float a = std::clamp(color.a, 0.0f, 1.0f);
+    const float channels[3] = { color.r, color.g, color.b };
+    for (int i = 0; i < 3; ++i) {
+        const float straight = a > 0.0f ? std::clamp(channels[i] / a, 0.0f, 1.0f) : 0.0f;
+        p.color[i] = srgbToLinear(straight) * a;
+    }
+    p.color[3] = a;
+    p.shapeRect[0] = float(caster.x);
+    p.shapeRect[1] = float(caster.y);
+    p.shapeRect[2] = float(caster.width);
+    p.shapeRect[3] = float(caster.height);
+    p.shape[0] = radius;
+    p.shape[1] = sigma;
+    // La finestra, dove l'ombra non va: nei campi delle texture, che qui non servono.
+    p.uvOrigin[0] = float(window.x);
+    p.uvOrigin[1] = float(window.y);
+    p.uvX[0] = float(window.width);
+    p.uvX[1] = float(window.height);
+    addDraw(draw, box, clip);
+}
+
+// ---------------------------------------------------------- sfocatura --
+
+int Pass::blurReach(float strength)
+{
+    // Ogni livello allarga di circa due volte l'ampiezza nei suoi pixel, che
+    // valgono 2^livello pixel dello schermo: la somma, con un po' di margine.
+    return int(std::ceil(strength * 3.0f * float(1 << Renderer::blurLevels))) + 2;
+}
+
+void Pass::addBlur(const TextureDraw& panel, const pixman_region32_t* region, float strength)
+{
+    if (!m_target->sampleable || !region || !pixman_region32_not_empty(region)) {
+        return;
+    }
+    const pixman_box32_t* extents = pixman_region32_extents(region);
+    const int reach = blurReach(strength);
+    wlr_box source {
+        extents->x1 - reach,
+        extents->y1 - reach,
+        extents->x2 - extents->x1 + 2 * reach,
+        extents->y2 - extents->y1 + 2 * reach,
+    };
+    const wlr_box whole { 0, 0, int(m_target->width), int(m_target->height) };
+    if (!wlr_box_intersection(&source, &source, &whole) || !m_renderer.prepareBlur(uint32_t(source.width), uint32_t(source.height))) {
+        return;
+    }
+
+    Draw draw {};
+    if (!prepareTexture(panel, draw)) {
+        return;
+    }
+    draw.kind = Renderer::PipelineKind::BlurMix;
+    draw.blend = true;
+    draw.linear = true;
+    draw.push.flags &= ~1u; // il pannello si legge solo per l'alfa
+    draw.blurOp = int(m_blurOps.size());
+    m_blurOps.push_back({ source, strength });
+    // Dal pixel dello schermo al livello 0 (metà risoluzione) delle immagini di lavoro.
+    const Renderer::BlurImage& level0 = m_renderer.blurImage(0);
+    draw.push.pad[0] = float(source.x);
+    draw.push.pad[1] = float(source.y);
+    draw.push.shape[2] = 0.5f / float(level0.width);
+    draw.push.shape[3] = 0.5f / float(level0.height);
+    // La tinta acrylic del tema scuro di Windows 11 (sRGB premoltiplicato).
+    const wlr_render_color tint { 0.11f * 0.55f, 0.11f * 0.55f, 0.12f * 0.55f, 0.55f };
+    const float a = tint.a;
+    const float channels[3] = { tint.r, tint.g, tint.b };
+    for (int i = 0; i < 3; ++i) {
+        draw.push.color[i] = srgbToLinear(std::clamp(channels[i] / a, 0.0f, 1.0f)) * a;
+    }
+    draw.push.color[3] = a;
+    addDraw(draw, panel.dst, region);
+}
+
+void Pass::runBlur(VkCommandBuffer cmd, const BlurOp& op)
+{
+    const VkPipelineLayout layout = m_renderer.pipelineLayout();
+    auto barrier = [&](VkImage image, VkImageLayout from, VkImageLayout to, VkPipelineStageFlags2 srcStage,
+                       VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess) {
+        const VkImageMemoryBarrier2 b {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = srcStage,
+            .srcAccessMask = srcAccess,
+            .dstStageMask = dstStage,
+            .dstAccessMask = dstAccess,
+            .oldLayout = from,
+            .newLayout = to,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = image,
+            .subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 },
+        };
+        const VkDependencyInfo dep { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &b };
+        vkCmdPipelineBarrier2(cmd, &dep);
+    };
+    constexpr VkPipelineStageFlags2 drawStages
+        = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    constexpr VkAccessFlags2 drawAccess = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+
+    // Un passaggio: da `source` (zona usata src, in texture di srcW x srcH)
+    // al livello `level`, grande usedW x usedH.
+    auto pass = [&](Renderer::PipelineKind kind, VkImageView source, const wlr_box& src, uint32_t srcW, uint32_t srcH,
+                    int level, uint32_t usedW, uint32_t usedH) {
+        const Renderer::BlurImage& dst = m_renderer.blurImage(level);
+        barrier(dst.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, drawStages, drawAccess,
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+        const VkRenderingAttachmentInfo attachment {
+            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .imageView = dst.view,
+            .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        };
+        const VkRenderingInfo rendering {
+            .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+            .renderArea = { { 0, 0 }, { usedW, usedH } },
+            .layerCount = 1,
+            .colorAttachmentCount = 1,
+            .pColorAttachments = &attachment,
+        };
+        vkCmdBeginRendering(cmd, &rendering);
+        const VkViewport viewport { 0.0f, 0.0f, float(dst.width), float(dst.height), 0.0f, 1.0f };
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+        const VkRect2D scissor { { 0, 0 }, { usedW, usedH } };
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_renderer.pipeline(Renderer::blurFormat, kind, false));
+        const VkDescriptorImageInfo image {
+            .sampler = m_renderer.sampler(true),
+            .imageView = source,
+            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
+        const VkWriteDescriptorSet write {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &image,
+        };
+        vkCmdPushDescriptorSet(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &write);
+        QuadPush p {};
+        p.dst[2] = float(usedW);
+        p.dst[3] = float(usedH);
+        p.target[0] = float(dst.width);
+        p.target[1] = float(dst.height);
+        p.alpha = 1.0f;
+        p.uvOrigin[0] = float(src.x) / float(srcW);
+        p.uvOrigin[1] = float(src.y) / float(srcH);
+        p.uvX[0] = float(src.width) / float(srcW);
+        p.uvY[1] = float(src.height) / float(srcH);
+        // Mezzo texel della sorgente, per l'ampiezza; e dove si può leggere.
+        p.shape[0] = 0.5f / float(srcW) * op.strength;
+        p.shape[1] = 0.5f / float(srcH) * op.strength;
+        p.shapeRect[0] = (float(src.x) + 0.5f) / float(srcW);
+        p.shapeRect[1] = (float(src.y) + 0.5f) / float(srcH);
+        p.shapeRect[2] = (float(src.x + src.width) - 0.5f) / float(srcW);
+        p.shapeRect[3] = (float(src.y + src.height) - 0.5f) / float(srcH);
+        vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(QuadPush), &p);
+        vkCmdDraw(cmd, 4, 1, 0, 0);
+        vkCmdEndRendering(cmd);
+        barrier(dst.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    };
+
+    // Lo schermo disegnato fin qui diventa leggibile.
+    vkCmdEndRendering(cmd);
+    barrier(m_target->image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+
+    // Le dimensioni usate di ogni livello.
+    uint32_t usedW[Renderer::blurLevels];
+    uint32_t usedH[Renderer::blurLevels];
+    for (int level = 0; level < Renderer::blurLevels; ++level) {
+        usedW[level] = std::max(1u, (uint32_t(op.source.width) + (2u << level) - 1) >> (level + 1));
+        usedH[level] = std::max(1u, (uint32_t(op.source.height) + (2u << level) - 1) >> (level + 1));
+    }
+    // Giù: dallo schermo al livello 0, poi ogni livello dal precedente.
+    pass(Renderer::PipelineKind::BlurDown, m_target->view, op.source, m_target->width, m_target->height, 0, usedW[0],
+        usedH[0]);
+    for (int level = 1; level < Renderer::blurLevels; ++level) {
+        const Renderer::BlurImage& from = m_renderer.blurImage(level - 1);
+        pass(Renderer::PipelineKind::BlurDown, from.view, { 0, 0, int(usedW[level - 1]), int(usedH[level - 1]) },
+            from.width, from.height, level, usedW[level], usedH[level]);
+    }
+    // Su: di nuovo fino al livello 0.
+    for (int level = Renderer::blurLevels - 2; level >= 0; --level) {
+        const Renderer::BlurImage& from = m_renderer.blurImage(level + 1);
+        pass(Renderer::PipelineKind::BlurUp, from.view, { 0, 0, int(usedW[level + 1]), int(usedH[level + 1]) },
+            from.width, from.height, level, usedW[level], usedH[level]);
+    }
+
+    // Si torna a disegnare sullo schermo.
+    barrier(m_target->image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 }
 
 bool Pass::submit()
@@ -358,7 +602,16 @@ bool Pass::submit()
 
     VkPipeline bound = VK_NULL_HANDLE;
     const VkPipelineLayout layout = m_renderer.pipelineLayout();
+    int blurDone = -1;
     for (const Draw& draw : m_draws) {
+        // Una sfocatura: si legge ciò che c'è dietro prima dei suoi pezzi.
+        if (draw.blurOp >= 0 && draw.blurOp != blurDone) {
+            runBlur(cmd, m_blurOps[draw.blurOp]);
+            blurDone = draw.blurOp;
+            vkCmdBeginRendering(cmd, &rendering);
+            vkCmdSetViewport(cmd, 0, 1, &viewport);
+            bound = VK_NULL_HANDLE;
+        }
         VkPipeline pipeline = m_renderer.pipeline(m_target->format, draw.kind, draw.blend);
         if (!pipeline) {
             continue;
@@ -373,14 +626,30 @@ bool Pass::submit()
                 .imageView = draw.texture->view,
                 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             };
-            const VkWriteDescriptorSet write {
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstBinding = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = &image,
+            const VkDescriptorImageInfo blurred {
+                .sampler = m_renderer.sampler(true),
+                .imageView = m_renderer.blurImage(0).view,
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             };
-            vkCmdPushDescriptorSet(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &write);
+            const VkWriteDescriptorSet writes[] = {
+                {
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstBinding = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .pImageInfo = &image,
+                },
+                {
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstBinding = 1,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .pImageInfo = &blurred,
+                },
+            };
+            // La composizione della sfocatura legge anche lo sfondo sfocato.
+            const uint32_t count = draw.kind == Renderer::PipelineKind::BlurMix ? 2 : 1;
+            vkCmdPushDescriptorSet(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, count, writes);
         }
         vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
             sizeof(QuadPush), &draw.push);

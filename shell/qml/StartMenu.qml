@@ -132,6 +132,17 @@ Window {
         }
     }
 
+    // Lo sfondo sfocato sotto il pannello (che sale aprendosi).
+    function updateBlur() {
+        Effects.setBlur(root, [Qt.rect(panel.x, Math.max(0, panel.y), panel.width, Math.max(0, Math.min(panel.height, root.height - panel.y)))])
+    }
+    Connections {
+        target: panel
+        function onYChanged() { root.updateBlur() }
+        function onHeightChanged() { root.updateBlur() }
+        function onWidthChanged() { root.updateBlur() }
+    }
+
     function open() {
         closing = false
         powerButton.menuOpen = false
@@ -240,28 +251,13 @@ Window {
         }
     }
 
-    // Ombra morbida sotto il pannello. L'effetto lavora su una sagoma
-    // nascosta con la stessa forma, così il pannello resta interattivo.
-    Rectangle {
-        id: shadowShape
-        visible: false
-        x: panel.x
-        y: panel.y
-        width: panel.width
-        height: panel.height
-        radius: panel.radius
-        color: "black"
-    }
-
-    MultiEffect {
-        source: shadowShape
-        anchors.fill: shadowShape
-        shadowEnabled: true
-        shadowColor: "#000000"
-        shadowOpacity: 0.5
-        shadowBlur: 1.0
-        shadowVerticalOffset: 6
+    // Ombra morbida attorno al pannello (non sotto: è acrylic).
+    PanelShadow {
+        target: panel
         opacity: panel.opacity
+        blur: 40
+        offset: Qt.vector2d(0, 8)
+        color: Qt.rgba(0, 0, 0, 0.5)
     }
 
     Rectangle {

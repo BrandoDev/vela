@@ -8,6 +8,7 @@
 // codifica scrivendo.
 
 #include "push.glsl"
+#include "shape.glsl"
 
 layout(set = 0, binding = 0) uniform sampler2D tex;
 layout(location = 0) in vec2 uv;
@@ -59,5 +60,5 @@ void main()
     } else {
         c.rgb = srgbToLinear(clamp(c.rgb, 0.0, 1.0)); // additivo: raro, ma lecito
     }
-    outColor = c * pc.alpha;
+    outColor = c * (pc.alpha * shapeClip());
 }

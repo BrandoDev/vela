@@ -19,6 +19,18 @@ const uint32_t textureFrag[] = {
 const uint32_t rectFrag[] = {
 #include "rect.frag.spv.inc"
 };
+const uint32_t shadowFrag[] = {
+#include "shadow.frag.spv.inc"
+};
+const uint32_t blurDownFrag[] = {
+#include "blur_down.frag.spv.inc"
+};
+const uint32_t blurUpFrag[] = {
+#include "blur_up.frag.spv.inc"
+};
+const uint32_t blurMixFrag[] = {
+#include "blur_mix.frag.spv.inc"
+};
 
 constexpr VkDeviceSize stagingChunkSize = 8 * 1024 * 1024;
 constexpr size_t idleStagingChunksKept = 2;
@@ -175,19 +187,28 @@ bool Renderer::init()
         }
     }
 
-    // Una texture per disegno, legata con i push descriptor (Vulkan 1.4):
-    // niente pool di descrittori da gestire.
-    const VkDescriptorSetLayoutBinding binding {
-        .binding = 0,
-        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+    // Una texture per disegno (due per la sfocatura: il pannello e lo sfondo
+    // sfocato), legate con i push descriptor (Vulkan 1.4): niente pool di
+    // descrittori da gestire.
+    const VkDescriptorSetLayoutBinding bindings[] = {
+        {
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        },
+        {
+            .binding = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        },
     };
     const VkDescriptorSetLayoutCreateInfo setInfo {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT,
-        .bindingCount = 1,
-        .pBindings = &binding,
+        .bindingCount = 2,
+        .pBindings = bindings,
     };
     if (vkCreateDescriptorSetLayout(m_vk.device, &setInfo, nullptr, &m_setLayout) != VK_SUCCESS) {
         return false;
@@ -211,7 +232,11 @@ bool Renderer::init()
     m_vert = m_vk.createShader(quadVert, sizeof(quadVert));
     m_textureFrag = m_vk.createShader(textureFrag, sizeof(textureFrag));
     m_rectFrag = m_vk.createShader(rectFrag, sizeof(rectFrag));
-    return m_vert && m_textureFrag && m_rectFrag;
+    m_shadowFrag = m_vk.createShader(shadowFrag, sizeof(shadowFrag));
+    m_blurDownFrag = m_vk.createShader(blurDownFrag, sizeof(blurDownFrag));
+    m_blurUpFrag = m_vk.createShader(blurUpFrag, sizeof(blurUpFrag));
+    m_blurMixFrag = m_vk.createShader(blurMixFrag, sizeof(blurMixFrag));
+    return m_vert && m_textureFrag && m_rectFrag && m_shadowFrag && m_blurDownFrag && m_blurUpFrag && m_blurMixFrag;
 }
 
 Renderer::~Renderer()
@@ -247,6 +272,13 @@ Renderer::~Renderer()
     vkDestroyShaderModule(m_vk.device, m_vert, nullptr);
     vkDestroyShaderModule(m_vk.device, m_textureFrag, nullptr);
     vkDestroyShaderModule(m_vk.device, m_rectFrag, nullptr);
+    vkDestroyShaderModule(m_vk.device, m_shadowFrag, nullptr);
+    vkDestroyShaderModule(m_vk.device, m_blurDownFrag, nullptr);
+    vkDestroyShaderModule(m_vk.device, m_blurUpFrag, nullptr);
+    vkDestroyShaderModule(m_vk.device, m_blurMixFrag, nullptr);
+    for (BlurImage& image : m_blur) {
+        destroyBlurImage(image);
+    }
     vkDestroyPipelineLayout(m_vk.device, m_layout, nullptr);
     vkDestroyDescriptorSetLayout(m_vk.device, m_setLayout, nullptr);
     vkDestroySampler(m_vk.device, m_nearest, nullptr);
@@ -436,8 +468,14 @@ RenderTarget* Renderer::targetFor(wlr_buffer* buffer)
     target->dmabufFd = dmabuf.fd[0];
     target->width = uint32_t(dmabuf.width);
     target->height = uint32_t(dmabuf.height);
-    if (!m_vk.importDmabuf(dmabuf, format->srgb, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, target->image,
-            target->memory)) {
+    // Anche leggibile, se il formato lo permette: la sfocatura legge ciò che
+    // è già disegnato sotto una zona (§8.3).
+    VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    if (m_vk.supportsDmabuf(format->srgb, dmabuf.modifier, usage | VK_IMAGE_USAGE_SAMPLED_BIT)) {
+        usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+        target->sampleable = true;
+    }
+    if (!m_vk.importDmabuf(dmabuf, format->srgb, usage, target->image, target->memory)) {
         wlr_log(WLR_ERROR, "Renderer: impossibile importare il buffer di destinazione");
         delete target;
         return nullptr;
@@ -813,7 +851,12 @@ VkPipeline Renderer::pipeline(VkFormat target, PipelineKind kind, bool blend)
             .pName = "main" },
         { .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .module = kind == PipelineKind::Texture ? m_textureFrag : m_rectFrag,
+            .module = kind == PipelineKind::Texture ? m_textureFrag
+                : kind == PipelineKind::Shadow      ? m_shadowFrag
+                : kind == PipelineKind::BlurDown    ? m_blurDownFrag
+                : kind == PipelineKind::BlurUp      ? m_blurUpFrag
+                : kind == PipelineKind::BlurMix     ? m_blurMixFrag
+                                                    : m_rectFrag,
             .pName = "main" },
     };
     const VkPipelineVertexInputStateCreateInfo vertexInput {
@@ -888,6 +931,90 @@ VkPipeline Renderer::pipeline(VkFormat target, PipelineKind kind, bool blend)
     }
     m_pipelines[key] = pipeline;
     return pipeline;
+}
+
+} // namespace vela::render
+
+namespace vela::render {
+
+// ---------------------------------------------------------- sfocatura --
+
+void Renderer::destroyBlurImage(BlurImage& image)
+{
+    if (image.view) {
+        vkDestroyImageView(m_vk.device, image.view, nullptr);
+    }
+    if (image.image) {
+        vkDestroyImage(m_vk.device, image.image, nullptr);
+    }
+    if (image.memory) {
+        vkFreeMemory(m_vk.device, image.memory, nullptr);
+    }
+    image = {};
+}
+
+bool Renderer::prepareBlur(uint32_t width, uint32_t height)
+{
+    for (int level = 0; level < blurLevels; ++level) {
+        const uint32_t needWidth = std::max(1u, (width + (2u << level) - 1) >> (level + 1));
+        const uint32_t needHeight = std::max(1u, (height + (2u << level) - 1) >> (level + 1));
+        BlurImage& current = m_blur[level];
+        if (current.image && current.width >= needWidth && current.height >= needHeight) {
+            continue;
+        }
+        // Più grande del necessario: così non si rifà a ogni zona un po' più grande.
+        const uint32_t allocWidth = std::max(needWidth, current.width) + 64;
+        const uint32_t allocHeight = std::max(needHeight, current.height) + 64;
+        if (current.image) {
+            BlurImage old = current;
+            current = {};
+            defer([this, old]() mutable { destroyBlurImage(old); });
+        }
+        const VkImageCreateInfo imageInfo {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = blurFormat,
+            .extent = { allocWidth, allocHeight, 1 },
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+            .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        };
+        BlurImage image { .width = allocWidth, .height = allocHeight };
+        bool ok = vkCreateImage(m_vk.device, &imageInfo, nullptr, &image.image) == VK_SUCCESS;
+        if (ok) {
+            VkMemoryRequirements requirements {};
+            vkGetImageMemoryRequirements(m_vk.device, image.image, &requirements);
+            const VkMemoryAllocateInfo allocInfo {
+                .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                .allocationSize = requirements.size,
+                .memoryTypeIndex = m_vk.findMemoryType(requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
+            };
+            ok = allocInfo.memoryTypeIndex != UINT32_MAX
+                && vkAllocateMemory(m_vk.device, &allocInfo, nullptr, &image.memory) == VK_SUCCESS
+                && vkBindImageMemory(m_vk.device, image.image, image.memory, 0) == VK_SUCCESS;
+        }
+        if (ok) {
+            const VkImageViewCreateInfo viewInfo {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                .image = image.image,
+                .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                .format = blurFormat,
+                .subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 },
+            };
+            ok = vkCreateImageView(m_vk.device, &viewInfo, nullptr, &image.view) == VK_SUCCESS;
+        }
+        if (!ok) {
+            wlr_log(WLR_ERROR, "Renderer: niente memoria per la sfocatura (%ux%u)", allocWidth, allocHeight);
+            destroyBlurImage(image);
+            return false;
+        }
+        current = image;
+    }
+    return true;
 }
 
 } // namespace vela::render

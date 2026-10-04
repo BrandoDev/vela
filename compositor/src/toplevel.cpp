@@ -12,6 +12,7 @@ Popup::Popup(wlr_xdg_popup* popup, scene::Tree* parent, BoxFn box)
     , surfaceNode(std::make_unique<scene::SurfaceNode>(tree.get(), popup->base->surface))
     , constraintBox(std::move(box))
 {
+    tree->unclipped = true; // un menu esce dalla finestra: niente angoli della finestra
     commit.connect(&xdg->base->surface->events.commit, [this](void*) {
         if (xdg->base->initial_commit) {
             unconstrain(); // invia anche il primo configure
@@ -771,6 +772,33 @@ pid_t Toplevel::pid() const
         return pid;
     }
     return 0;
+}
+
+void Toplevel::updateShape()
+{
+    static constexpr double cornerRadius = 8.0; // logici, come Windows 11
+    scene::Shape shape;
+    bool ownShadow = false;
+    if (xdg && xdg->base->surface) {
+        const wlr_box g = xdg->base->geometry;
+        const int width = xdg->base->surface->current.width;
+        const int height = xdg->base->surface->current.height;
+        ownShadow = g.x > 0 || g.y > 0 || (g.width > 0 && g.width < width) || (g.height > 0 && g.height < height);
+    }
+    if (mapped && !minimized && !maximized && !fullscreen && snap == Snap::None && !ownShadow) {
+        const wlr_box g = geometry();
+        if (g.width > 0 && g.height > 0) {
+            shape.enabled = true;
+            shape.x = g.x;
+            shape.y = g.y;
+            shape.width = g.width;
+            shape.height = g.height;
+            shape.radius = cornerRadius;
+            shape.shadow = true;
+            shape.active = activated;
+        }
+    }
+    tree->setShape(shape);
 }
 
 } // namespace vela

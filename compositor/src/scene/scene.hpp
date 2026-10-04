@@ -64,6 +64,9 @@ public:
     // Si vede ma non prende input, lui e i figli (es. l'icona trascinata,
     // che sta sotto il cursore e non deve coprire dove la si lascia).
     bool ignoresInput = false;
+    // I figli non ereditano il ritaglio della forma di un antenato (i popup:
+    // un menu può uscire dalla finestra).
+    bool unclipped = false;
 
 protected:
     Node(Type type, Tree* parent);
@@ -80,6 +83,22 @@ private:
     float m_opacity = 1.0f;
 };
 
+// La forma di un albero (docs/renderer.md §8): i figli ritagliati in un
+// rettangolo arrotondato, con l'ombra sotto. Coordinate logiche, rispetto
+// all'albero.
+struct Shape {
+    bool enabled = false;
+    double x = 0.0;
+    double y = 0.0;
+    double width = 0.0;
+    double height = 0.0;
+    double radius = 0.0;
+    bool shadow = false;
+    bool active = false; // la finestra attiva ha l'ombra più marcata
+
+    bool operator==(const Shape&) const = default;
+};
+
 class Tree : public Node {
 public:
     explicit Tree(Tree* parent);
@@ -88,9 +107,13 @@ public:
     // Dal basso verso l'alto.
     const std::vector<Node*>& children() const { return m_children; }
 
+    const Shape& shape() const { return m_shape; }
+    void setShape(const Shape& shape);
+
 private:
     friend class Node;
     std::vector<Node*> m_children;
+    Shape m_shape;
 };
 
 // Una superficie di un'app con le sue sottosuperfici, lette dal vivo.

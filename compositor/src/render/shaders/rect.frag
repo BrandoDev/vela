@@ -5,10 +5,11 @@
 // in spazio lineare e premoltiplicato.
 
 #include "push.glsl"
+#include "shape.glsl"
 
 layout(location = 0) out vec4 outColor;
 
 void main()
 {
-    outColor = pc.color;
+    outColor = pc.color * shapeClip();
 }

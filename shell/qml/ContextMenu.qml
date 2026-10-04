@@ -90,8 +90,18 @@ Window {
             panel.move(1)
         }
         panels.push(panel)
+        panel.xChanged.connect(updateBlur)
+        panel.yChanged.connect(updateBlur)
+        panel.widthChanged.connect(updateBlur)
+        panel.heightChanged.connect(updateBlur)
+        updateBlur()
         panel.forceActiveFocus()
         return panel
+    }
+
+    // Lo sfondo sfocato sotto i menu aperti (la finestra copre lo schermo).
+    function updateBlur() {
+        Effects.setBlur(root, panels.map(p => Qt.rect(p.x, p.y, p.width, p.height)))
     }
 
     function openSubmenu(parentPanel, index, rowY, keyboard) {
@@ -159,6 +169,7 @@ Window {
         while (panels.length > level) {
             panels.pop().destroy()
         }
+        updateBlur()
     }
 
     function closeAll(notify, reopening) {

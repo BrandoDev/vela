@@ -16,6 +16,10 @@ Snapshot::Snapshot(scene::Tree* parent, scene::Node* source, wlr_box frame)
         source->parent()->coords(lx, ly);
     }
     collect(source, lx, ly);
+    // Gli angoli e l'ombra della finestra la seguono nell'animazione.
+    if (source->type() == scene::Node::Type::Tree) {
+        m_shape = static_cast<scene::Tree*>(source)->shape();
+    }
     if (source->parent() == parent) {
         m_tree->placeAbove(source);
     }
@@ -69,6 +73,15 @@ void Snapshot::apply(double cx, double cy, double scale, float opacity)
         piece.node->setSize(piece.width * scale, piece.height * scale);
     }
     m_tree->setOpacity(opacity);
+    if (m_shape.enabled) {
+        scene::Shape shape = m_shape;
+        shape.width = m_frame.width * scale;
+        shape.height = m_frame.height * scale;
+        shape.x = cx - shape.width / 2.0;
+        shape.y = cy - shape.height / 2.0;
+        shape.radius = m_shape.radius * scale;
+        m_tree->setShape(shape);
+    }
 }
 
 // ------------------------------------------------------------ animazioni --

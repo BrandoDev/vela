@@ -614,7 +614,7 @@ Window {
                             visible: icon.renaming
                             width: parent.width
                             height: editor.height + 4
-                            color: Theme.surface
+                            color: Theme.dialog
                             border.width: 1
                             border.color: Theme.accent
                             MenuTextField {

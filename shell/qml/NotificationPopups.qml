@@ -11,6 +11,15 @@ Window {
     visible: Notifications.count > 0
     color: "transparent"
 
+    // Lo sfondo sfocato sotto i riquadri: la finestra intera, la forma la
+    // danno i riquadri (fuori è trasparente).
+    function updateBlur() {
+        Effects.setBlur(root, [Qt.rect(0, 0, width, height)])
+    }
+    onWidthChanged: updateBlur()
+    onHeightChanged: updateBlur()
+    Component.onCompleted: updateBlur()
+
     // Mouse sopra: non scadono mentre le si legge.
     HoverHandler {
         onHoveredChanged: Notifications.setHovered(hovered)

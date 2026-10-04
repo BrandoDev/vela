@@ -29,7 +29,15 @@ Window {
         if (!Tasks.pinsSaved) {
             Tasks.pinnedIds = pinnedIds
         }
+        updateBlur()
     }
+
+    // Tutta la taskbar sopra lo sfondo sfocato (acrylic).
+    function updateBlur() {
+        Effects.setBlur(root, [Qt.rect(0, 0, width, height)])
+    }
+    onWidthChanged: updateBlur()
+    onHeightChanged: updateBlur()
 
     // --- menu del tasto destro (docs/renderer.md §14.4-14.6) ---
 

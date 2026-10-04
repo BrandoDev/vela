@@ -203,6 +203,15 @@ void BufferNode::setSize(double width, double height)
     Scene::changed();
 }
 
+void Tree::setShape(const Shape& shape)
+{
+    if (shape == m_shape) {
+        return;
+    }
+    m_shape = shape;
+    Scene::changed();
+}
+
 // ------------------------------------------------------------ superfici --
 
 namespace {

@@ -8,5 +8,9 @@ layout(push_constant) uniform Push {
     vec2 uvX; // spostamento lungo il bordo superiore
     vec2 uvY; // spostamento lungo il bordo sinistro
     vec2 pad;
-    vec4 color; // rettangoli: colore lineare premoltiplicato
+    vec4 color; // rettangoli e ombre: colore lineare premoltiplicato
+    // La forma (docs/renderer.md §8): rettangolo arrotondato in pixel della
+    // destinazione. Ritaglio (flags bit 1) o, per le ombre, chi la proietta.
+    vec4 shapeRect;
+    vec4 shape; // x: raggio degli angoli; y: sigma dell'ombra (pixel)
 } pc;

@@ -10,6 +10,8 @@ qt_add_executable(vela-shell
     src/main.cpp
     src/appmodel.cpp
     src/appmodel.h
+    src/backgroundeffects.cpp
+    src/backgroundeffects.h
     src/desktopmodel.cpp
     src/desktopmodel.h
     src/foreigntoplevels.cpp
@@ -55,7 +57,8 @@ file(MAKE_DIRECTORY ${SHELL_GENERATED_DIR})
 foreach(name
         ext-foreign-toplevel-list/ext-foreign-toplevel-list-v1
         ext-image-capture-source/ext-image-capture-source-v1
-        ext-image-copy-capture/ext-image-copy-capture-v1)
+        ext-image-copy-capture/ext-image-copy-capture-v1
+        ext-background-effect/ext-background-effect-v1)
     get_filename_component(base ${name} NAME)
     set(xml ${SHELL_WAYLAND_PROTOCOLS_DIR}/staging/${name}.xml)
     set(header ${SHELL_GENERATED_DIR}/${base}-client-protocol.h)
@@ -85,7 +88,8 @@ set(VELA_QML_FILES
     qml/MenuPanel.qml
     qml/MenuTextField.qml
     qml/RunDialog.qml
-    qml/ConfirmDialog.qml)
+    qml/ConfirmDialog.qml
+    qml/PanelShadow.qml)
 
 # I file stanno in qml/ per ordine, ma nel modulo devono stare alla radice:
 # così si vedono tra loro (Theme compreso, che è un singleton) senza import.
