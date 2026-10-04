@@ -34,6 +34,12 @@ QtObject {
         confirmRequested(title, text, yesText, action)
     }
 
+    // La finestra Proprietà (PropertiesDialog.qml) per questi file.
+    signal propertiesRequested(var paths)
+    function showProperties(paths) {
+        propertiesRequested(paths)
+    }
+
     function open(entries, x, y, options) {
         isOpen = true
         openRequested(entries, x, y, options || {})

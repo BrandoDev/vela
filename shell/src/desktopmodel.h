@@ -48,6 +48,8 @@ public:
         IsAppRole, // un collegamento .desktop
         IsTrashRole,
         TypeRole,
+        ModifiedRole,
+        ThumbnailRole, // c'è (o si può fare) una miniatura
         XRole, // posizione nella griglia (logica, dentro l'area)
         YRole,
     };
@@ -125,6 +127,7 @@ private:
         bool isDir = false;
         bool isApp = false;
         bool isTrash = false;
+        bool hasThumbnail = false;
         qint64 size = 0;
         QDateTime modified;
         QPointF position; // scelta a mano (salvata); (-1, -1): nessuna

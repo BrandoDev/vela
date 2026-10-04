@@ -12,6 +12,10 @@ qt_add_executable(vela-shell
     src/appmodel.h
     src/backgroundeffects.cpp
     src/backgroundeffects.h
+    src/filethumbnails.cpp
+    src/filethumbnails.h
+    src/fileproperties.cpp
+    src/fileproperties.h
     src/desktopmodel.cpp
     src/desktopmodel.h
     src/foreigntoplevels.cpp
@@ -89,6 +93,7 @@ set(VELA_QML_FILES
     qml/MenuTextField.qml
     qml/RunDialog.qml
     qml/ConfirmDialog.qml
+    qml/PropertiesDialog.qml
     qml/PanelShadow.qml)
 
 # I file stanno in qml/ per ordine, ma nel modulo devono stare alla radice:

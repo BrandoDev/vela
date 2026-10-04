@@ -3,6 +3,8 @@
 #include "appmodel.h"
 
 #include <QClipboard>
+#include <QCryptographicHash>
+#include <QImageReader>
 #include <QCollator>
 #include <QDir>
 #include <QFile>
@@ -69,6 +71,26 @@ void readDesktopFile(const QString& path, QString& name, QString& icon)
     icon = values.value(QStringLiteral("Icon"), icon);
 }
 
+// Le immagini (la miniatura la fa la shell) e i file di cui un'altra app
+// ha già messo la miniatura nella cache condivisa (video, PDF...).
+bool hasThumbnail(const QFileInfo& info, const QMimeType& mime)
+{
+    static const QList<QByteArray> readable = QImageReader::supportedMimeTypes();
+    if (readable.contains(mime.name().toLatin1())) {
+        return true;
+    }
+    const QByteArray uri = QUrl::fromLocalFile(info.absoluteFilePath()).toEncoded();
+    const QString name = QString::fromLatin1(QCryptographicHash::hash(uri, QCryptographicHash::Md5).toHex())
+        + QStringLiteral(".png");
+    const QString root = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) + QStringLiteral("/thumbnails/");
+    for (const char* dir : { "normal/", "large/", "x-large/" }) {
+        if (QFileInfo::exists(root + QLatin1String(dir) + name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool runDetached(const QString& program, const QStringList& arguments, const QString& directory)
 {
     qInfo("vela-shell: %s %s", qPrintable(program), qPrintable(arguments.join(u' ')));
@@ -125,6 +147,8 @@ QVariant DesktopModel::data(const QModelIndex& index, int role) const
     case IsAppRole: return item.isApp;
     case IsTrashRole: return item.isTrash;
     case TypeRole: return item.type;
+    case ThumbnailRole: return item.hasThumbnail;
+    case ModifiedRole: return double(item.modified.isValid() ? item.modified.toSecsSinceEpoch() : 0);
     case XRole: return index.row() < m_layout.size() ? m_layout.at(index.row()).x() : 0.0;
     case YRole: return index.row() < m_layout.size() ? m_layout.at(index.row()).y() : 0.0;
     default: return {};
@@ -142,6 +166,8 @@ QHash<int, QByteArray> DesktopModel::roleNames() const
         { IsAppRole, "isApp" },
         { IsTrashRole, "isTrash" },
         { TypeRole, "typeName" },
+        { ModifiedRole, "modified" },
+        { ThumbnailRole, "hasThumbnail" },
         { XRole, "cellX" },
         { YRole, "cellY" },
     };
@@ -288,6 +314,7 @@ void DesktopModel::reload()
         if (!item.isDir && !QIcon::hasThemeIcon(item.icon)) {
             item.icon = mime.genericIconName();
         }
+        item.hasThumbnail = !item.isDir && hasThumbnail(info, mime);
         if (!item.isDir && info.suffix() == QLatin1String("desktop")) {
             item.isApp = true;
             item.name = info.completeBaseName();

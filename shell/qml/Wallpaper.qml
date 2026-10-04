@@ -119,7 +119,7 @@ Window {
             { text: "&Elimina", action: () => Desktop.trash(files) },
             { text: "Ri&nomina", enabled: !!single, action: () => icons.startRename(single.path) },
             { separator: true },
-            { text: "P&roprietà", enabled: false })
+            { text: "P&roprietà", action: () => Menus.showProperties(files) })
         return entries
     }
 
@@ -224,7 +224,7 @@ Window {
                 { text: "File &TAR", icon: "application-x-tar", action: () => Desktop.compress(files, "tar") }
             ] },
             { text: "Copia come &percorso", icon: "edit-copy-path", shortcut: "Ctrl+Maiusc+C", action: () => Desktop.copyAsPath(files) },
-            { text: "P&roprietà", icon: "document-properties", shortcut: "Alt+Invio", enabled: false },
+            { text: "P&roprietà", icon: "document-properties", shortcut: "Alt+Invio", action: () => Menus.showProperties(files) },
             { separator: true },
             { text: "Mostra altre opzioni", icon: "view-more-symbolic", shortcut: "Maiusc+F10", action: () => root.showMoreOptions(files) }
         )
@@ -391,8 +391,13 @@ Window {
                 Desktop.trash(files)
             } else if (event.key === Qt.Key_F2 && files.length === 1) {
                 startRename(files[0])
-            } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && paths.length > 0) {
+            } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && paths.length > 0
+                && !(event.modifiers & Qt.AltModifier)) {
                 Desktop.open(paths)
+            } else if ((event.modifiers & Qt.AltModifier) && (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)) {
+                if (files.length > 0) {
+                    Menus.showProperties(files)
+                }
             } else if (event.key === Qt.Key_F5) {
                 Desktop.refresh()
             } else if (ctrl && shift && event.key === Qt.Key_C) {
@@ -508,6 +513,8 @@ Window {
                 required property bool isDir
                 required property bool isApp
                 required property bool isTrash
+                required property bool hasThumbnail
+                required property double modified // secondi: una miniatura nuova se il file cambia
                 required property real cellX
                 required property real cellY
 
@@ -572,14 +579,43 @@ Window {
                     width: parent.width - 4
                     spacing: 4
 
-                    Image {
+                    // L'icona del tipo di file, o la miniatura (immagini, e ciò
+                    // che altre app hanno già messo nella cache: video, PDF).
+                    Item {
                         anchors.horizontalCenter: parent.horizontalCenter
                         width: Desktop.iconPixels
                         height: Desktop.iconPixels
-                        source: "image://icon/" + encodeURIComponent(icon.iconName)
-                        sourceSize: Qt.size(Desktop.iconPixels * 2, Desktop.iconPixels * 2)
-                        smooth: true
-                        mipmap: true
+
+                        Image {
+                            anchors.fill: parent
+                            visible: preview.status !== Image.Ready
+                            source: "image://icon/" + encodeURIComponent(icon.iconName)
+                            sourceSize: Qt.size(Desktop.iconPixels * 2, Desktop.iconPixels * 2)
+                            smooth: true
+                            mipmap: true
+                        }
+                        Image {
+                            id: preview
+                            anchors.fill: parent
+                            fillMode: Image.PreserveAspectFit
+                            asynchronous: true
+                            source: icon.hasThumbnail
+                                ? "image://filethumb/" + encodeURIComponent(icon.path) + "/" + icon.modified
+                                : ""
+                            sourceSize: Qt.size(Desktop.iconPixels * 2, Desktop.iconPixels * 2)
+                            smooth: true
+                            mipmap: true
+                            // Il contorno sottile delle foto in Windows.
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: preview.paintedWidth
+                                height: preview.paintedHeight
+                                visible: preview.status === Image.Ready
+                                color: "transparent"
+                                border.width: 1
+                                border.color: Qt.rgba(1, 1, 1, 0.35)
+                            }
+                        }
                     }
 
                     // Il nome: bianco con un'ombra, su due righe (tutto se scelta).

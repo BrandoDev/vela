@@ -7,6 +7,8 @@
 #include "appmodel.h"
 #include "backgroundeffects.h"
 #include "desktopmodel.h"
+#include "fileproperties.h"
+#include "filethumbnails.h"
 #include "foreigntoplevels.h"
 #include "iconprovider.h"
 #include "jumplists.h"
@@ -130,6 +132,16 @@ void setupConfirmDialog(QQuickWindow* window)
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
 }
 
+void setupPropertiesDialog(QQuickWindow* window)
+{
+    // Proprietà: al centro dello schermo, sopra le finestre come una finestra di dialogo.
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScope(QStringLiteral("vela-properties"));
+    layer->setLayer(LayerWindow::LayerTop);
+    layer->setAnchors(LayerWindow::Anchors());
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
+}
+
 // La taskbar ci deve essere sempre (gli sfondi li segue Wallpapers). Il
 // compositor chiude le superfici della shell quando il loro schermo
 // sparisce: un monitor scollegato, o il cambio di console (wlroots toglie
@@ -220,12 +232,14 @@ int main(int argc, char* argv[])
     JumpLists jumps(&apps);
     DesktopModel desktop(&apps);
     ServiceMenus serviceMenus;
+    FileProperties properties;
     BackgroundEffects effects;
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
     engine.addImageProvider(QStringLiteral("wallpaper"), new WallpaperProvider);
     engine.addImageProvider(QStringLiteral("thumbnail"), new ThumbnailProvider(&capture));
+    engine.addImageProvider(QStringLiteral("filethumb"), new FileThumbnailProvider);
     engine.addImageProvider(QStringLiteral("notification"), new NotificationImageProvider(&notifications));
     engine.addImageProvider(QStringLiteral("tray"), new TrayImageProvider(&tray));
     engine.rootContext()->setContextProperty(QStringLiteral("Apps"), &apps);
@@ -238,6 +252,7 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("Jumps"), &jumps);
     engine.rootContext()->setContextProperty(QStringLiteral("Desktop"), &desktop);
     engine.rootContext()->setContextProperty(QStringLiteral("ServiceMenus"), &serviceMenus);
+    engine.rootContext()->setContextProperty(QStringLiteral("Properties"), &properties);
     engine.rootContext()->setContextProperty(QStringLiteral("Effects"), &effects);
 
     // Le finestre QML partono invisibili: le trasformiamo in superfici
@@ -249,6 +264,7 @@ int main(int argc, char* argv[])
     engine.loadFromModule("Vela.Shell", "ContextMenu");
     engine.loadFromModule("Vela.Shell", "RunDialog");
     engine.loadFromModule("Vela.Shell", "ConfirmDialog");
+    engine.loadFromModule("Vela.Shell", "PropertiesDialog");
 
     QQuickWindow* switcher = findWindow(engine, "switcher");
     QQuickWindow* taskbar = findWindow(engine, "taskbar");
@@ -257,7 +273,8 @@ int main(int argc, char* argv[])
     QQuickWindow* contextMenu = findWindow(engine, "contextMenu");
     QQuickWindow* runDialog = findWindow(engine, "runDialog");
     QQuickWindow* confirmDialog = findWindow(engine, "confirmDialog");
-    if (!taskbar || !startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog || !confirmDialog) {
+    QQuickWindow* propertiesDialog = findWindow(engine, "propertiesDialog");
+    if (!taskbar || !startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog || !confirmDialog || !propertiesDialog) {
         qCritical("vela-shell: impossibile caricare l'interfaccia QML");
         return 1;
     }
@@ -269,6 +286,7 @@ int main(int argc, char* argv[])
     setupContextMenu(contextMenu);
     setupRunDialog(runDialog);
     setupConfirmDialog(confirmDialog);
+    setupPropertiesDialog(propertiesDialog);
     taskbar->show();
     keepShown(app, { taskbar });
     Wallpapers wallpapers(&engine);
