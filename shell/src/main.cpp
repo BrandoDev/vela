@@ -337,6 +337,7 @@ int main(int argc, char* argv[])
     tray.start();
     SystemActions system;
     QObject::connect(&shell, &ShellController::settingsRequested, &system, [&system] { system.trigger(QStringLiteral("settings")); });
+    QObject::connect(&shell, &ShellController::filesRequested, &system, [&system] { system.trigger(QStringLiteral("files")); });
     JumpLists jumps(&apps);
     DesktopModel desktop(&apps);
     ServiceMenus serviceMenus;

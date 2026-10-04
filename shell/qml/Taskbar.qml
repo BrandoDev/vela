@@ -16,7 +16,7 @@ Window {
     // App fissate (id dei file .desktop). Quelle non installate si saltano.
     // TODO: renderle configurabili e trascinabili.
     readonly property list<string> pinnedIds: [
-        "org.kde.dolphin.desktop",
+        "vela-files.desktop",
         "org.kde.konsole.desktop",
         "firefox.desktop",
         "org.mozilla.firefox.desktop",

@@ -1,0 +1,253 @@
+import QtQuick
+
+// La barra degli indirizzi di Windows 11: Indietro, Avanti, Su, Aggiorna;
+// il percorso a pezzi (ogni pezzo porta lì, la freccia tra i pezzi apre le
+// sottocartelle); un clic sul vuoto (o Ctrl+L) lo fa scrivere; a destra la
+// casella di ricerca.
+Item {
+    id: bar
+    property var tab
+    height: 48
+
+    function focusAddress() {
+        editor.text = tab.isFolder ? tab.location : ""
+        editing = true
+        editor.forceActiveFocus()
+        editor.selectAll()
+    }
+    function focusSearch() {
+        search.forceActiveFocus()
+        search.selectAll()
+    }
+    property bool editing: false
+
+    // I pezzi del percorso: [{label, location, icon}].
+    readonly property var crumbs: {
+        const loc = tab.location
+        if (loc === "home:") return [{ label: "Home", location: "home:", icon: "go-home" }]
+        if (loc === "thispc:") return [{ label: "Questo PC", location: "thispc:", icon: "computer" }]
+        if (loc === Places.trash) return [{ label: "Cestino", location: Places.trash, icon: "user-trash" }]
+        const out = []
+        let rest
+        if (loc === Places.home || loc.startsWith(Places.home + "/")) {
+            out.push({ label: Places.userName, location: Places.home, icon: "user-home" })
+            rest = loc.slice(Places.home.length)
+        } else {
+            out.push({ label: "Questo PC", location: "thispc:", icon: "computer" })
+            out.push({ label: "Disco locale", location: "/" })
+            rest = loc
+        }
+        let path = out[out.length - 1].location === "/" ? "" : out[out.length - 1].location
+        for (const part of rest.split("/").filter(p => p !== "")) {
+            path += "/" + part
+            out.push({ label: part, location: path })
+        }
+        return out
+    }
+
+    Row {
+        id: buttons
+        x: 8
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 2
+        ToolButton { icon: "go-previous"; tooltip: "Indietro (Alt+Freccia SINISTRA)"; usable: bar.tab.canGoBack; onClicked: bar.tab.back(); width: 36 }
+        ToolButton { icon: "go-next"; tooltip: "Avanti (Alt+Freccia DESTRA)"; usable: bar.tab.canGoForward; onClicked: bar.tab.forward(); width: 36 }
+        ToolButton { icon: "go-up"; tooltip: "Su (Alt+Freccia SU)"; usable: bar.tab.canGoUp; onClicked: bar.tab.up(); width: 36 }
+        ToolButton { icon: "view-refresh"; tooltip: "Aggiorna (F5)"; onClicked: bar.tab.refresh(); width: 36 }
+    }
+
+    Rectangle {
+        id: address
+        anchors { left: buttons.right; leftMargin: 8; right: searchBox.left; rightMargin: 8; verticalCenter: parent.verticalCenter }
+        height: 32
+        radius: Theme.radiusSmall
+        color: bar.editing ? "#1e1e1e" : addressMouse.containsMouse ? Theme.controlHover : Theme.control
+        border.width: 1
+        border.color: bar.editing ? Theme.accent : Theme.controlStroke
+        clip: true
+
+        MouseArea {
+            id: addressMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            onClicked: bar.focusAddress()
+        }
+
+        // Il percorso a pezzi, allineato a destra se troppo lungo (come Windows).
+        Flickable {
+            visible: !bar.editing
+            anchors { fill: parent; leftMargin: 4; rightMargin: 4 }
+            contentWidth: crumbRow.width
+            contentX: Math.max(0, crumbRow.width - width)
+            interactive: false
+            Row {
+                id: crumbRow
+                height: parent.height
+                Repeater {
+                    model: bar.crumbs
+                    delegate: Row {
+                        id: crumb
+                        required property var modelData
+                        required property int index
+                        height: parent.height
+                        Rectangle {
+                            height: 26
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: crumbContent.width + 12
+                            radius: Theme.radiusSmall
+                            color: crumbMouse.containsMouse || crumbDrop.containsDrag ? Theme.hover : "transparent"
+                            Row {
+                                id: crumbContent
+                                anchors.centerIn: parent
+                                spacing: 6
+                                Image {
+                                    visible: !!crumb.modelData.icon
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 16
+                                    height: 16
+                                    source: crumb.modelData.icon ? "image://icon/" + crumb.modelData.icon : ""
+                                    sourceSize: Qt.size(width, height)
+                                }
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: crumb.modelData.label
+                                    color: Theme.text
+                                    font.pixelSize: Theme.fontNormal
+                                }
+                            }
+                            MouseArea {
+                                id: crumbMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+                                onClicked: mouse => mouse.button === Qt.MiddleButton ? bar.tab.openInNewTab(crumb.modelData.location)
+                                                                                     : bar.tab.navigate(crumb.modelData.location)
+                            }
+                            DropArea {
+                                id: crumbDrop
+                                anchors.fill: parent
+                                enabled: crumb.modelData.location.startsWith("/")
+                                onEntered: drag => { if (!drag.hasUrls) drag.accepted = false }
+                                onDropped: drop => {
+                                    Ops.drop(drop.urls.map(u => u.toString()), crumb.modelData.location, 0)
+                                    drop.accept(Qt.MoveAction)
+                                }
+                            }
+                        }
+                        // La freccia: le sottocartelle di questo pezzo.
+                        Rectangle {
+                            visible: crumb.modelData.location.startsWith("/") && crumb.modelData.location !== Places.trash
+                            height: 26
+                            width: 18
+                            anchors.verticalCenter: parent.verticalCenter
+                            radius: Theme.radiusSmall
+                            color: chevronMouse.containsMouse ? Theme.hover : "transparent"
+                            Text {
+                                anchors.centerIn: parent
+                                text: "›"
+                                color: Theme.textDim
+                                font.pixelSize: 16
+                            }
+                            MouseArea {
+                                id: chevronMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    const base = crumb.modelData.location
+                                    const names = Ops.subfolders(base, bar.tab.showHidden)
+                                    const entries = names.slice(0, 60).map(n => ({
+                                        text: n.replace(/&/g, "&&"), icon: "folder",
+                                        action: () => bar.tab.navigate((base === "/" ? "" : base) + "/" + n)
+                                    }))
+                                    if (entries.length === 0) entries.push({ text: "Nessuna cartella", enabled: false })
+                                    const p = mapToItem(null, 0, height)
+                                    bar.tab.menus.open(entries, p.x, p.y + 2)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        TextInput {
+            id: editor
+            visible: bar.editing
+            anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
+            verticalAlignment: TextInput.AlignVCenter
+            color: Theme.text
+            selectionColor: Theme.accent
+            selectedTextColor: "white"
+            font.pixelSize: Theme.fontNormal
+            selectByMouse: true
+            clip: true
+            Keys.onEscapePressed: { bar.editing = false; bar.tab.focusView() }
+            Keys.onReturnPressed: {
+                const path = Ops.resolve(text, bar.tab.location)
+                if (path !== "") {
+                    bar.editing = false
+                    bar.tab.navigate(path)
+                    bar.tab.focusView()
+                } else {
+                    bar.tab.showError("Impossibile trovare \"" + text + "\". Controlla l'ortografia e riprova.")
+                }
+            }
+            onActiveFocusChanged: if (!activeFocus) bar.editing = false
+        }
+    }
+
+    // La ricerca: in questa cartella e nelle sottocartelle.
+    Rectangle {
+        id: searchBox
+        anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
+        width: Math.min(280, bar.width * 0.25)
+        height: 32
+        radius: Theme.radiusSmall
+        color: search.activeFocus ? "#1e1e1e" : searchMouse.containsMouse ? Theme.controlHover : Theme.control
+        border.width: 1
+        border.color: search.activeFocus ? Theme.accent : Theme.controlStroke
+        opacity: bar.tab.isFolder ? 1 : 0.5
+        MouseArea {
+            id: searchMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            onClicked: search.forceActiveFocus()
+        }
+        Text {
+            visible: search.text === ""
+            anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 32 }
+            text: "Cerca in " + bar.tab.title
+            color: Theme.textDim
+            font.pixelSize: Theme.fontNormal
+            elide: Text.ElideRight
+        }
+        TextInput {
+            id: search
+            anchors { fill: parent; leftMargin: 10; rightMargin: 32 }
+            verticalAlignment: TextInput.AlignVCenter
+            enabled: bar.tab.isFolder
+            color: Theme.text
+            selectionColor: Theme.accent
+            selectedTextColor: "white"
+            font.pixelSize: Theme.fontNormal
+            selectByMouse: true
+            clip: true
+            onTextChanged: searchDelay.restart()
+            Keys.onEscapePressed: { text = ""; bar.tab.focusView() }
+            Keys.onReturnPressed: { searchDelay.stop(); bar.tab.search(text) }
+            Timer { id: searchDelay; interval: 350; onTriggered: bar.tab.search(search.text) }
+            Connections {
+                target: bar.tab
+                function onLocationChanged() { search.text = ""; searchDelay.stop() }
+            }
+        }
+        Image {
+            anchors { right: parent.right; rightMargin: 10; verticalCenter: parent.verticalCenter }
+            width: 16
+            height: 16
+            source: "image://icon/edit-find"
+            sourceSize: Qt.size(width, height)
+            opacity: 0.8
+        }
+    }
+}

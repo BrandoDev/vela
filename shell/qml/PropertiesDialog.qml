@@ -39,6 +39,11 @@ Window {
             panel.forceActiveFocus()
         }
     }
+    // Anche da Esplora (vela-files), attraverso il socket della shell.
+    Connections {
+        target: Shell
+        function onPropertiesRequested(paths) { Menus.showProperties(paths) }
+    }
     Connections {
         target: Properties
         function onSizeCounted(token, bytes, onDisk, files, folders) {

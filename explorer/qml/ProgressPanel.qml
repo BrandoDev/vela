@@ -1,0 +1,75 @@
+import QtQuick
+
+// Le copie e gli spostamenti in corso, in basso a destra: titolo,
+// percentuale, il file di adesso, e la X per annullare; come il riquadro di
+// avanzamento di Windows, in piccolo.
+Column {
+    id: root
+    spacing: 8
+    width: 340
+
+    Repeater {
+        model: Ops.jobs
+        delegate: Rectangle {
+            id: card
+            required property var modelData
+            readonly property real fraction: modelData.total > 0 ? Math.min(1, modelData.done / modelData.total) : 0
+            width: root.width
+            height: content.height + 24
+            radius: Theme.radiusLarge
+            color: Theme.dialog
+            border.width: 1
+            border.color: Qt.rgba(0, 0, 0, 0.45)
+
+            Column {
+                id: content
+                x: 16
+                y: 12
+                width: parent.width - 32
+                spacing: 6
+                Item {
+                    width: parent.width
+                    height: titleText.height
+                    Text {
+                        id: titleText
+                        width: parent.width - 32
+                        text: card.modelData.error !== "" ? card.modelData.error
+                            : card.modelData.finished ? card.modelData.title.replace(/^(Copia|Spostamento) di/, "Completato:")
+                            : card.modelData.title
+                        color: card.modelData.error !== "" ? Theme.critical : Theme.text
+                        font.pixelSize: Theme.fontNormal
+                        elide: Text.ElideRight
+                    }
+                    ToolButton {
+                        anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                        width: 28
+                        height: 28
+                        icon: "window-close"
+                        onClicked: card.modelData.finished ? Ops.dismissJob(card.modelData.id) : Ops.cancelJob(card.modelData.id)
+                    }
+                }
+                Text {
+                    text: Math.round(card.fraction * 100) + "% completato" + (card.modelData.current !== "" ? " · " + card.modelData.current : "")
+                    visible: !card.modelData.finished
+                    width: parent.width
+                    color: Theme.textDim
+                    font.pixelSize: Theme.fontSmall
+                    elide: Text.ElideMiddle
+                }
+                Rectangle {
+                    width: parent.width
+                    height: 4
+                    radius: 2
+                    color: Theme.control
+                    Rectangle {
+                        width: parent.width * card.fraction
+                        height: parent.height
+                        radius: 2
+                        color: card.modelData.error !== "" ? Theme.critical : Theme.accentLight
+                        Behavior on width { NumberAnimation { duration: Theme.normal } }
+                    }
+                }
+            }
+        }
+    }
+}

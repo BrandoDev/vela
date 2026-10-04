@@ -1,0 +1,147 @@
+import QtQuick
+
+// I menu del tasto destro dentro la finestra di Esplora, con lo stesso
+// pannello del desktop (MenuPanel.qml, docs/renderer.md §14): copre la
+// finestra, i menu e i sottomenu sono pannelli al suo interno, e un clic
+// fuori li chiude. open(voci, x, y) con x e y nella finestra.
+Item {
+    id: root
+    visible: false
+
+    property var panels: []
+    property var options: ({})
+    property var pending: null
+    readonly property bool isOpen: visible
+
+    Component {
+        id: panelComponent
+        MenuPanel {}
+    }
+
+    function open(entries, x, y, opts) {
+        closeAll(false, true)
+        options = opts || {}
+        visible = true
+        openLevel(0, entries, {
+            anchorX: x, anchorY: y,
+            above: !!options.above, centered: !!options.centered,
+            minWidth: options.minWidth || 0,
+            keyboardMode: !!options.keyboard
+        }, !!options.keyboard)
+    }
+
+    function openLevel(level, entries, properties, selectFirst) {
+        closeFrom(level)
+        const panel = panelComponent.createObject(root, Object.assign({ entries: entries, level: level }, properties))
+        panel.activated.connect(entry => {
+            root.closeAll(true)
+            if (entry.action) {
+                Qt.callLater(entry.action)
+            }
+        })
+        panel.hovered.connect((index, rowY) => root.onHovered(panel, index, rowY))
+        panel.submenuRequested.connect((index, rowY, keyboard) => root.openSubmenu(panel, index, rowY, keyboard))
+        panel.contextRequested.connect((entry, px, py) => {
+            root.openLevel(panel.level + 1, entry.context, { anchorX: px, anchorY: py, keyboardMode: panel.keyboardMode }, false)
+        })
+        panel.backRequested.connect(() => {
+            if (panel.level > 0) {
+                root.closeFrom(panel.level)
+                root.panels[panel.level - 1].forceActiveFocus()
+            } else {
+                root.closeAll(true)
+            }
+        })
+        panel.closeAllRequested.connect(() => root.closeAll(true))
+        if (selectFirst) {
+            panel.move(1)
+        }
+        panels.push(panel)
+        panel.forceActiveFocus()
+        return panel
+    }
+
+    function openSubmenu(parentPanel, index, rowY, keyboard) {
+        pending = null
+        const child = panels[parentPanel.level + 1]
+        if (child && child.parentIndex === index) {
+            return
+        }
+        const panel = openLevel(parentPanel.level + 1, parentPanel.entries[index].children, {
+            anchorX: parentPanel.x + parentPanel.width - 4,
+            altX: parentPanel.x + 4,
+            anchorY: parentPanel.y + rowY - 4,
+            keyboardMode: parentPanel.keyboardMode
+        }, keyboard)
+        panel.parentIndex = index
+        parentPanel.currentIndex = index
+    }
+
+    // Come Windows: i sottomenu si aprono (e chiudono) dopo una breve pausa.
+    function onHovered(panel, index, rowY) {
+        const entry = panel.entries[index]
+        const child = panels[panel.level + 1]
+        if (child && child.parentIndex === index) {
+            pending = null
+            return
+        }
+        if (entry.children && entry.enabled !== false) {
+            pending = { panel: panel, index: index, rowY: rowY }
+        } else if (child) {
+            pending = { panel: panel, index: -1 }
+        } else {
+            pending = null
+        }
+        if (panel.level > 0) {
+            panels[panel.level - 1].currentIndex = panel.parentIndex
+        }
+        if (pending) {
+            hoverTimer.restart()
+        }
+    }
+
+    Timer {
+        id: hoverTimer
+        interval: 400
+        onTriggered: {
+            const p = root.pending
+            root.pending = null
+            if (!p || root.panels.indexOf(p.panel) < 0) {
+                return
+            }
+            if (p.index >= 0) {
+                root.openSubmenu(p.panel, p.index, p.rowY, false)
+            } else {
+                root.closeFrom(p.panel.level + 1)
+                p.panel.forceActiveFocus()
+            }
+        }
+    }
+
+    function closeFrom(level) {
+        while (panels.length > level) {
+            panels.pop().destroy()
+        }
+    }
+
+    function closeAll(notify, reopening) {
+        const wasOpen = visible
+        pending = null
+        closeFrom(0)
+        if (reopening) {
+            return
+        }
+        visible = false
+        if (wasOpen && notify && options.onClosed) {
+            options.onClosed()
+        }
+    }
+
+    // Un clic fuori dai menu li chiude.
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.AllButtons
+        onPressed: root.closeAll(true)
+        onWheel: {}
+    }
+}

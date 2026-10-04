@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Esplora file
+GenericName=Gestore di file
+Comment=Sfoglia e organizza file e cartelle
+Exec=vela-files %U
+Icon=system-file-manager
+Categories=System;FileTools;FileManager;
+MimeType=inode/directory;
+Keywords=file;cartelle;esplora;explorer;
+StartupNotify=true

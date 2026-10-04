@@ -4,6 +4,8 @@
 
 #include <QImage>
 #include <QImageReader>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QSettings>
 
 #include <QDBusConnection>
@@ -26,6 +28,7 @@ const QStringList defaultStartPins {
     QStringLiteral("firefox.desktop"),
     QStringLiteral("org.mozilla.firefox.desktop"),
     QStringLiteral("chromium.desktop"),
+    QStringLiteral("vela-files.desktop"),
     QStringLiteral("org.kde.dolphin.desktop"),
     QStringLiteral("org.kde.konsole.desktop"),
     QStringLiteral("org.kde.kate.desktop"),
@@ -273,6 +276,8 @@ void ShellController::handleCommand(const QByteArray& command)
         emit notificationCenterRequested();
     } else if (command == "settings") {
         emit settingsRequested();
+    } else if (command == "files") {
+        emit filesRequested();
     } else if (command == "task-view") {
         emit taskViewRequested();
     } else if (parts.first() == "workspaces") {
@@ -281,6 +286,15 @@ void ShellController::handleCommand(const QByteArray& command)
         // snap-layouts <finestra> <schermo> <x> <y> <da tastiera>
         emit snapLayoutsRequested(QString::fromLatin1(parts.at(1)), QString::fromUtf8(parts.at(2)), parts.at(3).toInt(),
             parts.at(4).toInt(), parts.at(5) == "1");
+    } else if (parts.first() == "properties") {
+        // properties ["percorso", ...]: la finestra Proprietà, chiesta da Esplora.
+        QStringList paths;
+        for (const QJsonValue& value : QJsonDocument::fromJson(command.mid(11)).array()) {
+            paths.append(value.toString());
+        }
+        if (!paths.isEmpty()) {
+            emit propertiesRequested(paths);
+        }
     } else if (parts.first() == "snap-assist") {
         emit snapAssistRequested(QString::fromUtf8(command.mid(12)));
     } else if (parts.first() == "window-menu" && parts.size() == 8) {

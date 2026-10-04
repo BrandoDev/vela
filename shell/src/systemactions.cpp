@@ -40,25 +40,35 @@ bool spawn(const QString& command, const QString& directory = QDir::homePath())
     return QProcess::startDetached(QStringLiteral("/bin/sh"), { QStringLiteral("-c"), command }, directory);
 }
 
-// Le Impostazioni di Vela: installate, accanto alla shell, o nella
-// cartella di build (settings/ accanto a shell/). Vuoto dentro le
-// Impostazioni stesse, che non devono rimandare a sé.
-QString velaSettings()
+// Un'app di Vela (vela-settings, vela-files): installata, accanto alla
+// shell, o nella cartella di build (settings/, explorer/ accanto a shell/).
+// Vuoto dentro l'app stessa, che non deve rimandare a sé.
+QString velaTool(const QString& name, const QString& buildDir)
 {
-    if (QCoreApplication::applicationName() == QLatin1String("vela-settings")) {
+    if (QCoreApplication::applicationName() == name) {
         return {};
     }
-    const QString installed = QStandardPaths::findExecutable(QStringLiteral("vela-settings"));
+    const QString installed = QStandardPaths::findExecutable(name);
     if (!installed.isEmpty()) {
         return installed;
     }
     const QString here = QCoreApplication::applicationDirPath();
-    for (const QString& candidate : { here + QStringLiteral("/vela-settings"), here + QStringLiteral("/../settings/vela-settings") }) {
+    for (const QString& candidate : { here + u'/' + name, here + QStringLiteral("/../") + buildDir + u'/' + name }) {
         if (QFileInfo(candidate).isExecutable()) {
             return QFileInfo(candidate).canonicalFilePath();
         }
     }
     return {};
+}
+
+QString velaSettings()
+{
+    return velaTool(QStringLiteral("vela-settings"), QStringLiteral("settings"));
+}
+
+QString velaFiles()
+{
+    return velaTool(QStringLiteral("vela-files"), QStringLiteral("explorer"));
 }
 
 // Un comando in un terminale che resta aperto a mostrare com'è andata.
@@ -145,6 +155,10 @@ QString SystemActions::command(const QString& name) const
         return !gui.isEmpty() ? gui : terminalProgram() + QStringLiteral(" -e journalctl -b -e");
     }
     if (name == QLatin1String("files")) {
+        // Esplora di Vela, se c'è.
+        if (const QString files = velaFiles(); !files.isEmpty()) {
+            return quote(files);
+        }
         return first({ { "xdg-open", "xdg-open \"$HOME\"" } });
     }
     if (name == QLatin1String("settings")) {
@@ -248,6 +262,11 @@ QStringList SystemActions::runHistory() const
 void SystemActions::showInFolder(const QString& pathOrUrl) const
 {
     const QUrl url = pathOrUrl.contains(QLatin1String("://")) ? QUrl(pathOrUrl) : QUrl::fromLocalFile(pathOrUrl);
+    // Esplora di Vela apre la cartella con il file selezionato.
+    if (const QString files = velaFiles(); !files.isEmpty() && url.isLocalFile()) {
+        QProcess::startDetached(files, { url.toLocalFile() });
+        return;
+    }
     // Lo standard dei file manager (Dolphin, Nautilus...): apre la cartella
     // e seleziona il file.
     QDBusMessage call = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.FileManager1"),

@@ -1378,9 +1378,13 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
         sendShellCommand("notification-center");
         return true;
     }
-    // Win+I: le Impostazioni.
+    // Win+I: le Impostazioni; Win+E: Esplora file.
     if ((super || altNested) && lower == XKB_KEY_i) {
         sendShellCommand("settings");
+        return true;
+    }
+    if ((super || altNested) && lower == XKB_KEY_e) {
+        sendShellCommand("files");
         return true;
     }
     // Alt+Spazio: il menu della finestra, sotto la sua barra del titolo.

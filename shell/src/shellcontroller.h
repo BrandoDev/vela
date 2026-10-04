@@ -100,12 +100,14 @@ signals:
     void quickSettingsRequested(); // Win+A
     void notificationCenterRequested(); // Win+N
     void settingsRequested(); // Win+I
+    void filesRequested(); // Win+E
     void taskViewRequested(); // Win+Tab
     void workspacesReceived(const QByteArray& json); // lo stato dei desktop virtuali
     // I layout di snap sotto il pulsante Ingrandisci (Win+Z): x, y nello schermo.
     void snapLayoutsRequested(const QString& window, const QString& output, int x, int y, bool keyboard);
     // Dopo uno snap: le finestre da proporre per gli spazi liberi (JSON).
     void snapAssistRequested(const QString& json);
+    void propertiesRequested(const QStringList& paths); // da Esplora
     // Il menu della finestra (clic destro sulla barra del titolo,
     // Alt+Spazio): su quale schermo e dove, in coordinate dello schermo.
     void windowMenuRequested(const QString& window, const QString& output, int x, int y, bool maximized,
