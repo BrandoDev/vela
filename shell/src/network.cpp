@@ -115,6 +115,28 @@ void Network::refresh()
         QStringLiteral("device"), QStringLiteral("wifi"), QStringLiteral("list"), QStringLiteral("--rescan"), QStringLiteral("no") }));
 }
 
+void Network::refreshWifi()
+{
+    if (!m_available) {
+        return;
+    }
+    runAsync(this, { QStringLiteral("-t"), QStringLiteral("-f"), QStringLiteral("NAME,TYPE"), QStringLiteral("connection") },
+        [this](int, const QByteArray& out, const QByteArray&) {
+            m_known.clear();
+            for (const QString& line : QString::fromUtf8(out).split(u'\n', Qt::SkipEmptyParts)) {
+                const QStringList f = splitTerse(line);
+                if (f.size() >= 2 && f[1].contains(QLatin1String("wireless"))) {
+                    m_known << f[0];
+                }
+            }
+            runAsync(this,
+                { QStringLiteral("-t"), QStringLiteral("-f"), QStringLiteral("IN-USE,SSID,SIGNAL,SECURITY"),
+                    QStringLiteral("device"), QStringLiteral("wifi"), QStringLiteral("list"), QStringLiteral("--rescan"),
+                    QStringLiteral("no") },
+                [this](int, const QByteArray& list, const QByteArray&) { readWifi(list); });
+        });
+}
+
 void Network::readWifi(const QByteArray& output)
 {
     QVariantList networks;
@@ -189,14 +211,37 @@ void Network::connectWifi(const QString& ssid, const QString& password)
             m_connectResult = QStringLiteral("Impossibile connettersi a questa rete");
         }
         emit connectResultChanged();
-        refresh();
+        // La shell non ha bisogno dei dettagli dei collegamenti (e non deve fermarsi).
+        if (m_devices.isEmpty()) {
+            refreshWifi();
+        } else {
+            refresh();
+        }
     });
 }
 
 void Network::disconnectDevice(const QString& device)
 {
     runAsync(this, { QStringLiteral("device"), QStringLiteral("disconnect"), device },
-        [this](int, const QByteArray&, const QByteArray&) { refresh(); });
+        [this](int, const QByteArray&, const QByteArray&) {
+            if (m_devices.isEmpty()) {
+                refreshWifi();
+            } else {
+                refresh();
+            }
+        });
+}
+
+void Network::disconnectWifi(const QString& ssid)
+{
+    runAsync(this, { QStringLiteral("connection"), QStringLiteral("down"), QStringLiteral("id"), ssid },
+        [this](int, const QByteArray&, const QByteArray&) {
+            if (m_devices.isEmpty()) {
+                refreshWifi();
+            } else {
+                refresh();
+            }
+        });
 }
 
 void Network::forget(const QString& connection)

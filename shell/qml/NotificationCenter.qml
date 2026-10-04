@@ -81,7 +81,7 @@ Window {
             anchors.centerIn: parent
             width: 16
             height: 16
-            source: smallButton.icon !== "" ? "image://icon/" + encodeURIComponent(smallButton.icon) : ""
+            source: smallButton.icon !== "" ? Theme.icons + encodeURIComponent(smallButton.icon) : ""
             sourceSize: Qt.size(width, height)
         }
         MouseArea {

@@ -52,6 +52,22 @@ Item {
         navigate(parent, location)
     }
     function refresh() { if (isFolder) folder.reload(); else if (location === "thispc:") Places.refreshDrives() }
+    // Un'unità non ancora montata: udisks la monta (chiedendo la password
+    // se serve), poi ci si va.
+    property string mountingVolume: ""
+    function openVolume(volume) {
+        mountingVolume = volume
+        Places.mount(volume)
+    }
+    Connections {
+        target: Places
+        function onMounted(volume, path, error) {
+            if (volume !== page.mountingVolume) return
+            page.mountingVolume = ""
+            if (path !== "") page.navigate(path)
+            else if (error !== "") page.showError(error)
+        }
+    }
     function openInNewTab(loc) { win.newTab(loc, "") }
     function search(text) { if (isFolder) folder.search = text }
     function focusView() { keys.forceActiveFocus() }
@@ -208,7 +224,7 @@ Item {
     function newEntries() {
         const entries = [
             { text: "&Cartella", icon: "folder-new", shortcut: "Ctrl+Maiusc+N", action: () => Ops.createFolder(page.location) },
-            { text: "C&ollegamento", icon: "insert-link", enabled: false },
+            { text: "C&ollegamento", icon: "insert-link", action: () => Ops.newShortcut(page.location) },
             { separator: true },
             { text: "Documento di &testo", icon: "text-plain", action: () => Ops.createFile(page.location, "") }
         ]
@@ -233,6 +249,9 @@ Item {
             mode("&Dettagli", "details", "Ctrl+Maiusc+6", "view-list-details"),
             { separator: true },
             { text: "Mos&tra", icon: "view-visible", children: [
+                { text: "Riquadro di &anteprima", checked: win.pane === "preview", shortcut: "Alt+P", action: () => win.togglePane("preview") },
+                { text: "Riquadro &dettagli", checked: win.pane === "details", shortcut: "Alt+Maiusc+P", action: () => win.togglePane("details") },
+                { separator: true },
                 { text: "&Elementi nascosti", checked: page.showHidden, shortcut: "Ctrl+H", action: () => win.showHidden = !win.showHidden }
             ] }
         ]
@@ -267,11 +286,12 @@ Item {
         }
         const single = paths.length === 1 ? paths[0] : ""
         const singleDir = single !== "" && folder.isDirAt(folder.indexOf(single))
+        const files = paths.filter(p => !folder.isDirAt(folder.indexOf(p)))
         const entries = [{ iconRow: [
             { icon: "edit-cut", text: "Taglia", action: () => Ops.cut(paths) },
             { icon: "edit-copy", text: "Copia", action: () => Ops.copy(paths) },
             { icon: "edit-rename", text: "Rinomina", enabled: single !== "", action: () => page.renamingPath = single },
-            { icon: "document-share", text: "Condividi", enabled: false },
+            { icon: "document-share", text: "Condividi", enabled: files.length > 0, action: () => Ops.share(files) },
             { icon: "edit-delete", text: "Elimina", action: () => Ops.trash(paths) }
         ] }]
         entries.push({ text: "&Apri", icon: "document-open", shortcut: "Invio", action: () => page.openSelection() })
@@ -283,8 +303,20 @@ Item {
             const apps = Ops.appsFor(single)
             const openWith = apps.map(a => ({ text: a.name.replace(/&/g, "&&"), icon: a.icon, action: () => Ops.openWith(a.id, single) }))
             if (openWith.length > 0) openWith.push({ separator: true })
-            openWith.push({ text: "Scegli un'altra app", enabled: false })
+            openWith.push({ text: "Scegli un'altra app", action: () => Ops.chooseApp(single) })
             entries.push({ text: "Apri &con", icon: "document-open", children: openWith })
+        }
+        // Un collegamento: dove sta l'originale.
+        if (single !== "" && Ops.isLink(single)) {
+            const target = Ops.linkTarget(single)
+            entries.push({ text: "Apri &percorso file", icon: "folder-open",
+                action: () => page.navigate(target.substring(0, target.lastIndexOf("/")) || "/", target) })
+        }
+        if (files.length > 0 && files.length === paths.length) {
+            const favorite = files.every(p => Places.isFavorite(p))
+            entries.push(favorite
+                ? { text: "Rimuovi da &Preferiti", icon: "starred-symbolic", action: () => files.forEach(p => Places.setFavorite(p, false)) }
+                : { text: "Aggiungi a &Preferiti", icon: "starred-symbolic", action: () => files.forEach(p => Places.setFavorite(p, true)) })
         }
         if (singleDir) {
             entries.push(Places.isPinned(single)
@@ -320,7 +352,7 @@ Item {
             { text: "&Taglia", action: () => Ops.cut(paths) },
             { text: "&Copia", action: () => Ops.copy(paths) },
             { separator: true },
-            { text: "Crea c&ollegamento", enabled: false },
+            { text: "Crea c&ollegamento", action: () => Ops.createLinks(paths) },
             { text: "&Elimina", action: () => Ops.trash(paths) },
             { text: "Ri&nomina", enabled: paths.length === 1, action: () => page.renamingPath = paths[0] },
             { separator: true },
@@ -370,7 +402,7 @@ Item {
             { text: "A&ggiorna", action: () => page.refresh() },
             { separator: true },
             { text: "&Incolla", enabled: Ops.canPaste, action: () => page.paste() },
-            { text: "Incolla c&ollegamento", enabled: false }
+            { text: "Incolla c&ollegamento", enabled: Ops.canPaste, action: () => Ops.pasteLinks(page.location) }
         ]
         const services = serviceEntries([page.location])
         if (services.length > 0) entries.push({ separator: true }, ...services)
@@ -397,6 +429,7 @@ Item {
             else if (alt && event.key === Qt.Key_Up) page.up()
             else if (event.key === Qt.Key_Backspace && !page.typed) page.back()
             else if (event.key === Qt.Key_F5 || (ctrl && event.key === Qt.Key_R)) page.refresh()
+            else if (alt && event.key === Qt.Key_P) win.togglePane(shift ? "details" : "preview")
             else if (!page.isFolder) event.accepted = false
             else if (ctrl && shift && event.key === Qt.Key_N) Ops.createFolder(page.location)
             else if (ctrl && shift && event.key === Qt.Key_C) Ops.copyAsPath(folder.selectedPaths())
@@ -477,6 +510,7 @@ Item {
             current: page.location
             onNavigate: location => page.navigate(location)
             onOpenInNewTab: location => page.openInNewTab(location)
+            onOpenVolume: volume => page.openVolume(volume)
             onContextMenu: (entries, x, y) => page.openMenu(entries, x, y)
         }
         // Il bordo del riquadro: si trascina per allargarlo.
@@ -496,11 +530,38 @@ Item {
 
         Loader {
             id: contentLoader
-            anchors { left: splitter.right; right: parent.right; top: parent.top; bottom: statusBar.top }
+            anchors { left: splitter.right; right: sidePane.visible ? paneSplitter.left : parent.right; top: parent.top; bottom: statusBar.top }
             sourceComponent: page.location === "home:" ? homeComponent
                 : page.location === "thispc:" ? thisPcComponent
                 : page.viewMode === "details" ? detailsComponent : iconComponent
         }
+        // Il riquadro di anteprima o dei dettagli, a destra (si allarga trascinandone il bordo).
+        Rectangle {
+            id: paneSplitter
+            visible: sidePane.visible
+            anchors { right: sidePane.left; top: parent.top; bottom: statusBar.top }
+            width: 1
+            color: Theme.divider
+            MouseArea {
+                anchors { fill: parent; leftMargin: -4; rightMargin: -4 }
+                cursorShape: Qt.SplitHCursor
+                onPositionChanged: mouse => {
+                    if (pressed) {
+                        const x = mapToItem(sidePane.parent, mouse.x, 0).x
+                        page.win.paneWidth = Math.max(200, Math.min(sidePane.parent.width / 2, sidePane.parent.width - x))
+                    }
+                }
+            }
+        }
+        PreviewPane {
+            id: sidePane
+            visible: page.win.pane !== "" && page.location !== "home:" && page.location !== "thispc:"
+            anchors { right: parent.right; top: parent.top; bottom: statusBar.top }
+            width: page.win.paneWidth
+            tab: page
+            mode: page.win.pane || "preview"
+        }
+
         Component { id: homeComponent; HomePage { tab: page } }
         Component { id: thisPcComponent; ThisPcPage { tab: page } }
         Component { id: detailsComponent; DetailsView { tab: page } }

@@ -119,9 +119,9 @@ Page {
                 width: logicalWidth * arrangement.zoom - 2
                 height: logicalHeight * arrangement.zoom - 2
                 radius: 4
-                color: index === page.selected ? Qt.rgba(Theme.accentFill.r, Theme.accentFill.g, Theme.accentFill.b, 0.35) : Qt.rgba(1, 1, 1, 0.12)
+                color: index === page.selected ? Qt.rgba(Theme.accentFill.r, Theme.accentFill.g, Theme.accentFill.b, 0.35) : Theme.light ? Qt.rgba(0, 0, 0, 0.06) : Qt.rgba(1, 1, 1, 0.12)
                 border.width: index === page.selected ? 2 : 1
-                border.color: index === page.selected ? Theme.accentFill : Qt.rgba(1, 1, 1, 0.25)
+                border.color: index === page.selected ? Theme.accentFill : Theme.light ? Qt.rgba(0, 0, 0, 0.25) : Qt.rgba(1, 1, 1, 0.25)
 
                 Text {
                     anchors.centerIn: parent
@@ -212,6 +212,33 @@ Page {
     }
 
     CardGroup {
+        title: "Luminosità e colore"
+        Card {
+            visible: Status.brightnessAvailable
+            icon: "brightness-high"
+            title: "Luminosità"
+            description: "Regola la luminosità dello schermo integrato"
+            trailing: Slider {
+                width: 200
+                value: Status.brightness
+                onMoved: value => Status.setBrightness(value)
+            }
+        }
+        Card {
+            icon: "redshift-status-on"
+            title: "Luce notturna"
+            description: "Usa colori più caldi per aiutarti a dormire"
+            clickable: true
+            chevron: true
+            onClicked: root.navigate("night-light")
+            trailing: Toggle {
+                checked: Prefs.nightLight
+                onToggled: on => Prefs.nightLight = on
+            }
+        }
+    }
+
+    CardGroup {
         visible: page.output !== null
         title: "Scala e layout"
         Card {
@@ -286,18 +313,20 @@ Page {
     }
 
     CardGroup {
-        title: "Impostazioni correlate"
+        title: "Giochi"
         Card {
-            visible: Status.brightnessAvailable
-            icon: "brightness-high"
-            title: "Luminosità"
-            description: "Regola la luminosità dello schermo integrato"
-            trailing: Slider {
-                width: 200
-                value: Status.brightness
-                onMoved: value => Status.setBrightness(value)
+            icon: "input-gaming"
+            title: "Mostra subito ogni fotogramma nei giochi a schermo intero"
+            description: "I giochi che lo chiedono vanno sullo schermo senza aspettare il monitor: meno latenza, con qualche strappo nell'immagine (tearing)"
+            trailing: Toggle {
+                checked: Prefs.tearing
+                onToggled: on => Prefs.tearing = on
             }
         }
+    }
+
+    CardGroup {
+        title: "Impostazioni correlate"
         Card {
             icon: "preferences-desktop-wallpaper"
             title: "Sfondo"

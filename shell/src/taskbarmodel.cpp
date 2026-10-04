@@ -176,6 +176,20 @@ void TaskbarModel::rebuild()
     sendButtonRects(); // anche le finestre appena aperte devono saperlo
 }
 
+QStringList TaskbarModel::appIds(int row) const
+{
+    QStringList out;
+    if (row < 0 || row >= m_items.size()) {
+        return out;
+    }
+    for (ForeignToplevel* window : m_items.at(row).windows) {
+        if (window && !out.contains(window->appId)) {
+            out << window->appId;
+        }
+    }
+    return out;
+}
+
 void TaskbarModel::setButtonGeometry(int row, QWindow* panel, const QRectF& rect)
 {
     if (row < 0 || row >= m_items.size()) {

@@ -7,6 +7,7 @@ Item {
     id: root
 
     property string tooltip: ""
+    readonly property bool hovered: mouse.containsMouse
     property bool active: false
     property bool running: false
     default property alias content: holder.data

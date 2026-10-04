@@ -23,13 +23,14 @@ qt_add_executable(vela-settings
     src/displays.h
     src/keyboardlayouts.cpp
     src/keyboardlayouts.h
-    src/network.cpp
-    src/network.h
     src/preferences.cpp
     src/preferences.h
     ${SHELL_SRC}/appmodel.cpp
     ${SHELL_SRC}/appmodel.h
     ${SHELL_SRC}/iconprovider.h
+    ${SHELL_SRC}/mica.h
+    ${SHELL_SRC}/network.cpp
+    ${SHELL_SRC}/network.h
     ${SHELL_SRC}/systemactions.cpp
     ${SHELL_SRC}/systemactions.h
     ${SHELL_SRC}/systemstatus.cpp
@@ -68,7 +69,9 @@ set(SETTINGS_QML_FILES
     qml/pages/DefaultAppsPage.qml
     qml/pages/TimeLanguagePage.qml
     qml/pages/DateTimePage.qml
-    qml/pages/KeyboardPage.qml)
+    qml/pages/KeyboardPage.qml
+    qml/pages/NightLightPage.qml
+    qml/pages/AccessibilityPage.qml)
 
 foreach(file IN LISTS SETTINGS_QML_FILES)
     get_filename_component(name ${file} NAME)

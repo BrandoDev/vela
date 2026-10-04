@@ -76,7 +76,7 @@ Window {
         const modern = desktopEntries()
         const entries = [modern[0], modern[1], modern[2], { separator: true },
             { text: "&Incolla", enabled: Desktop.canPaste, action: () => Desktop.paste() },
-            { text: "Incolla c&ollegamento", enabled: false }]
+            { text: "Incolla c&ollegamento", enabled: Desktop.canPaste, action: () => { FileActions.pasteLinks(Desktop.directory); Desktop.refresh() } }]
         if (Desktop.undoText !== "") {
             entries.push({ text: "&Annulla " + Desktop.undoText, shortcut: "Ctrl+Z", action: () => Desktop.undo() })
         }
@@ -115,7 +115,7 @@ Window {
             { text: "&Taglia", action: () => Desktop.cut(files) },
             { text: "&Copia", action: () => Desktop.copy(files) },
             { separator: true },
-            { text: "Crea c&ollegamento", enabled: false },
+            { text: "Crea c&ollegamento", action: () => { FileActions.createLinks(files, Desktop.directory); Desktop.refresh() } },
             { text: "&Elimina", action: () => Desktop.trash(files) },
             { text: "Ri&nomina", enabled: !!single, action: () => icons.startRename(single.path) },
             { separator: true },
@@ -130,7 +130,7 @@ Window {
         const sort = (text, value) => ({ text: text, radio: true, checked: Desktop.sortMode === value, action: () => Desktop.sortBy(value) })
         const newEntries = [
             { text: "&Cartella", icon: "folder-new", action: () => Desktop.createFolder() },
-            { text: "C&ollegamento", icon: "insert-link", enabled: false },
+            { text: "C&ollegamento", icon: "insert-link", action: () => Menus.newShortcut(Desktop.directory) },
             { separator: true },
             { text: "Documento di &testo", icon: "text-plain", action: () => Desktop.createFile("") }
         ]
@@ -171,6 +171,14 @@ Window {
         return entries
     }
 
+    // "Aggiungi a Preferiti" (la Home di Esplora): solo per i file.
+    function favoriteEntry(files) {
+        const all = files.length > 0 && files.every(p => FileActions.isFavorite(p))
+        return all
+            ? { text: "Rimuovi da &Preferiti", icon: "starred-symbolic", action: () => files.forEach(p => FileActions.setFavorite(p, false)) }
+            : { text: "Aggiungi a &Preferiti", icon: "starred-symbolic", enabled: files.length > 0, action: () => files.forEach(p => FileActions.setFavorite(p, true)) }
+    }
+
     // Uno o più file: la riga di icone, poi Apri, Apri con...
     function fileEntries(paths) {
         const items = paths.map(p => icons.itemFor(p)).filter(i => i)
@@ -192,7 +200,7 @@ Window {
             { icon: "edit-cut", text: "Taglia", action: () => Desktop.cut(files) },
             { icon: "edit-copy", text: "Copia", action: () => Desktop.copy(files) },
             { icon: "edit-rename", text: "Rinomina", enabled: !!single, action: () => icons.startRename(single.path) },
-            { icon: "document-share", text: "Condividi", enabled: false },
+            { icon: "document-share", text: "Condividi", enabled: items.some(i => !i.isDir && !i.isTrash), action: () => Menus.share(items.filter(i => !i.isDir && !i.isTrash).map(i => i.path)) },
             { icon: "edit-delete", text: "Elimina", action: () => Desktop.trash(files) }
         ] }]
         entries.push({ text: "&Apri", icon: "document-open", shortcut: "Invio", action: () => Desktop.open(files) })
@@ -202,7 +210,7 @@ Window {
             if (openWith.length > 0) {
                 openWith.push({ separator: true })
             }
-            openWith.push({ text: "Scegli un'altra app", enabled: false })
+            openWith.push({ text: "Scegli un'altra app", action: () => Menus.chooseApp(single.path) })
             entries.push({ text: "Apri &con", icon: "document-open", children: openWith })
         }
         if (single && single.isDir) {
@@ -217,7 +225,7 @@ Window {
             }
         }
         entries.push(
-            { text: "Aggiungi a &Preferiti", icon: "starred-symbolic", enabled: false },
+            favoriteEntry(items.filter(i => !i.isTrash && !i.isDir).map(i => i.path)),
             { text: "Compri&mi in", icon: "archive-insert", children: [
                 { text: "File &ZIP", icon: "application-zip", action: () => Desktop.compress(files, "zip") },
                 { text: "File &7z", icon: "application-x-7z-compressed", action: () => Desktop.compress(files, "7z") },

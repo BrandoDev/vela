@@ -1,7 +1,7 @@
 import QtQuick
 
 // La Home di Esplora, come Windows 11: le cartelle di Accesso rapido in
-// riquadri, poi i file usati di recente.
+// riquadri, poi i file Preferiti e quelli usati di recente.
 Flickable {
     id: page
     property var tab
@@ -9,6 +9,80 @@ Flickable {
     clip: true
     boundsBehavior: Flickable.StopAtBounds
     readonly property var recent: Places.recentFiles(40)
+    property var favorites: Places.favorites
+    Connections {
+        target: Places
+        function onFavoritesChanged() { page.favorites = Places.favorites }
+    }
+
+    // Una riga di file (Preferiti e Recenti): nome, data, cartella.
+    component FileRow: Rectangle {
+        id: row
+        required property var modelData
+        width: column.width
+        height: 32
+        radius: Theme.radiusSmall
+        color: rowMouse.containsMouse ? Theme.hover : "transparent"
+        Image {
+            x: 8
+            anchors.verticalCenter: parent.verticalCenter
+            width: 16
+            height: 16
+            source: "image://fileicon/" + encodeURIComponent(row.modelData.icon)
+            sourceSize: Qt.size(width, height)
+        }
+        Text {
+            x: 34
+            width: parent.width * 0.38
+            anchors.verticalCenter: parent.verticalCenter
+            text: row.modelData.name
+            color: Theme.text
+            font.pixelSize: Theme.fontNormal
+            elide: Text.ElideRight
+        }
+        Text {
+            x: parent.width * 0.42
+            width: 150
+            anchors.verticalCenter: parent.verticalCenter
+            text: Qt.formatDateTime(row.modelData.modified, "dd/MM/yyyy HH:mm")
+            color: Theme.textDim
+            font.pixelSize: Theme.fontSmall + 1
+        }
+        Text {
+            x: parent.width * 0.42 + 160
+            width: parent.width - x - 8
+            anchors.verticalCenter: parent.verticalCenter
+            text: row.modelData.location
+            color: Theme.textDim
+            font.pixelSize: Theme.fontSmall + 1
+            elide: Text.ElideMiddle
+        }
+        MouseArea {
+            id: rowMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onDoubleClicked: Ops.open([row.modelData.path])
+            onClicked: mouse => {
+                if (mouse.button === Qt.RightButton) {
+                    const p = mapToItem(null, mouse.x, mouse.y)
+                    const path = row.modelData.path
+                    const favorite = Places.isFavorite(path)
+                    page.tab.menus.open([
+                        { text: "&Apri", icon: "document-open", action: () => Ops.open([path]) },
+                        { text: "Apri &percorso file", icon: "folder-open", action: () => page.tab.navigate(row.modelData.location, path) },
+                        { separator: true },
+                        favorite
+                            ? { text: "Rimuovi da &Preferiti", icon: "starred-symbolic", action: () => Places.setFavorite(path, false) }
+                            : { text: "Aggiungi a &Preferiti", icon: "starred-symbolic", action: () => Places.setFavorite(path, true) },
+                        { text: "C&ondividi", icon: "document-share", action: () => Ops.share([path]) },
+                        { text: "Copia come &percorso", icon: "edit-copy-path", action: () => Ops.copyAsPath([path]) },
+                        { text: "P&roprietà", icon: "document-properties", action: () => Ops.showProperties([path]) }
+                    ], p.x, p.y)
+                }
+            }
+        }
+    }
 
     Column {
         id: column
@@ -96,6 +170,25 @@ Flickable {
         }
 
         Text {
+            text: "Preferiti"
+            color: Theme.text
+            font.pixelSize: Theme.fontNormal
+            font.weight: Font.DemiBold
+            topPadding: 20
+            bottomPadding: 4
+        }
+        Text {
+            visible: page.favorites.length === 0
+            text: "Dopo aver aggiunto dei file ai Preferiti, li mostreremo qui."
+            color: Theme.textDim
+            font.pixelSize: Theme.fontNormal
+        }
+        Repeater {
+            model: page.favorites
+            delegate: FileRow {}
+        }
+
+        Text {
             text: "Recenti"
             color: Theme.text
             font.pixelSize: Theme.fontNormal
@@ -111,67 +204,7 @@ Flickable {
         }
         Repeater {
             model: page.recent
-            delegate: Rectangle {
-                id: recentRow
-                required property var modelData
-                width: column.width
-                height: 32
-                radius: Theme.radiusSmall
-                color: recentMouse.containsMouse ? Theme.hover : "transparent"
-                Image {
-                    x: 8
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 16
-                    height: 16
-                    source: "image://fileicon/" + encodeURIComponent(recentRow.modelData.icon)
-                    sourceSize: Qt.size(width, height)
-                }
-                Text {
-                    x: 34
-                    width: parent.width * 0.38
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: recentRow.modelData.name
-                    color: Theme.text
-                    font.pixelSize: Theme.fontNormal
-                    elide: Text.ElideRight
-                }
-                Text {
-                    x: parent.width * 0.42
-                    width: 150
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: Qt.formatDateTime(recentRow.modelData.modified, "dd/MM/yyyy HH:mm")
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fontSmall + 1
-                }
-                Text {
-                    x: parent.width * 0.42 + 160
-                    width: parent.width - x - 8
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: recentRow.modelData.location
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fontSmall + 1
-                    elide: Text.ElideMiddle
-                }
-                MouseArea {
-                    id: recentMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    onDoubleClicked: Ops.open([recentRow.modelData.path])
-                    onClicked: mouse => {
-                        if (mouse.button === Qt.RightButton) {
-                            const p = mapToItem(null, mouse.x, mouse.y)
-                            page.tab.menus.open([
-                                { text: "&Apri", icon: "document-open", action: () => Ops.open([recentRow.modelData.path]) },
-                                { text: "Apri &percorso file", icon: "folder-open", action: () => page.tab.navigate(recentRow.modelData.location, recentRow.modelData.path) },
-                                { separator: true },
-                                { text: "Copia come &percorso", icon: "edit-copy-path", action: () => Ops.copyAsPath([recentRow.modelData.path]) },
-                                { text: "P&roprietà", icon: "document-properties", action: () => Ops.showProperties([recentRow.modelData.path]) }
-                            ], p.x, p.y)
-                        }
-                    }
-                }
-            }
+            delegate: FileRow {}
         }
     }
 }

@@ -159,7 +159,7 @@ Page {
                             anchors.verticalCenter: parent.verticalCenter
                             width: 24
                             height: 24
-                            source: "image://icon/" + encodeURIComponent(page.deviceIcon(candidate.modelData.icon))
+                            source: Theme.icons + encodeURIComponent(page.deviceIcon(candidate.modelData.icon))
                             sourceSize: Qt.size(width, height)
                         }
                         Column {

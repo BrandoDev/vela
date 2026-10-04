@@ -32,6 +32,12 @@ QtObject {
     // Il layout di snap appena scelto ({window, zones: [[x0,y0,x1,y1]...]}):
     // Snap Assist propone le finestre per le sue altre zone.
     property var snapLayout: null
+    // Le anteprime delle finestre di un pulsante della taskbar
+    // (TaskbarPreview.qml): {key, appIds, center (x sullo schermo)}, o null.
+    // Restano finché il mouse sta sul pulsante o sulle anteprime.
+    property var preview: null
+    property bool previewHovered: false
+    property bool previewButtonHovered: false
 
     signal openRequested(var entries, real x, real y, var options)
     signal closeRequested()
@@ -47,6 +53,14 @@ QtObject {
     function showProperties(paths) {
         propertiesRequested(paths)
     }
+
+    // Condividi, "Scegli un'altra app", Nuovo > Collegamento (FileDialogs.qml).
+    signal shareRequested(var paths)
+    signal openWithRequested(string path)
+    signal newShortcutRequested(string folder)
+    function share(paths) { shareRequested(paths) }
+    function chooseApp(path) { openWithRequested(path) }
+    function newShortcut(folder) { newShortcutRequested(folder) }
 
     function open(entries, x, y, options) {
         isOpen = true

@@ -13,7 +13,7 @@ Rectangle {
 
     height: input.contentHeight + 8
     radius: Theme.radiusSmall
-    color: "#1e1e1e"
+    color: Theme.field
     border.width: 1
     border.color: Theme.accent
 

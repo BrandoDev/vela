@@ -19,7 +19,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: width / 2
-        color: Qt.rgba(1, 1, 1, 0.05)
+        color: Theme.scrollTrack
         visible: hover.hovered || drag.active
     }
     Rectangle {
@@ -29,7 +29,7 @@ Item {
         y: bar.flickable ? Math.max(0, Math.min(bar.height - height, bar.flickable.contentY / Math.max(1, bar.flickable.contentHeight) * bar.height)) : 0
         height: Math.max(24, bar.height * bar.ratio)
         radius: width / 2
-        color: Qt.rgba(1, 1, 1, hover.hovered || drag.active ? 0.55 : 0.35)
+        color: hover.hovered || drag.active ? Theme.scrollThumbHover : Theme.scrollThumb
     }
     HoverHandler { id: hover }
     MouseArea {

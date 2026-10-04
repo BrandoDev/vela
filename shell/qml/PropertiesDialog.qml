@@ -271,7 +271,7 @@ Window {
                         width: 16
                         height: 16
                         anchors.verticalCenter: parent.verticalCenter
-                        source: root.defaultAppIcon !== "" ? "image://icon/" + encodeURIComponent(root.defaultAppIcon) : ""
+                        source: root.defaultAppIcon !== "" ? Theme.icons + encodeURIComponent(root.defaultAppIcon) : ""
                         sourceSize: Qt.size(width, height)
                     }
                     Text {

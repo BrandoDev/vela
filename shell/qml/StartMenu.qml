@@ -107,7 +107,7 @@ Window {
             width: 16
             height: 16
             visible: entry.icon !== ""
-            source: entry.icon !== "" ? "image://icon/" + entry.icon : ""
+            source: entry.icon !== "" ? Theme.icons + entry.icon : ""
             sourceSize: Qt.size(width, height)
         }
         Item {

@@ -4,6 +4,7 @@
 
 #include <QImage>
 #include <QImageReader>
+#include <LayerShellQt/Window>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSettings>
@@ -295,6 +296,29 @@ void ShellController::handleCommand(const QByteArray& command)
         if (!paths.isEmpty()) {
             emit propertiesRequested(paths);
         }
+    } else if (parts.first() == "share") {
+        // share ["percorso", ...]: Condividi, chiesto da Esplora.
+        QStringList paths;
+        for (const QJsonValue& value : QJsonDocument::fromJson(command.mid(6)).array()) {
+            paths.append(value.toString());
+        }
+        if (!paths.isEmpty()) {
+            emit shareRequested(paths);
+        }
+    } else if (parts.first() == "open-with") {
+        // open-with ["percorso"]: "Scegli un'altra app", chiesto da Esplora.
+        const QJsonArray paths = QJsonDocument::fromJson(command.mid(10)).array();
+        if (!paths.isEmpty()) {
+            emit openWithRequested(paths.first().toString());
+        }
+    } else if (parts.first() == "new-shortcut") {
+        // new-shortcut ["cartella"]: "Nuovo > Collegamento", chiesto da Esplora.
+        const QJsonArray folders = QJsonDocument::fromJson(command.mid(13)).array();
+        if (!folders.isEmpty()) {
+            emit newShortcutRequested(folders.first().toString());
+        }
+    } else if (parts.first() == "accessibility") {
+        emit accessibilityReceived(command.mid(14));
     } else if (parts.first() == "snap-assist") {
         emit snapAssistRequested(QString::fromUtf8(command.mid(12)));
     } else if (parts.first() == "window-menu" && parts.size() == 8) {
@@ -303,6 +327,16 @@ void ShellController::handleCommand(const QByteArray& command)
             parts.at(4).toInt(), parts.at(5) == "1", parts.at(6) == "1", parts.at(7) == "1");
     } else if (!command.isEmpty() && command != "ping") {
         qWarning("vela-shell: comando sconosciuto '%s'", command.constData());
+    }
+}
+
+void ShellController::placeAtLeft(QWindow* window, int left)
+{
+    if (auto* layer = window ? LayerShellQt::Window::get(window) : nullptr) {
+        const QMargins margins = layer->margins();
+        if (margins.left() != left) {
+            layer->setMargins(QMargins(left, margins.top(), margins.right(), margins.bottom()));
+        }
     }
 }
 

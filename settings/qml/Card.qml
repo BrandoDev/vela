@@ -58,7 +58,7 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 20
             height: 20
-            source: card.icon !== "" ? (card.icon.indexOf("://") >= 0 ? card.icon : "image://icon/" + encodeURIComponent(card.icon)) : ""
+            source: card.icon !== "" ? (card.icon.indexOf("://") >= 0 ? card.icon : Theme.icons + encodeURIComponent(card.icon)) : ""
             sourceSize: Qt.size(width, height)
         }
         Column {

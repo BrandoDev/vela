@@ -2,6 +2,7 @@
 
 #include "appmodel.h"
 #include "foldermodel.h"
+#include "links.h"
 
 #include <QClipboard>
 #include <QCollator>
@@ -13,6 +14,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QImageReader>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLocalSocket>
@@ -820,6 +822,152 @@ void FileOps::undo()
 void FileOps::showProperties(const QStringList& paths)
 {
     sendToShell("properties " + QJsonDocument(QJsonArray::fromStringList(paths)).toJson(QJsonDocument::Compact));
+}
+
+void FileOps::share(const QStringList& paths)
+{
+    sendToShell("share " + QJsonDocument(QJsonArray::fromStringList(paths)).toJson(QJsonDocument::Compact));
+}
+
+void FileOps::chooseApp(const QString& path)
+{
+    sendToShell("open-with " + QJsonDocument(QJsonArray::fromStringList({ path })).toJson(QJsonDocument::Compact));
+}
+
+void FileOps::newShortcut(const QString& directory)
+{
+    sendToShell("new-shortcut " + QJsonDocument(QJsonArray::fromStringList({ directory })).toJson(QJsonDocument::Compact));
+}
+
+// ------------------------------------------------------- collegamenti --
+
+void FileOps::createLinks(const QStringList& paths)
+{
+    UndoStep step;
+    step.label = QStringLiteral("Nuovo");
+    QString last;
+    for (const QString& path : paths) {
+        QString directory = QFileInfo(path).absolutePath();
+        if (!QFileInfo(directory).isWritable()) {
+            // Come Windows: qui non si può, va sul desktop.
+            directory = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+        }
+        const QString link = createLink(path, directory);
+        if (link.isEmpty()) {
+            emit failed(QStringLiteral("Impossibile creare il collegamento a \"%1\".").arg(QFileInfo(path).fileName()));
+            continue;
+        }
+        step.created.append(link);
+        last = link;
+    }
+    if (!step.created.isEmpty()) {
+        pushUndo(step);
+        emit created(last, false);
+    }
+}
+
+void FileOps::pasteLinks(const QString& directory)
+{
+    const QMimeData* mime = QGuiApplication::clipboard()->mimeData();
+    if (!mime || !mime->hasUrls()) {
+        return;
+    }
+    UndoStep step;
+    step.label = QStringLiteral("Nuovo");
+    QString last;
+    for (const QUrl& url : mime->urls()) {
+        if (!url.isLocalFile() || !QFileInfo::exists(url.toLocalFile())) {
+            continue;
+        }
+        const QFileInfo info(url.toLocalFile());
+        // Nella stessa cartella dell'originale il nome dice che è un collegamento.
+        const QString link = createLink(info.absoluteFilePath(), directory,
+            info.absolutePath() == QDir(directory).absolutePath() ? QString() : info.fileName());
+        if (!link.isEmpty()) {
+            step.created.append(link);
+            last = link;
+        }
+    }
+    if (step.created.isEmpty()) {
+        emit failed(QStringLiteral("Impossibile creare i collegamenti qui."));
+        return;
+    }
+    pushUndo(step);
+    emit created(last, false);
+}
+
+bool FileOps::isLink(const QString& path) const
+{
+    return QFileInfo(path).isSymLink();
+}
+
+QString FileOps::linkTarget(const QString& path) const
+{
+    return QFileInfo(path).symLinkTarget();
+}
+
+// ------------------------------------------- anteprima e dettagli --
+
+QVariantMap FileOps::details(const QString& path) const
+{
+    static const QMimeDatabase mimes;
+    const QFileInfo info(path);
+    QVariantMap out {
+        { QStringLiteral("name"), info.fileName().isEmpty() ? path : info.fileName() },
+        { QStringLiteral("location"), info.absolutePath() },
+        { QStringLiteral("isDir"), info.isDir() },
+        { QStringLiteral("modified"), info.lastModified() },
+        { QStringLiteral("created"), info.birthTime().isValid() ? info.birthTime() : info.metadataChangeTime() },
+    };
+    const QMimeType mime = mimes.mimeTypeForFile(info);
+    out[QStringLiteral("mime")] = mime.name();
+    out[QStringLiteral("icon")] = info.isDir() ? QStringLiteral("folder") : mime.iconName();
+    out[QStringLiteral("type")] = info.isDir() ? QStringLiteral("Cartella di file") : mime.comment();
+    if (info.isDir()) {
+        out[QStringLiteral("items")] = int(QDir(path).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
+    } else {
+        out[QStringLiteral("size")] = double(info.size());
+        out[QStringLiteral("sizeText")] = ::formatSize(info.size());
+        QImageReader reader(path);
+        if (reader.canRead()) {
+            const QSize size = reader.size();
+            if (size.isValid()) {
+                out[QStringLiteral("width")] = size.width();
+                out[QStringLiteral("height")] = size.height();
+            }
+        }
+    }
+    if (info.isSymLink()) {
+        out[QStringLiteral("target")] = info.symLinkTarget();
+    }
+    return out;
+}
+
+QString FileOps::previewText(const QString& path) const
+{
+    static const QMimeDatabase mimes;
+    const QFileInfo info(path);
+    if (!info.isFile() || info.size() > 8 * 1024 * 1024) {
+        return {};
+    }
+    const QMimeType mime = mimes.mimeTypeForFile(info);
+    if (!mime.inherits(QStringLiteral("text/plain")) && mime.name() != QLatin1String("application/json")
+        && mime.name() != QLatin1String("application/xml")) {
+        return {};
+    }
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    // Basta l'inizio: il riquadro ne mostra poche decine di righe.
+    QString text = QString::fromUtf8(file.read(32 * 1024));
+    text.replace(u'\t', QStringLiteral("    "));
+    return text.isEmpty() ? QStringLiteral(" ") : text;
+}
+
+bool FileOps::isImage(const QString& path) const
+{
+    return QImageReader(path).canRead();
 }
 
 // ------------------------------------------------------------ varie --

@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QStringList>
+#include <QVariantList>
 #include <QVariantMap>
 
 // I desktop virtuali, come li vede la shell: li decide il compositor
@@ -16,6 +17,9 @@ class Workspaces : public QObject {
     // identificativo ext della finestra -> desktop (-1: su tutti)
     Q_PROPERTY(QVariantMap windows READ windows NOTIFY changed)
     Q_PROPERTY(QStringList stickyApps READ stickyApps NOTIFY changed)
+    // I gruppi di snap: [{output, windows: [{id, tile: [x0, y0, x1, y1]}]}],
+    // tile in dodicesimi dell'area utile.
+    Q_PROPERTY(QVariantList snapGroups READ snapGroups NOTIFY changed)
 
 public:
     explicit Workspaces(QObject* parent = nullptr);
@@ -25,6 +29,7 @@ public:
     QStringList names() const { return m_names; }
     QVariantMap windows() const { return m_windows; }
     QStringList stickyApps() const { return m_stickyApps; }
+    QVariantList snapGroups() const { return m_snapGroups; }
 
     // Il desktop di una finestra (-1: tutti; -2: sconosciuta).
     Q_INVOKABLE int workspaceOf(const QString& window) const;
@@ -52,4 +57,5 @@ private:
     int m_current = 0;
     QVariantMap m_windows;
     QStringList m_stickyApps;
+    QVariantList m_snapGroups;
 };

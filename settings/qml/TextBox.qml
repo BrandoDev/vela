@@ -16,7 +16,7 @@ C.TextField {
     verticalAlignment: TextInput.AlignVCenter
     background: Rectangle {
         radius: Theme.radius
-        color: field.activeFocus ? Qt.rgba(0.12, 0.12, 0.12, 0.7) : field.hovered ? Theme.controlHover : Theme.control
+        color: field.activeFocus ? (Theme.light ? "#ffffff" : Qt.rgba(0.12, 0.12, 0.12, 0.7)) : field.hovered ? Theme.controlHover : Theme.control
         border.width: 1
         border.color: Theme.controlStroke
         Rectangle {

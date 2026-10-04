@@ -1,13 +1,15 @@
 import QtQuick
 
 // Il riquadro di navigazione a sinistra, come Windows 11: Home, le cartelle
-// di Accesso rapido (con la puntina), Questo PC con le unità, il Cestino.
+// di Accesso rapido (con la puntina), Questo PC con le unità (anche quelle
+// non montate, che si montano aprendole), il Cestino.
 // Si possono lasciare file su una voce per spostarli o copiarli lì.
 Flickable {
     id: pane
     property string current // la posizione aperta, per evidenziarla
     signal navigate(string location)
     signal openInNewTab(string location)
+    signal openVolume(string volume) // un'unità non montata: si monta e si apre
     signal contextMenu(var entries, real x, real y)
 
     contentHeight: column.height + 16
@@ -20,6 +22,8 @@ Flickable {
         property string label
         property string location
         property bool pinned: false
+        property string volume: "" // unità non montata (udisks)
+        property string device: "" // unità rimovibile montata: si può espellere
         property bool droppable: location.startsWith("/")
         property int indent: 0
         readonly property bool selected: pane.current === location
@@ -71,6 +75,8 @@ Flickable {
                 } else if (mouse.button === Qt.RightButton) {
                     const p = entry.mapToItem(null, mouse.x, mouse.y)
                     pane.contextMenu(pane.entryMenu(entry), p.x, p.y)
+                } else if (entry.volume !== "") {
+                    pane.openVolume(entry.volume)
                 } else {
                     pane.navigate(entry.location)
                 }
@@ -91,6 +97,9 @@ Flickable {
     // Il menu di una voce: Apri, Apri in una nuova scheda, la puntina, Proprietà.
     function entryMenu(entry) {
         const loc = entry.location
+        if (entry.volume !== "") {
+            return [{ text: "&Apri", icon: "document-open", action: () => pane.openVolume(entry.volume) }]
+        }
         const entries = [
             { text: "&Apri", icon: "document-open", action: () => pane.navigate(loc) },
             { text: "Apri in una nuova &scheda", icon: "tab-new", action: () => pane.openInNewTab(loc) },
@@ -102,6 +111,9 @@ Flickable {
                 ? { text: "&Rimuovi da Accesso rapido", icon: "window-unpin", action: () => Places.unpin(loc) }
                 : { text: "Aggiungi ad &Accesso rapido", icon: "window-pin", action: () => Places.pin(loc) })
             entries.push({ text: "Apri in &Terminale", icon: "utilities-terminal", action: () => System.openTerminal(loc) })
+            if (entry.device !== "") {
+                entries.push({ text: "&Espelli", icon: "media-eject", action: () => Places.eject(entry.device) })
+            }
             entries.push({ separator: true })
             entries.push({ text: "P&roprietà", icon: "document-properties", action: () => Ops.showProperties([loc]) })
         }
@@ -138,8 +150,11 @@ Flickable {
             delegate: Entry {
                 required property var modelData
                 icon: modelData.icon
-                label: modelData.name + (modelData.path !== "/" && modelData.name !== modelData.path ? "" : "")
+                label: modelData.name
                 location: modelData.path
+                volume: modelData.volume || ""
+                device: modelData.mounted && modelData.removable ? modelData.device : ""
+                opacity: modelData.mounted ? 1 : 0.7
                 indent: 16
             }
         }

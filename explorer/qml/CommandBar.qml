@@ -37,7 +37,17 @@ Item {
         ToolButton { visible: !bar.tab.isTrash; icon: "edit-copy"; tooltip: "Copia (Ctrl+C)"; usable: bar.hasSelection; onClicked: bar.tab.copySelection() }
         ToolButton { visible: !bar.tab.isTrash; icon: "edit-paste"; tooltip: "Incolla (Ctrl+V)"; usable: Ops.canPaste && bar.writable; onClicked: bar.tab.paste() }
         ToolButton { visible: !bar.tab.isTrash; icon: "edit-rename"; tooltip: "Rinomina (F2)"; usable: bar.tab.model && bar.tab.model.selectionCount === 1 && bar.writable; onClicked: bar.tab.renameSelection() }
-        ToolButton { visible: !bar.tab.isTrash; icon: "document-share"; tooltip: "Condividi"; usable: false }
+        ToolButton {
+            visible: !bar.tab.isTrash
+            icon: "document-share"
+            tooltip: "Condividi"
+            usable: bar.hasSelection
+            onClicked: {
+                const m = bar.tab.model
+                const files = m.selectedPaths().filter(p => !m.isDirAt(m.indexOf(p)))
+                if (files.length > 0) Ops.share(files)
+            }
+        }
         ToolButton { visible: !bar.tab.isTrash; icon: "edit-delete"; tooltip: "Elimina (Canc)"; usable: bar.hasSelection && bar.writable; onClicked: bar.tab.deleteSelection(false) }
 
         // Nel Cestino.
@@ -74,5 +84,16 @@ Item {
             usable: bar.tab.isFolder
             onClicked: bar.openMenu(bar.tab.moreEntries(), moreButton)
         }
+    }
+
+    // A destra, come Windows 11: il riquadro dei dettagli.
+    ToolButton {
+        anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
+        icon: "help-about"
+        text: "Dettagli"
+        tooltip: "Riquadro dettagli (Alt+Maiusc+P)"
+        checked: bar.tab.win.pane === "details"
+        usable: bar.tab.isFolder
+        onClicked: bar.tab.win.togglePane("details")
     }
 }

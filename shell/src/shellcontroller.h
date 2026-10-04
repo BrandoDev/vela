@@ -12,6 +12,8 @@
 // - riceve comandi dal compositor su un socket Unix (es. "toggle-start"
 //   quando premi Super);
 // - espone al QML piccole informazioni di sessione.
+class QWindow;
+
 class ShellController : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString userName READ userName CONSTANT)
@@ -42,6 +44,11 @@ public:
     // Maiusc premuto adesso (lo sa il compositor: la tastiera può essere di
     // un'altra app mentre si clicca la taskbar).
     Q_INVOKABLE bool shiftHeld() const;
+    // Una finestra della shell ancorata in basso a sinistra (le anteprime
+    // della taskbar): a `left` pixel dal bordo sinistro dello schermo.
+    Q_INVOKABLE void placeAtLeft(QWindow* window, int left);
+    // Alt+Tab: un clic sull'anteprima `index` (il compositor ci passa).
+    Q_INVOKABLE void pickSwitcher(int index) { sendToCompositor("switcher-pick " + QByteArray::number(index)); }
 
     QString userName() const;
     QString userInitial() const;
@@ -108,6 +115,10 @@ signals:
     // Dopo uno snap: le finestre da proporre per gli spazi liberi (JSON).
     void snapAssistRequested(const QString& json);
     void propertiesRequested(const QStringList& paths); // da Esplora
+    void shareRequested(const QStringList& paths); // "Condividi", da Esplora
+    void openWithRequested(const QString& path); // "Scegli un'altra app", da Esplora
+    void newShortcutRequested(const QString& folder); // "Nuovo > Collegamento", da Esplora
+    void accessibilityReceived(const QByteArray& json); // dal compositor
     // Il menu della finestra (clic destro sulla barra del titolo,
     // Alt+Spazio): su quale schermo e dove, in coordinate dello schermo.
     void windowMenuRequested(const QString& window, const QString& output, int x, int y, bool maximized,

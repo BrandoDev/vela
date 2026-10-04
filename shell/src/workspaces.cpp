@@ -50,6 +50,7 @@ void Workspaces::update(const QByteArray& json)
     for (const QJsonValue& app : state[QStringLiteral("stickyApps")].toArray()) {
         m_stickyApps << app.toString();
     }
+    m_snapGroups = state[QStringLiteral("snapGroups")].toArray().toVariantList();
     emit changed();
 }
 

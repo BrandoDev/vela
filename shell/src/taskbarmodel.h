@@ -64,6 +64,8 @@ public:
     // Win+D e "Desktop" nel menu Win+X: riduce tutto a icona, e la volta
     // dopo rimette com'era.
     Q_INVOKABLE void toggleDesktop();
+    // Gli app_id delle sue finestre aperte (per trovarle nelle anteprime).
+    Q_INVOKABLE QStringList appIds(int row) const;
     // Posizione del pulsante nella finestra della taskbar.
     Q_INVOKABLE void setButtonGeometry(int row, QWindow* panel, const QRectF& rect);
 

@@ -41,7 +41,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: 36
             height: 36
-            source: "image://icon/" + encodeURIComponent(root.iconName)
+            source: Theme.icons + encodeURIComponent(root.iconName)
             sourceSize: Qt.size(width, height)
             smooth: true
             mipmap: true

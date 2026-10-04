@@ -184,6 +184,7 @@ Item {
             required property bool isDir
             required property bool selected
             required property bool isCut
+            required property bool isLink
             required property string iconName
             required property bool hasThumbnail
             required property var modified
@@ -204,7 +205,7 @@ Item {
                     : row.selected ? (rowMouse.containsMouse ? Theme.selectionHover : Theme.selection)
                     : rowMouse.containsMouse ? Theme.hover : "transparent"
                 border.width: view.model.currentIndex === row.index && view.tab.viewFocused ? 1 : 0
-                border.color: Qt.rgba(1, 1, 1, 0.35)
+                border.color: Theme.focusRing
             }
 
             FileIcon {
@@ -216,6 +217,7 @@ Item {
                 thumbnail: row.hasThumbnail
                 modified: row.modified
                 cut: row.isCut
+                link: row.isLink
             }
             Text {
                 visible: view.tab.renamingPath !== row.path

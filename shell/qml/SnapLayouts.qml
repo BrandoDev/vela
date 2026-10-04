@@ -165,7 +165,7 @@ Window {
                     width: 96
                     height: 60
                     radius: Theme.radiusSmall
-                    color: Qt.rgba(1, 1, 1, 0.05)
+                    color: Theme.light ? Qt.rgba(0, 0, 0, 0.03) : Qt.rgba(1, 1, 1, 0.05)
                     border.width: 1
                     border.color: Theme.stroke
 
@@ -184,7 +184,7 @@ Window {
                             width: (modelData[2] - modelData[0]) * unitX - 4
                             height: (modelData[3] - modelData[1]) * unitY - 4
                             radius: 3
-                            color: zoneMouse.containsMouse || focused ? Theme.accent : Qt.rgba(1, 1, 1, 0.22)
+                            color: zoneMouse.containsMouse || focused ? Theme.accent : Theme.light ? Qt.rgba(0, 0, 0, 0.16) : Qt.rgba(1, 1, 1, 0.22)
                             Behavior on color { ColorAnimation { duration: Theme.fast } }
                             MouseArea {
                                 id: zoneMouse

@@ -92,7 +92,7 @@ Window {
             y: 20
             width: 32
             height: 32
-            source: "image://icon/system-run"
+            source: Theme.icons + "system-run"
             sourceSize: Qt.size(width, height)
         }
         Text {

@@ -61,7 +61,7 @@ Item {
         anchors { left: buttons.right; leftMargin: 8; right: searchBox.left; rightMargin: 8; verticalCenter: parent.verticalCenter }
         height: 32
         radius: Theme.radiusSmall
-        color: bar.editing ? "#1e1e1e" : addressMouse.containsMouse ? Theme.controlHover : Theme.control
+        color: bar.editing ? Theme.field : addressMouse.containsMouse ? Theme.controlHover : Theme.control
         border.width: 1
         border.color: bar.editing ? Theme.accent : Theme.controlStroke
         clip: true
@@ -203,7 +203,7 @@ Item {
         width: Math.min(280, bar.width * 0.25)
         height: 32
         radius: Theme.radiusSmall
-        color: search.activeFocus ? "#1e1e1e" : searchMouse.containsMouse ? Theme.controlHover : Theme.control
+        color: search.activeFocus ? Theme.field : searchMouse.containsMouse ? Theme.controlHover : Theme.control
         border.width: 1
         border.color: search.activeFocus ? Theme.accent : Theme.controlStroke
         opacity: bar.tab.isFolder ? 1 : 0.5
@@ -245,7 +245,7 @@ Item {
             anchors { right: parent.right; rightMargin: 10; verticalCenter: parent.verticalCenter }
             width: 16
             height: 16
-            source: "image://icon/edit-find"
+            source: Theme.icons + "edit-find"
             sourceSize: Qt.size(width, height)
             opacity: 0.8
         }

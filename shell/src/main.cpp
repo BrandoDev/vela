@@ -4,15 +4,18 @@
 // è parte del desktop (non un'app), la tiene sopra o sotto le finestre e le
 // riserva spazio sullo schermo.
 
+#include "accessibility.h"
 #include "appmodel.h"
 #include "backgroundeffects.h"
 #include "config.h"
 #include "desktopmodel.h"
+#include "fileactions.h"
 #include "fileproperties.h"
 #include "filethumbnails.h"
 #include "foreigntoplevels.h"
 #include "iconprovider.h"
 #include "jumplists.h"
+#include "network.h"
 #include "notifications.h"
 #include "servicemenus.h"
 #include "shellcontroller.h"
@@ -193,6 +196,18 @@ void setupDesktopOsd(QQuickWindow* window)
     window->setFlag(Qt::WindowTransparentForInput);
 }
 
+void setupTaskbarPreview(QQuickWindow* window)
+{
+    // Le anteprime dei pulsanti: in basso, appena sopra la taskbar (che ha
+    // riservato il suo spazio); la distanza dal bordo sinistro la decide il
+    // pulsante (ShellController::placeAtLeft). Senza tastiera.
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScope(QStringLiteral("vela-taskbar-preview"));
+    layer->setLayer(LayerWindow::LayerTop);
+    layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorBottom) | LayerWindow::AnchorLeft);
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityNone);
+}
+
 void setupSnapLayouts(QQuickWindow* window)
 {
     // I layout di snap: tutto lo schermo, trasparente, sopra a tutto (un
@@ -307,23 +322,44 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    // Fuori da Plasma Qt potrebbe non conoscere il tema di icone scelto.
-    if (QIcon::themeName().isEmpty() || QIcon::themeName() == QLatin1String("hicolor")) {
-        QIcon::setThemeName(qEnvironmentVariable("VELA_ICON_THEME", QStringLiteral("breeze-dark")));
-    }
     QIcon::setFallbackThemeName(QStringLiteral("hicolor"));
+
+    Config config;
+    // Le icone del tema adatto alla modalità della shell (breeze o
+    // breeze-dark); fuori da Plasma Qt potrebbe non conoscere quello scelto.
+    applyIconTheme(config.shellTheme() == QLatin1String("light"));
+    config.setIconMode(config.shellTheme() == QLatin1String("light") ? QStringLiteral("l/") : QStringLiteral("d/"));
 
     AppModel apps;
     apps.reload();
 
-    Config config;
     ShellController shell;
     Workspaces workspaces;
     QObject::connect(&shell, &ShellController::workspacesReceived, &workspaces, &Workspaces::update);
     workspaces.query();
+    Accessibility accessibility;
+    QObject::connect(&shell, &ShellController::accessibilityReceived, &accessibility, &Accessibility::update);
+    accessibility.query();
+    Network network;
     shell.listen();
     shell.sendWallpaperTint(config.wallpaper());
     QObject::connect(&config, &Config::wallpaperChanged, &shell, [&] { shell.sendWallpaperTint(config.wallpaper()); });
+    // La modalità al compositor (tinta acrylic, barre del titolo). Le icone
+    // cambiano prima che il QML le richieda (questa connessione viene prima).
+    auto sendTheme = [&config] {
+        ShellController::sendToCompositor("theme " + config.shellTheme().toLatin1() + ' ' + config.appTheme().toLatin1());
+    };
+    sendTheme();
+    QObject::connect(&config, &Config::themeChanged, &shell, [&config, sendTheme] {
+        const bool light = config.shellTheme() == QLatin1String("light");
+        applyIconTheme(light);
+        sendTheme();
+        // Le icone si richiedono quando le cache (anche quella di KIconLoader,
+        // che riceve il segnale D-Bus) sono vuote.
+        QTimer::singleShot(300, &config, [&config, light] {
+            config.setIconMode(light ? QStringLiteral("l/") : QStringLiteral("d/"));
+        });
+    });
     shell.watchSleep();
 
     ForeignToplevelManager windows;
@@ -342,6 +378,7 @@ int main(int argc, char* argv[])
     DesktopModel desktop(&apps);
     ServiceMenus serviceMenus;
     FileProperties properties;
+    FileActions fileActions;
     BackgroundEffects effects;
     SystemStatus status;
 
@@ -366,8 +403,11 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("Desktop"), &desktop);
     engine.rootContext()->setContextProperty(QStringLiteral("ServiceMenus"), &serviceMenus);
     engine.rootContext()->setContextProperty(QStringLiteral("Properties"), &properties);
+    engine.rootContext()->setContextProperty(QStringLiteral("FileActions"), &fileActions);
     engine.rootContext()->setContextProperty(QStringLiteral("Effects"), &effects);
     engine.rootContext()->setContextProperty(QStringLiteral("Status"), &status);
+    engine.rootContext()->setContextProperty(QStringLiteral("Access"), &accessibility);
+    engine.rootContext()->setContextProperty(QStringLiteral("Network"), &network);
 
     // Le finestre QML partono invisibili: le trasformiamo in superfici
     // layer-shell PRIMA che vengano mostrate.
@@ -386,6 +426,8 @@ int main(int argc, char* argv[])
     engine.loadFromModule("Vela.Shell", "DesktopOsd");
     engine.loadFromModule("Vela.Shell", "SnapLayouts");
     engine.loadFromModule("Vela.Shell", "SnapAssist");
+    engine.loadFromModule("Vela.Shell", "TaskbarPreview");
+    engine.loadFromModule("Vela.Shell", "FileDialogs");
 
     QQuickWindow* switcher = findWindow(engine, "switcher");
     QQuickWindow* taskbar = findWindow(engine, "taskbar");
@@ -402,8 +444,10 @@ int main(int argc, char* argv[])
     QQuickWindow* desktopOsd = findWindow(engine, "desktopOsd");
     QQuickWindow* snapLayouts = findWindow(engine, "snapLayouts");
     QQuickWindow* snapAssist = findWindow(engine, "snapAssist");
+    QQuickWindow* taskbarPreview = findWindow(engine, "taskbarPreview");
+    QQuickWindow* fileDialogs = findWindow(engine, "fileDialogs");
     if (!taskbar || !startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog || !confirmDialog || !sourceChooser || !propertiesDialog || !quickSettings
-        || !notificationCenter || !taskView || !desktopOsd || !snapLayouts || !snapAssist) {
+        || !notificationCenter || !taskView || !desktopOsd || !snapLayouts || !snapAssist || !taskbarPreview || !fileDialogs) {
         qCritical("vela-shell: impossibile caricare l'interfaccia QML");
         return 1;
     }
@@ -427,6 +471,9 @@ int main(int argc, char* argv[])
     setupDesktopOsd(desktopOsd);
     setupSnapLayouts(snapLayouts);
     setupSnapAssist(snapAssist);
+    setupTaskbarPreview(taskbarPreview);
+    setupPropertiesDialog(fileDialogs); // come Proprietà: al centro, sopra le finestre
+    LayerWindow::get(fileDialogs)->setScope(QStringLiteral("vela-file-dialogs"));
     taskbar->show();
     keepShown(app, { taskbar });
     Wallpapers wallpapers(&engine);

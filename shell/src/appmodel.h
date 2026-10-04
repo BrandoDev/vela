@@ -74,6 +74,8 @@ public:
     // genitori, es. text/plain per il C++), la predefinita per prima:
     // [{id, name, icon, isDefault}].
     Q_INVOKABLE QVariantList appsForFile(const QString& path) const;
+    // Tutte le app, per nome: [{id, name, icon}] ("Scegli un'altra app").
+    Q_INVOKABLE QVariantList allApps() const;
     // Un collegamento .desktop fuori dal menu (es. sul desktop): lo avvia.
     Q_INVOKABLE bool launchDesktopFile(const QString& path) const;
     // L'id nel menu di un .desktop che sta altrove (es. steam.desktop sul

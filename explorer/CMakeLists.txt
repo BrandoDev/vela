@@ -16,11 +16,14 @@ qt_add_executable(vela-files
     src/foldermodel.h
     src/places.cpp
     src/places.h
+    ${SHELL_SRC}/appearance.cpp
+    ${SHELL_SRC}/appearance.h
     ${SHELL_SRC}/appmodel.cpp
     ${SHELL_SRC}/appmodel.h
     ${SHELL_SRC}/filethumbnails.cpp
     ${SHELL_SRC}/filethumbnails.h
     ${SHELL_SRC}/iconprovider.h
+    ${SHELL_SRC}/links.h
     ${SHELL_SRC}/mica.h
     ${SHELL_SRC}/servicemenus.cpp
     ${SHELL_SRC}/servicemenus.h
@@ -47,6 +50,7 @@ set(FILES_QML_FILES
     qml/FileIcon.qml
     qml/RenameField.qml
     qml/ScrollBar.qml
+    qml/PreviewPane.qml
     ${PROJECT_SOURCE_DIR}/shell/qml/MenuPanel.qml
     ${PROJECT_SOURCE_DIR}/shell/qml/PanelShadow.qml)
 

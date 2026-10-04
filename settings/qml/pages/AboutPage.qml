@@ -12,7 +12,7 @@ Page {
             anchors.verticalCenter: parent.verticalCenter
             width: 64
             height: 64
-            source: "image://icon/" + About.chassisIcon
+            source: Theme.icons + About.chassisIcon
             sourceSize: Qt.size(width, height)
         }
         Column {

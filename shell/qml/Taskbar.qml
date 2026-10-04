@@ -39,6 +39,18 @@ Window {
     onWidthChanged: updateBlur()
     onHeightChanged: updateBlur()
 
+    // Le anteprime delle finestre di un pulsante (TaskbarPreview.qml).
+    Timer {
+        id: previewDelay
+        property var task: null
+        interval: 450
+        onTriggered: {
+            if (!task || !task.hovered || task.windowCount === 0) return
+            const p = task.mapToItem(null, task.width / 2, 0)
+            Menus.preview = { key: task.key, appIds: Tasks.appIds(task.index), center: p.x }
+        }
+    }
+
     // --- menu del tasto destro (docs/renderer.md §14.4-14.6) ---
 
     // La taskbar sta in fondo allo schermo: da coordinate sue a quelle dello schermo.
@@ -274,6 +286,7 @@ Window {
             TaskbarButton {
                 id: task
                 required property int index
+                required property string key
                 required property string name
                 required property string iconName
                 required property int windowCount
@@ -283,9 +296,28 @@ Window {
                 tooltip: name
                 running: windowCount > 0
                 active: windowActive
-                onClicked: Tasks.activate(index)
+                onClicked: {
+                    Menus.preview = null
+                    Tasks.activate(index)
+                }
                 onMiddleClicked: Tasks.launchNew(index)
+                // Le anteprime delle sue finestre, col mouse fermo sul pulsante
+                // (subito, se quelle di un altro pulsante sono già aperte).
+                onHoveredChanged: {
+                    Menus.previewButtonHovered = hovered
+                    if (hovered && windowCount > 0) {
+                        previewDelay.task = task
+                        if (Menus.preview) {
+                            previewDelay.triggered()
+                        } else {
+                            previewDelay.restart()
+                        }
+                    } else if (previewDelay.task === task) {
+                        previewDelay.stop()
+                    }
+                }
                 onRightClicked: shift => {
+                    Menus.preview = null
                     if ((shift || Shell.shiftHeld()) && windowCount > 0) {
                         const state = Tasks.windowState(index)
                         root.openAbove(Menus.windowEntries(state.maximized, state.minimized, true,
@@ -311,7 +343,7 @@ Window {
 
                 Image {
                     anchors.fill: parent
-                    source: "image://icon/" + encodeURIComponent(task.iconName)
+                    source: Theme.icons + encodeURIComponent(task.iconName)
                     sourceSize: Qt.size(width, height)
                     smooth: true
                     mipmap: true
@@ -409,7 +441,7 @@ Window {
                 id: networkIcon
                 width: 16
                 height: 16
-                source: "image://icon/" + encodeURIComponent(Status.networkIconName)
+                source: Theme.icons + encodeURIComponent(Status.networkIconName)
                 sourceSize: Qt.size(width, height)
             }
             Image {
@@ -417,14 +449,14 @@ Window {
                 visible: Status.volumeAvailable
                 width: 16
                 height: 16
-                source: "image://icon/" + encodeURIComponent(Status.volumeIconName)
+                source: Theme.icons + encodeURIComponent(Status.volumeIconName)
                 sourceSize: Qt.size(width, height)
             }
             Image {
                 visible: Status.batteryPresent
                 width: 16
                 height: 16
-                source: "image://icon/" + encodeURIComponent(Status.batteryCharging ? "battery-good-charging" : "battery-good")
+                source: Theme.icons + encodeURIComponent(Status.batteryCharging ? "battery-good-charging" : "battery-good")
                 sourceSize: Qt.size(width, height)
             }
         }
@@ -502,7 +534,7 @@ Window {
                 visible: Notifications.doNotDisturb
                 width: 14
                 height: 14
-                source: "image://icon/notifications-disabled"
+                source: Theme.icons + "notifications-disabled"
                 sourceSize: Qt.size(width, height)
             }
         }

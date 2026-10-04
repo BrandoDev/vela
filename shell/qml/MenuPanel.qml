@@ -289,7 +289,7 @@ Item {
                                 width: 16
                                 height: 16
                                 opacity: iconButton.usable ? 1 : 0.4
-                                source: "image://icon/" + encodeURIComponent(iconButton.modelData.icon)
+                                source: Theme.icons + encodeURIComponent(iconButton.modelData.icon)
                                 sourceSize: Qt.size(width, height)
                             }
                             MouseArea {
@@ -339,7 +339,7 @@ Item {
                             anchors.fill: parent
                             visible: row.entry.checked === undefined && !!row.entry.icon
                             source: row.entry.icon
-                                ? (row.entry.icon.indexOf(":") > 0 ? row.entry.icon : "image://icon/" + encodeURIComponent(row.entry.icon))
+                                ? (row.entry.icon.indexOf(":") > 0 ? row.entry.icon : Theme.icons + encodeURIComponent(row.entry.icon))
                                 : ""
                             sourceSize: Qt.size(width, height)
                             smooth: true

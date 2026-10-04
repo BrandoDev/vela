@@ -22,9 +22,15 @@ Window {
         property string viewModes: "{}" // cartella -> vista
         property bool showHidden: false
         property real navWidth: 240
+        property string pane: "" // a destra: "", "preview" o "details"
+        property real paneWidth: 320
     }
     property alias showHidden: settings.showHidden
     property alias navWidth: settings.navWidth
+    property alias pane: settings.pane
+    property alias paneWidth: settings.paneWidth
+    // Alt+P e Alt+Maiusc+P: il riquadro di anteprima o dei dettagli, o niente.
+    function togglePane(mode) { pane = pane === mode ? "" : mode }
     property var viewModes: JSON.parse(settings.viewModes)
     function viewModeFor(location) {
         if (viewModes[location]) return viewModes[location]
@@ -73,6 +79,12 @@ Window {
             win: root
             visible: root.current === this
         }
+    }
+
+    // Espelli (da qualunque scheda): l'errore una volta sola.
+    Connections {
+        target: Places
+        function onEjected(error) { if (error !== "") root.showError(error) }
     }
 
     Shortcut { sequence: "Ctrl+T"; onActivated: root.newTab("home:", "") }

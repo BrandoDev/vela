@@ -1,5 +1,15 @@
 #include "places.h"
 
+#include "foldermodel.h"
+#include "links.h"
+
+#include <QDBusArgument>
+#include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDBusMetaType>
+#include <QDBusObjectPath>
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -7,6 +17,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QStorageInfo>
+#include <QTimer>
 #include <QUrl>
 #include <QVariantMap>
 #include <QXmlStreamReader>
@@ -16,7 +27,33 @@
 
 #include <algorithm>
 
+using ManagedObjects = QMap<QDBusObjectPath, QMap<QString, QVariantMap>>;
+Q_DECLARE_METATYPE(ManagedObjects)
+
 namespace {
+
+const QString udisks = QStringLiteral("org.freedesktop.UDisks2");
+
+// Le stringhe di byte di udisks ("ay"), senza lo zero finale.
+QString bytes(const QVariant& value)
+{
+    QByteArray data = value.toByteArray();
+    while (data.endsWith('\0')) {
+        data.chop(1);
+    }
+    return QString::fromLocal8Bit(data);
+}
+
+bool hasMountPoints(const QVariant& value)
+{
+    if (value.canConvert<QDBusArgument>()) {
+        const QDBusArgument arg = value.value<QDBusArgument>();
+        QList<QByteArray> points;
+        arg >> points;
+        return !points.isEmpty();
+    }
+    return !value.value<QList<QByteArray>>().isEmpty();
+}
 
 struct UserDir {
     QStandardPaths::StandardLocation location;
@@ -172,13 +209,216 @@ void Places::refreshDrives()
             { QStringLiteral("free"), double(volume.bytesAvailable()) },
             { QStringLiteral("device"), device },
             { QStringLiteral("removable"), removable },
+            { QStringLiteral("mounted"), true },
+            { QStringLiteral("volume"), QString() },
         });
     }
+    m_mountedDrives = drives;
+    publishDrives();
+    readVolumes();
+}
+
+void Places::publishDrives()
+{
+    QVariantList drives = m_mountedDrives;
+    drives += m_volumes;
     if (drives != m_drives) {
         m_drives = drives;
         emit drivesChanged();
     }
 }
+
+void Places::readVolumes()
+{
+    if (m_readingVolumes) {
+        return;
+    }
+    m_readingVolumes = true;
+    static const bool registered = [] {
+        qDBusRegisterMetaType<ManagedObjects>();
+        return true;
+    }();
+    Q_UNUSED(registered);
+    QDBusMessage call = QDBusMessage::createMethodCall(udisks, QStringLiteral("/org/freedesktop/UDisks2"),
+        QStringLiteral("org.freedesktop.DBus.ObjectManager"), QStringLiteral("GetManagedObjects"));
+    auto* watcher = new QDBusPendingCallWatcher(QDBusConnection::systemBus().asyncCall(call), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher] {
+        watcher->deleteLater();
+        m_readingVolumes = false;
+        const QDBusPendingReply<ManagedObjects> reply = *watcher;
+        if (reply.isError()) {
+            return; // niente udisks: solo le unità montate
+        }
+        const ManagedObjects objects = reply.value();
+        const QString blockIface = QStringLiteral("org.freedesktop.UDisks2.Block");
+        const QString fsIface = QStringLiteral("org.freedesktop.UDisks2.Filesystem");
+        const QString driveIface = QStringLiteral("org.freedesktop.UDisks2.Drive");
+        QVariantList volumes;
+        m_devices.clear();
+        for (auto it = objects.cbegin(); it != objects.cend(); ++it) {
+            const QVariantMap block = it.value().value(blockIface);
+            if (block.isEmpty()) {
+                continue;
+            }
+            const QString device = bytes(block.value(QStringLiteral("PreferredDevice")));
+            const QString drivePath = qvariant_cast<QDBusObjectPath>(block.value(QStringLiteral("Drive"))).path();
+            const QVariantMap drive = objects.value(QDBusObjectPath(drivePath)).value(driveIface);
+            const bool removable = drive.value(QStringLiteral("Removable")).toBool()
+                || drive.value(QStringLiteral("Ejectable")).toBool()
+                || drive.value(QStringLiteral("ConnectionBus")).toString() == QLatin1String("usb");
+            m_devices.insert(device,
+                { { QStringLiteral("block"), it.key().path() }, { QStringLiteral("drive"), drivePath },
+                    { QStringLiteral("removable"), removable } });
+            m_devices.insert(bytes(block.value(QStringLiteral("Device"))), m_devices.value(device));
+            // Le non montate che si possono aprire: file system veri, non
+            // nascosti (la partizione EFI, quelle di ripristino), non la swap.
+            if (!it.value().contains(fsIface) || block.value(QStringLiteral("IdUsage")).toString() != QLatin1String("filesystem")
+                || block.value(QStringLiteral("HintIgnore")).toBool()
+                || hasMountPoints(it.value().value(fsIface).value(QStringLiteral("MountPoints")))) {
+                continue;
+            }
+            const double size = block.value(QStringLiteral("Size")).toDouble();
+            QString name = block.value(QStringLiteral("IdLabel")).toString();
+            if (name.isEmpty()) {
+                name = QStringLiteral("Volume da ") + formatSize(qint64(size));
+            }
+            volumes.append(QVariantMap {
+                { QStringLiteral("name"), name },
+                { QStringLiteral("path"), QString() },
+                { QStringLiteral("icon"), removable ? QStringLiteral("drive-removable-media") : QStringLiteral("drive-harddisk") },
+                { QStringLiteral("total"), size },
+                { QStringLiteral("free"), -1.0 },
+                { QStringLiteral("device"), device },
+                { QStringLiteral("removable"), removable },
+                { QStringLiteral("mounted"), false },
+                { QStringLiteral("volume"), it.key().path() },
+            });
+        }
+        std::sort(volumes.begin(), volumes.end(), [](const QVariant& a, const QVariant& b) {
+            return a.toMap().value(QStringLiteral("device")).toString() < b.toMap().value(QStringLiteral("device")).toString();
+        });
+        m_volumes = volumes;
+        // Le montate rimovibili lo sanno meglio da udisks.
+        for (QVariant& entry : m_mountedDrives) {
+            QVariantMap map = entry.toMap();
+            const QVariantMap known = m_devices.value(map.value(QStringLiteral("device")).toString());
+            if (!known.isEmpty() && known.value(QStringLiteral("removable")).toBool()) {
+                map[QStringLiteral("removable")] = true;
+                map[QStringLiteral("icon")] = QStringLiteral("drive-removable-media");
+                entry = map;
+            }
+        }
+        publishDrives();
+        if (!m_watchingVolumes) {
+            m_watchingVolumes = true;
+            QDBusConnection system = QDBusConnection::systemBus();
+            for (const char* signal : { "InterfacesAdded", "InterfacesRemoved" }) {
+                system.connect(udisks, QStringLiteral("/org/freedesktop/UDisks2"),
+                    QStringLiteral("org.freedesktop.DBus.ObjectManager"), QLatin1String(signal), this,
+                    SLOT(onVolumesChanged()));
+            }
+            system.connect(udisks, QString(), QStringLiteral("org.freedesktop.DBus.Properties"),
+                QStringLiteral("PropertiesChanged"), this, SLOT(onVolumesChanged()));
+        }
+    });
+}
+
+void Places::onVolumesChanged()
+{
+    // Arrivano a raffiche: un giro solo.
+    QTimer::singleShot(300, this, [this] { refreshDrives(); });
+}
+
+void Places::mount(const QString& volume)
+{
+    QDBusMessage call = QDBusMessage::createMethodCall(udisks, volume, QStringLiteral("org.freedesktop.UDisks2.Filesystem"),
+        QStringLiteral("Mount"));
+    call << QVariantMap { { QStringLiteral("auth.no_user_interaction"), false } };
+    // La password (polkit) può volerci un po'.
+    auto* watcher = new QDBusPendingCallWatcher(QDBusConnection::systemBus().asyncCall(call, 5 * 60 * 1000), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, volume] {
+        watcher->deleteLater();
+        const QDBusPendingReply<QString> reply = *watcher;
+        if (reply.isError()) {
+            const QString name = reply.error().name();
+            emit mounted(volume, {},
+                name.endsWith(QLatin1String("NotAuthorizedDismissed")) ? QString()
+                    : QStringLiteral("Impossibile aprire l'unità: ") + reply.error().message());
+        } else {
+            emit mounted(volume, reply.value(), {});
+        }
+        refreshDrives();
+    });
+}
+
+void Places::eject(const QString& device)
+{
+    const QVariantMap known = m_devices.value(device);
+    if (known.isEmpty()) {
+        emit ejected(QStringLiteral("Impossibile trovare l'unità."));
+        return;
+    }
+    QDBusMessage unmount = QDBusMessage::createMethodCall(udisks, known.value(QStringLiteral("block")).toString(),
+        QStringLiteral("org.freedesktop.UDisks2.Filesystem"), QStringLiteral("Unmount"));
+    unmount << QVariantMap {};
+    auto* watcher = new QDBusPendingCallWatcher(QDBusConnection::systemBus().asyncCall(unmount), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, known] {
+        watcher->deleteLater();
+        const QDBusPendingReply<> reply = *watcher;
+        if (reply.isError()) {
+            emit ejected(reply.error().name().endsWith(QLatin1String("DeviceBusy"))
+                    ? QStringLiteral("L'unità è in uso: chiudi i file aperti e riprova.")
+                    : QStringLiteral("Impossibile espellere l'unità: ") + reply.error().message());
+            refreshDrives();
+            return;
+        }
+        // Smontata: ora si può staccare (le chiavette si spengono anche).
+        const QString drive = known.value(QStringLiteral("drive")).toString();
+        if (!drive.isEmpty() && drive != QLatin1String("/")) {
+            QDBusMessage eject = QDBusMessage::createMethodCall(udisks, drive,
+                QStringLiteral("org.freedesktop.UDisks2.Drive"), QStringLiteral("Eject"));
+            eject << QVariantMap {};
+            QDBusConnection::systemBus().asyncCall(eject);
+        }
+        emit ejected({});
+        refreshDrives();
+    });
+}
+
+// ------------------------------------------------------------ Preferiti --
+
+QVariantList Places::favorites() const
+{
+    static const QMimeDatabase mimes;
+    QVariantList out;
+    for (const QString& path : favoriteFiles()) {
+        const QFileInfo info(path);
+        if (!info.exists()) {
+            continue;
+        }
+        out.append(QVariantMap {
+            { QStringLiteral("name"), info.fileName() },
+            { QStringLiteral("path"), path },
+            { QStringLiteral("icon"), info.isDir() ? QStringLiteral("folder") : mimes.mimeTypeForFile(info, QMimeDatabase::MatchExtension).iconName() },
+            { QStringLiteral("modified"), info.lastModified() },
+            { QStringLiteral("location"), info.absolutePath() },
+        });
+    }
+    return out;
+}
+
+bool Places::isFavorite(const QString& path) const
+{
+    return ::isFavorite(path);
+}
+
+void Places::setFavorite(const QString& path, bool on)
+{
+    ::setFavorite(path, on);
+    emit favoritesChanged();
+}
+
+
 
 QVariantList Places::recentFiles(int limit) const
 {

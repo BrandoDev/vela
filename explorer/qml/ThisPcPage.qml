@@ -80,9 +80,16 @@ Flickable {
                 delegate: Rectangle {
                     id: drive
                     required property var modelData
-                    readonly property real used: modelData.total > 0 ? 1 - modelData.free / modelData.total : 0
+                    readonly property bool mounted: modelData.mounted !== false
+                    readonly property bool mounting: !mounted && page.tab.mountingVolume === modelData.volume
+                    readonly property real used: mounted && modelData.total > 0 ? 1 - modelData.free / modelData.total : 0
+                    function open() {
+                        if (mounted) page.tab.navigate(modelData.path)
+                        else page.tab.openVolume(modelData.volume)
+                    }
                     width: 300
                     height: 72
+                    opacity: mounted ? 1 : 0.85
                     radius: Theme.radiusSmall
                     color: driveMouse.containsMouse ? Theme.hover : "transparent"
                     Image {
@@ -100,17 +107,18 @@ Flickable {
                         spacing: 4
                         Text {
                             width: parent.width
-                            text: drive.modelData.name + (drive.modelData.path !== "/" ? "  (" + drive.modelData.path + ")" : "")
+                            text: drive.modelData.name + (drive.mounted && drive.modelData.path !== "/" ? "  (" + drive.modelData.path + ")" : "")
                             color: Theme.text
                             font.pixelSize: Theme.fontNormal
                             elide: Text.ElideRight
                         }
                         Rectangle {
+                            visible: drive.mounted
                             width: parent.width
                             height: 12
-                            color: Qt.rgba(1, 1, 1, 0.12)
+                            color: Theme.light ? Qt.rgba(0, 0, 0, 0.08) : Qt.rgba(1, 1, 1, 0.12)
                             border.width: 1
-                            border.color: Qt.rgba(1, 1, 1, 0.08)
+                            border.color: Theme.divider
                             Rectangle {
                                 x: 1
                                 y: 1
@@ -120,7 +128,9 @@ Flickable {
                             }
                         }
                         Text {
-                            text: Ops.formatSize(drive.modelData.free) + " disponibili di " + Ops.formatSize(drive.modelData.total)
+                            text: drive.mounting ? "Apertura in corso..."
+                                : !drive.mounted ? Ops.formatSize(drive.modelData.total) + ", non ancora aperta"
+                                : Ops.formatSize(drive.modelData.free) + " disponibili di " + Ops.formatSize(drive.modelData.total)
                             color: Theme.textDim
                             font.pixelSize: Theme.fontSmall
                         }
@@ -130,17 +140,22 @@ Flickable {
                         anchors.fill: parent
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
-                        onDoubleClicked: page.tab.navigate(drive.modelData.path)
+                        onDoubleClicked: drive.open()
                         onClicked: mouse => {
                             if (mouse.button === Qt.RightButton) {
                                 const p = mapToItem(null, mouse.x, mouse.y)
-                                page.tab.menus.open([
-                                    { text: "&Apri", icon: "document-open", action: () => page.tab.navigate(drive.modelData.path) },
-                                    { text: "Apri in una nuova &scheda", icon: "tab-new", action: () => page.tab.openInNewTab(drive.modelData.path) },
-                                    { separator: true },
-                                    { text: "Apri in &Terminale", icon: "utilities-terminal", action: () => System.openTerminal(drive.modelData.path) },
-                                    { text: "P&roprietà", icon: "document-properties", action: () => Ops.showProperties([drive.modelData.path]) }
-                                ], p.x, p.y)
+                                const d = drive.modelData
+                                const entries = [{ text: "&Apri", icon: "document-open", action: () => drive.open() }]
+                                if (drive.mounted) {
+                                    entries.push(
+                                        { text: "Apri in una nuova &scheda", icon: "tab-new", action: () => page.tab.openInNewTab(d.path) },
+                                        { separator: true },
+                                        { text: "Apri in &Terminale", icon: "utilities-terminal", action: () => System.openTerminal(d.path) })
+                                    if (d.removable) entries.push({ text: "&Espelli", icon: "media-eject", action: () => Places.eject(d.device) })
+                                    entries.push({ separator: true },
+                                        { text: "P&roprietà", icon: "document-properties", action: () => Ops.showProperties([d.path]) })
+                                }
+                                page.tab.menus.open(entries, p.x, p.y)
                             }
                         }
                     }

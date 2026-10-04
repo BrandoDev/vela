@@ -15,6 +15,7 @@ Window {
     property int current: 0 // quello di cui si scelgono le finestre
     property var candidates: [] // [{id, title, icon}]
     property int revision: 0
+    property string origin: "" // la finestra agganciata da cui è partito
 
     function overlaps(a, b) {
         return a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
@@ -52,6 +53,7 @@ Window {
                 root.screen = screen
             }
             root.zones = zones
+            root.origin = state.window
             root.current = 0
             root.candidates = state.candidates.map(id => ({
                 id: id, title: Capture.title(id), icon: Apps.iconForAppId(Capture.appId(id))
@@ -75,7 +77,8 @@ Window {
     }
     function pick(id) {
         const z = zones[current]
-        Shell.windowAction(id, "snap " + z.join(" ") + " quiet")
+        // Accanto alla finestra appena agganciata: insieme fanno un gruppo di snap.
+        Shell.windowAction(id, "snap " + z.join(" ") + " quiet " + origin)
         candidates = candidates.filter(c => c.id !== id)
         if (current + 1 < zones.length && candidates.length > 0) {
             current++
@@ -128,7 +131,8 @@ Window {
                 width: area.width - 8
                 height: area.height - 8
                 radius: Theme.radiusLarge
-                color: active ? Qt.rgba(0.12, 0.12, 0.14, 0.72) : Qt.rgba(0.12, 0.12, 0.14, 0.45)
+                color: Theme.light ? (active ? Qt.rgba(0.94, 0.94, 0.96, 0.78) : Qt.rgba(0.94, 0.94, 0.96, 0.5))
+                    : (active ? Qt.rgba(0.12, 0.12, 0.14, 0.72) : Qt.rgba(0.12, 0.12, 0.14, 0.45))
                 border.width: 1
                 border.color: Theme.stroke
 
@@ -158,7 +162,7 @@ Window {
                             width: space.cardWidth
                             height: width * 0.62 + 34
                             radius: Theme.radiusLarge
-                            color: cardMouse.containsMouse ? Qt.rgba(0.22, 0.22, 0.25, 0.95) : Qt.rgba(0.16, 0.16, 0.18, 0.92)
+                            color: cardMouse.containsMouse ? Theme.cardHover : Theme.card
                             border.width: cardMouse.containsMouse ? 2 : 1
                             border.color: cardMouse.containsMouse ? Theme.accent : Theme.stroke
                             Row {
@@ -169,7 +173,7 @@ Window {
                                 Image {
                                     width: 16
                                     height: 16
-                                    source: "image://icon/" + encodeURIComponent(card.modelData.icon)
+                                    source: Theme.icons + encodeURIComponent(card.modelData.icon)
                                     sourceSize: Qt.size(width, height)
                                 }
                                 Text {

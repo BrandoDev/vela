@@ -42,9 +42,9 @@ Item {
         width: 20
         height: 20
         radius: 10
-        color: "#454545"
+        color: Theme.light ? "#ffffff" : "#454545"
         border.width: 1
-        border.color: Qt.rgba(1, 1, 1, 0.09)
+        border.color: Theme.light ? Qt.rgba(0, 0, 0, 0.1) : Qt.rgba(1, 1, 1, 0.09)
         Rectangle {
             anchors.centerIn: parent
             width: mouse.pressed ? 10 : mouse.containsMouse ? 14 : 12

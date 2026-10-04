@@ -76,6 +76,26 @@ public:
     Q_INVOKABLE void newWindow(const QString& location) const;
     // La finestra Proprietà è quella della shell (la stessa del desktop).
     Q_INVOKABLE void showProperties(const QStringList& paths);
+    // Anche Condividi, "Scegli un'altra app" e Nuovo > Collegamento.
+    Q_INVOKABLE void share(const QStringList& paths);
+    Q_INVOKABLE void chooseApp(const QString& path);
+    Q_INVOKABLE void newShortcut(const QString& directory);
+
+    // Collegamenti (links.h): "Crea collegamento" li mette accanto agli
+    // originali (o sul desktop, se lì non si può scrivere); "Incolla
+    // collegamento" crea qui quelli dei file negli appunti.
+    Q_INVOKABLE void createLinks(const QStringList& paths);
+    Q_INVOKABLE void pasteLinks(const QString& directory);
+    Q_INVOKABLE bool isLink(const QString& path) const;
+    Q_INVOKABLE QString linkTarget(const QString& path) const;
+
+    // Il riquadro dei dettagli: {name, type, size, sizeText, modified,
+    // created, isDir, items, mime, width, height, location}.
+    Q_INVOKABLE QVariantMap details(const QString& path) const;
+    // Il riquadro di anteprima: l'inizio di un file di testo (vuoto se non
+    // lo è), e se è un'immagine che Qt sa leggere.
+    Q_INVOKABLE QString previewText(const QString& path) const;
+    Q_INVOKABLE bool isImage(const QString& path) const;
 
 signals:
     void clipboardChanged();

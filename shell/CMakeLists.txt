@@ -8,6 +8,8 @@ qt_standard_project_setup(REQUIRES 6.5)
 
 qt_add_executable(vela-shell
     src/main.cpp
+    src/accessibility.cpp
+    src/accessibility.h
     src/appmodel.cpp
     src/appmodel.h
     src/backgroundeffects.cpp
@@ -16,6 +18,8 @@ qt_add_executable(vela-shell
     src/config.h
     src/filethumbnails.cpp
     src/filethumbnails.h
+    src/fileactions.cpp
+    src/fileactions.h
     src/fileproperties.cpp
     src/fileproperties.h
     src/desktopmodel.cpp
@@ -25,6 +29,9 @@ qt_add_executable(vela-shell
     src/iconprovider.h
     src/jumplists.cpp
     src/jumplists.h
+    src/links.h
+    src/network.cpp
+    src/network.h
     src/notifications.cpp
     src/shellcontroller.cpp
     src/shellcontroller.h
@@ -107,7 +114,10 @@ set(VELA_QML_FILES
     qml/TaskView.qml
     qml/DesktopOsd.qml
     qml/SnapLayouts.qml
-    qml/SnapAssist.qml)
+    qml/SnapAssist.qml
+    qml/TaskbarPreview.qml
+    qml/FileDialogs.qml
+    qml/DialogButton.qml)
 
 # I file stanno in qml/ per ordine, ma nel modulo devono stare alla radice:
 # così si vedono tra loro (Theme compreso, che è un singleton) senza import.

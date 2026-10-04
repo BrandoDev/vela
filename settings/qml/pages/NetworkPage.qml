@@ -30,7 +30,7 @@ Page {
             anchors.verticalCenter: parent.verticalCenter
             width: 64
             height: 64
-            source: "image://icon/" + encodeURIComponent(Status.networkIconName)
+            source: Theme.icons + encodeURIComponent(Status.networkIconName)
             sourceSize: Qt.size(width, height)
         }
         Column {
@@ -98,7 +98,7 @@ Page {
                         anchors.verticalCenter: parent.verticalCenter
                         width: 20
                         height: 20
-                        source: "image://icon/" + (net.modelData.signal > 75 ? "network-wireless-signal-excellent"
+                        source: Theme.icons + (net.modelData.signal > 75 ? "network-wireless-signal-excellent"
                             : net.modelData.signal > 50 ? "network-wireless-signal-good"
                             : net.modelData.signal > 25 ? "network-wireless-signal-ok" : "network-wireless-signal-weak")
                         sourceSize: Qt.size(width, height)

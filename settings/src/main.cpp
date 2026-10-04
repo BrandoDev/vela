@@ -28,6 +28,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QTimer>
 #include <QQuickWindow>
 #include <QStandardPaths>
 
@@ -114,7 +115,7 @@ int main(int argc, char* argv[])
     const QCommandLineOption pageOption(QStringLiteral("page"),
         QStringLiteral("La pagina da aprire: system, display, sound, notifications, power, about, bluetooth, "
                        "network, personalization, background, colors, taskbar, apps, installed-apps, "
-                       "default-apps, time-language, datetime, keyboard."),
+                       "default-apps, time-language, datetime, keyboard, night-light, accessibility."),
         QStringLiteral("nome"));
     parser.addOption(pageOption);
     parser.process(app);
@@ -124,10 +125,6 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    // Fuori da Plasma Qt potrebbe non conoscere il tema di icone scelto.
-    if (QIcon::themeName().isEmpty() || QIcon::themeName() == QLatin1String("hicolor")) {
-        QIcon::setThemeName(qEnvironmentVariable("VELA_ICON_THEME", QStringLiteral("breeze-dark")));
-    }
     QIcon::setFallbackThemeName(QStringLiteral("hicolor"));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
@@ -138,6 +135,15 @@ int main(int argc, char* argv[])
     apps.reload();
     SystemActions system;
     Preferences preferences;
+    // Le icone del tema adatto alla modalità delle app (breeze o breeze-dark).
+    applyIconTheme(preferences.light());
+    preferences.setIconMode(preferences.light() ? QStringLiteral("l/") : QStringLiteral("d/"));
+    QObject::connect(&preferences, &Preferences::appThemeChanged, &preferences, [&preferences] {
+        applyIconTheme(preferences.light());
+        QTimer::singleShot(300, &preferences, [&preferences] {
+            preferences.setIconMode(preferences.light() ? QStringLiteral("l/") : QStringLiteral("d/"));
+        });
+    });
     Displays displays;
     Audio audio;
     Network network;

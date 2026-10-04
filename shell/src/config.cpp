@@ -72,6 +72,18 @@ void Config::reload()
         emit taskbarChanged();
     }
 
+    auto mode = [&](const char* key) {
+        return settings.value(QLatin1String(key)).toString() == QLatin1String("light") ? QStringLiteral("light")
+                                                                                       : QStringLiteral("dark");
+    };
+    const QString shellTheme = mode("appearance/shellTheme");
+    const QString appTheme = mode("appearance/appTheme");
+    if (shellTheme != m_shellTheme || appTheme != m_appTheme) {
+        m_shellTheme = shellTheme;
+        m_appTheme = appTheme;
+        emit themeChanged();
+    }
+
     const bool dnd = settings.value(QStringLiteral("notifications/doNotDisturb"), false).toBool();
     if (dnd != m_doNotDisturb) {
         m_doNotDisturb = dnd;

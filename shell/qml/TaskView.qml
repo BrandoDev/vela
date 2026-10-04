@@ -97,7 +97,7 @@ Window {
     // Il fondo: lo sfondo sfocato, scurito. Un clic sul vuoto chiude.
     Rectangle {
         anchors.fill: parent
-        color: Theme.acrylic ? Qt.rgba(0.05, 0.05, 0.07, 0.55) : Qt.rgba(0.07, 0.07, 0.09, 0.96)
+        color: Theme.backdrop
         MouseArea {
             anchors.fill: parent
             acceptedButtons: Qt.LeftButton | Qt.RightButton
@@ -231,7 +231,7 @@ Window {
                         width: card.width
                         height: card.height
                         radius: Theme.radiusLarge
-                        color: hover.hovered || cardMouse.drag.active ? Qt.rgba(0.20, 0.20, 0.23, 0.95) : Qt.rgba(0.15, 0.15, 0.17, 0.92)
+                        color: hover.hovered || cardMouse.drag.active ? Theme.cardHover : Theme.card
                         border.width: hover.hovered ? 2 : 1
                         border.color: hover.hovered ? Theme.accent : Theme.stroke
                         scale: cardMouse.drag.active ? 0.5 : 1
@@ -250,7 +250,7 @@ Window {
                             Image {
                                 width: 16
                                 height: 16
-                                source: "image://icon/" + encodeURIComponent(card.modelData.icon)
+                                source: Theme.icons + encodeURIComponent(card.modelData.icon)
                                 sourceSize: Qt.size(width, height)
                             }
                             Text {
@@ -346,7 +346,7 @@ Window {
             height: 196
             Rectangle {
                 anchors.fill: parent
-                color: Qt.rgba(0, 0, 0, 0.18)
+                color: Theme.footer
             }
 
             Row {
@@ -400,7 +400,7 @@ Window {
                                 Text {
                                     anchors.centerIn: parent
                                     text: "✕"
-                                    color: Theme.text
+                                    color: "white"
                                     font.pixelSize: 11
                                 }
                                 MouseArea {
@@ -463,7 +463,7 @@ Window {
                                 visible: root.renaming === desk.index
                                 anchors.fill: parent
                                 radius: Theme.radiusSmall
-                                color: Qt.rgba(0.10, 0.10, 0.12, 0.95)
+                                color: Theme.dialog
                                 border.width: 1
                                 border.color: Theme.accent
                             }
@@ -500,7 +500,7 @@ Window {
                         width: desktops.cardWidth
                         height: desktops.cardHeight
                         radius: Theme.radiusLarge
-                        color: newMouse.containsMouse || newDrop.containsDrag ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(1, 1, 1, 0.06)
+                        color: newMouse.containsMouse || newDrop.containsDrag ? Theme.cardHover : Theme.card
                         border.width: newDrop.containsDrag ? 2 : 1
                         border.color: newDrop.containsDrag ? Theme.accent : Theme.stroke
                         Text {

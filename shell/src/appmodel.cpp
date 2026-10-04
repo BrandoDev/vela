@@ -479,6 +479,16 @@ QString defaultAppFor(const QString& mime)
     return {};
 }
 
+QVariantList AppModel::allApps() const
+{
+    QVariantList out;
+    for (const Entry& entry : m_all) {
+        out.append(QVariantMap { { QStringLiteral("id"), entry.id }, { QStringLiteral("name"), entry.name },
+            { QStringLiteral("icon"), entry.icon } });
+    }
+    return out;
+}
+
 QVariantList AppModel::appsForFile(const QString& path) const
 {
     static const QMimeDatabase mimes;

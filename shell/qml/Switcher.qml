@@ -118,9 +118,17 @@ Window {
                     width: root.cardWidth
                     height: root.cardHeight
                     radius: Theme.radiusLarge
-                    color: current ? Theme.hover : "transparent"
+                    color: current || cardMouse.containsMouse ? Theme.hover : "transparent"
                     border.width: current ? 2 : 0
                     border.color: Theme.accent
+
+                    // Un clic su un'anteprima ci porta subito.
+                    MouseArea {
+                        id: cardMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: Shell.pickSwitcher(card.index)
+                    }
 
                     // Icona e titolo sopra l'anteprima.
                     Row {
@@ -132,7 +140,7 @@ Window {
                             width: 16
                             height: 16
                             anchors.verticalCenter: parent.verticalCenter
-                            source: "image://icon/" + encodeURIComponent(card.icon)
+                            source: Theme.icons + encodeURIComponent(card.icon)
                             sourceSize: Qt.size(width, height)
                         }
                         Text {
@@ -162,7 +170,7 @@ Window {
                             width: 48
                             height: 48
                             visible: thumbnail.status !== Image.Ready
-                            source: "image://icon/" + encodeURIComponent(card.icon)
+                            source: Theme.icons + encodeURIComponent(card.icon)
                             sourceSize: Qt.size(width, height)
                         }
                     }

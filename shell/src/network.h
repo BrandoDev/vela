@@ -7,7 +7,8 @@
 // Rete e Internet, con NetworkManager (nmcli): i collegamenti attivi con i
 // loro indirizzi, le reti Wi-Fi intorno, connettersi e disconnettersi.
 // I comandi lenti (la ricerca delle reti, la connessione) girano in
-// sottofondo: la pagina non si blocca.
+// sottofondo: la pagina non si blocca. Lo usano le Impostazioni e le
+// impostazioni rapide della shell (la scelta della rete Wi-Fi).
 class Network : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool available READ available CONSTANT)
@@ -29,10 +30,15 @@ public:
     QString connectResult() const { return m_connectResult; }
 
     Q_INVOKABLE void refresh();
+    // Solo le reti Wi-Fi (e quelle salvate), in sottofondo: per le
+    // impostazioni rapide della shell, che non devono mai fermarsi.
+    Q_INVOKABLE void refreshWifi();
     Q_INVOKABLE void scan();
     // Password vuota per le reti aperte o già note.
     Q_INVOKABLE void connectWifi(const QString& ssid, const QString& password);
     Q_INVOKABLE void disconnectDevice(const QString& device);
+    // La rete Wi-Fi in uso (il collegamento ha il suo nome).
+    Q_INVOKABLE void disconnectWifi(const QString& ssid);
     Q_INVOKABLE void forget(const QString& connection);
 
 signals:

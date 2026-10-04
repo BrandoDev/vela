@@ -30,7 +30,7 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 16
             height: 16
-            source: button.icon !== "" ? "image://icon/" + encodeURIComponent(button.icon) : ""
+            source: button.icon !== "" ? Theme.icons + encodeURIComponent(button.icon) : ""
             sourceSize: Qt.size(width, height)
         }
         Text {

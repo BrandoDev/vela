@@ -92,7 +92,7 @@ Item {
             id: footer
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: 1 }
             height: 80
-            color: "#202020"
+            color: Theme.dialogFooter
             bottomLeftRadius: Theme.radiusLarge - 1
             bottomRightRadius: Theme.radiusLarge - 1
             Row {
@@ -106,7 +106,7 @@ Item {
                         width: (parent.width - 8 * (dialog.buttons.length - 1)) / dialog.buttons.length
                         height: 32
                         radius: Theme.radiusSmall
-                        color: modelData.accent ? (buttonMouse.containsMouse ? Qt.lighter(Theme.accent, 1.25) : Theme.accentLight)
+                        color: modelData.accent ? (buttonMouse.containsMouse ? (Theme.light ? Qt.darker(Theme.accent, 1.05) : Qt.lighter(Theme.accent, 1.25)) : Theme.accentLight)
                                                 : (buttonMouse.containsMouse ? Theme.controlHover : Theme.control)
                         border.width: 1
                         border.color: Theme.controlStroke

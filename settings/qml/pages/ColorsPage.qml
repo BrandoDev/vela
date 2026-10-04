@@ -1,9 +1,11 @@
 import QtQuick
 
-// Personalizzazione > Colori: la modalità delle app (chiara o scura) e il
-// colore principale, con la tavolozza di Windows 11.
+// Personalizzazione > Colori: la modalità (chiara, scura, o personalizzata:
+// una per Vela e una per le app) e il colore principale, con la tavolozza
+// di Windows 11.
 Page {
     id: page
+    property bool custom: false // "Personalizzato" scelto anche con le due modalità uguali
     readonly property var accents: [
         "#5b8cff", "#ffb900", "#ff8c00", "#f7630c", "#ca5010", "#da3b01", "#ef6950", "#d13438",
         "#ff4343", "#e74856", "#e81123", "#ea005e", "#c30052", "#e3008c", "#bf0077", "#c239b3",
@@ -19,11 +21,40 @@ Page {
         Card {
             icon: "preferences-desktop-theme"
             title: "Scegli la modalità"
-            description: "Il colore delle finestre delle app. Barra delle applicazioni e menu restano scuri."
+            description: "Cambia i colori di Vela e delle app (chiaro o scuro)"
             trailing: Choice {
-                model: ["Scuro", "Chiaro"]
-                currentIndex: Prefs.appTheme === "light" ? 1 : 0
-                onChosen: index => Prefs.appTheme = index === 1 ? "light" : "dark"
+                model: ["Chiaro", "Scuro", "Personalizzato"]
+                currentIndex: page.custom || Prefs.shellTheme !== Prefs.appTheme ? 2 : Prefs.appTheme === "light" ? 0 : 1
+                onChosen: index => {
+                    page.custom = index === 2
+                    if (index < 2) {
+                        const mode = index === 0 ? "light" : "dark"
+                        Prefs.shellTheme = mode
+                        Prefs.appTheme = mode
+                    }
+                }
+            }
+        }
+        Card {
+            visible: page.custom || Prefs.shellTheme !== Prefs.appTheme
+            icon: "preferences-system-windows"
+            title: "Scegli la modalità predefinita di Vela"
+            description: "Barra delle applicazioni, menu Start, menu e pannelli"
+            trailing: Choice {
+                model: ["Chiaro", "Scuro"]
+                currentIndex: Prefs.shellTheme === "light" ? 0 : 1
+                onChosen: index => Prefs.shellTheme = index === 0 ? "light" : "dark"
+            }
+        }
+        Card {
+            visible: page.custom || Prefs.shellTheme !== Prefs.appTheme
+            icon: "preferences-desktop-default-applications"
+            title: "Scegli la modalità predefinita delle app"
+            description: "Le finestre delle app, Esplora e le Impostazioni"
+            trailing: Choice {
+                model: ["Chiaro", "Scuro"]
+                currentIndex: Prefs.appTheme === "light" ? 0 : 1
+                onChosen: index => Prefs.appTheme = index === 0 ? "light" : "dark"
             }
         }
         Card {

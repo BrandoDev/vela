@@ -44,10 +44,12 @@ inline QColor cachedWallpaperTint()
     return QColor(parts[0].toInt(), parts[1].toInt(), parts[2].toInt());
 }
 
-// Attiva: base #202020 al 30% verso la tinta; inattiva: #2b2b2b al 45%.
-inline QColor micaFromTint(const QColor& tint, bool active)
+// Scuro: attiva base #202020 al 30% verso la tinta, inattiva #2b2b2b al
+// 45%. Chiaro: #f3f3f3 e #f9f9f9, con la tinta portata nella fascia
+// chiara. Come micaColor in compositor/src/decoration.cpp.
+inline QColor micaFromTint(const QColor& tint, bool active, bool light = false)
 {
-    const float base = active ? 0.125f : 0.169f;
+    const float base = light ? (active ? 0.953f : 0.976f) : (active ? 0.125f : 0.169f);
     if (!tint.isValid()) {
         return QColor::fromRgbF(base, base, base);
     }
@@ -57,7 +59,9 @@ inline QColor micaFromTint(const QColor& tint, bool active)
     float out[3];
     for (int i = 0; i < 3; ++i) {
         const float desaturated = luma + (t[i] - luma) * 0.5f;
-        const float safe = std::clamp(desaturated * (0.16f / std::max(luma, 0.02f)), 0.0f, 0.32f);
+        const float safe = light
+            ? std::clamp(1.0f - (1.0f - desaturated) * (0.10f / std::max(1.0f - luma, 0.02f)), 0.82f, 1.0f)
+            : std::clamp(desaturated * (0.16f / std::max(luma, 0.02f)), 0.0f, 0.32f);
         out[i] = base + (safe - base) * weight;
     }
     return QColor::fromRgbF(out[0], out[1], out[2]);

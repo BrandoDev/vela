@@ -40,14 +40,18 @@ Window {
         "default-apps": { title: "App predefinite", parent: "apps", file: "DefaultAppsPage.qml", icon: "preferences-desktop-default-applications" },
         "time-language": { title: "Ora e lingua", parent: "", file: "TimeLanguagePage.qml", icon: "preferences-system-time" },
         "datetime": { title: "Data e ora", parent: "time-language", file: "DateTimePage.qml", icon: "preferences-system-time" },
-        "keyboard": { title: "Tastiera", parent: "time-language", file: "KeyboardPage.qml", icon: "input-keyboard" }
+        "keyboard": { title: "Tastiera", parent: "time-language", file: "KeyboardPage.qml", icon: "input-keyboard" },
+        "night-light": { title: "Luce notturna", parent: "display", file: "NightLightPage.qml", icon: "redshift-status-on" },
+        "accessibility": { title: "Accessibilità", parent: "", file: "AccessibilityPage.qml", icon: "preferences-desktop-accessibility" }
     })
-    readonly property var sections: ["home", "system", "bluetooth", "network", "personalization", "apps", "time-language"]
+    readonly property var sections: ["home", "system", "bluetooth", "network", "personalization", "apps", "time-language", "accessibility"]
     // I nomi che usa la shell (systemactions.cpp) per le voci dei menu.
     readonly property var aliases: ({
         "settings": "home", "personalize": "personalization", "taskbar-settings": "taskbar",
         "notification-settings": "notifications", "sound-settings": "sound", "devices": "bluetooth",
-        "mobility": "power", "computer": "about", "installed-apps": "installed-apps"
+        "mobility": "power", "computer": "about", "installed-apps": "installed-apps",
+        "bluetooth-settings": "bluetooth", "night-light-settings": "night-light", "accessibility-settings": "accessibility",
+        "colors-settings": "colors"
     })
 
     property string current: "home"
@@ -122,7 +126,13 @@ Window {
         { page: "installed-apps", text: "App installate", keys: "disinstalla rimuovi programmi" },
         { page: "default-apps", text: "App predefinite", keys: "browser posta lettore apri con predefinito" },
         { page: "datetime", text: "Data e ora", keys: "orologio fuso orario sincronizza ntp" },
-        { page: "keyboard", text: "Tastiera", keys: "layout lingua input digitazione ripetizione tasti" }
+        { page: "keyboard", text: "Tastiera", keys: "layout lingua input digitazione ripetizione tasti" },
+        { page: "night-light", text: "Luce notturna", keys: "notte colori caldi blu sera pianifica tramonto" },
+        { page: "display", text: "Tearing nei giochi", keys: "giochi tearing latenza schermo intero vsync" },
+        { page: "accessibility", text: "Accessibilità", keys: "ipovedenti daltonismo" },
+        { page: "accessibility", text: "Lente di ingrandimento", keys: "zoom ingrandire magnifier" },
+        { page: "accessibility", text: "Filtri colore", keys: "scala di grigi daltonismo deuteranopia protanopia tritanopia" },
+        { page: "accessibility", text: "Tasti permanenti", keys: "sticky keys maiusc ctrl alt tastiera" }
     ]
     readonly property var searchResults: {
         const q = search.text.trim().toLowerCase()
@@ -196,7 +206,7 @@ Window {
                 anchors { right: parent.right; rightMargin: 10; verticalCenter: parent.verticalCenter }
                 width: 16
                 height: 16
-                source: "image://icon/edit-find"
+                source: Theme.icons + "edit-find"
                 sourceSize: Qt.size(width, height)
                 opacity: 0.8
             }

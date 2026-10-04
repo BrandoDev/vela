@@ -125,6 +125,10 @@ QString SystemActions::command(const QString& name) const
         { QStringLiteral("installed-apps"), QStringLiteral("installed-apps") },
         { QStringLiteral("system"), QStringLiteral("about") },
         { QStringLiteral("sound-settings"), QStringLiteral("sound") },
+        { QStringLiteral("bluetooth-settings"), QStringLiteral("bluetooth") },
+        { QStringLiteral("night-light-settings"), QStringLiteral("night-light") },
+        { QStringLiteral("accessibility-settings"), QStringLiteral("accessibility") },
+        { QStringLiteral("colors-settings"), QStringLiteral("colors") },
     };
     if (settingsPages.contains(name)) {
         const QString program = velaSettings();

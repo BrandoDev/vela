@@ -7,12 +7,12 @@
 // primo fotogramma (le app per "Apri con", i service menu) si prepara dopo.
 // Con VELA_FILES_TIMING=1 stampa quanto ci ha messo.
 
+#include "appearance.h"
 #include "appmodel.h"
 #include "fileops.h"
 #include "filethumbnails.h"
 #include "foldermodel.h"
 #include "iconprovider.h"
-#include "mica.h"
 #include "places.h"
 #include "servicemenus.h"
 #include "systemactions.h"
@@ -26,7 +26,6 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickWindow>
-#include <QSettings>
 #include <QTimer>
 #include <QUrl>
 
@@ -56,35 +55,6 @@ double sinceProcessStart()
 
 } // namespace
 
-// L'aspetto condiviso con la shell: accento e Mica (vedi shell/src/mica.h).
-class Appearance : public QObject {
-    Q_OBJECT
-    Q_PROPERTY(QColor accent READ accent CONSTANT)
-    Q_PROPERTY(QColor mica READ mica CONSTANT)
-    Q_PROPERTY(QColor micaInactive READ micaInactive CONSTANT)
-
-public:
-    Appearance()
-    {
-        const QSettings shell(QStringLiteral("Vela"), QStringLiteral("vela-shell"));
-        m_accent = QColor(shell.value(QStringLiteral("appearance/accent")).toString());
-        if (!m_accent.isValid()) {
-            m_accent = QColor(0x5b, 0x8c, 0xff);
-        }
-        const QColor tint = cachedWallpaperTint();
-        m_mica = micaFromTint(tint, true);
-        m_micaInactive = micaFromTint(tint, false);
-    }
-    QColor accent() const { return m_accent; }
-    QColor mica() const { return m_mica; }
-    QColor micaInactive() const { return m_micaInactive; }
-
-private:
-    QColor m_accent;
-    QColor m_mica;
-    QColor m_micaInactive;
-};
-
 int main(int argc, char* argv[])
 {
     QElapsedTimer sinceMain;
@@ -98,11 +68,10 @@ int main(int argc, char* argv[])
     QGuiApplication::setDesktopFileName(QStringLiteral("vela-files"));
     QGuiApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("system-file-manager")));
 
-    // Fuori da Plasma Qt potrebbe non conoscere il tema di icone scelto.
-    if (QIcon::themeName().isEmpty() || QIcon::themeName() == QLatin1String("hicolor")) {
-        QIcon::setThemeName(qEnvironmentVariable("VELA_ICON_THEME", QStringLiteral("breeze-dark")));
-    }
     QIcon::setFallbackThemeName(QStringLiteral("hicolor"));
+    // La modalità delle app, l'accento e Mica dalla shell; le icone del
+    // tema adatto (breeze o breeze-dark).
+    Appearance appearance;
 
     // Dove aprirsi: la cartella data, o la cartella del file dato (selezionato).
     QString start = QStringLiteral("home:");
@@ -126,7 +95,6 @@ int main(int argc, char* argv[])
     Places places;
     SystemActions system;
     ServiceMenus serviceMenus;
-    Appearance appearance;
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
@@ -159,10 +127,12 @@ int main(int argc, char* argv[])
                     double(sinceMain.nsecsElapsed()) / 1e6, sinceProcessStart());
             }
             // Ciò che non serve al primo fotogramma.
-            QTimer::singleShot(0, &app, [&apps] { apps.reload(); });
+            QTimer::singleShot(0, &app, [&apps, &appearance] {
+                apps.reload();
+                appearance.watch();
+            });
         }, Qt::QueuedConnection);
     }
     return app.exec();
 }
 
-#include "main.moc"

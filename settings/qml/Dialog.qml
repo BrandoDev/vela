@@ -78,7 +78,7 @@ Item {
             Rectangle {
                 width: parent.width
                 height: 80
-                color: "#202020"
+                color: Theme.light ? "#f3f3f3" : "#202020"
                 bottomLeftRadius: Theme.radiusOverlay
                 bottomRightRadius: Theme.radiusOverlay
                 Row {

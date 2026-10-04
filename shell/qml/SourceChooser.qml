@@ -225,7 +225,7 @@ Window {
                         visible: thumbnail.status !== Image.Ready
                         width: 48
                         height: 48
-                        source: "image://icon/" + encodeURIComponent(card.icon)
+                        source: Theme.icons + encodeURIComponent(card.icon)
                         sourceSize: Qt.size(width, height)
                     }
                 }
@@ -237,7 +237,7 @@ Window {
                     Image {
                         width: 16
                         height: 16
-                        source: "image://icon/" + encodeURIComponent(card.icon)
+                        source: Theme.icons + encodeURIComponent(card.icon)
                         sourceSize: Qt.size(width, height)
                     }
                     Text {

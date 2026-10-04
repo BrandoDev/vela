@@ -1,7 +1,8 @@
 import QtQuick
 
 // L'icona di un file: la miniatura se c'è (immagini, video, PDF), altrimenti
-// l'icona del tipo. Si caricano senza fermare la vista.
+// l'icona del tipo. Si caricano senza fermare la vista. Sui collegamenti la
+// freccia in basso a sinistra, come in Windows.
 Item {
     id: icon
     property string path
@@ -10,6 +11,7 @@ Item {
     property var modified
     property int size: 16
     property bool cut: false
+    property bool link: false
 
     width: size
     height: size
@@ -35,5 +37,14 @@ Item {
         fillMode: Image.PreserveAspectFit
         asynchronous: true
         cache: false
+    }
+    // La freccia del collegamento.
+    Image {
+        visible: icon.link
+        anchors { left: parent.left; bottom: parent.bottom }
+        width: Math.max(10, Math.round(icon.size * 0.4))
+        height: width
+        source: Theme.icons + "emblem-symbolic-link"
+        sourceSize: Qt.size(width, height)
     }
 }
