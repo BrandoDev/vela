@@ -4,10 +4,12 @@ Un desktop environment per Linux moderno, fluido e leggero, con l'aspetto
 e la comodità di Windows 11. L'obiettivo è sostituire KDE Plasma un pezzo
 alla volta.
 
-> **Stato: milestone 0, prototipo.** Il codice è scritto e verificato sulle
-> API di wlroots 0.20 (confrontandolo con sway 1.12, cage, labwc e Wayfire),
-> ma questa è la sua prima compilazione su una macchina vera. Se qualcosa non
-> compila, l'errore esatto basta a sistemarlo.
+> **Stato: milestone 3 completata.** Vela si sceglie all'accesso come una
+> sessione vera e copre il desktop di tutti i giorni: compositor con il suo
+> renderer Vulkan, shell, Esplora e Impostazioni. Ogni funzione nuova è
+> provata in automatico in una sessione senza schermo (vedi «Provarlo senza
+> guardarlo»); ciò che dipende dall'hardware (gamma del monitor, tearing,
+> touchpad) va provato su una macchina vera.
 
 ## Com'è fatto
 
@@ -51,12 +53,15 @@ alla volta.
 - Pubblica l'elenco delle finestre aperte (protocollo foreign-toplevel):
   lo usa la taskbar, ma funziona anche con strumenti esterni.
 - Snap a metà e quarti con Super+frecce o trascinando a bordi e angoli,
-  con anteprima animata; layout di snap e Snap Assist (vedi sotto).
+  con anteprima animata; layout di snap e Snap Assist (vedi sotto). Le
+  finestre sistemate insieme con Snap Assist fanno un **gruppo di snap**:
+  la taskbar le mostra insieme e le riporta davanti insieme; ci si stacca
+  spostando, massimizzando o mandando la finestra su un altro desktop.
 - Menu e popup tenuti dentro lo schermo.
 - Alt+Tab come su Windows: tenendo premuto Alt compare il pannello con le
   anteprime delle finestre dalla più recente (anche quelle ridotte a icona
   o coperte) del desktop in uso; un Alt+Tab veloce cambia finestra senza
-  mostrarlo.
+  mostrarlo. Un clic su un'anteprima ci porta subito.
 - Cattura di schermi e finestre con i protocolli standard ext-image-copy-capture
   (le anteprime di Alt+Tab e della condivisione dello schermo).
 - Bordi invisibili per ridimensionare le finestre con la barra di Vela, come
@@ -74,6 +79,24 @@ alla volta.
   (cursor-shape), oltre ai protocolli che le app moderne si aspettano:
   scala frazionaria, viewporter, appunti, screencopy, presentation time.
 - Il tasto Super premuto da solo apre il menu Start.
+- **Luce notturna** come Windows: colori più caldi con l'intensità scelta,
+  accesa a mano o pianificata (dalle-alle, o dal tramonto all'alba con le
+  ore del sole calcolate dalle coordinate del fuso orario, senza rete),
+  con un passaggio graduale di un secondo. Sui monitor veri va nella gamma
+  del monitor: niente tinta negli screenshot e nella condivisione dello
+  schermo, e lo scanout diretto dei giochi resta; dove il monitor non la
+  accetta (annidato, headless) la applica il renderer.
+- **Accessibilità**: filtri colore (scala di grigi e correzioni per i
+  daltonismi, anche con Win+Ctrl+C), **lente di ingrandimento** (Win+più
+  ingrandisce lo schermo del cursore attorno a lui, Win+meno riduce,
+  Win+Esc chiude; la zona ingrandita segue il cursore ai bordi),
+  **tasti permanenti** (Maiusc, Ctrl, Alt e Win premuti e lasciati valgono
+  per il tasto dopo; premuti due volte restano bloccati).
+- **Tearing per i giochi** (wp-tearing-control): un gioco a schermo intero
+  che lo chiede mostra ogni fotogramma appena è pronto, senza aspettare il
+  vblank (si spegne nelle Impostazioni o con `VELA_TEARING=0`).
+- Barre del titolo chiare o scure secondo la modalità delle app, e tinta
+  acrylic chiara o scura secondo quella della shell.
 - Touchpad come su Windows: tocco per cliccare, trascinamento col tocco,
   niente tocchi accidentali mentre scrivi, scorrimento naturale.
 - Se la shell va in crash il compositor la rilancia (ma si arrende se
@@ -181,11 +204,27 @@ alla volta.
     tastiera come in Windows, Riduci a icona, Ingrandisci, Chiudi;
   - desktop e file (vedi le icone del desktop sopra) e campi di testo.
 - **Impostazioni rapide** (Win+A, o clic sulle icone di sistema accanto
-  all'orologio), come Windows 11: Wi-Fi (NetworkManager), Bluetooth
-  (BlueZ), modalità aereo, risparmio energia (power-profiles-daemon),
-  luminosità dei portatili (logind), volume (PipeWire), batteria (UPower)
-  e Impostazioni. Le icone di sistema seguono lo stato; la rotellina sul
-  volume lo cambia, il tasto destro apre i loro menu.
+  all'orologio), come Windows 11: Wi-Fi (NetworkManager, con la freccia
+  che elenca le reti per connettersi, con la password, o disconnettersi),
+  Bluetooth (BlueZ), modalità aereo, risparmio energia
+  (power-profiles-daemon), Luce notturna, Accessibilità (lente, filtri
+  colore, tasti permanenti), luminosità dei portatili (logind), volume
+  (PipeWire), batteria (UPower) e Impostazioni. Le icone di sistema seguono
+  lo stato; la rotellina sul volume lo cambia, il tasto destro apre i loro
+  menu.
+- **Anteprime della taskbar**: col mouse fermo sul pulsante di un'app
+  aperta compaiono le sue finestre in miniatura (clic per andarci, clic
+  centrale o ✕ per chiuderle), e i suoi gruppi di snap con le finestre nei
+  loro posti.
+- **Tema chiaro e scuro** come Windows 11 ("Scegli la modalità": Chiaro,
+  Scuro o Personalizzato, una modalità per Vela e una per le app): la shell,
+  le sue icone, Esplora, le Impostazioni e le barre del titolo cambiano
+  subito; alle app KDE e GTK passano colori e icone.
+- **Condividi** (desktop ed Esplora): ai telefoni e computer associati con
+  KDE Connect, per posta, via Bluetooth. **Scegli un'altra app** con "Solo
+  una volta" e "Sempre". **Collegamenti**: Nuovo > Collegamento (a file,
+  cartelle o indirizzi web), Crea collegamento, Incolla collegamento.
+  **Aggiungi a Preferiti** (la sezione Preferiti della Home di Esplora).
 - **Centro notifiche e calendario** (Win+N, o clic sull'orologio): le
   notifiche passate raggruppate per app (quelle scadute dal popup ci
   restano, ancora vive: un clic esegue l'azione), "Non disturbare",
@@ -227,12 +266,19 @@ alla volta.
   l'avanzamento e "Sostituisci o ignora file"; trascinamento da e verso le
   app, le cartelle, il riquadro di navigazione e il percorso. Gli stessi
   menu del tasto destro del desktop, con Apri con, Comprimi, Estrai tutto,
-  Mostra altre opzioni e la finestra Proprietà della shell.
+  Mostra altre opzioni e la finestra Proprietà della shell. **Riquadro di
+  anteprima** (Alt+P: immagini, testo, miniature di video e PDF) e
+  **riquadro dettagli** (Alt+Maiusc+P, o "Dettagli" a destra della barra
+  dei comandi). Le **unità non ancora montate** (udisks, per esempio la
+  partizione di Windows) stanno in Questo PC e si aprono con un doppio clic
+  (con la password, se serve); le chiavette si espellono dal menu. Home con
+  Accesso rapido, **Preferiti** e Recenti; i collegamenti hanno la freccia.
 - **Impostazioni** (Win+I, `vela-settings`), come quelle di Windows 11, con
   la ricerca e il fondo Mica che continua la barra del titolo:
   - Sistema: **Schermo** (disposizione dei monitor trascinabile, scala,
     risoluzione, orientamento, frequenza, e "Mantenere queste impostazioni?"
-    che torna indietro da solo dopo 15 secondi), **Audio** (uscite e
+    che torna indietro da solo dopo 15 secondi; **Luce notturna** con
+    intensità e pianificazione; tearing nei giochi), **Audio** (uscite e
     ingressi con il loro volume), **Notifiche** (Non disturbare),
     **Alimentazione** (schermo spento dopo, blocco, modalità di
     alimentazione), **Informazioni** (specifiche, Rinomina questo PC);
@@ -240,17 +286,21 @@ alla volta.
     disconnetti, rimuovi, batteria) e **Rete e Internet** (reti Wi-Fi con
     la password, proprietà dei collegamenti);
   - Personalizzazione: **Sfondo** (immagini recenti, Sfoglia foto, sfondi
-    del sistema), **Colori** (la tavolozza di Windows 11, modalità chiara o
-    scura delle app), **Barra delle applicazioni** (allineamento al centro
-    o a sinistra, Termina attività);
+    del sistema), **Colori** (la tavolozza di Windows 11, modalità Chiara,
+    Scura o Personalizzata), **Barra delle applicazioni** (allineamento al
+    centro o a sinistra, Termina attività);
   - App: **App installate** (cerca, disinstalla) e **App predefinite**;
   - Ora e lingua: **Data e ora** (fuso orario, sincronizzazione) e
     **Tastiera** (layout, con Win+Spazio per passare dall'uno all'altro, e
-    ripetizione dei tasti).
+    ripetizione dei tasti);
+  - **Accessibilità**: lente di ingrandimento (e di quanto ingrandisce),
+    filtri colore (quale, e la scorciatoia Win+Ctrl+C), tasti permanenti.
 
   Ogni cambiamento vale subito: la shell rilegge
   `~/.config/Vela/vela-shell.conf` appena cambia, il compositor rilegge
-  `~/.config/vela/vela.conf` quando le Impostazioni glielo chiedono. Le voci
+  `~/.config/vela/vela.conf` quando le Impostazioni glielo chiedono (e lo
+  aggiorna lui stesso quando Luce notturna, filtri o tasti permanenti si
+  accendono dalle impostazioni rapide o dalla pianificazione). Le voci
   dei menu (Impostazioni schermo, Personalizza, Win+X...) aprono la pagina
   giusta.
 
@@ -389,6 +439,8 @@ resta alle app, che lo usano per aprire i propri menu.
 | Desktop precedente / successivo  | Super+Ctrl+← / →    | Alt+Ctrl+← / → |
 | Nuovo desktop / chiudi desktop   | Super+Ctrl+D / Super+Ctrl+F4 | Alt+Ctrl+D |
 | Layout di tastiera successivo    | Super+Spazio        |               |
+| Lente: ingrandisci / riduci / chiudi | Super+più / Super+meno / Super+Esc | |
+| Filtri colore (se attivata la scorciatoia) | Super+Ctrl+C |       |
 | Sposta / ridimensiona una finestra | Super+trascina / Super+tasto destro |  |
 | Cambia console                   | Ctrl+Alt+F1…F12     |               |
 | Esci da Vela                     | Alt+Shift+Esc       | Alt+Shift+Esc |
@@ -404,6 +456,7 @@ resta alle app, che lo usano per aprire i propri menu.
 | `VELA_LATCH=0`       | disegna appena arriva il vblank, invece che il più tardi possibile prima del successivo (late latching, per confronto) |
 | `VELA_LATCH_MARGIN`  | margine minimo del late latching in ms (predefinito 1; cresce da solo se un frame arriva tardi) |
 | `VELA_SCANOUT=0`     | niente scanout diretto delle app a schermo intero (per confronto e diagnosi) |
+| `VELA_TEARING=0`     | niente tearing anche per i giochi che lo chiedono (vince sulle Impostazioni) |
 | `VELA_SCREEN_OFF`    | minuti di inattività prima di bloccare e spegnere gli schermi (predefinito 10; 0: mai). Vince sulla scelta fatta nelle Impostazioni |
 | `VELA_LOCK_ON_IDLE=0` | con l'inattività spegne gli schermi senza bloccare (vince sulle Impostazioni) |
 | `VELA_LOCK`          | programma di blocco da usare al posto di `vela-lock` (es. `swaylock`) |
@@ -476,7 +529,10 @@ compositor/src/
   workspaces.cpp   desktop virtuali e il passaggio animato dall'uno all'altro
   layer.cpp        superfici della shell (layer-shell)
   keyboard.cpp     tastiera e tasto Super
-  settings.*       ~/.config/vela/vela.conf (inattività, tastiera)
+  accessibility.cpp  Luce notturna (anche pianificata), filtri colore, lente
+                   di ingrandimento, tasti permanenti
+  settings.*       ~/.config/vela/vela.conf (inattività, tastiera, Luce
+                   notturna, accessibilità, tearing)
 shell/
   src/             app installate, finestre aperte, taskbar, icone, socket
   qml/             Theme, Taskbar, StartMenu e componenti
@@ -500,7 +556,7 @@ scripts/           avvio annidato e headless
 - ~~Animazione di chiusura (istantanea del contenuto che si dissolve).~~
   Fatto.
 - ~~Alt+Tab grafico con anteprime.~~ Fatto (anteprime fotografate
-  all'apertura; il clic sulle anteprime più avanti).
+  all'apertura, clic per scegliere).
 - ~~Snap delle finestre: Super+frecce e trascinamento ai bordi, con
   anteprima.~~ Fatto (metà schermo; i quarti e i layout di Windows 11 con
   la milestone 3).
@@ -509,7 +565,8 @@ scripts/           avvio annidato e headless
 all'accesso.
 - ~~Sessione da SDDM/Plasma Login, collegata a systemd e D-Bus; portali;
   agente polkit; tastiera e schermi del sistema.~~ Fatto.
-- ~~Xwayland e i protocolli per i giochi.~~ Fatto (manca tearing-control).
+- ~~Xwayland e i protocolli per i giochi.~~ Fatto, tearing-control
+  compreso (ottobre 2026).
 - ~~Area di notifica, notifiche, menu di accensione.~~ Fatto.
 - ~~Schermata di blocco e inattività.~~ Fatto.
 - ~~Selettore dello schermo o della finestra da condividere; bordi per
@@ -523,29 +580,29 @@ all'accesso.
   Fatto per le app che la accettano (Qt/KDE, X11), con icona e tinta Mica
   (tappa S6).
 - ~~Centro notifiche, impostazioni rapide (volume, rete, luminosità).~~
-  Fatto (ottobre 2026). Restano i riquadri "Luce notturna" e
-  "Accessibilità" (spenti) e la scelta della rete Wi-Fi dal pannello.
+  Fatto (ottobre 2026), con la scelta della rete Wi-Fi dal pannello e i
+  riquadri Luce notturna e Accessibilità.
 - ~~Menu del tasto destro copiati in toto da Windows 11, tutti con lo stesso
   componente della shell ([docs/renderer.md §14](docs/renderer.md)).~~ Fatto
   (settembre 2026).
 
 **Milestone 3: sostituire Plasma**
 - ~~App Impostazioni (schermi, tastiera, tema) e configurazione su file.~~
-  Fatto (ottobre 2026); la modalità chiara vale per le app, la shell resta
-  scura.
+  Fatto (ottobre 2026), con la modalità chiara anche per la shell
+  (Chiaro, Scuro, Personalizzato).
 - ~~Desktop virtuali e Visualizzazione attività, con i loro menu del tasto
   destro.~~ Fatto (ottobre 2026).
 - ~~Snap a quarti e layout di Windows 11.~~ Fatto (ottobre 2026), con
-  Snap Assist; mancano i gruppi di snap sulla taskbar.
+  Snap Assist e i gruppi di snap sulla taskbar.
 - ~~Icone sul desktop con il menu del desktop e dei file di Windows 11.~~
   Fatto (settembre 2026), con "Mostra altre opzioni" (service menu di KDE)
   e il trascinamento di file da e verso le app, le miniature delle immagini
-  e la finestra Proprietà; restano Collegamento, Preferiti e Condividi. Lo
-  stesso menu dei file lo userà Esplora.
+  e la finestra Proprietà, Collegamento, Preferiti e Condividi; lo stesso
+  menu dei file lo usa Esplora.
 - ~~File manager veloce ("Esplora"), avvio a freddo sotto i 150 ms come
   obiettivo.~~ Fatto (ottobre 2026): primo fotogramma a circa 100 ms
-  dall'avvio del processo. Restano il riquadro di anteprima, Condividi, i
-  collegamenti e le unità non montate.
+  dall'avvio del processo; con il riquadro di anteprima e dei dettagli,
+  Condividi, i collegamenti, i Preferiti e le unità non montate.
 
 ## Obiettivi misurabili
 

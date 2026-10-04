@@ -192,6 +192,19 @@ testo a 1 px. A ogni scala supportata il test confronta **bit per bit** i
 pixel sullo schermo con il buffer del client, anche dopo averlo spostato,
 agganciato e massimizzato. Un solo pixel diverso fa fallire il test.
 
+### 3.11 La lente di ingrandimento
+
+La lente (Accessibilità, Win+più) non è un effetto sull'immagine finita:
+lo schermo del cursore costruisce la scena a partire da un altro punto del
+layout e a una scala più grande (`OutputFrame::setMagnifier`). Ogni
+superficie si disegna quindi dal suo buffer alla dimensione ingrandita, col
+filtro bicubico del §3.3, e il testo resta più leggibile che ingrandendo
+dei pixel già disegnati. Il danno lo trova il confronto con il frame
+precedente (§6): spostando la zona cambia tutto. Il cursore va dove si vede
+il punto che indica (`wlr_output_cursor_move`); la zona lo segue quando
+arriva ai bordi, e un cambio d'ingrandimento lascia fermo il punto sotto il
+cursore.
+
 ## 4. Tempo e frame: qualunque frequenza
 
 ### 4.1 Un orologio per schermo
@@ -297,6 +310,17 @@ precluderlo. Cosa ne sappiamo già:
 
 Fino ad allora il VRR resta spento di default (`VELA_VRR=1` per provarlo),
 come oggi.
+
+### 4.4.1 Tearing
+
+Un gioco a schermo intero può chiedere con `wp-tearing-control-v1` di
+mostrare ogni fotogramma appena è pronto, anche a metà schermo. Lo si
+concede solo nello scanout diretto (§5.3), con lo scambio di pagina
+asincrono di DRM (`tearing_page_flip`); se il driver non lo accetta il
+frame va col vblank come sempre. Finché dura, il ciclo di frame di quello
+schermo non pianifica il late latching (§4.3): disegna (cioè consegna il
+buffer del gioco) appena il gioco fa il commit. Si spegne nelle
+Impostazioni ("tearing" in vela.conf) o con `VELA_TEARING=0`.
 
 ### 4.5 Frame callback e feedback
 
@@ -463,6 +487,32 @@ senza fermarsi, quindi i rilasci arrivano.
 - Schermi a 10 bit dove disponibili.
 - Più avanti HDR e `color-management-v1` (già in wlroots 0.20): l'impianto
   lineare fin dall'inizio lo rende un'estensione, non una riscrittura.
+
+### 7.6 Luce notturna e filtri colore
+
+Entrambi sono una matrice 3x3 in spazio lineare (la Luce notturna è una
+diagonale: quanto resta di rosso, verde e blu alla temperatura scelta).
+
+- **Filtri colore** (scala di grigi, correzioni per i daltonismi): nel
+  disegno. La matrice va nelle costanti di ogni quad (`QuadPush.filter`, bit 2
+  dei flag) e la applicano gli shader di texture, rettangoli e ombre. Dato
+  che è lineare, e che le fusioni sono combinazioni lineari in spazio
+  lineare (§7.5), applicarla a ogni disegno equivale ad applicarla
+  all'immagine finita, senza un passaggio in più. La sfocatura legge uno
+  sfondo che ha già il filtro: nella composizione acrylic lo prende solo
+  la tinta. Col filtro acceso niente scanout diretto, e il cursore lo
+  disegna il renderer (lo prende anche lui).
+- **Luce notturna**: sugli schermi veri nella **gamma del monitor**
+  (`wlr_output_state_set_color_transform` con una tabella 3x1D: ogni
+  valore codificato torna in luce lineare, prende il guadagno e si
+  ricodifica), provata prima con un commit di prova e poi mandata col
+  frame. Così non finisce negli screenshot né nella condivisione dello
+  schermo, prende anche il cursore hardware e lo scanout diretto dei giochi
+  resta. Dove la gamma non c'è (annidato, headless) o il monitor non la
+  accetta, si moltiplica nella matrice del disegno come i filtri.
+- Il passaggio (un secondo, come Windows) è un'animazione del §4.2: a ogni
+  frame un nuovo valore, e tutto lo schermo ridisegnato (o solo una nuova
+  gamma).
 
 ## 8. Effetti
 
