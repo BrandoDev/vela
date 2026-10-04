@@ -233,7 +233,7 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 16
                     height: 16
-                    source: "image://icon/" + encodeURIComponent(root.pages[entry.modelData].icon)
+                    source: "image://fileicon/" + encodeURIComponent(root.pages[entry.modelData].icon)
                     sourceSize: Qt.size(width, height)
                 }
                 Text {
@@ -284,7 +284,7 @@ Window {
                             anchors.verticalCenter: parent.verticalCenter
                             width: 16
                             height: 16
-                            source: "image://icon/" + encodeURIComponent(root.pages[result.modelData.page].icon)
+                            source: "image://fileicon/" + encodeURIComponent(root.pages[result.modelData.page].icon)
                             sourceSize: Qt.size(width, height)
                         }
                         Text {

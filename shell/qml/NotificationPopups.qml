@@ -94,7 +94,7 @@ Window {
                             height: 16
                             anchors.verticalCenter: parent.verticalCenter
                             source: toast.icon
-                            sourceSize: Qt.size(32, 32)
+                            sourceSize: Qt.size(width, height)
                             smooth: true
                         }
                         Text {

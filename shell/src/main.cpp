@@ -347,6 +347,7 @@ int main(int argc, char* argv[])
 
     QQmlApplicationEngine engine;
     engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
+    engine.addImageProvider(QStringLiteral("fileicon"), new IconProvider(32));
     engine.addImageProvider(QStringLiteral("wallpaper"), new WallpaperProvider);
     engine.addImageProvider(QStringLiteral("thumbnail"), new ThumbnailProvider(&capture));
     engine.addImageProvider(QStringLiteral("filethumb"), new FileThumbnailProvider);

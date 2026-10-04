@@ -527,7 +527,7 @@ Window {
                 Drag.supportedActions: Qt.CopyAction | Qt.MoveAction | Qt.LinkAction
                 Drag.proposedAction: Qt.MoveAction
                 Drag.mimeData: ({ "text/uri-list": icons.dragUrls.join("\r\n") })
-                Drag.imageSource: "image://icon/" + encodeURIComponent(icon.iconName)
+                Drag.imageSource: "image://fileicon/" + encodeURIComponent(icon.iconName)
                 Drag.imageSourceSize: Qt.size(Desktop.iconPixels, Desktop.iconPixels)
                 Drag.hotSpot: Qt.point(Desktop.iconPixels / 2, Desktop.iconPixels / 2)
 
@@ -589,8 +589,8 @@ Window {
                         Image {
                             anchors.fill: parent
                             visible: preview.status !== Image.Ready
-                            source: "image://icon/" + encodeURIComponent(icon.iconName)
-                            sourceSize: Qt.size(Desktop.iconPixels * 2, Desktop.iconPixels * 2)
+                            source: "image://fileicon/" + encodeURIComponent(icon.iconName)
+                            sourceSize: Qt.size(Desktop.iconPixels, Desktop.iconPixels)
                             smooth: true
                             mipmap: true
                         }
@@ -602,7 +602,7 @@ Window {
                             source: icon.hasThumbnail
                                 ? "image://filethumb/" + encodeURIComponent(icon.path) + "/" + icon.modified
                                 : ""
-                            sourceSize: Qt.size(Desktop.iconPixels * 2, Desktop.iconPixels * 2)
+                            sourceSize: Qt.size(Desktop.iconPixels, Desktop.iconPixels)
                             smooth: true
                             mipmap: true
                             // Il contorno sottile delle foto in Windows.

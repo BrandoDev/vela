@@ -290,7 +290,7 @@ Item {
                                 height: 16
                                 opacity: iconButton.usable ? 1 : 0.4
                                 source: "image://icon/" + encodeURIComponent(iconButton.modelData.icon)
-                                sourceSize: Qt.size(32, 32)
+                                sourceSize: Qt.size(width, height)
                             }
                             MouseArea {
                                 id: iconMouse
@@ -341,7 +341,7 @@ Item {
                             source: row.entry.icon
                                 ? (row.entry.icon.indexOf(":") > 0 ? row.entry.icon : "image://icon/" + encodeURIComponent(row.entry.icon))
                                 : ""
-                            sourceSize: Qt.size(32, 32)
+                            sourceSize: Qt.size(width, height)
                             smooth: true
                         }
                         Shape {

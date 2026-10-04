@@ -236,7 +236,7 @@ Window {
                 Image {
                     width: 40
                     height: 40
-                    source: "image://icon/" + encodeURIComponent(root.info.icon || "unknown")
+                    source: "image://fileicon/" + encodeURIComponent(root.info.icon || "unknown")
                     sourceSize: Qt.size(width, height)
                 }
                 Rectangle {

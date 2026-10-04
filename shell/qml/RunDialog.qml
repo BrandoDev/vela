@@ -93,7 +93,7 @@ Window {
             width: 32
             height: 32
             source: "image://icon/system-run"
-            sourceSize: Qt.size(64, 64)
+            sourceSize: Qt.size(width, height)
         }
         Text {
             x: 64

@@ -312,7 +312,7 @@ Window {
                 Image {
                     anchors.fill: parent
                     source: "image://icon/" + encodeURIComponent(task.iconName)
-                    sourceSize: Qt.size(52, 52)
+                    sourceSize: Qt.size(width, height)
                     smooth: true
                     mipmap: true
                 }
@@ -351,7 +351,7 @@ Window {
                     width: 18
                     height: 18
                     source: trayItem.icon
-                    sourceSize: Qt.size(36, 36)
+                    sourceSize: Qt.size(width, height)
                     smooth: true
                     mipmap: true
                 }

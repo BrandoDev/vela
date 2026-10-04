@@ -42,7 +42,7 @@ Item {
             width: 36
             height: 36
             source: "image://icon/" + encodeURIComponent(root.iconName)
-            sourceSize: Qt.size(72, 72)
+            sourceSize: Qt.size(width, height)
             smooth: true
             mipmap: true
         }

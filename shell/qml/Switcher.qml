@@ -133,7 +133,7 @@ Window {
                             height: 16
                             anchors.verticalCenter: parent.verticalCenter
                             source: "image://icon/" + encodeURIComponent(card.icon)
-                            sourceSize: Qt.size(32, 32)
+                            sourceSize: Qt.size(width, height)
                         }
                         Text {
                             width: header.width - 24
@@ -163,7 +163,7 @@ Window {
                             height: 48
                             visible: thumbnail.status !== Image.Ready
                             source: "image://icon/" + encodeURIComponent(card.icon)
-                            sourceSize: Qt.size(96, 96)
+                            sourceSize: Qt.size(width, height)
                         }
                     }
                 }

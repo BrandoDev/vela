@@ -108,7 +108,7 @@ Window {
             height: 16
             visible: entry.icon !== ""
             source: entry.icon !== "" ? "image://icon/" + entry.icon : ""
-            sourceSize: Qt.size(32, 32)
+            sourceSize: Qt.size(width, height)
         }
         Item {
             id: glyphSlot

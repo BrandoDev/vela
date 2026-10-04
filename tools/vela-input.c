@@ -6,7 +6,8 @@
 //   move X Y                 porta il cursore in (X, Y), coordinate globali
 //   rel DX DY                sposta il mouse di (DX, DY), come un mouse vero
 //                            (movimento relativo: lo vedono anche i giochi)
-//   down|up|click [TASTO]    tasto del mouse: left (predefinito), right, middle
+//   down|up|click [TASTO]    tasto del mouse: left (predefinito), right, middle,
+//                            back, forward (i tasti laterali)
 //   key COMBINAZIONE         es. super+Left, alt+F4, Return, super (da solo)
 //   keydown|keyup TASTO      tiene premuto / rilascia un tasto (es. alt per Alt+Tab)
 //   type TESTO               scrive del testo (layout us)
@@ -120,6 +121,13 @@ static int buttonCode(const char* name)
     }
     if (!strcmp(name, "middle")) {
         return BTN_MIDDLE;
+    }
+    // I tasti laterali: Indietro e Avanti nei browser e nei file manager.
+    if (!strcmp(name, "back")) {
+        return BTN_SIDE;
+    }
+    if (!strcmp(name, "forward")) {
+        return BTN_EXTRA;
     }
     return -1;
 }
@@ -301,7 +309,7 @@ static void usage(const char* program)
 {
     fprintf(stderr,
         "Uso: %s AZIONE [AZIONE...]\n"
-        "  move X Y | down [left|right|middle] | up [...] | click [...]\n"
+        "  move X Y | down [left|right|middle|back|forward] | up [...] | click [...]\n"
         "  key COMBINAZIONE (es. super+Left) | keydown|keyup TASTO | type TESTO | sleep MS\n",
         program);
 }
