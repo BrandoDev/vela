@@ -276,6 +276,14 @@ Decoration::Part Decoration::partAt(double lx, double ly) const
     return Part::Title;
 }
 
+wlr_box Decoration::maximizeBox() const
+{
+    double ox = 0.0;
+    double oy = 0.0;
+    m_tree->coords(ox, oy);
+    return { int(std::lround(ox)) + m_width - 2 * buttonWidth, int(std::lround(oy)), buttonWidth, height };
+}
+
 void Decoration::setHover(Part part)
 {
     if (part == m_hover) {

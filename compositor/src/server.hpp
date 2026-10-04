@@ -218,7 +218,33 @@ struct Popup {
 // -------------------------------------------------------------- Toplevel --
 
 // Metà dello schermo a cui è agganciata una finestra (snap).
-enum class Snap { None, Left, Right };
+// Dove sta una finestra agganciata (snap.cpp): un rettangolo dell'area
+// utile dello schermo in dodicesimi, così ci stanno metà, terzi e quarti come
+// nei layout di Windows 11. Vuoto: non agganciata.
+struct Snap {
+    int x0 = 0;
+    int y0 = 0;
+    int x1 = 0;
+    int y1 = 0;
+
+    static const Snap None;
+    static const Snap Left;
+    static const Snap Right;
+    static const Snap TopLeft;
+    static const Snap TopRight;
+    static const Snap BottomLeft;
+    static const Snap BottomRight;
+
+    bool operator==(const Snap&) const = default;
+    bool valid() const { return x0 >= 0 && y0 >= 0 && x1 <= 12 && y1 <= 12 && x1 > x0 && y1 > y0; }
+};
+inline constexpr Snap Snap::None {};
+inline constexpr Snap Snap::Left { 0, 0, 6, 12 };
+inline constexpr Snap Snap::Right { 6, 0, 12, 12 };
+inline constexpr Snap Snap::TopLeft { 0, 0, 6, 6 };
+inline constexpr Snap Snap::TopRight { 6, 0, 12, 6 };
+inline constexpr Snap Snap::BottomLeft { 0, 6, 6, 12 };
+inline constexpr Snap Snap::BottomRight { 6, 6, 12, 12 };
 
 // Una finestra applicativa (xdg-shell).
 // Una finestra: di un'app Wayland (xdg-shell) o X11 (Xwayland). Tutto ciò
@@ -450,7 +476,7 @@ private:
 enum class CursorMode { Passthrough, Move, Resize };
 
 // Dove si aggancerà la finestra trascinata, se la rilasci ora.
-enum class SnapZone { None, Left, Right, Maximize };
+enum class SnapZone { None, Tile, Maximize };
 
 // L'area utile di uno schermo divisa a metà.
 Area snapArea(const Output* out, Snap side);
@@ -483,6 +509,12 @@ public:
     void beginInteractive(Toplevel* toplevel, CursorMode mode, uint32_t edges, bool fromModifier = false);
     void updateSnapZone(); // durante il trascinamento: anteprima dello snap
     void endSnapZone(bool apply);
+    // Dopo uno snap: Snap Assist della shell propone le altre finestre negli
+    // spazi rimasti liberi (`quiet`: lo snap viene già da Snap Assist).
+    void offerSnapAssist(Toplevel* toplevel);
+    void showSnapLayouts(Toplevel* toplevel, bool keyboard); // Win+Z, o il mouse sul pulsante
+    void hoverMaximize(Toplevel* toplevel); // il mouse su Ingrandisci (null: altrove)
+    void snapWithKeyboard(Toplevel* active, xkb_keysym_t sym); // Win+frecce
 
     // Animazioni: chiamate dal frame di ogni schermo, con l'istante in cui
     // quel frame verrà mostrato (docs/renderer.md §4.2).
@@ -783,11 +815,18 @@ private:
     // Anteprima dello snap mentre trascini una finestra verso un bordo.
     struct {
         SnapZone zone = SnapZone::None;
+        Snap tile; // con SnapZone::Tile
         Output* output = nullptr;
         std::unique_ptr<scene::RectNode> rect;
         Area target {};
         Tween tween;
     } m_snapPreview;
+    // I layout di snap (Win+Z, o il mouse fermo sul pulsante Ingrandisci):
+    // li mostra la shell, sotto il pulsante.
+    struct {
+        Toplevel* toplevel = nullptr;
+        wl_event_source* timer = nullptr;
+    } m_snapLayoutsHover;
     void tickSnapPreview(double nowMs);
 
     struct {

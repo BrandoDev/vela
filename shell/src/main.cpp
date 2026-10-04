@@ -193,6 +193,32 @@ void setupDesktopOsd(QQuickWindow* window)
     window->setFlag(Qt::WindowTransparentForInput);
 }
 
+void setupSnapLayouts(QQuickWindow* window)
+{
+    // I layout di snap: tutto lo schermo, trasparente, sopra a tutto (un
+    // clic fuori dal pannello lo chiude), con la tastiera per Win+Z.
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScope(QStringLiteral("vela-snap-layouts"));
+    layer->setLayer(LayerWindow::LayerOverlay);
+    layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorTop) | LayerWindow::AnchorBottom
+        | LayerWindow::AnchorLeft | LayerWindow::AnchorRight);
+    layer->setExclusiveZone(-1);
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
+}
+
+void setupSnapAssist(QQuickWindow* window)
+{
+    // Snap Assist: l'area utile dello schermo (la taskbar resta fuori), così
+    // gli spazi in dodicesimi coincidono con quelli delle finestre.
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScope(QStringLiteral("vela-snap-assist"));
+    layer->setLayer(LayerWindow::LayerTop);
+    layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorTop) | LayerWindow::AnchorBottom
+        | LayerWindow::AnchorLeft | LayerWindow::AnchorRight);
+    layer->setExclusiveZone(0);
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityExclusive);
+}
+
 void setupSidePanel(QQuickWindow* window, const QString& scope)
 {
     // Impostazioni rapide e centro notifiche: in basso a destra, sopra la
@@ -356,6 +382,8 @@ int main(int argc, char* argv[])
     engine.loadFromModule("Vela.Shell", "NotificationCenter");
     engine.loadFromModule("Vela.Shell", "TaskView");
     engine.loadFromModule("Vela.Shell", "DesktopOsd");
+    engine.loadFromModule("Vela.Shell", "SnapLayouts");
+    engine.loadFromModule("Vela.Shell", "SnapAssist");
 
     QQuickWindow* switcher = findWindow(engine, "switcher");
     QQuickWindow* taskbar = findWindow(engine, "taskbar");
@@ -370,8 +398,10 @@ int main(int argc, char* argv[])
     QQuickWindow* notificationCenter = findWindow(engine, "notificationCenter");
     QQuickWindow* taskView = findWindow(engine, "taskView");
     QQuickWindow* desktopOsd = findWindow(engine, "desktopOsd");
+    QQuickWindow* snapLayouts = findWindow(engine, "snapLayouts");
+    QQuickWindow* snapAssist = findWindow(engine, "snapAssist");
     if (!taskbar || !startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog || !confirmDialog || !sourceChooser || !propertiesDialog || !quickSettings
-        || !notificationCenter || !taskView || !desktopOsd) {
+        || !notificationCenter || !taskView || !desktopOsd || !snapLayouts || !snapAssist) {
         qCritical("vela-shell: impossibile caricare l'interfaccia QML");
         return 1;
     }
@@ -393,6 +423,8 @@ int main(int argc, char* argv[])
     setupSidePanel(notificationCenter, QStringLiteral("vela-notification-center"));
     setupTaskView(taskView);
     setupDesktopOsd(desktopOsd);
+    setupSnapLayouts(snapLayouts);
+    setupSnapAssist(snapAssist);
     taskbar->show();
     keepShown(app, { taskbar });
     Wallpapers wallpapers(&engine);

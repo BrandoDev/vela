@@ -277,6 +277,12 @@ void ShellController::handleCommand(const QByteArray& command)
         emit taskViewRequested();
     } else if (parts.first() == "workspaces") {
         emit workspacesReceived(command.mid(11));
+    } else if (parts.first() == "snap-layouts" && parts.size() == 6) {
+        // snap-layouts <finestra> <schermo> <x> <y> <da tastiera>
+        emit snapLayoutsRequested(QString::fromLatin1(parts.at(1)), QString::fromUtf8(parts.at(2)), parts.at(3).toInt(),
+            parts.at(4).toInt(), parts.at(5) == "1");
+    } else if (parts.first() == "snap-assist") {
+        emit snapAssistRequested(QString::fromUtf8(command.mid(12)));
     } else if (parts.first() == "window-menu" && parts.size() == 8) {
         // window-menu <id> <schermo> <x> <y> <massimizzata> <ridimensionabile> <da tastiera>
         emit windowMenuRequested(QString::fromLatin1(parts.at(1)), QString::fromUtf8(parts.at(2)), parts.at(3).toInt(),

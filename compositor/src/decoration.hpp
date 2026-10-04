@@ -38,6 +38,8 @@ public:
     // Che cosa c'è in un punto globale della barra.
     Part partAt(double lx, double ly) const;
     void setHover(Part part);
+    // Il pulsante Ingrandisci in coordinate globali (lì sotto si aprono i layout di snap).
+    wlr_box maximizeBox() const;
 
 private:
     // Un'immagine della CPU (testo, simbolo) come nodo della scena.

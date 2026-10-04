@@ -29,6 +29,9 @@ QtObject {
     property bool notificationCenterOpen: false
     // La Visualizzazione attività è aperta.
     property bool taskViewOpen: false
+    // Il layout di snap appena scelto ({window, zones: [[x0,y0,x1,y1]...]}):
+    // Snap Assist propone le finestre per le sue altre zone.
+    property var snapLayout: null
 
     signal openRequested(var entries, real x, real y, var options)
     signal closeRequested()

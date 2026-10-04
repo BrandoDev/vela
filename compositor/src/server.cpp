@@ -661,6 +661,9 @@ void Server::refocus()
 void Server::forget(Toplevel* toplevel)
 {
     workspaceForget(toplevel);
+    if (m_snapLayoutsHover.toplevel == toplevel) {
+        hoverMaximize(nullptr);
+    }
     const bool wasFocused = focusedToplevel() == toplevel;
     if (hoveredDecoration == toplevel) {
         hoveredDecoration = nullptr;
@@ -1001,7 +1004,11 @@ void Server::onCursorMotion(uint32_t timeMsec)
     }
     hoveredDecoration = decorated;
     if (decorated) {
-        decorated->decoration->setHover(decorated->decoration->partAt(cursor->x, cursor->y));
+        const Decoration::Part part = decorated->decoration->partAt(cursor->x, cursor->y);
+        decorated->decoration->setHover(part);
+        hoverMaximize(part == Decoration::Part::Maximize ? decorated : nullptr);
+    } else {
+        hoverMaximize(nullptr);
     }
     if (!hit.surface) {
         wlr_cursor_set_xcursor(cursor, cursorManager, "default");
@@ -1322,31 +1329,24 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
         sendShellCommand("task-view");
         return true;
     }
-    if ((super && sym == XKB_KEY_Up) || (altNested && sym == XKB_KEY_m)) {
+    // Win+frecce: metà, quarti, massimizza, riduci (snap.cpp). Dentro KDE
+    // Alt+frecce e Alt+M (massimizza o ripristina).
+    if ((super || altNested) && (sym == XKB_KEY_Left || sym == XKB_KEY_Right || (super && (sym == XKB_KEY_Up || sym == XKB_KEY_Down)))) {
         if (Toplevel* active = focusedToplevel()) {
-            active->setMaximized(sym == XKB_KEY_Up ? true : !active->maximized);
+            snapWithKeyboard(active, sym);
         }
         return true;
     }
-    if (super && sym == XKB_KEY_Down) {
-        // Come su Windows: prima si ripristina, poi si riduce a icona.
+    if (altNested && sym == XKB_KEY_m) {
         if (Toplevel* active = focusedToplevel()) {
-            if (active->maximized) {
-                active->setMaximized(false);
-            } else if (active->snap != Snap::None) {
-                active->setSnap(Snap::None);
-            } else {
-                active->setMinimized(true);
-            }
+            active->setMaximized(!active->maximized);
         }
         return true;
     }
-    if ((super || altNested) && (sym == XKB_KEY_Left || sym == XKB_KEY_Right)) {
-        // Metà sinistra/destra; verso il lato opposto la finestra si sgancia.
+    // Win+Z: i layout di snap della finestra attiva.
+    if ((super || altNested) && (sym == XKB_KEY_z || sym == XKB_KEY_Z)) {
         if (Toplevel* active = focusedToplevel()) {
-            const Snap side = sym == XKB_KEY_Left ? Snap::Left : Snap::Right;
-            const Snap opposite = side == Snap::Left ? Snap::Right : Snap::Left;
-            active->setSnap(active->snap == opposite ? Snap::None : side);
+            showSnapLayouts(active, true);
         }
         return true;
     }
@@ -1954,6 +1954,21 @@ void Server::windowAction(Toplevel* toplevel, const std::string& action)
         // Dalla Visualizzazione attività: "Aggancia a sinistra/destra".
         focusToplevel(toplevel);
         toplevel->setSnap(action == "snap-left" ? Snap::Left : Snap::Right);
+    } else if (action.rfind("snap ", 0) == 0) {
+        // Dai layout di snap e da Snap Assist: "snap x0 y0 x1 y1 [quiet]", in dodicesimi.
+        Snap tile;
+        char quiet[8] = {};
+        const int n = std::sscanf(action.c_str() + 5, "%d %d %d %d %7s", &tile.x0, &tile.y0, &tile.x1, &tile.y1, quiet);
+        if (n >= 4 && tile.valid()) {
+            if (toplevel->minimized) {
+                toplevel->setMinimized(false);
+            }
+            focusToplevel(toplevel);
+            toplevel->setSnap(tile);
+            if (std::string(quiet) != "quiet") {
+                offerSnapAssist(toplevel);
+            }
+        }
     } else if (action.rfind("move-to ", 0) == 0) {
         moveToWorkspace(toplevel, std::atoi(action.c_str() + 8));
     } else if (action == "move-to-new") {

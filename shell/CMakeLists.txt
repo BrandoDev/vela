@@ -105,7 +105,9 @@ set(VELA_QML_FILES
     qml/QuickSettings.qml
     qml/NotificationCenter.qml
     qml/TaskView.qml
-    qml/DesktopOsd.qml)
+    qml/DesktopOsd.qml
+    qml/SnapLayouts.qml
+    qml/SnapAssist.qml)
 
 # I file stanno in qml/ per ordine, ma nel modulo devono stare alla radice:
 # così si vedono tra loro (Theme compreso, che è un singleton) senza import.
