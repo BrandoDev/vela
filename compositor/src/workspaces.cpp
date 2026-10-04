@@ -143,6 +143,36 @@ std::string Server::workspacesJson() const
     for (size_t i = 0; i < workspaces.stickyApps.size(); ++i) {
         json += (i ? "," : "") + jsonString(workspaces.stickyApps[i]);
     }
+    // I gruppi di snap: [{"output":nome,"windows":[{"id":...,"tile":[x0,y0,x1,y1]}]}].
+    json += "],\"snapGroups\":[";
+    std::vector<uint32_t> groups;
+    for (Toplevel* toplevel : toplevels) {
+        if (toplevel->snapGroup && std::find(groups.begin(), groups.end(), toplevel->snapGroup) == groups.end()) {
+            groups.push_back(toplevel->snapGroup);
+        }
+    }
+    bool firstGroup = true;
+    for (uint32_t group : groups) {
+        std::string members;
+        Output* out = nullptr;
+        for (Toplevel* toplevel : toplevels) {
+            if (toplevel->snapGroup != group || !toplevel->mapped || !toplevel->extHandle
+                || !toplevel->extHandle->identifier) {
+                continue;
+            }
+            out = out ? out : toplevel->output();
+            const Snap& s = toplevel->snap;
+            members += std::string(members.empty() ? "" : ",") + "{\"id\":" + jsonString(toplevel->extHandle->identifier)
+                + ",\"tile\":[" + std::to_string(s.x0) + "," + std::to_string(s.y0) + "," + std::to_string(s.x1) + ","
+                + std::to_string(s.y1) + "]}";
+        }
+        if (members.empty()) {
+            continue;
+        }
+        json += std::string(firstGroup ? "" : ",") + "{\"output\":" + jsonString(out ? out->wlr->name : "")
+            + ",\"windows\":[" + members + "]}";
+        firstGroup = false;
+    }
     return json + "]}";
 }
 
@@ -389,6 +419,7 @@ void Server::moveToWorkspace(Toplevel* toplevel, int index)
     }
     toplevel->sticky = false;
     toplevel->workspace = index;
+    toplevel->leaveSnapGroup(); // il gruppo resta sull'altro desktop
     const bool wasFocused = focusedToplevel() == toplevel;
     if (toplevel->mapped && !toplevel->minimized) {
         toplevel->tree->setEnabled(toplevel->onCurrentWorkspace());

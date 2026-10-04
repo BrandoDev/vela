@@ -642,6 +642,7 @@ void Toplevel::setMaximized(bool on)
     finishOpenAnimation();
 
     if (on) {
+        leaveSnapGroup();
         if (mapped && snap == Snap::None) {
             restore = frameBox(); // da agganciata si torna alla dimensione libera
         }

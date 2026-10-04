@@ -65,5 +65,5 @@ void main()
     // La finestra (in uvOrigin e uvX, che le ombre non usano): lì sotto niente.
     const vec4 window = vec4(pc.uvOrigin, pc.uvX);
     shadow *= 1.0 - roundedCoverage(p, window, pc.shape.x);
-    outColor = pc.color * shadow;
+    outColor = colorFilter(pc.color) * shadow;
 }

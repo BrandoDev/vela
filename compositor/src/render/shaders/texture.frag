@@ -60,5 +60,5 @@ void main()
     } else {
         c.rgb = srgbToLinear(clamp(c.rgb, 0.0, 1.0)); // additivo: raro, ma lecito
     }
-    outColor = c * (pc.alpha * shapeClip());
+    outColor = colorFilter(c) * (pc.alpha * shapeClip());
 }

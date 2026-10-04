@@ -11,5 +11,5 @@ layout(location = 0) out vec4 outColor;
 
 void main()
 {
-    outColor = pc.color * shapeClip();
+    outColor = colorFilter(pc.color) * shapeClip();
 }

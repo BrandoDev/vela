@@ -157,6 +157,17 @@ Keyboard::Keyboard(Server& s, wlr_keyboard* keyboard)
     applySettings(readSettings());
 
     modifiers.connect(&wlr->events.modifiers, [this](void*) {
+        // Tasti permanenti: chi manda i modificatori da sé (le tastiere
+        // virtuali) non sa di quelli rimasti premuti: si rimettono.
+        const wlr_keyboard_modifiers& m = wlr->modifiers;
+        const uint32_t latched = m.latched | server.a11y.latched;
+        const uint32_t locked = m.locked | server.a11y.locked;
+        if (server.a11y.stickyKeys && !m_restoring && (latched != m.latched || locked != m.locked)) {
+            m_restoring = true;
+            wlr_keyboard_notify_modifiers(wlr, m.depressed, latched, locked, m.group); // richiama qui
+            m_restoring = false;
+            return;
+        }
         wlr_seat_set_keyboard(server.seat, wlr);
         wlr_seat_keyboard_notify_modifiers(server.seat, &wlr->modifiers);
     });
@@ -224,6 +235,10 @@ void Keyboard::onKey(wlr_keyboard_key_event* event)
     // remoto) riceve anche il tasto Super da solo.
     const bool inhibited = server.shortcutsInhibited() || server.locked;
     server.noteActivity();
+    // Tasti permanenti: un modificatore premuto e lasciato vale per il tasto
+    // dopo (i modificatori di questo tasto, `mods`, li comprendono già); al
+    // rilascio di quel tasto si lasciano.
+    server.stickyKey(*this, syms, count, event->state == WL_KEYBOARD_KEY_STATE_PRESSED);
     if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
         for (int i = 0; i < count; ++i) {
             if (isSuper(syms[i]) && !inhibited) {

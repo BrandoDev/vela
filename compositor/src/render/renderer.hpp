@@ -227,13 +227,14 @@ private:
     void destroyBlurImage(BlurImage& image);
 };
 
-// Le costanti di ogni disegno (vedi shaders/push.glsl): 112 byte, sotto i
-// 128 che ogni GPU garantisce.
+// Le costanti di ogni disegno (vedi shaders/push.glsl): 160 byte, sotto i
+// 256 che Vulkan 1.4 garantisce.
 struct QuadPush {
     float dst[4]; // x, y, larghezza, altezza in pixel della destinazione
     float target[2]; // dimensioni della destinazione
     float alpha;
-    uint32_t flags; // bit 0: ingrandimento bicubico; bit 1: ritaglio arrotondato
+    // bit 0: ingrandimento bicubico; bit 1: ritaglio arrotondato; bit 2: filtro colore
+    uint32_t flags;
     float uvOrigin[2]; // coordinate texture dell'angolo in alto a sinistra
     float uvX[2]; // spostamento lungo il bordo superiore
     float uvY[2]; // spostamento lungo il bordo sinistro
@@ -241,7 +242,10 @@ struct QuadPush {
     float color[4]; // rettangoli e ombre: colore lineare premoltiplicato
     float shapeRect[4]; // rettangolo arrotondato (ritaglio, o chi proietta l'ombra)
     float shape[4]; // raggio degli angoli, sigma dell'ombra
+    // Il filtro colore dello schermo (Luce notturna, filtri colore): una
+    // matrice 3x3 in spazio lineare, una riga per vec4.
+    float filter[12];
 };
-static_assert(sizeof(QuadPush) == 112);
+static_assert(sizeof(QuadPush) == 160);
 
 } // namespace vela::render

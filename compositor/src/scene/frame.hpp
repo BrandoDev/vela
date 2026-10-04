@@ -111,8 +111,15 @@ public:
         uint64_t point = 0; // punto della timeline del renderer; 0: nessun disegno della GPU
         int timingSlot = -1;
         bool scanout = false; // il buffer di un'app direttamente sullo schermo
+        bool tearing = false; // e mostrato subito, senza aspettare il vblank
     };
     const Delivered& delivered() const { return m_delivered; }
+
+    // Lente di ingrandimento (Accessibilità): lo schermo mostra la zona del
+    // layout che comincia nel punto logico (x, y), ingrandita `zoom` volte.
+    // zoom 1: lo schermo com'è.
+    void setMagnifier(double zoom, double x, double y);
+    double zoom() const { return m_zoom; }
 
     // Dalla scena.
     void surfaceCommitted(wlr_surface* surface);
@@ -144,6 +151,21 @@ private:
 
     Delivered m_delivered;
     bool m_scanout = false; // l'ultimo frame era uno scanout diretto
+    bool m_tearing = false; // l'ultimo scanout era con tearing
+    double m_zoom = 1.0;
+    double m_zoomX = 0.0;
+    double m_zoomY = 0.0;
+    // La Luce notturna nella gamma del monitor: la versione applicata
+    // (quella della scena), se il monitor la accetta.
+    // Prima di ogni frame: se la Luce notturna è cambiata, la prova sulla
+    // gamma; se il monitor la accetta va nel prossimo commit.
+    void prepareNightLight();
+    wlr_color_transform* m_nightTransform = nullptr;
+    bool m_nightCommitPending = false;
+    uint32_t m_nightVersion = 0;
+    bool m_nightInGamma = false; // la gamma la sta mostrando
+    bool m_gammaRefused = false; // questo schermo non la accetta: nel disegno
+    bool m_cursorLocked = false; // col filtro nel disegno, il cursore lo disegniamo noi
     // Sincronizzazione esplicita dello scanout: il backend fa scattare qui
     // il rilascio del buffer di un'app quando smette di mostrarlo.
     wlr_drm_syncobj_timeline* m_scanoutTimeline = nullptr;

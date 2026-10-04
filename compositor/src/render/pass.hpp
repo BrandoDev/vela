@@ -63,9 +63,17 @@ public:
     // l'alfa di `panel`, la superficie che va sopra (da aggiungere dopo,
     // come al solito). `strength`: l'ampiezza dei passaggi, in pixel.
     // Niente, se la destinazione non si può leggere.
-    void addBlur(const TextureDraw& panel, const pixman_region32_t* region, float strength);
+    // `tint`: la tinta acrylic (sRGB premoltiplicato), scura o chiara secondo il tema.
+    void addBlur(const TextureDraw& panel, const pixman_region32_t* region, float strength,
+        const wlr_render_color& tint);
     // Fin dove legge la sfocatura attorno a una zona, in pixel.
     static int blurReach(float strength);
+
+    // Il filtro colore dello schermo (Luce notturna, filtri colore): una
+    // matrice 3x3 per righe, in spazio lineare, applicata a tutto ciò che si
+    // disegna. null: nessuno. Solo per i frame degli schermi, non per le
+    // catture.
+    void setColorFilter(const float* matrix);
 
     // Da chiamare prima di submit(): misura i tempi della GPU di questo
     // disegno (Renderer::readTiming con timingSlot() e point()).
@@ -124,6 +132,8 @@ private:
     wlr_drm_syncobj_timeline* m_signalTimeline = nullptr;
     uint64_t m_signalPoint = 0;
     int m_timingSlot = -1;
+    bool m_filtered = false;
+    float m_filter[12] {};
     uint64_t m_point = 0;
     uint64_t m_syncPoint = 0;
     bool m_submitted = false;

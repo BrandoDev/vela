@@ -204,6 +204,25 @@ public:
     wlr_linux_dmabuf_v1* linuxDmabuf = nullptr;
     // Per i punti di rilascio della sincronizzazione esplicita.
     wl_event_loop* eventLoop = nullptr;
+    // La tinta acrylic delle sfocature (sRGB premoltiplicato): quella del
+    // tema scuro di Windows 11, o del chiaro se la shell è chiara.
+    wlr_render_color acrylicTint { 0.11f * 0.55f, 0.11f * 0.55f, 0.12f * 0.55f, 0.55f };
+    // I filtri colore di tutti gli schermi: matrice 3x3 per righe in spazio
+    // lineare, se `colorFiltered`. Si applicano nel disegno.
+    bool colorFiltered = false;
+    float colorFilter[9] {};
+    // La Luce notturna: quanto resta di rosso, verde e blu (luce lineare).
+    // Sugli schermi veri va nella gamma del monitor (fuori dal disegno:
+    // niente tinta negli screenshot, scanout diretto salvo); dove non si
+    // può, nel disegno come i filtri. La versione cambia con i valori.
+    bool nightActive = false;
+    float nightGains[3] { 1.0f, 1.0f, 1.0f };
+    uint32_t nightVersion = 0;
+    // wp-tearing-control: le app a schermo intero che chiedono di mostrare
+    // ogni frame subito, anche a metà schermo (giochi). Si concede se
+    // `allowTearing` (vela.conf "tearing").
+    wlr_tearing_control_manager_v1* tearingControl = nullptr;
+    bool allowTearing = true;
     static Scene* instance() { return s_instance; }
 
 private:

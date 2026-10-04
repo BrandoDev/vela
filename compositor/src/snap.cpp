@@ -73,6 +73,9 @@ void Toplevel::setSnap(Snap side, Output* out)
         return;
     }
     finishOpenAnimation();
+    if (side != snap) {
+        leaveSnapGroup(); // spostata altrove: non sta più col suo gruppo
+    }
 
     if (side == Snap::None) {
         if (snap == Snap::None) {
@@ -119,6 +122,27 @@ void Toplevel::applySnap(Output* out)
     configureSize(place.width, place.height);
     const wlr_box geometry = this->geometry();
     tree->setPosition(place.x - geometry.x, place.y - geometry.y);
+}
+
+void Toplevel::leaveSnapGroup()
+{
+    const uint32_t group = std::exchange(snapGroup, 0u);
+    if (group == 0) {
+        return;
+    }
+    // Un gruppo di una finestra sola non è più un gruppo.
+    std::vector<Toplevel*> rest;
+    for (Toplevel* other : server.toplevels) {
+        if (other->snapGroup == group) {
+            rest.push_back(other);
+        }
+    }
+    if (rest.size() < 2) {
+        for (Toplevel* other : rest) {
+            other->snapGroup = 0;
+        }
+    }
+    server.announceWorkspaces();
 }
 
 // ------------------------------------------------- Win+frecce (Server) --
@@ -301,6 +325,38 @@ void Server::offerSnapAssist(Toplevel* toplevel)
     sendShellCommand(std::string("snap-assist {\"window\":\"") + toplevel->extHandle->identifier + "\",\"output\":\""
         + out->wlr->name + "\",\"tile\":" + tileJson(toplevel->snap) + ",\"occupied\":[" + occupied
         + "],\"candidates\":[" + candidates + "]}");
+}
+
+void Server::joinSnapGroup(Toplevel* toplevel, Toplevel* origin)
+{
+    if (!toplevel || !origin || origin == toplevel || !origin->mapped || origin->snap == Snap::None
+        || toplevel->snap == Snap::None || origin->output() != toplevel->output()) {
+        return;
+    }
+    if (origin->snapGroup == 0) {
+        origin->snapGroup = nextSnapGroup++;
+    }
+    toplevel->snapGroup = origin->snapGroup;
+    announceWorkspaces();
+}
+
+void Server::activateSnapGroup(Toplevel* toplevel)
+{
+    const uint32_t group = toplevel->snapGroup;
+    std::vector<Toplevel*> members;
+    for (Toplevel* other : toplevels) {
+        if (group != 0 && other->snapGroup == group && other != toplevel) {
+            members.push_back(other);
+        }
+    }
+    // Prima le altre, poi quella scelta: resta sopra e a fuoco.
+    members.push_back(toplevel);
+    for (Toplevel* member : members) {
+        if (member->minimized) {
+            member->setMinimized(false);
+        }
+        focusToplevel(member);
+    }
 }
 
 void Server::showSnapLayouts(Toplevel* toplevel, bool keyboard)

@@ -138,6 +138,9 @@ inline constexpr double snapPreviewMs = 150.0;
 // arriva dall'altra parte. Lo scorrimento è una frazione dello schermo più
 // stretto: con più schermi le finestre non invadono quello accanto.
 inline constexpr double workspaceSwitchMs = 300.0;
+
+// Lente di ingrandimento: da un ingrandimento all'altro.
+inline constexpr double magnifierMs = 150.0;
 inline constexpr double workspaceSlideFraction = 0.25;
 
 } // namespace motion

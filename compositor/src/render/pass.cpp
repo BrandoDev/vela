@@ -324,7 +324,21 @@ int Pass::blurReach(float strength)
     return int(std::ceil(strength * 3.0f * float(1 << Renderer::blurLevels))) + 2;
 }
 
-void Pass::addBlur(const TextureDraw& panel, const pixman_region32_t* region, float strength)
+void Pass::setColorFilter(const float* matrix)
+{
+    m_filtered = matrix != nullptr;
+    if (matrix) {
+        for (int row = 0; row < 3; ++row) {
+            for (int column = 0; column < 3; ++column) {
+                m_filter[row * 4 + column] = matrix[row * 3 + column];
+            }
+            m_filter[row * 4 + 3] = 0.0f;
+        }
+    }
+}
+
+void Pass::addBlur(const TextureDraw& panel, const pixman_region32_t* region, float strength,
+    const wlr_render_color& tint)
 {
     if (!m_target->sampleable || !region || !pixman_region32_not_empty(region)) {
         return;
@@ -358,9 +372,7 @@ void Pass::addBlur(const TextureDraw& panel, const pixman_region32_t* region, fl
     draw.push.pad[1] = float(source.y);
     draw.push.shape[2] = 0.5f / float(level0.width);
     draw.push.shape[3] = 0.5f / float(level0.height);
-    // La tinta acrylic del tema scuro di Windows 11 (sRGB premoltiplicato).
-    const wlr_render_color tint { 0.11f * 0.55f, 0.11f * 0.55f, 0.12f * 0.55f, 0.55f };
-    const float a = tint.a;
+    const float a = std::clamp(tint.a, 0.001f, 1.0f);
     const float channels[3] = { tint.r, tint.g, tint.b };
     for (int i = 0; i < 3; ++i) {
         draw.push.color[i] = srgbToLinear(std::clamp(channels[i] / a, 0.0f, 1.0f)) * a;
@@ -651,8 +663,16 @@ bool Pass::submit()
             const uint32_t count = draw.kind == Renderer::PipelineKind::BlurMix ? 2 : 1;
             vkCmdPushDescriptorSet(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, count, writes);
         }
-        vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-            sizeof(QuadPush), &draw.push);
+        if (m_filtered) {
+            QuadPush push = draw.push;
+            push.flags |= 4u;
+            std::copy(std::begin(m_filter), std::end(m_filter), std::begin(push.filter));
+            vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                sizeof(QuadPush), &push);
+        } else {
+            vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                sizeof(QuadPush), &draw.push);
+        }
         vkCmdSetScissor(cmd, 0, 1, &draw.scissor);
         vkCmdDraw(cmd, 4, 1, 0, 0);
     }

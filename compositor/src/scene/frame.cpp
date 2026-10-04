@@ -10,6 +10,25 @@ namespace vela::scene {
 
 namespace {
 
+// La Luce notturna come tabella della gamma del monitor: ogni valore
+// codificato sRGB torna in luce lineare, prende il suo guadagno e si
+// ricodifica.
+wlr_color_transform* nightLut(const float gains[3])
+{
+    constexpr size_t size = 256;
+    std::vector<uint16_t> channels[3];
+    for (int c = 0; c < 3; ++c) {
+        channels[c].resize(size);
+        for (size_t i = 0; i < size; ++i) {
+            const double x = double(i) / double(size - 1);
+            const double linear = (x <= 0.04045 ? x / 12.92 : std::pow((x + 0.055) / 1.055, 2.4)) * gains[c];
+            const double encoded = linear <= 0.0031308 ? linear * 12.92 : 1.055 * std::pow(linear, 1.0 / 2.4) - 0.055;
+            channels[c][i] = uint16_t(std::lround(std::clamp(encoded, 0.0, 1.0) * 65535.0));
+        }
+    }
+    return wlr_color_transform_init_lut_3x1d(size, channels[0].data(), channels[1].data(), channels[2].data());
+}
+
 bool sameBox(const wlr_box& a, const wlr_box& b)
 {
     return a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height;
@@ -505,7 +524,9 @@ void drawElements(render::Pass& pass, const std::vector<Element>& elements, cons
                 if (pixman_region32_not_empty(&region)) {
                     render::Pass::TextureDraw panel = draw;
                     panel.clip = nullptr;
-                    pass.addBlur(panel, &region, blurStrength(e.scaleX));
+                    const Scene* scene = Scene::instance();
+                    pass.addBlur(panel, &region, blurStrength(e.scaleX),
+                        scene ? scene->acrylicTint : wlr_render_color { 0.06f, 0.06f, 0.066f, 0.55f });
                 }
                 pixman_region32_fini(&region);
             }
@@ -578,10 +599,64 @@ OutputFrame::~OutputFrame()
     if (m_feedbackSurface) {
         sendFeedback(m_feedbackSurface, false);
     }
+    if (m_nightTransform) {
+        wlr_color_transform_unref(m_nightTransform);
+    }
     if (m_scanoutTimeline) {
         wlr_drm_syncobj_timeline_unref(m_scanoutTimeline);
     }
     wlr_damage_ring_finish(&m_ring);
+}
+
+void OutputFrame::prepareNightLight()
+{
+    if (m_scene.nightVersion == m_nightVersion) {
+        return;
+    }
+    m_nightVersion = m_scene.nightVersion;
+    // Solo gli schermi veri hanno una gamma (non quelli annidati o headless).
+    if (m_gammaRefused || !wlr_output_is_drm(m_output)) {
+        m_gammaRefused = true;
+        m_nightInGamma = false;
+        return;
+    }
+    wlr_color_transform* transform = m_scene.nightActive ? nightLut(m_scene.nightGains) : nullptr;
+    wlr_output_state test;
+    wlr_output_state_init(&test);
+    wlr_output_state_set_color_transform(&test, transform);
+    const bool ok = wlr_output_test_state(m_output, &test);
+    wlr_output_state_finish(&test);
+    if (!ok) {
+        wlr_log(WLR_INFO, "%s: il monitor non accetta la Luce notturna nella gamma, la applica il disegno",
+            m_output->name);
+        if (transform) {
+            wlr_color_transform_unref(transform);
+        }
+        m_gammaRefused = true;
+        m_nightInGamma = false;
+        return;
+    }
+    if (m_nightTransform) {
+        wlr_color_transform_unref(m_nightTransform);
+    }
+    m_nightTransform = transform;
+    m_nightCommitPending = true;
+    m_nightInGamma = m_scene.nightActive;
+}
+
+void OutputFrame::setMagnifier(double zoom, double x, double y)
+{
+    zoom = std::max(1.0, zoom);
+    if (zoom == m_zoom && (zoom == 1.0 || (x == m_zoomX && y == m_zoomY))) {
+        return;
+    }
+    m_zoom = zoom;
+    m_zoomX = x;
+    m_zoomY = y;
+    // Tutto si sposta: il confronto con il frame precedente trova il danno.
+    if (scheduleFrame) {
+        scheduleFrame();
+    }
 }
 
 void OutputFrame::damage(const pixman_region32_t* region)
@@ -718,12 +793,14 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
         wlr_damage_ring_add_box(&m_ring, &whole);
     }
 
-    // 1. La scena appiattita, in pixel di questo schermo.
+    // 1. La scena appiattita, in pixel di questo schermo (con la lente:
+    //    la zona ingrandita).
     std::vector<Element> elements;
+    const bool magnified = m_zoom > 1.0;
     const BuildParams params {
-        .originX = lx,
-        .originY = ly,
-        .scale = scale,
+        .originX = magnified ? m_zoomX : lx,
+        .originY = magnified ? m_zoomY : ly,
+        .scale = scale * (magnified ? m_zoom : 1.0),
         .bounds = { 0, 0, width, height },
     };
     buildElements(&m_scene.root(), params, elements);
@@ -780,11 +857,32 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
     m_last = std::move(current);
     updateSurfaces(elements);
 
-    // Un'app a schermo intero che si può mostrare così com'è.
-    const Element* candidate = pending ? nullptr : scanoutCandidate(elements, transform);
+    // Il colore: i filtri, e la Luce notturna se la gamma del monitor non
+    // la prende, si applicano nel disegno (cursore compreso).
+    prepareNightLight();
+    const bool nightInDrawing = m_scene.nightActive && !m_nightInGamma;
+    const bool filtered = m_scene.colorFiltered || nightInDrawing;
+    float filter[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+    if (filtered) {
+        const float* f = m_scene.colorFiltered ? m_scene.colorFilter : filter;
+        const float* g = m_scene.nightGains;
+        for (int row = 0; row < 3; ++row) {
+            for (int column = 0; column < 3; ++column) {
+                filter[row * 3 + column] = (nightInDrawing ? g[row] : 1.0f) * f[row * 3 + column];
+            }
+        }
+    }
+    if (filtered != m_cursorLocked) {
+        wlr_output_lock_software_cursors(m_output, filtered);
+        m_cursorLocked = filtered;
+    }
+
+    // Un'app a schermo intero che si può mostrare così com'è (non col
+    // filtro nel disegno).
+    const Element* candidate = pending || filtered ? nullptr : scanoutCandidate(elements, transform);
     updateFeedback(candidate);
 
-    const bool damaged = pixman_region32_not_empty(&m_ring.current);
+    const bool damaged = pixman_region32_not_empty(&m_ring.current) || m_nightCommitPending;
     if (!damaged && !m_output->needs_frame && !pending) {
         return false;
     }
@@ -795,6 +893,9 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
     wlr_output_state own;
     wlr_output_state_init(&own);
     wlr_output_state& state = pending ? *pending : own;
+    if (m_nightCommitPending) {
+        wlr_output_state_set_color_transform(&state, m_nightTransform);
+    }
     // Anche quando c'è solo da spostare il cursore hardware si consegna un
     // buffer (con danno vuoto il disegno non costa quasi nulla). Con DRM un
     // commit senza buffer è bloccante: fermerebbe il compositor fino al
@@ -804,6 +905,7 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
     // Scanout diretto: niente disegno, il buffer dell'app va sullo schermo.
     if (candidate && tryScanout(*candidate, state)) {
         wlr_output_state_finish(&own);
+        m_nightCommitPending = false;
         // Lo schermo è a posto: il danno accumulato non serve più (i
         // nostri buffer invece sono rimasti indietro, vedi sotto).
         pixman_region32_clear(&m_ring.current);
@@ -819,6 +921,10 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
         // dello scanout, si ridisegnano interi.
         wlr_log(WLR_DEBUG, "%s: scanout diretto finito", m_output->name);
         m_scanout = false;
+        if (m_tearing) {
+            wlr_log(WLR_INFO, "%s: tearing finito", m_output->name);
+            m_tearing = false;
+        }
         const wlr_box whole { 0, 0, width, height };
         wlr_damage_ring_add_box(&m_ring, &whole);
     }
@@ -850,6 +956,9 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
 
     bool ok = false;
     if (std::unique_ptr<render::Pass> pass = m_renderer.beginPass(buffer)) {
+        if (filtered) {
+            pass->setColorFilter(filter);
+        }
         // Sotto tutto, il nero (lo sfondo del desktop di solito lo copre).
         pass->addRect({ 0, 0, buffer->width, buffer->height }, { 0.0f, 0.0f, 0.0f, 1.0f }, &bufferDamage, false);
         drawElements(*pass, elements, &bufferDamage, transform, width, height);
@@ -875,6 +984,9 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
             }
         }
         ok = wlr_output_commit_state(m_output, &state);
+    }
+    if (ok) {
+        m_nightCommitPending = false;
     }
     wlr_buffer_unlock(buffer);
     wlr_output_state_finish(&own);
@@ -953,6 +1065,11 @@ bool OutputFrame::tryScanout(const Element& e, wlr_output_state& state)
         return false;
     }
     wlr_output_state_set_buffer(&attempt, buffer);
+    // Tearing: l'app (un gioco) vuole ogni frame sullo schermo subito.
+    bool tearing = m_scene.allowTearing && m_scene.tearingControl
+        && wlr_tearing_control_manager_v1_surface_hint_from_surface(m_scene.tearingControl, surface)
+            == WP_TEARING_CONTROL_V1_PRESENTATION_HINT_ASYNC;
+    attempt.tearing_page_flip = tearing;
     auto* sync = wlr_linux_drm_syncobj_v1_get_surface_state(surface);
     if (sync && sync->acquire_timeline) {
         if (!m_scanoutTimeline) {
@@ -963,6 +1080,12 @@ bool OutputFrame::tryScanout(const Element& e, wlr_output_state& state)
         wlr_output_state_set_signal_timeline(&attempt, m_scanoutTimeline, m_scanoutPoint + 1);
     }
     bool ok = wlr_output_test_state(m_output, &attempt);
+    if (!ok && tearing) {
+        // Lo schermo (o il driver) non lo permette: col vblank, come sempre.
+        tearing = false;
+        attempt.tearing_page_flip = false;
+        ok = wlr_output_test_state(m_output, &attempt);
+    }
     if (ok) {
         const SurfaceState* info = surfaceState(surface);
         if (!info || info->pacing == m_output) {
@@ -970,6 +1093,11 @@ bool OutputFrame::tryScanout(const Element& e, wlr_output_state& state)
         }
         ok = wlr_output_commit_state(m_output, &attempt);
     }
+    if (ok && tearing != m_tearing) {
+        wlr_log(WLR_INFO, "%s: tearing %s", m_output->name, tearing ? "attivo (l'app lo chiede)" : "finito");
+        m_tearing = tearing;
+    }
+    m_delivered.tearing = ok && tearing;
     if (ok && sync && sync->acquire_timeline) {
         // Il backend fa scattare il punto quando smette di mostrare il buffer.
         ++m_scanoutPoint;

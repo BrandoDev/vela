@@ -416,6 +416,7 @@ bool Server::init()
         this);
     initXwayland();
     initLock();
+    initAccessibility();
     initWorkspaces();
 
     wl_event_loop_add_signal(loop, SIGINT, handleTerminate, display);
@@ -661,6 +662,7 @@ void Server::refocus()
 void Server::forget(Toplevel* toplevel)
 {
     workspaceForget(toplevel);
+    toplevel->leaveSnapGroup();
     if (m_snapLayoutsHover.toplevel == toplevel) {
         hoverMaximize(nullptr);
     }
@@ -776,10 +778,12 @@ void Server::tickAnimations(int64_t presentNs)
         toplevel->updateShape(); // angoli e ombra secondo lo stato di adesso
     }
     m_animationNowMs = std::max(m_animationNowMs, double(presentNs) / 1e6);
-    if (m_animating.empty() && m_snapshotAnimations.empty() && !m_snapPreview.rect && workspaces.direction == 0) {
+    if (m_animating.empty() && m_snapshotAnimations.empty() && !m_snapPreview.rect && workspaces.direction == 0
+        && !a11y.levelAnimating && !a11y.zoomAnimating) {
         return;
     }
     const double nowMs = m_animationNowMs;
+    const bool accessibility = tickAccessibility(nowMs);
 
     const auto running = m_animating; // la lista può cambiare durante il giro
     for (Toplevel* toplevel : running) {
@@ -790,7 +794,7 @@ void Server::tickAnimations(int64_t presentNs)
     tickSnapshotAnimations(nowMs);
     tickSnapPreview(nowMs);
     const bool switching = tickWorkspaceSwitch(nowMs);
-    if (!m_animating.empty() || !m_snapshotAnimations.empty() || switching
+    if (!m_animating.empty() || !m_snapshotAnimations.empty() || switching || accessibility
         || (m_snapPreview.rect && !m_snapPreview.tween.finished(nowMs))) {
         scheduleFrames();
     }
@@ -924,6 +928,9 @@ void Server::updateDragIcon()
 void Server::onCursorMotion(uint32_t timeMsec)
 {
     updateDragIcon();
+    if (a11y.magnifier || a11y.zoomAnimating || a11y.zoom > 1.0) {
+        updateMagnifier(); // la zona ingrandita segue il cursore
+    }
     if (pendingTitleDrag.toplevel
         && std::hypot(cursor->x - pendingTitleDrag.x, cursor->y - pendingTitleDrag.y) > 4.0) {
         Toplevel* toplevel = pendingTitleDrag.toplevel;
@@ -1324,6 +1331,25 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
             removeWorkspace(workspaces.current);
             return true;
         }
+    }
+    // Accessibilità: Win+Ctrl+C i filtri colore (se la scorciatoia è accesa
+    // nelle Impostazioni, come Windows); Win+più e Win+meno la lente di
+    // ingrandimento, Win+Esc la chiude.
+    if (super && ctrl && xkb_keysym_to_lower(sym) == XKB_KEY_c && a11y.colorFilterShortcut) {
+        setColorFilter(!a11y.colorFilter);
+        return true;
+    }
+    if (super && (sym == XKB_KEY_plus || sym == XKB_KEY_equal || sym == XKB_KEY_KP_Add)) {
+        zoomMagnifier(1);
+        return true;
+    }
+    if (super && a11y.magnifier && (sym == XKB_KEY_minus || sym == XKB_KEY_KP_Subtract)) {
+        zoomMagnifier(-1);
+        return true;
+    }
+    if (super && a11y.magnifier && sym == XKB_KEY_Escape) {
+        setMagnifier(false);
+        return true;
     }
     if ((super && tab) || (altNested && (sym == XKB_KEY_w || sym == XKB_KEY_W))) {
         sendShellCommand("task-view");
@@ -1761,6 +1787,10 @@ void Server::listenForCommands()
                             // I desktop virtuali, per la shell appena partita.
                             const std::string reply = self->workspacesJson() + "\n";
                             (void)!write(fd, reply.data(), reply.size());
+                        } else if (line == "accessibility") {
+                            // Luce notturna, filtri, lente: per la shell appena partita.
+                            const std::string reply = self->accessibilityJson() + "\n";
+                            (void)!write(fd, reply.data(), reply.size());
                         }
                     }
                     const bool closed = n == 0 || (mask & (WL_EVENT_HANGUP | WL_EVENT_ERROR))
@@ -1823,7 +1853,31 @@ void Server::handleCommand(const std::string& command)
                 }
             }
         }
-    } else if (command == "modifiers" || command == "workspaces") {
+    } else if (command.rfind("theme ", 0) == 0) {
+        // theme <shell> <app>, "light" o "dark": la modalità di Vela e quella delle app.
+        char shellMode[16] = {};
+        char appMode[16] = {};
+        if (std::sscanf(command.c_str() + 6, "%15s %15s", shellMode, appMode) == 2) {
+            const bool shellLight = std::strcmp(shellMode, "light") == 0;
+            const bool appsLight = std::strcmp(appMode, "light") == 0;
+            if (shellLight != lightShell || appsLight != lightApps) {
+                lightShell = shellLight;
+                lightApps = appsLight;
+                // La tinta acrylic di Windows 11, scura o chiara (sRGB premoltiplicato).
+                sceneGraph->acrylicTint = lightShell ? wlr_render_color { 0.95f * 0.55f, 0.95f * 0.55f, 0.96f * 0.55f, 0.55f }
+                                                     : wlr_render_color { 0.11f * 0.55f, 0.11f * 0.55f, 0.12f * 0.55f, 0.55f };
+                ++wallpaperTintVersion;
+                for (Toplevel* toplevel : toplevels) {
+                    if (toplevel->decoration) {
+                        toplevel->decoration->update();
+                    }
+                }
+                for (Output* output : outputs) {
+                    output->sceneFrame->damageWhole();
+                }
+            }
+        }
+    } else if (command == "modifiers" || command == "workspaces" || command == "accessibility") {
         // già risposto a chi l'ha chiesto (listenForCommands)
     } else if (command.rfind("workspace ", 0) == 0) {
         // workspace switch|close <n>, workspace new [switch], workspace
@@ -1859,6 +1913,27 @@ void Server::handleCommand(const std::string& command)
         }
         if (seat->keyboard_state.keyboard) {
             wlr_seat_set_keyboard(seat, seat->keyboard_state.keyboard); // il layout nuovo alle app
+        }
+        loadAccessibilitySettings();
+    } else if (command.rfind("night-light ", 0) == 0) {
+        // Dalle impostazioni rapide: night-light on|off|toggle (e così filtri, lente, tasti).
+        const std::string what = command.substr(12);
+        setNightLight(what == "toggle" ? !a11y.nightLight : what == "on");
+    } else if (command.rfind("color-filter ", 0) == 0) {
+        const std::string what = command.substr(13);
+        setColorFilter(what == "toggle" ? !a11y.colorFilter : what == "on");
+    } else if (command.rfind("magnifier ", 0) == 0) {
+        const std::string what = command.substr(10);
+        setMagnifier(what == "toggle" ? !a11y.magnifier : what == "on");
+    } else if (command.rfind("sticky-keys ", 0) == 0) {
+        const std::string what = command.substr(12);
+        setStickyKeys(what == "toggle" ? !a11y.stickyKeys : what == "on");
+    } else if (command.rfind("switcher-pick ", 0) == 0) {
+        // Un clic su un'anteprima di Alt+Tab: si passa a quella finestra.
+        const int index = std::atoi(command.c_str() + 14);
+        if (m_switcher.active && index >= 0 && size_t(index) < m_switcher.windows.size()) {
+            m_switcher.selected = size_t(index);
+            switcherFinish(true);
         }
     } else if (command == "lock") {
         lockScreen(); // per esempio prima di sospendere il computer
@@ -1959,10 +2034,14 @@ void Server::windowAction(Toplevel* toplevel, const std::string& action)
         focusToplevel(toplevel);
         toplevel->setSnap(action == "snap-left" ? Snap::Left : Snap::Right);
     } else if (action.rfind("snap ", 0) == 0) {
-        // Dai layout di snap e da Snap Assist: "snap x0 y0 x1 y1 [quiet]", in dodicesimi.
+        // Dai layout di snap e da Snap Assist: "snap x0 y0 x1 y1 [quiet [finestra]]",
+        // in dodicesimi. Da Snap Assist anche la finestra accanto a cui va:
+        // insieme fanno un gruppo di snap.
         Snap tile;
         char quiet[8] = {};
-        const int n = std::sscanf(action.c_str() + 5, "%d %d %d %d %7s", &tile.x0, &tile.y0, &tile.x1, &tile.y1, quiet);
+        char origin[128] = {};
+        const int n = std::sscanf(action.c_str() + 5, "%d %d %d %d %7s %127s", &tile.x0, &tile.y0, &tile.x1,
+            &tile.y1, quiet, origin);
         if (n >= 4 && tile.valid()) {
             if (toplevel->minimized) {
                 toplevel->setMinimized(false);
@@ -1971,8 +2050,17 @@ void Server::windowAction(Toplevel* toplevel, const std::string& action)
             toplevel->setSnap(tile);
             if (std::string(quiet) != "quiet") {
                 offerSnapAssist(toplevel);
+            } else if (n >= 6) {
+                for (Toplevel* other : toplevels) {
+                    if (other->extHandle && std::strcmp(origin, other->extHandle->identifier) == 0) {
+                        joinSnapGroup(toplevel, other);
+                    }
+                }
             }
         }
+    } else if (action == "activate-group") {
+        // Il gruppo di snap dalla taskbar: tutte le sue finestre davanti.
+        activateSnapGroup(toplevel);
     } else if (action.rfind("move-to ", 0) == 0) {
         moveToWorkspace(toplevel, std::atoi(action.c_str() + 8));
     } else if (action == "move-to-new") {

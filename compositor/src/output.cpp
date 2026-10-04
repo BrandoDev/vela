@@ -253,6 +253,9 @@ Output::~Output()
         wlr_layer_surface_v1_destroy(layer->wlr);
     }
     server.endSnapZone(false); // l'anteprima potrebbe essere su questo schermo
+    if (server.a11y.zoomOutput == this) {
+        server.a11y.zoomOutput = nullptr;
+    }
     // Un blocco in corso non deve più aspettare il nero su questo schermo.
     server.outputRendered(this);
     server.outputs.remove(this);
@@ -350,6 +353,13 @@ void Output::onFrameEvent()
         return; // già pianificato, o niente da fare
     }
     collectCosts();
+    // Tearing (un gioco a schermo intero che lo chiede): il suo frame va
+    // sullo schermo appena arriva, non al momento migliore prima del vblank.
+    if (sceneFrame->delivered().tearing) {
+        m_planned = false;
+        onFrame();
+        return;
+    }
     const int64_t now = render::nowNs();
     m_plan = clock.plan(now, m_latching);
     m_planned = true;

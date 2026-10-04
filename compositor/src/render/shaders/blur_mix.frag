@@ -29,7 +29,8 @@ void main()
     vec3 c = texture(blurred, (gl_FragCoord.xy - pc.pad) * pc.shape.zw).rgb;
     const float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
     c = mix(vec3(luma), c, 1.25); // saturazione
-    c = c * (1.0 - pc.color.a) + pc.color.rgb; // tinta
+    // Lo sfondo letto ha già il filtro dello schermo (se c'è): solo la tinta lo prende qui.
+    c = c * (1.0 - pc.color.a) + colorFilter(pc.color).rgb; // tinta
     c += (noise(gl_FragCoord.xy) - 0.5) * (2.0 / 255.0);
     c = max(c, 0.0);
     const float coverage = smoothstep(0.0, 0.5, texture(mask, uv).a) * shapeClip() * pc.alpha;

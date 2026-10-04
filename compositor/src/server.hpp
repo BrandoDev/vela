@@ -320,6 +320,11 @@ struct Toplevel : SceneOwner {
     bool fullscreen = false;
     bool minimized = false;
     Snap snap = Snap::None;
+    // Gruppo di snap (snap.cpp), come Windows 11: le finestre sistemate
+    // insieme con Snap Assist; la taskbar le mostra e le riporta davanti
+    // insieme. 0: nessuno. Si esce staccandosi (o chiudendo).
+    uint32_t snapGroup = 0;
+    void leaveSnapGroup();
     // Desktop virtuali (workspaces.cpp): quello della finestra, o tutti.
     int workspace = 0;
     bool sticky = false;
@@ -469,6 +474,7 @@ struct Keyboard {
 
 private:
     void onKey(wlr_keyboard_key_event* event);
+    bool m_restoring = false; // tasti permanenti: si stanno rimettendo i modificatori
 };
 
 // ---------------------------------------------------------------- Server --
@@ -514,6 +520,11 @@ public:
     void offerSnapAssist(Toplevel* toplevel);
     void showSnapLayouts(Toplevel* toplevel, bool keyboard); // Win+Z, o il mouse sul pulsante
     void hoverMaximize(Toplevel* toplevel); // il mouse su Ingrandisci (null: altrove)
+    // Snap Assist ha messo `toplevel` accanto a `origin`: stesso gruppo.
+    void joinSnapGroup(Toplevel* toplevel, Toplevel* origin);
+    // Il clic sul gruppo nella taskbar: tutte davanti, `toplevel` a fuoco.
+    void activateSnapGroup(Toplevel* toplevel);
+    uint32_t nextSnapGroup = 1;
     void snapWithKeyboard(Toplevel* active, xkb_keysym_t sym); // Win+frecce
 
     // Animazioni: chiamate dal frame di ogni schermo, con l'istante in cui
@@ -560,6 +571,64 @@ public:
     bool tickWorkspaceSwitch(double nowMs); // false quando ha finito
     void finishWorkspaceSwitch();
     void syncTaskbarHandles();
+
+    // Accessibilità e colore dello schermo (accessibility.cpp), come in
+    // Windows: Luce notturna (anche pianificata), filtri colore, lente di
+    // ingrandimento (Win+più, Win+meno, Win+Esc), tasti permanenti. Le
+    // scelte stanno in vela.conf; la shell le accende dalle impostazioni
+    // rapide e riceve lo stato ("accessibility <json>").
+    struct Accessibility {
+        bool nightLight = false; // accesa, a mano o dalla pianificazione
+        int nightStrength = 48; // 0-100, come l'"Intensità" di Windows
+        std::string schedule = "no"; // "no", "tramonto" (dal tramonto all'alba), "ore"
+        int nightFrom = 21 * 60; // minuti dalla mezzanotte
+        int nightTo = 7 * 60;
+        std::string scheduleKey; // la pianificazione letta l'ultima volta
+        int scheduled = -1; // cosa diceva la pianificazione l'ultima volta (-1: non si sa)
+        // Il passaggio graduale tra spenta (0) e accesa (1).
+        double nightLevel = 0.0;
+        double levelFrom = 0.0;
+        Tween levelTween;
+        bool levelAnimating = false;
+
+        bool colorFilter = false;
+        std::string colorFilterKind = "grigi"; // grigi, deuteranopia, protanopia, tritanopia
+        bool colorFilterShortcut = false; // Win+Ctrl+C
+
+        bool magnifier = false;
+        int zoomStep = 100; // percento per Win+più
+        double zoomTarget = 1.0;
+        double zoom = 1.0; // quello mostrato (animato)
+        double zoomFrom = 1.0;
+        Tween zoomTween;
+        bool zoomAnimating = false;
+        Output* zoomOutput = nullptr; // lo schermo ingrandito (quello del cursore)
+        double viewX = 0.0; // l'angolo della zona ingrandita, nel layout
+        double viewY = 0.0;
+
+        bool stickyKeys = false;
+        uint32_t latched = 0; // modificatori premuti e lasciati: valgono per il prossimo tasto
+        uint32_t locked = 0; // premuti due volte: restano finché non si ripremono
+        uint32_t candidate = 0; // il modificatore premuto ora, finché non arriva altro
+
+        wl_event_source* timer = nullptr; // la pianificazione, ogni minuto
+    } a11y;
+    void initAccessibility();
+    void loadAccessibilitySettings();
+    void setNightLight(bool on, bool save = true);
+    void setColorFilter(bool on, bool save = true);
+    void setMagnifier(bool on);
+    void zoomMagnifier(int direction); // +1 Win+più, -1 Win+meno
+    void setStickyKeys(bool on, bool save = true);
+    void updateMagnifier(); // dopo ogni movimento del cursore
+    void checkNightSchedule();
+    bool tickAccessibility(double nowMs); // false quando non c'è più nulla da animare
+    void applyColorFilter();
+    std::string accessibilityJson() const;
+    void announceAccessibility();
+    // Tasti permanenti: il tasto passa di qui prima delle scorciatoie
+    // (keyboard.cpp). Restituisce i modificatori da usare per le scorciatoie.
+    void stickyKey(Keyboard& keyboard, const xkb_keysym_t* syms, int count, bool pressed);
 
     // Alt+Tab: il compositor decide l'ordine e la selezione, la shell
     // disegna il pannello con le anteprime.
@@ -745,7 +814,11 @@ public:
     // colore medio, in sRGB, mandato dalla shell. La versione cambia con lei.
     bool hasWallpaperTint = false;
     float wallpaperTint[3] {};
-    uint32_t wallpaperTintVersion = 0;
+    uint32_t wallpaperTintVersion = 0; // cambia anche con il tema
+    // Il tema scelto nelle Impostazioni ("Scegli la modalità"), mandato
+    // dalla shell: chiara la shell (tinta acrylic) e chiare le app (barre del titolo).
+    bool lightShell = false;
+    bool lightApps = false;
     // I bordi invisibili per ridimensionare le finestre con la barra di
     // Vela, come in Windows 11: la finestra e i bordi (WLR_EDGE_*) sotto
     // il punto, o null.
