@@ -45,10 +45,19 @@ ShellController::ShellController(QObject* parent)
         while (QLocalSocket* socket = m_server.nextPendingConnection()) {
             connect(socket, &QLocalSocket::readyRead, this, [this, socket] {
                 while (socket->canReadLine()) {
-                    handleCommand(socket->readLine().trimmed());
+                    const QByteArray line = socket->readLine().trimmed();
+                    if (line == "choose-source") {
+                        startChooser(socket); // risponde quando l'utente sceglie
+                    } else {
+                        handleCommand(line);
+                    }
                 }
             });
             connect(socket, &QLocalSocket::disconnected, this, [this, socket] {
+                if (m_chooser == socket) {
+                    m_chooser = nullptr;
+                    emit chooseSourceCancelled(); // il portale ha rinunciato
+                }
                 // Un eventuale comando senza "a capo" finale.
                 const QByteArray rest = socket->readAll().trimmed();
                 if (!rest.isEmpty()) {
@@ -66,6 +75,45 @@ QString ShellController::socketPath()
     const QString runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
     const QString display = qEnvironmentVariable("WAYLAND_DISPLAY", QStringLiteral("wayland-0"));
     return runtimeDir + QStringLiteral("/vela-shell-") + display + QStringLiteral(".sock");
+}
+
+QByteArray ShellController::askRunningInstance(const QByteArray& command)
+{
+    QLocalSocket socket;
+    socket.connectToServer(socketPath());
+    if (!socket.waitForConnected(1000)) {
+        return {};
+    }
+    socket.write(command + '\n');
+    socket.waitForBytesWritten(1000);
+    // L'utente può metterci quanto vuole: si aspetta la risposta o la chiusura.
+    while (!socket.canReadLine()) {
+        if (!socket.waitForReadyRead(-1)) {
+            break;
+        }
+    }
+    return socket.readLine().trimmed();
+}
+
+void ShellController::startChooser(QLocalSocket* socket)
+{
+    if (m_chooser && m_chooser != socket) {
+        chooseSource(QString()); // una richiesta nuova prende il posto della vecchia
+    }
+    m_chooser = socket;
+    emit chooseSourceRequested();
+}
+
+void ShellController::chooseSource(const QString& answer)
+{
+    QPointer<QLocalSocket> socket = m_chooser;
+    m_chooser = nullptr;
+    if (!socket) {
+        return;
+    }
+    socket->write(answer.toUtf8() + '\n');
+    socket->waitForBytesWritten(300);
+    socket->disconnectFromServer();
 }
 
 bool ShellController::sendToRunningInstance(const QByteArray& command)

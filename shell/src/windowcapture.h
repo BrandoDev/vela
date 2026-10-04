@@ -6,12 +6,14 @@
 #include <QQuickImageProvider>
 #include <QString>
 #include <QStringList>
+#include <QVariantList>
 
 struct wl_registry;
 struct wl_shm;
 struct ext_foreign_toplevel_list_v1;
 struct ext_foreign_toplevel_handle_v1;
 struct ext_foreign_toplevel_image_capture_source_manager_v1;
+struct ext_output_image_capture_source_manager_v1;
 struct ext_image_copy_capture_manager_v1;
 
 // Anteprime delle finestre (per Alt+Tab), con i protocolli standard
@@ -29,6 +31,10 @@ public:
     ~WindowCapture() override;
 
     Q_INVOKABLE void capture(const QStringList& identifiers);
+    // Una fotografia di ogni schermo: le miniature si chiamano "screen:<nome>".
+    Q_INVOKABLE void captureScreens();
+    // Le finestre aperte: [{id, title, appId}], nell'ordine di apertura.
+    Q_INVOKABLE QVariantList windowList() const;
     Q_INVOKABLE QString title(const QString& identifier) const;
     Q_INVOKABLE QString appId(const QString& identifier) const;
     QImage thumbnail(const QString& identifier) const { return m_thumbnails.value(identifier); }
@@ -50,6 +56,7 @@ private:
     wl_shm* m_shm = nullptr;
     ext_foreign_toplevel_list_v1* m_list = nullptr;
     ext_foreign_toplevel_image_capture_source_manager_v1* m_sources = nullptr;
+    ext_output_image_capture_source_manager_v1* m_outputSources = nullptr;
     ext_image_copy_capture_manager_v1* m_copier = nullptr;
 
     QHash<ext_foreign_toplevel_handle_v1*, Window*> m_windows;

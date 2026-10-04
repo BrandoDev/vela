@@ -24,6 +24,7 @@
 
 #include <LayerShellQt/Window>
 
+#include <QCoreApplication>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QQmlApplicationEngine>
@@ -33,6 +34,7 @@
 #include <QTimer>
 #include <QtDebug>
 
+#include <cstdio>
 #include <memory>
 
 namespace {
@@ -132,6 +134,16 @@ void setupConfirmDialog(QQuickWindow* window)
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
 }
 
+void setupSourceChooser(QQuickWindow* window)
+{
+    // Cosa condividere: al centro dello schermo principale, sopra a tutto.
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScope(QStringLiteral("vela-share"));
+    layer->setLayer(LayerWindow::LayerOverlay);
+    layer->setAnchors(LayerWindow::Anchors());
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
+}
+
 void setupPropertiesDialog(QQuickWindow* window)
 {
     // Proprietà: al centro dello schermo, sopra le finestre come una finestra di dialogo.
@@ -186,6 +198,18 @@ void keepShown(QGuiApplication& app, const QList<QQuickWindow*>& windows)
 
 int main(int argc, char* argv[])
 {
+    // "vela-shell --choose-source": il selettore che xdg-desktop-portal-wlr
+    // lancia quando un'app vuole condividere lo schermo. Chiede alla shell
+    // già aperta, che mostra la scelta, e stampa la risposta per il portale.
+    if (argc > 1 && QByteArray(argv[1]) == "--choose-source") {
+        QCoreApplication app(argc, argv);
+        const QByteArray answer = ShellController::askRunningInstance("choose-source");
+        if (!answer.isEmpty()) {
+            std::printf("%s\n", answer.constData());
+        }
+        return 0;
+    }
+
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("vela-shell"));
     QGuiApplication::setOrganizationName(QStringLiteral("Vela"));
@@ -264,6 +288,7 @@ int main(int argc, char* argv[])
     engine.loadFromModule("Vela.Shell", "ContextMenu");
     engine.loadFromModule("Vela.Shell", "RunDialog");
     engine.loadFromModule("Vela.Shell", "ConfirmDialog");
+    engine.loadFromModule("Vela.Shell", "SourceChooser");
     engine.loadFromModule("Vela.Shell", "PropertiesDialog");
 
     QQuickWindow* switcher = findWindow(engine, "switcher");
@@ -273,8 +298,9 @@ int main(int argc, char* argv[])
     QQuickWindow* contextMenu = findWindow(engine, "contextMenu");
     QQuickWindow* runDialog = findWindow(engine, "runDialog");
     QQuickWindow* confirmDialog = findWindow(engine, "confirmDialog");
+    QQuickWindow* sourceChooser = findWindow(engine, "sourceChooser");
     QQuickWindow* propertiesDialog = findWindow(engine, "propertiesDialog");
-    if (!taskbar || !startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog || !confirmDialog || !propertiesDialog) {
+    if (!taskbar || !startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog || !confirmDialog || !sourceChooser || !propertiesDialog) {
         qCritical("vela-shell: impossibile caricare l'interfaccia QML");
         return 1;
     }
@@ -286,6 +312,7 @@ int main(int argc, char* argv[])
     setupContextMenu(contextMenu);
     setupRunDialog(runDialog);
     setupConfirmDialog(confirmDialog);
+    setupSourceChooser(sourceChooser);
     setupPropertiesDialog(propertiesDialog);
     taskbar->show();
     keepShown(app, { taskbar });

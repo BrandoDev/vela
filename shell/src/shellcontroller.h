@@ -2,6 +2,8 @@
 
 #include <QDBusUnixFileDescriptor>
 #include <QLocalServer>
+#include <QLocalSocket>
+#include <QPointer>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -32,6 +34,13 @@ public:
     static QString socketPath();
     // Invia un comando a una shell già in esecuzione. false se non c'è.
     static bool sendToRunningInstance(const QByteArray& command);
+    // Un comando con risposta (aspetta quanto serve): "choose-source".
+    static QByteArray askRunningInstance(const QByteArray& command);
+
+    // La condivisione dello schermo (xdg-desktop-portal-wlr): la risposta
+    // per il portale, "Monitor: <schermo>", "Window: <identificativo>", o
+    // vuota se l'utente annulla.
+    Q_INVOKABLE void chooseSource(const QString& answer);
 
     bool listen();
     // Un comando al compositor, sul suo socket (es. "lock").
@@ -90,6 +99,8 @@ signals:
     void switcherHidden();
     void startMenuOpenChanged();
     void startPinsChanged();
+    void chooseSourceRequested();
+    void chooseSourceCancelled();
     // Scorciatoie di Windows che arrivano dal compositor.
     void winXRequested(); // Win+X
     void runRequested(); // Win+R
@@ -105,6 +116,8 @@ private Q_SLOTS:
 private:
     void handleCommand(const QByteArray& command);
     void takeSleepDelay();
+    void startChooser(QLocalSocket* socket);
+    QPointer<QLocalSocket> m_chooser; // il portale che aspetta la scelta
     void saveStartPins();
     QDBusUnixFileDescriptor m_sleepDelay; // finché è aperto, logind aspetta a sospendere
 

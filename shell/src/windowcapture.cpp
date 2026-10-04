@@ -1,7 +1,10 @@
 #include "windowcapture.h"
 
 #include <QGuiApplication>
+#include <QScreen>
+#include <QVariantMap>
 #include <QtGui/qguiapplication_platform.h>
+#include <QtGui/qscreen_platform.h>
 
 #include <cstring>
 #include <sys/mman.h>
@@ -74,6 +77,9 @@ struct CaptureCallbacks {
         } else if (!strcmp(interface, ext_foreign_toplevel_image_capture_source_manager_v1_interface.name)) {
             self->m_sources = static_cast<ext_foreign_toplevel_image_capture_source_manager_v1*>(
                 wl_registry_bind(registry, name, &ext_foreign_toplevel_image_capture_source_manager_v1_interface, 1));
+        } else if (!strcmp(interface, ext_output_image_capture_source_manager_v1_interface.name)) {
+            self->m_outputSources = static_cast<ext_output_image_capture_source_manager_v1*>(
+                wl_registry_bind(registry, name, &ext_output_image_capture_source_manager_v1_interface, 1));
         } else if (!strcmp(interface, ext_image_copy_capture_manager_v1_interface.name)) {
             self->m_copier = static_cast<ext_image_copy_capture_manager_v1*>(
                 wl_registry_bind(registry, name, &ext_image_copy_capture_manager_v1_interface, 1));
@@ -261,6 +267,42 @@ void WindowCapture::capture(const QStringList& identifiers)
         job->owner = this;
         job->identifier = window->identifier;
         job->source = ext_foreign_toplevel_image_capture_source_manager_v1_create_source(m_sources, window->handle);
+        job->session = ext_image_copy_capture_manager_v1_create_session(m_copier, job->source, 0);
+        ext_image_copy_capture_session_v1_add_listener(job->session, &CaptureCallbacks::sessionListener, job);
+        m_jobs.append(job);
+    }
+    if (auto* wayland = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>()) {
+        wl_display_flush(wayland->display());
+    }
+}
+
+QVariantList WindowCapture::windowList() const
+{
+    QVariantList out;
+    for (const Window* window : m_windows) {
+        if (!window->identifier.isEmpty()) {
+            out.append(QVariantMap { { QStringLiteral("id"), window->identifier },
+                { QStringLiteral("title"), window->title }, { QStringLiteral("appId"), window->appId } });
+        }
+    }
+    return out;
+}
+
+void WindowCapture::captureScreens()
+{
+    if (!m_shm || !m_outputSources || !m_copier) {
+        qWarning("vela-shell: il compositor non offre la cattura degli schermi");
+        return;
+    }
+    for (QScreen* screen : QGuiApplication::screens()) {
+        auto* native = screen->nativeInterface<QNativeInterface::QWaylandScreen>();
+        if (!native || !native->output()) {
+            continue;
+        }
+        auto* job = new Job;
+        job->owner = this;
+        job->identifier = QStringLiteral("screen:") + screen->name();
+        job->source = ext_output_image_capture_source_manager_v1_create_source(m_outputSources, native->output());
         job->session = ext_image_copy_capture_manager_v1_create_session(m_copier, job->source, 0);
         ext_image_copy_capture_session_v1_add_listener(job->session, &CaptureCallbacks::sessionListener, job);
         m_jobs.append(job);

@@ -93,6 +93,7 @@ set(VELA_QML_FILES
     qml/MenuTextField.qml
     qml/RunDialog.qml
     qml/ConfirmDialog.qml
+    qml/SourceChooser.qml
     qml/PropertiesDialog.qml
     qml/PanelShadow.qml)
 

@@ -1,0 +1,7 @@
+# xdg-desktop-portal-wlr dentro Vela (condivisione dello schermo).
+# Quando un'app chiede di condividere, la shell di Vela mostra cosa si può
+# scegliere: uno schermo intero o una finestra, con le anteprime. Risponde
+# "Monitor: <schermo>" o "Window: <identificativo>", o niente se si annulla.
+[screencast]
+chooser_type=simple
+chooser_cmd=@CMAKE_INSTALL_FULL_BINDIR@/vela-shell --choose-source
