@@ -320,6 +320,11 @@ struct Toplevel : SceneOwner {
     Listener requestFullscreen;
     Listener requestMinimize;
     Listener requestWindowMenu;
+    // xdg-decoration: la barra la disegna Vela (docs/renderer.md §9.1).
+    wlr_xdg_toplevel_decoration_v1* xdgDecoration = nullptr;
+    Listener decorationMode;
+    Listener decorationDestroy;
+    void setXdgDecoration(wlr_xdg_toplevel_decoration_v1* decoration);
     Listener setTitle;
     Listener setAppId;
     Listener setParent;
@@ -647,13 +652,22 @@ public:
     struct {
         Toplevel* toplevel = nullptr;
         uint32_t timeMsec = 0;
-    } lastTitleClick;
+    } lastTitleClick, lastIconClick;
     struct {
         Toplevel* toplevel = nullptr;
         double x = 0.0; // dove è stato premuto il titolo
         double y = 0.0;
     } pendingTitleDrag;
     void onDecorationPress(Toplevel* toplevel, uint32_t timeMsec);
+    // La tinta dello sfondo del desktop (Mica, docs/renderer.md §9.4): il
+    // colore medio, in sRGB, mandato dalla shell. La versione cambia con lei.
+    bool hasWallpaperTint = false;
+    float wallpaperTint[3] {};
+    uint32_t wallpaperTintVersion = 0;
+    // I bordi invisibili per ridimensionare le finestre con la barra di
+    // Vela, come in Windows 11: la finestra e i bordi (WLR_EDGE_*) sotto
+    // il punto, o null.
+    Toplevel* resizeBorderAt(double lx, double ly, uint32_t& edges) const;
 
     struct LockState {
         wlr_session_lock_v1* lock = nullptr;

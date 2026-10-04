@@ -22,7 +22,9 @@ public:
     static constexpr int height = 32; // logici
     static constexpr int buttonWidth = 46;
 
-    enum class Part { None, Title, Minimize, Maximize, Close };
+    enum class Part { None, Icon, Title, Minimize, Maximize, Close };
+    static constexpr int iconSize = 16; // logici
+    static constexpr int iconX = 12;
 
     explicit Decoration(Toplevel& toplevel);
     ~Decoration();
@@ -54,11 +56,15 @@ private:
     std::array<std::unique_ptr<scene::RectNode>, 3> m_hoverRects; // riduci, massimizza, chiudi
     std::array<Image, 3> m_glyphs;
     Image m_title;
+    Image m_icon;
 
     // Ciò che è disegnato adesso.
     int m_width = -1;
     float m_scale = 0.0f;
     std::string m_titleText;
+    std::string m_appId;
+    bool m_hasIcon = false;
+    uint32_t m_tintVersion = 0; // la tinta dello sfondo con cui è disegnata
     bool m_active = false;
     bool m_maximized = false;
     bool m_drawn = false;

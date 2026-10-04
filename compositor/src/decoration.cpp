@@ -1,5 +1,6 @@
 #include "decoration.hpp"
 
+#include "icons.hpp"
 #include "render/pixelbuffer.hpp"
 #include "server.hpp"
 #include "text.hpp"
@@ -12,7 +13,8 @@ namespace vela {
 namespace {
 
 constexpr int glyphSize = 10; // logici, come i simboli di Windows 11
-constexpr int titleMargin = 12;
+constexpr int titleMargin = 12; // senza icona
+constexpr int titleAfterIcon = Decoration::iconX + Decoration::iconSize + 8;
 
 // Colori come Windows 11 in tema scuro.
 constexpr wlr_render_color activeBackground { 0.125f, 0.125f, 0.125f, 1.0f };
@@ -104,8 +106,29 @@ Decoration::Decoration(Toplevel& toplevel)
     update();
 }
 
+// I colori della barra con la tinta dello sfondo (Mica, docs/renderer.md
+// §9.4): la tinta resa "sicura" per il testo (meno satura, luminosità
+// nella fascia scura del tema) e mescolata al grigio di Windows 11; da
+// inattiva pesa di più.
+wlr_render_color micaColor(const wlr_render_color& base, const Server& server, float weight)
+{
+    if (!server.hasWallpaperTint) {
+        return base;
+    }
+    const float* t = server.wallpaperTint;
+    const float luma = 0.2126f * t[0] + 0.7152f * t[1] + 0.0722f * t[2];
+    float safe[3];
+    for (int i = 0; i < 3; ++i) {
+        const float desaturated = luma + (t[i] - luma) * 0.5f;
+        safe[i] = std::clamp(desaturated * (0.16f / std::max(luma, 0.02f)), 0.0f, 0.32f);
+    }
+    return { base.r + (safe[0] - base.r) * weight, base.g + (safe[1] - base.g) * weight,
+        base.b + (safe[2] - base.b) * weight, 1.0f };
+}
+
 Decoration::~Decoration()
 {
+    clearImage(m_icon);
     clearImage(m_title);
     for (Image& image : m_glyphs) {
         clearImage(image);
@@ -151,32 +174,54 @@ void Decoration::update()
 {
     const Toplevel& t = m_toplevel;
     m_tree->setEnabled(!t.fullscreen);
-    const int width = t.geometry().width;
+    // In cima al riquadro della finestra (le app Wayland possono avere la
+    // geometria spostata rispetto all'origine della superficie).
+    const wlr_box geometry = t.geometry();
+    m_tree->setPosition(geometry.x, geometry.y);
+    const int width = geometry.width;
     const Output* out = t.output();
     const float scale = out ? out->wlr->scale : 1.0f;
     const std::string title = t.title();
     const bool active = t.activated;
     const bool maximized = t.maximized;
 
+    const std::string appId = t.appId();
     const bool resized = width != m_width;
-    const bool restyled = !m_drawn || scale != m_scale || active != m_active;
+    const bool restyled = !m_drawn || scale != m_scale || active != m_active
+        || m_tintVersion != t.server.wallpaperTintVersion;
     m_width = width;
     if (resized) {
         m_background->setSize(width, height);
     }
     if (restyled) {
-        m_background->setColor(active ? activeBackground : inactiveBackground);
+        m_background->setColor(active ? micaColor(activeBackground, t.server, 0.30f)
+                                      : micaColor(inactiveBackground, t.server, 0.45f));
     }
+
+    // L'icona dell'app, disegnata alla dimensione fisica esatta (§9.6).
+    if (restyled || appId != m_appId) {
+        const int pixels = std::max(1, int(std::lround(iconSize * scale)));
+        const IconLoader::Image& icon = IconLoader::instance().appIcon(appId, pixels);
+        m_hasIcon = !icon.pixels.empty();
+        if (m_hasIcon) {
+            setImage(m_icon, icon.width, icon.height, icon.pixels, iconX, (height - iconSize) / 2.0, iconSize,
+                iconSize);
+            m_icon.node->setOpacity(active ? 1.0f : 0.6f);
+        } else {
+            clearImage(m_icon);
+        }
+    }
+    const int titleX = m_hasIcon ? titleAfterIcon : titleMargin;
 
     // Il titolo, rasterizzato ai pixel fisici dello schermo.
     TextRenderer* text = TextRenderer::instance();
-    if (text && (restyled || resized || title != m_titleText)) {
-        const int maxWidth = int((width - titleMargin - 3 * buttonWidth - 8) * scale);
+    if (text && (restyled || resized || title != m_titleText || appId != m_appId)) {
+        const int maxWidth = int((width - titleX - 3 * buttonWidth - 8) * scale);
         if (maxWidth > 0 && !title.empty()) {
             TextRenderer::Image image
                 = text->render(title, text->defaultPixelSize() * scale, active ? activeText : inactiveText, maxWidth);
             const double logicalHeight = image.height / double(scale);
-            setImage(m_title, image.width, image.height, std::move(image.pixels), titleMargin,
+            setImage(m_title, image.width, image.height, std::move(image.pixels), titleX,
                 std::round((height - logicalHeight) / 2.0), image.width / double(scale), logicalHeight);
         } else {
             clearImage(m_title);
@@ -201,6 +246,8 @@ void Decoration::update()
     m_active = active;
     m_maximized = maximized;
     m_titleText = title;
+    m_appId = appId;
+    m_tintVersion = t.server.wallpaperTintVersion;
     m_drawn = true;
 }
 
@@ -222,6 +269,9 @@ Decoration::Part Decoration::partAt(double lx, double ly) const
     }
     if (x >= m_width - 3 * buttonWidth) {
         return Part::Minimize;
+    }
+    if (m_hasIcon && x >= iconX - 6 && x < iconX + iconSize + 6) {
+        return Part::Icon;
     }
     return Part::Title;
 }

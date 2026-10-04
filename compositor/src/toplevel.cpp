@@ -139,7 +139,10 @@ wlr_surface* Toplevel::surface() const
 wlr_box Toplevel::geometry() const
 {
     if (xdg) {
-        return xdg->base->geometry;
+        // Con la barra di Vela il riquadro comincia sopra la superficie.
+        const wlr_box g = xdg->base->geometry;
+        const int bar = titleBarHeight();
+        return { g.x, g.y - bar, g.width, g.height + bar };
     }
     // X11: niente margini d'ombra; la barra di Vela, se c'è, sta sopra.
     const int bar = titleBarHeight();
@@ -153,12 +156,14 @@ int Toplevel::titleBarHeight() const
 
 void Toplevel::updateDecoration()
 {
-    // Solo le finestre X11 che lasciano la barra al gestore di finestre (le
-    // app con una barra propria, come Steam, dicono di no), e non gli
-    // schermi di avvio.
-    const bool wanted = x11 && !x11->override_redirect
-        && x11->decorations == WLR_XWAYLAND_SURFACE_DECORATIONS_ALL
-        && !wlr_xwayland_surface_has_window_type(x11, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_SPLASH);
+    // Le finestre X11 che lasciano la barra al gestore di finestre (le app
+    // con una barra propria, come Steam, dicono di no), ma non gli schermi
+    // di avvio; le app Wayland che accettano la barra lato server
+    // (xdg-decoration: Qt e KDE, Chromium se lo si sceglie).
+    const bool wanted = x11
+        ? !x11->override_redirect && x11->decorations == WLR_XWAYLAND_SURFACE_DECORATIONS_ALL
+            && !wlr_xwayland_surface_has_window_type(x11, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_SPLASH)
+        : xdgDecoration && xdgDecoration->current.mode == WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE;
     if (wanted && !decoration) {
         decoration = std::make_unique<Decoration>(*this);
     } else if (!wanted && decoration) {
@@ -197,7 +202,8 @@ Toplevel* Toplevel::parent() const
 void Toplevel::configureSize(int width, int height)
 {
     if (xdg) {
-        wlr_xdg_toplevel_set_size(xdg, width, height);
+        // Anche qui: all'app va la parte sotto la barra di Vela.
+        wlr_xdg_toplevel_set_size(xdg, width, height > 0 ? std::max(1, height - titleBarHeight()) : 0);
         return;
     }
     // Le dimensioni sono del riquadro intero: all'app va la parte sotto la
@@ -307,7 +313,11 @@ void Toplevel::onCommit()
         // di partire massimizzato o a schermo intero.
         wlr_xdg_toplevel_set_wm_capabilities(xdg,
             WLR_XDG_TOPLEVEL_WM_CAPABILITIES_MAXIMIZE | WLR_XDG_TOPLEVEL_WM_CAPABILITIES_FULLSCREEN
-                | WLR_XDG_TOPLEVEL_WM_CAPABILITIES_MINIMIZE);
+                | WLR_XDG_TOPLEVEL_WM_CAPABILITIES_MINIMIZE | WLR_XDG_TOPLEVEL_WM_CAPABILITIES_WINDOW_MENU);
+        // La barra la disegna Vela, sempre (§9.1).
+        if (xdgDecoration) {
+            wlr_xdg_toplevel_decoration_v1_set_mode(xdgDecoration, WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+        }
         if (xdg->requested.fullscreen) {
             setFullscreen(true);
         } else if (xdg->requested.maximized) {
@@ -320,8 +330,30 @@ void Toplevel::onCommit()
     if (mapped) {
         keepInPlace();
     }
-    if (decoration) {
+    if (xdg) {
+        updateDecoration(); // la barra lato server comincia (o finisce) con questo commit
+    } else if (decoration) {
         decoration->update(); // dimensione e scala possono essere cambiate
+    }
+}
+
+void Toplevel::setXdgDecoration(wlr_xdg_toplevel_decoration_v1* deco)
+{
+    xdgDecoration = deco;
+    decorationMode.connect(&deco->events.request_mode, [this](void*) {
+        // Qualunque cosa chieda l'app, la barra la disegna Vela (§9.1).
+        if (xdg->base->initialized) {
+            wlr_xdg_toplevel_decoration_v1_set_mode(xdgDecoration, WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+        }
+    });
+    decorationDestroy.connect(&deco->events.destroy, [this](void*) {
+        decorationMode.disconnect();
+        decorationDestroy.disconnect();
+        xdgDecoration = nullptr;
+        updateDecoration();
+    });
+    if (xdg->base->initialized) {
+        wlr_xdg_toplevel_decoration_v1_set_mode(deco, WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
     }
 }
 
@@ -345,6 +377,9 @@ void Toplevel::keepInPlace()
 void Toplevel::onMap()
 {
     mapped = true;
+    if (xdg) {
+        updateDecoration(); // la barra fa parte del riquadro da posizionare
+    }
 
     Output* out = server.outputUnderCursor();
     const wlr_box geometry = this->geometry();

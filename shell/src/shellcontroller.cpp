@@ -1,5 +1,7 @@
 #include "shellcontroller.h"
 
+#include <QImage>
+#include <QImageReader>
 #include <QSettings>
 
 #include <QDBusConnection>
@@ -240,6 +242,29 @@ QString ShellController::wallpaper() const
 {
     // Quello predefinito è incluso nell'eseguibile (images/ nel sorgente).
     return qEnvironmentVariable("VELA_WALLPAPER", QStringLiteral(":/vela/images/vela_splash_169.svg"));
+}
+
+void ShellController::sendWallpaperTint() const
+{
+    // Ridotto a pochi pixel già in lettura (anche gli SVG): poi la media.
+    QImageReader reader(wallpaper());
+    reader.setScaledSize(QSize(32, 18));
+    const QImage image = reader.read().convertToFormat(QImage::Format_RGB32);
+    if (image.isNull()) {
+        return;
+    }
+    qint64 sum[3] {};
+    for (int y = 0; y < image.height(); ++y) {
+        for (int x = 0; x < image.width(); ++x) {
+            const QRgb pixel = image.pixel(x, y);
+            sum[0] += qRed(pixel);
+            sum[1] += qGreen(pixel);
+            sum[2] += qBlue(pixel);
+        }
+    }
+    const qint64 count = qint64(image.width()) * image.height();
+    sendToCompositor(QByteArray("wallpaper-tint ") + QByteArray::number(sum[0] / count) + ' '
+        + QByteArray::number(sum[1] / count) + ' ' + QByteArray::number(sum[2] / count));
 }
 
 QString ShellController::userInitial() const

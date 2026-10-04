@@ -69,6 +69,9 @@ public:
     // chiudono con lui). Non spegne né riavvia il computer.
     Q_INVOKABLE void logout();
     Q_INVOKABLE void lock(); // Win+L dalla shell
+    // Il colore medio dello sfondo al compositor: la tinta delle barre del
+    // titolo (Mica, docs/renderer.md §9.4).
+    void sendWallpaperTint() const;
     // Blocca lo schermo prima che il computer si sospenda.
     void watchSleep();
     // Il computer, tramite systemd-logind (se serve, polkit chiede la

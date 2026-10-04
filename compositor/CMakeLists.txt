@@ -16,6 +16,8 @@ pkg_check_modules(GBM REQUIRED IMPORTED_TARGET gbm)
 pkg_check_modules(LIBDRM REQUIRED IMPORTED_TARGET libdrm)
 # Il testo del compositor (titoli delle finestre): font di KDE via fontconfig.
 pkg_check_modules(FONTS REQUIRED IMPORTED_TARGET freetype2 harfbuzz fontconfig)
+# Le icone delle app nella barra del titolo (SVG): facoltativo, senza niente icone.
+pkg_check_modules(RSVG IMPORTED_TARGET librsvg-2.0 cairo)
 find_program(GLSLC NAMES glslc REQUIRED)
 pkg_check_modules(WAYLAND_PROTOCOLS REQUIRED wayland-protocols>=1.32)
 pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
@@ -113,6 +115,7 @@ add_executable(vela-compositor
     src/xwayland.cpp
     src/layer.cpp
     src/decoration.cpp
+    src/icons.cpp
     src/text.cpp
     src/render/pixelbuffer.cpp
     src/lock.cpp
@@ -152,5 +155,11 @@ target_link_libraries(vela-compositor PRIVATE
     PkgConfig::GBM
     PkgConfig::LIBDRM
     PkgConfig::FONTS)
+if(RSVG_FOUND)
+    target_link_libraries(vela-compositor PRIVATE PkgConfig::RSVG)
+    target_compile_definitions(vela-compositor PRIVATE VELA_HAVE_RSVG=1)
+else()
+    message(STATUS "librsvg non trovata: la barra del titolo sarà senza icone")
+endif()
 
 install(TARGETS vela-compositor RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

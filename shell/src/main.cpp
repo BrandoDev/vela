@@ -206,6 +206,7 @@ int main(int argc, char* argv[])
 
     ShellController shell;
     shell.listen();
+    shell.sendWallpaperTint();
     shell.watchSleep();
 
     ForeignToplevelManager windows;

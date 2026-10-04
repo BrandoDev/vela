@@ -233,6 +233,14 @@ bool Server::init()
     });
 
     layerShell = wlr_layer_shell_v1_create(display, 4);
+    // La barra del titolo di Vela per le app che la accettano (§9.1).
+    auto* decorations = wlr_xdg_decoration_manager_v1_create(display);
+    on(&decorations->events.new_toplevel_decoration, [](void* data) {
+        auto* decoration = static_cast<wlr_xdg_toplevel_decoration_v1*>(data);
+        if (auto* toplevel = static_cast<Toplevel*>(decoration->toplevel->base->data)) {
+            toplevel->setXdgDecoration(decoration);
+        }
+    });
     // La sfocatura dietro i pannelli e le app che la chiedono (§8.3).
     scene::initBackgroundEffects(display);
     on(&layerShell->events.new_surface, [this](void* data) {
@@ -645,6 +653,9 @@ void Server::forget(Toplevel* toplevel)
     if (lastTitleClick.toplevel == toplevel) {
         lastTitleClick = {};
     }
+    if (lastIconClick.toplevel == toplevel) {
+        lastIconClick = {};
+    }
     if (pendingTitleDrag.toplevel == toplevel) {
         pendingTitleDrag = {};
     }
@@ -791,7 +802,77 @@ Hit hitTest(const scene::Scene& scene, double lx, double ly)
     return { static_cast<SceneOwner*>(found.owner), found.surface, found.sx, found.sy };
 }
 
+const char* resizeCursor(uint32_t edges)
+{
+    const bool top = edges & WLR_EDGE_TOP;
+    const bool bottom = edges & WLR_EDGE_BOTTOM;
+    const bool left = edges & WLR_EDGE_LEFT;
+    const bool right = edges & WLR_EDGE_RIGHT;
+    if (top) {
+        return left ? "nw-resize" : right ? "ne-resize" : "n-resize";
+    }
+    if (bottom) {
+        return left ? "sw-resize" : right ? "se-resize" : "s-resize";
+    }
+    return left ? "w-resize" : "e-resize";
+}
+
 } // namespace
+
+Toplevel* Server::resizeBorderAt(double lx, double ly, uint32_t& edges) const
+{
+    constexpr double band = 8.0; // fuori dalla finestra, come in Windows 11
+    constexpr double inner = 4.0; // in alto anche dentro la barra del titolo
+    constexpr double corner = 16.0; // gli angoli prendono anche un tratto dei lati
+    edges = 0;
+    // Sopra le finestre (taskbar, menu, pannelli): niente bordi.
+    const Hit hit = hitTest(*sceneGraph, lx, ly);
+    if (hit.owner && hit.owner->kind == SceneKind::Layer) {
+        const auto layer = static_cast<LayerSurface*>(hit.owner)->layer;
+        if (layer == ZWLR_LAYER_SHELL_V1_LAYER_TOP || layer == ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY) {
+            return nullptr;
+        }
+    }
+    // Dalla finestra più in alto: la prima che copre il punto vince.
+    const auto& children = layers.windows->children();
+    for (auto it = children.rbegin(); it != children.rend(); ++it) {
+        auto* owner = static_cast<SceneOwner*>((*it)->data);
+        if (!owner || owner->kind != SceneKind::Toplevel || !(*it)->enabled()) {
+            continue;
+        }
+        auto* toplevel = static_cast<Toplevel*>(owner);
+        if (!toplevel->mapped || toplevel->minimized) {
+            continue;
+        }
+        const wlr_box f = toplevel->frameBox();
+        const bool resizable = toplevel->decoration && !toplevel->maximized && !toplevel->fullscreen
+            && toplevel->resizable();
+        const bool inside = lx >= f.x && lx < f.x + f.width && ly >= f.y && ly < f.y + f.height;
+        if (inside && !(resizable && ly < f.y + inner)) {
+            return nullptr; // la finestra copre il punto
+        }
+        if (!resizable || lx < f.x - band || lx >= f.x + f.width + band || ly < f.y - band
+            || ly >= f.y + f.height + band) {
+            continue;
+        }
+        bool left = lx < f.x;
+        bool right = lx >= f.x + f.width;
+        bool top = ly < f.y + (inside ? inner : 0.0);
+        bool bottom = ly >= f.y + f.height;
+        if (top || bottom) {
+            left = left || lx < f.x + corner;
+            right = right || (!left && lx >= f.x + f.width - corner);
+        }
+        if (left || right) {
+            top = top || ly < f.y + corner;
+            bottom = bottom || (!top && ly >= f.y + f.height - corner);
+        }
+        edges = (top ? WLR_EDGE_TOP : 0) | (bottom ? WLR_EDGE_BOTTOM : 0) | (left ? WLR_EDGE_LEFT : 0)
+            | (right ? WLR_EDGE_RIGHT : 0);
+        return edges ? toplevel : nullptr;
+    }
+    return nullptr;
+}
 
 void Server::onNewInput(wlr_input_device* device)
 {
@@ -876,6 +957,21 @@ void Server::onCursorMotion(uint32_t timeMsec)
         implicitGrab = {};
     }
 
+    // Sul bordo di una finestra con la barra di Vela: le frecce per ridimensionare.
+    if (cursorMode == CursorMode::Passthrough && seat->pointer_state.button_count == 0 && !seat->drag) {
+        uint32_t edges = 0;
+        if (resizeBorderAt(cursor->x, cursor->y, edges)) {
+            if (hoveredDecoration && hoveredDecoration->decoration) {
+                hoveredDecoration->decoration->setHover(Decoration::Part::None);
+            }
+            hoveredDecoration = nullptr;
+            wlr_seat_pointer_clear_focus(seat);
+            updatePointerConstraint(nullptr);
+            wlr_cursor_set_xcursor(cursor, cursorManager, resizeCursor(edges));
+            return;
+        }
+    }
+
     const Hit hit = hitTest(*sceneGraph, cursor->x, cursor->y);
     // Sopra la barra del titolo di Vela: i pulsanti si illuminano.
     Toplevel* decorated = hit.owner && !hit.surface && hit.owner->kind == SceneKind::Toplevel
@@ -924,6 +1020,20 @@ void Server::onCursorButton(wlr_pointer_button_event* event)
         finishKeyboardGrab(true);
         modifierGrab = true; // nemmeno il rilascio arriva all'app
         return;
+    }
+
+    // Sul bordo di una finestra con la barra di Vela: si ridimensiona.
+    if (event->state == WL_POINTER_BUTTON_STATE_PRESSED && event->button == BTN_LEFT
+        && cursorMode == CursorMode::Passthrough && seat->pointer_state.button_count == 0) {
+        uint32_t edges = 0;
+        if (Toplevel* toplevel = resizeBorderAt(cursor->x, cursor->y, edges)) {
+            focusToplevel(toplevel);
+            beginInteractive(toplevel, CursorMode::Resize, edges, /*fromModifier=*/true);
+            if (cursorMode != CursorMode::Passthrough) {
+                modifierGrab = true; // nemmeno il rilascio arriva all'app
+                return;
+            }
+        }
     }
 
     // Super + trascinamento sposta la finestra, Super + tasto destro la
@@ -1026,6 +1136,20 @@ void Server::onDecorationPress(Toplevel* toplevel, uint32_t timeMsec)
     case Decoration::Part::Minimize:
         toplevel->setMinimized(true);
         return;
+    case Decoration::Part::Icon: {
+        // Come Windows: un clic sull'icona apre il menu della finestra, un
+        // doppio clic la chiude.
+        const bool doubleClick = lastIconClick.toplevel == toplevel && timeMsec - lastIconClick.timeMsec < 400;
+        lastIconClick = { toplevel, timeMsec };
+        if (doubleClick) {
+            lastIconClick = {};
+            toplevel->sendClose();
+            return;
+        }
+        const wlr_box frame = toplevel->frameBox();
+        showWindowMenu(toplevel, frame.x + Decoration::iconX - 4, frame.y + Decoration::height);
+        return;
+    }
     case Decoration::Part::Title: {
         // Doppio clic: massimizza o ripristina, come su Windows.
         const bool doubleClick = lastTitleClick.toplevel == toplevel && timeMsec - lastTitleClick.timeMsec < 400;
@@ -1621,6 +1745,23 @@ void Server::handleCommand(const std::string& command)
     if (command == "logout") {
         wlr_log(WLR_INFO, "Uscita chiesta dalla shell");
         wl_display_terminate(display);
+    } else if (command.rfind("wallpaper-tint ", 0) == 0) {
+        // wallpaper-tint R G B (0-255): il colore medio dello sfondo, per le barre.
+        int r = 0;
+        int g = 0;
+        int b = 0;
+        if (std::sscanf(command.c_str() + 15, "%d %d %d", &r, &g, &b) == 3) {
+            wallpaperTint[0] = std::clamp(r, 0, 255) / 255.0f;
+            wallpaperTint[1] = std::clamp(g, 0, 255) / 255.0f;
+            wallpaperTint[2] = std::clamp(b, 0, 255) / 255.0f;
+            hasWallpaperTint = true;
+            ++wallpaperTintVersion;
+            for (Toplevel* toplevel : toplevels) {
+                if (toplevel->decoration) {
+                    toplevel->decoration->update();
+                }
+            }
+        }
     } else if (command == "modifiers") {
         // già risposto a chi l'ha chiesto (listenForCommands)
     } else if (command == "lock") {
