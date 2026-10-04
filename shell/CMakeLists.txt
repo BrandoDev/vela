@@ -41,7 +41,9 @@ qt_add_executable(vela-shell
     src/wallpapers.cpp
     src/wallpapers.h
     src/windowcapture.cpp
-    src/windowcapture.h)
+    src/windowcapture.h
+    src/workspaces.cpp
+    src/workspaces.h)
 
 # Lo sfondo predefinito, dentro l'eseguibile: ":/vela/images/vela_splash_169.svg".
 qt_add_resources(vela-shell "images"
@@ -101,7 +103,9 @@ set(VELA_QML_FILES
     qml/PropertiesDialog.qml
     qml/PanelShadow.qml
     qml/QuickSettings.qml
-    qml/NotificationCenter.qml)
+    qml/NotificationCenter.qml
+    qml/TaskView.qml
+    qml/DesktopOsd.qml)
 
 # I file stanno in qml/ per ordine, ma nel modulo devono stare alla radice:
 # così si vedono tra loro (Theme compreso, che è un singleton) senza import.

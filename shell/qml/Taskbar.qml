@@ -237,6 +237,37 @@ Window {
             StartGlyph { anchors.centerIn: parent }
         }
 
+        // Visualizzazione attività: due finestre sovrapposte, come l'icona di Windows 11.
+        TaskbarButton {
+            visible: Config.taskView
+            tooltip: "Visualizzazione attività"
+            onClicked: Shell.taskViewRequested()
+            Item {
+                anchors.centerIn: parent
+                width: 20
+                height: 18
+                Rectangle {
+                    x: 0
+                    y: 4
+                    width: 13
+                    height: 13
+                    radius: 2.5
+                    color: "transparent"
+                    border.width: 1.5
+                    border.color: Theme.text
+                }
+                Rectangle {
+                    x: 6
+                    y: 0
+                    width: 13
+                    height: 13
+                    radius: 2.5
+                    color: Theme.accentLight
+                    opacity: 0.9
+                }
+            }
+        }
+
         Repeater {
             model: Tasks
 

@@ -19,6 +19,8 @@ class Config : public QObject {
     Q_PROPERTY(QString taskbarAlignment READ taskbarAlignment NOTIFY taskbarChanged)
     // "Termina attività" nel menu dei pulsanti della taskbar.
     Q_PROPERTY(bool endTask READ endTask NOTIFY taskbarChanged)
+    // Il pulsante della Visualizzazione attività sulla taskbar.
+    Q_PROPERTY(bool taskView READ taskView NOTIFY taskbarChanged)
 
 public:
     explicit Config(QObject* parent = nullptr);
@@ -27,6 +29,7 @@ public:
     QColor accent() const { return m_accent; }
     QString taskbarAlignment() const { return m_taskbarAlignment; }
     bool endTask() const { return m_endTask; }
+    bool taskView() const { return m_taskView; }
     bool doNotDisturb() const { return m_doNotDisturb; }
 
     static QColor defaultAccent() { return QColor(0x5b, 0x8c, 0xff); }
@@ -49,5 +52,6 @@ private:
     QColor m_accent;
     QString m_taskbarAlignment;
     bool m_endTask = true;
+    bool m_taskView = true;
     bool m_doNotDisturb = false;
 };

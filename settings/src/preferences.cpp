@@ -83,6 +83,7 @@ void Preferences::reload()
         ? QStringLiteral("left")
         : QStringLiteral("center");
     m_endTask = settings.value(QStringLiteral("taskbar/endTask"), true).toBool();
+    m_taskView = settings.value(QStringLiteral("taskbar/taskView"), true).toBool();
     emit taskbarChanged();
     m_doNotDisturb = settings.value(QStringLiteral("notifications/doNotDisturb"), false).toBool();
     emit doNotDisturbChanged();
@@ -279,6 +280,15 @@ void Preferences::setEndTask(bool on)
     if (on != m_endTask) {
         m_endTask = on;
         setShell(QStringLiteral("taskbar/endTask"), on);
+        emit taskbarChanged();
+    }
+}
+
+void Preferences::setTaskView(bool on)
+{
+    if (on != m_taskView) {
+        m_taskView = on;
+        setShell(QStringLiteral("taskbar/taskView"), on);
         emit taskbarChanged();
     }
 }

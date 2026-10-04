@@ -401,9 +401,11 @@ void Toplevel::onMap()
     }
 
     server.toplevels.push_front(this);
+    server.workspaceMapped(this);
     createHandle();
     server.focusToplevel(this);
     startOpenAnimation();
+    server.announceWorkspaces();
 }
 
 void Toplevel::onUnmap()
@@ -423,6 +425,7 @@ void Toplevel::onUnmap()
     }
     destroyHandle();
     server.forget(this);
+    server.announceWorkspaces();
 }
 
 // ---------------------------------------------------------------- taskbar --
@@ -447,13 +450,21 @@ void Toplevel::createHandle()
     };
     extHandle = wlr_ext_foreign_toplevel_handle_v1_create(server.extToplevels, &state);
     extHandle->data = this;
+    if (onCurrentWorkspace()) {
+        createTaskbarHandle();
+    }
+}
 
+void Toplevel::createTaskbarHandle()
+{
     handle = wlr_foreign_toplevel_handle_v1_create(server.foreignToplevels);
     handle->data = this;
     wlr_foreign_toplevel_handle_v1_set_title(handle, title());
     wlr_foreign_toplevel_handle_v1_set_app_id(handle, appId());
     wlr_foreign_toplevel_handle_v1_set_maximized(handle, maximized);
     wlr_foreign_toplevel_handle_v1_set_fullscreen(handle, fullscreen);
+    wlr_foreign_toplevel_handle_v1_set_minimized(handle, minimized);
+    wlr_foreign_toplevel_handle_v1_set_activated(handle, activated);
     updateHandleParent();
 
     handleRequests.activate.connect(&handle->events.request_activate, [this](void*) {
@@ -496,6 +507,11 @@ void Toplevel::destroyHandle()
         wlr_ext_foreign_toplevel_handle_v1_destroy(extHandle);
         extHandle = nullptr;
     }
+    destroyTaskbarHandle();
+}
+
+void Toplevel::destroyTaskbarHandle()
+{
     if (!handle) {
         return;
     }
@@ -508,6 +524,7 @@ void Toplevel::destroyHandle()
     handleRequests.rectangle.disconnect();
     wlr_foreign_toplevel_handle_v1_destroy(handle);
     handle = nullptr;
+    taskbarRect = {};
 }
 
 // Le finestre di dialogo dichiarano la finestra da cui dipendono: la taskbar

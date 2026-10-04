@@ -22,6 +22,7 @@
 #include "tray.h"
 #include "wallpaperprovider.h"
 #include "wallpapers.h"
+#include "workspaces.h"
 #include "windowcapture.h"
 
 #include <LayerShellQt/Window>
@@ -166,6 +167,32 @@ void setupPropertiesDialog(QQuickWindow* window)
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
 }
 
+void setupTaskView(QQuickWindow* window)
+{
+    // Visualizzazione attività: tutto lo spazio sopra la taskbar (che resta
+    // visibile e cliccabile, come in Windows), con la tastiera.
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScope(QStringLiteral("vela-task-view"));
+    layer->setLayer(LayerWindow::LayerTop);
+    layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorTop) | LayerWindow::AnchorBottom
+        | LayerWindow::AnchorLeft | LayerWindow::AnchorRight);
+    layer->setExclusiveZone(0);
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityExclusive);
+}
+
+void setupDesktopOsd(QQuickWindow* window)
+{
+    // Il nome del desktop al centro dello schermo: senza ancore il
+    // compositor lo centra. Non prende né tastiera né clic.
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScope(QStringLiteral("vela-desktop-osd"));
+    layer->setLayer(LayerWindow::LayerOverlay);
+    layer->setAnchors(LayerWindow::Anchors());
+    layer->setExclusiveZone(-1);
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityNone);
+    window->setFlag(Qt::WindowTransparentForInput);
+}
+
 void setupSidePanel(QQuickWindow* window, const QString& scope)
 {
     // Impostazioni rapide e centro notifiche: in basso a destra, sopra la
@@ -265,6 +292,9 @@ int main(int argc, char* argv[])
 
     Config config;
     ShellController shell;
+    Workspaces workspaces;
+    QObject::connect(&shell, &ShellController::workspacesReceived, &workspaces, &Workspaces::update);
+    workspaces.query();
     shell.listen();
     shell.sendWallpaperTint(config.wallpaper());
     QObject::connect(&config, &Config::wallpaperChanged, &shell, [&] { shell.sendWallpaperTint(config.wallpaper()); });
@@ -298,6 +328,7 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("Apps"), &apps);
     engine.rootContext()->setContextProperty(QStringLiteral("Shell"), &shell);
     engine.rootContext()->setContextProperty(QStringLiteral("Config"), &config);
+    engine.rootContext()->setContextProperty(QStringLiteral("Desktops"), &workspaces);
     engine.rootContext()->setContextProperty(QStringLiteral("Tasks"), &tasks);
     engine.rootContext()->setContextProperty(QStringLiteral("Capture"), &capture);
     engine.rootContext()->setContextProperty(QStringLiteral("Notifications"), &notifications);
@@ -323,6 +354,8 @@ int main(int argc, char* argv[])
     engine.loadFromModule("Vela.Shell", "PropertiesDialog");
     engine.loadFromModule("Vela.Shell", "QuickSettings");
     engine.loadFromModule("Vela.Shell", "NotificationCenter");
+    engine.loadFromModule("Vela.Shell", "TaskView");
+    engine.loadFromModule("Vela.Shell", "DesktopOsd");
 
     QQuickWindow* switcher = findWindow(engine, "switcher");
     QQuickWindow* taskbar = findWindow(engine, "taskbar");
@@ -335,8 +368,10 @@ int main(int argc, char* argv[])
     QQuickWindow* propertiesDialog = findWindow(engine, "propertiesDialog");
     QQuickWindow* quickSettings = findWindow(engine, "quickSettings");
     QQuickWindow* notificationCenter = findWindow(engine, "notificationCenter");
+    QQuickWindow* taskView = findWindow(engine, "taskView");
+    QQuickWindow* desktopOsd = findWindow(engine, "desktopOsd");
     if (!taskbar || !startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog || !confirmDialog || !sourceChooser || !propertiesDialog || !quickSettings
-        || !notificationCenter) {
+        || !notificationCenter || !taskView || !desktopOsd) {
         qCritical("vela-shell: impossibile caricare l'interfaccia QML");
         return 1;
     }
@@ -356,6 +391,8 @@ int main(int argc, char* argv[])
     setupPropertiesDialog(propertiesDialog);
     setupSidePanel(quickSettings, QStringLiteral("vela-quick-settings"));
     setupSidePanel(notificationCenter, QStringLiteral("vela-notification-center"));
+    setupTaskView(taskView);
+    setupDesktopOsd(desktopOsd);
     taskbar->show();
     keepShown(app, { taskbar });
     Wallpapers wallpapers(&engine);

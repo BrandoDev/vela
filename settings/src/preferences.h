@@ -21,6 +21,7 @@ class Preferences : public QObject {
     Q_PROPERTY(QString appTheme READ appTheme WRITE setAppTheme NOTIFY appThemeChanged)
     Q_PROPERTY(QString taskbarAlignment READ taskbarAlignment WRITE setTaskbarAlignment NOTIFY taskbarChanged)
     Q_PROPERTY(bool endTask READ endTask WRITE setEndTask NOTIFY taskbarChanged)
+    Q_PROPERTY(bool taskView READ taskView WRITE setTaskView NOTIFY taskbarChanged)
     // --- Notifiche ---
     Q_PROPERTY(bool doNotDisturb READ doNotDisturb WRITE setDoNotDisturb NOTIFY doNotDisturbChanged)
     // --- Alimentazione ---
@@ -55,6 +56,8 @@ public:
     void setTaskbarAlignment(const QString& alignment);
     bool endTask() const { return m_endTask; }
     void setEndTask(bool on);
+    bool taskView() const { return m_taskView; }
+    void setTaskView(bool on);
 
     bool doNotDisturb() const { return m_doNotDisturb; }
     void setDoNotDisturb(bool on);
@@ -100,6 +103,7 @@ private:
     QString m_appTheme;
     QString m_taskbarAlignment;
     bool m_endTask = true;
+    bool m_taskView = true;
     bool m_doNotDisturb = false;
     int m_screenOffMinutes = 10;
     bool m_lockOnIdle = true;

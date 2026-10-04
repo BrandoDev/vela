@@ -27,6 +27,8 @@ QtObject {
     // I pannelli a destra della taskbar: si apre uno alla volta.
     property bool quickSettingsOpen: false
     property bool notificationCenterOpen: false
+    // La Visualizzazione attività è aperta.
+    property bool taskViewOpen: false
 
     signal openRequested(var entries, real x, real y, var options)
     signal closeRequested()

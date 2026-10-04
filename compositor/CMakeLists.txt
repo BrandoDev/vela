@@ -117,6 +117,7 @@ add_executable(vela-compositor
     src/decoration.cpp
     src/icons.cpp
     src/text.cpp
+    src/workspaces.cpp
     src/render/pixelbuffer.cpp
     src/lock.cpp
     src/keyboard.cpp

@@ -64,9 +64,11 @@ void Config::reload()
         ? QStringLiteral("left")
         : QStringLiteral("center");
     const bool endTask = settings.value(QStringLiteral("taskbar/endTask"), true).toBool();
-    if (alignment != m_taskbarAlignment || endTask != m_endTask) {
+    const bool taskView = settings.value(QStringLiteral("taskbar/taskView"), true).toBool();
+    if (alignment != m_taskbarAlignment || endTask != m_endTask || taskView != m_taskView) {
         m_taskbarAlignment = alignment;
         m_endTask = endTask;
+        m_taskView = taskView;
         emit taskbarChanged();
     }
 

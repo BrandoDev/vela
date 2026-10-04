@@ -273,6 +273,10 @@ void ShellController::handleCommand(const QByteArray& command)
         emit notificationCenterRequested();
     } else if (command == "settings") {
         emit settingsRequested();
+    } else if (command == "task-view") {
+        emit taskViewRequested();
+    } else if (parts.first() == "workspaces") {
+        emit workspacesReceived(command.mid(11));
     } else if (parts.first() == "window-menu" && parts.size() == 8) {
         // window-menu <id> <schermo> <x> <y> <massimizzata> <ridimensionabile> <da tastiera>
         emit windowMenuRequested(QString::fromLatin1(parts.at(1)), QString::fromUtf8(parts.at(2)), parts.at(3).toInt(),

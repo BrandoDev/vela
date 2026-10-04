@@ -100,6 +100,8 @@ signals:
     void quickSettingsRequested(); // Win+A
     void notificationCenterRequested(); // Win+N
     void settingsRequested(); // Win+I
+    void taskViewRequested(); // Win+Tab
+    void workspacesReceived(const QByteArray& json); // lo stato dei desktop virtuali
     // Il menu della finestra (clic destro sulla barra del titolo,
     // Alt+Spazio): su quale schermo e dove, in coordinate dello schermo.
     void windowMenuRequested(const QString& window, const QString& output, int x, int y, bool maximized,

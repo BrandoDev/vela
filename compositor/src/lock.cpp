@@ -75,7 +75,7 @@ struct LockSurface {
 std::vector<scene::Tree*> unlockedLayers(Server& server)
 {
     auto& l = server.layers;
-    return { l.background.get(), l.bottom.get(), l.windows.get(), l.top.get(), l.fullscreen.get(),
+    return { l.background.get(), l.bottom.get(), l.windows.get(), l.windowsOut.get(), l.top.get(), l.fullscreen.get(),
         l.x11Popups.get(), l.overlay.get() };
 }
 

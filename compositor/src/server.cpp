@@ -200,6 +200,10 @@ bool Server::init()
     layers.fullscreen = std::make_unique<scene::Tree>(root);
     layers.x11Popups = std::make_unique<scene::Tree>(root);
     layers.overlay = std::make_unique<scene::Tree>(root);
+    // Sopra le finestre e sotto i pannelli: il desktop che si lascia.
+    layers.windowsOut = std::make_unique<scene::Tree>(root);
+    layers.windowsOut->placeAbove(layers.windows.get());
+    layers.windowsOut->ignoresInput = true;
     layers.drag = std::make_unique<scene::Tree>(root);
     layers.drag->ignoresInput = true;
     layers.lock = std::make_unique<scene::Tree>(root);
@@ -412,6 +416,7 @@ bool Server::init()
         this);
     initXwayland();
     initLock();
+    initWorkspaces();
 
     wl_event_loop_add_signal(loop, SIGINT, handleTerminate, display);
     wl_event_loop_add_signal(loop, SIGTERM, handleTerminate, display);
@@ -571,6 +576,10 @@ void Server::focusToplevel(Toplevel* toplevel)
     if (!toplevel || !toplevel->mapped || locked) {
         return;
     }
+    // Una finestra di un altro desktop: si va su quel desktop, come Windows.
+    if (!toplevel->onCurrentWorkspace()) {
+        switchWorkspace(toplevel->workspace, false);
+    }
     if (toplevel->minimized) {
         toplevel->setMinimized(false); // la riaccende e torna qui
         return;
@@ -637,16 +646,21 @@ void Server::refocus()
         return;
     }
     for (Toplevel* toplevel : toplevels) {
-        if (toplevel->mapped && !toplevel->minimized) {
+        if (toplevel->mapped && !toplevel->minimized && toplevel->onCurrentWorkspace()) {
             focusToplevel(toplevel);
             return;
         }
+    }
+    // Nessuna finestra su questo desktop: la tastiera non va a nessuno.
+    if (Toplevel* previous = focusedToplevel()) {
+        previous->setActivated(false);
     }
     wlr_seat_keyboard_notify_clear_focus(seat);
 }
 
 void Server::forget(Toplevel* toplevel)
 {
+    workspaceForget(toplevel);
     const bool wasFocused = focusedToplevel() == toplevel;
     if (hoveredDecoration == toplevel) {
         hoveredDecoration = nullptr;
@@ -759,7 +773,7 @@ void Server::tickAnimations(int64_t presentNs)
         toplevel->updateShape(); // angoli e ombra secondo lo stato di adesso
     }
     m_animationNowMs = std::max(m_animationNowMs, double(presentNs) / 1e6);
-    if (m_animating.empty() && m_snapshotAnimations.empty() && !m_snapPreview.rect) {
+    if (m_animating.empty() && m_snapshotAnimations.empty() && !m_snapPreview.rect && workspaces.direction == 0) {
         return;
     }
     const double nowMs = m_animationNowMs;
@@ -772,7 +786,8 @@ void Server::tickAnimations(int64_t presentNs)
     }
     tickSnapshotAnimations(nowMs);
     tickSnapPreview(nowMs);
-    if (!m_animating.empty() || !m_snapshotAnimations.empty()
+    const bool switching = tickWorkspaceSwitch(nowMs);
+    if (!m_animating.empty() || !m_snapshotAnimations.empty() || switching
         || (m_snapPreview.rect && !m_snapPreview.tween.finished(nowMs))) {
         scheduleFrames();
     }
@@ -1285,6 +1300,28 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
         switcherFinish(false);
         return true;
     }
+    // Desktop virtuali, come Windows: Win+Ctrl+←/→ per passare, Win+Ctrl+D
+    // per crearne uno nuovo, Win+Ctrl+F4 per chiudere quello in uso (dentro
+    // KDE con Alt+Ctrl); Win+Tab (Alt+W) la Visualizzazione attività.
+    const bool ctrl = modifiers & WLR_MODIFIER_CTRL;
+    if ((super || altNested) && ctrl) {
+        if (sym == XKB_KEY_Left || sym == XKB_KEY_Right) {
+            switchWorkspace(workspaces.current + (sym == XKB_KEY_Left ? -1 : 1));
+            return true;
+        }
+        if (sym == XKB_KEY_d || sym == XKB_KEY_D) {
+            switchWorkspace(addWorkspace());
+            return true;
+        }
+        if (sym == XKB_KEY_F4) {
+            removeWorkspace(workspaces.current);
+            return true;
+        }
+    }
+    if ((super && tab) || (altNested && (sym == XKB_KEY_w || sym == XKB_KEY_W))) {
+        sendShellCommand("task-view");
+        return true;
+    }
     if ((super && sym == XKB_KEY_Up) || (altNested && sym == XKB_KEY_m)) {
         if (Toplevel* active = focusedToplevel()) {
             active->setMaximized(sym == XKB_KEY_Up ? true : !active->maximized);
@@ -1372,8 +1409,9 @@ void Server::switcherStep(int direction)
     // Tutte le finestre, dalla più recente; le ridotte a icona stanno già
     // in fondo alla lista e si ripristinano se scelte.
     m_switcher.windows.clear();
+    // Solo il desktop in uso, come Windows.
     for (Toplevel* toplevel : toplevels) {
-        if (toplevel->mapped && toplevel->extHandle) {
+        if (toplevel->mapped && toplevel->extHandle && toplevel->onCurrentWorkspace()) {
             m_switcher.windows.push_back(toplevel);
         }
     }
@@ -1715,6 +1753,10 @@ void Server::listenForCommands()
                             const std::string reply
                                 = std::to_string(keyboard ? wlr_keyboard_get_modifiers(keyboard) : 0) + "\n";
                             (void)!write(fd, reply.data(), reply.size());
+                        } else if (line == "workspaces") {
+                            // I desktop virtuali, per la shell appena partita.
+                            const std::string reply = self->workspacesJson() + "\n";
+                            (void)!write(fd, reply.data(), reply.size());
                         }
                     }
                     const bool closed = n == 0 || (mask & (WL_EVENT_HANGUP | WL_EVENT_ERROR))
@@ -1777,8 +1819,32 @@ void Server::handleCommand(const std::string& command)
                 }
             }
         }
-    } else if (command == "modifiers") {
+    } else if (command == "modifiers" || command == "workspaces") {
         // già risposto a chi l'ha chiesto (listenForCommands)
+    } else if (command.rfind("workspace ", 0) == 0) {
+        // workspace switch|close <n>, workspace new [switch], workspace
+        // rename <n> <nome>, workspace move <da> <a>: dalla Visualizzazione attività.
+        char verb[16] = {};
+        int a = -1;
+        int b = -1;
+        int consumed = 0;
+        std::sscanf(command.c_str() + 10, "%15s %n", verb, &consumed);
+        const std::string rest = command.substr(std::min(command.size(), size_t(10 + consumed)));
+        const std::string what = verb;
+        if (what == "switch" && std::sscanf(rest.c_str(), "%d", &a) == 1) {
+            switchWorkspace(a);
+        } else if (what == "new") {
+            const int index = addWorkspace();
+            if (rest == "switch") {
+                switchWorkspace(index);
+            }
+        } else if (what == "close" && std::sscanf(rest.c_str(), "%d", &a) == 1) {
+            removeWorkspace(a);
+        } else if (what == "rename" && std::sscanf(rest.c_str(), "%d %n", &a, &consumed) >= 1) {
+            renameWorkspace(a, rest.substr(std::min(rest.size(), size_t(consumed))));
+        } else if (what == "move" && std::sscanf(rest.c_str(), "%d %d", &a, &b) == 2) {
+            moveWorkspace(a, b);
+        }
     } else if (command == "reload-config") {
         // Le Impostazioni hanno cambiato vela.conf.
         wlr_log(WLR_INFO, "Impostazioni: rileggo vela.conf");
@@ -1858,7 +1924,14 @@ void Server::showWindowMenu(Toplevel* toplevel, double lx, double ly, bool keybo
 
 void Server::windowAction(Toplevel* toplevel, const std::string& action)
 {
-    if (action == "restore") {
+    if (action == "activate") {
+        // Dalla Visualizzazione attività: in primo piano (sul suo desktop).
+        if (toplevel->minimized) {
+            toplevel->setMinimized(false);
+        } else {
+            focusToplevel(toplevel);
+        }
+    } else if (action == "restore") {
         if (toplevel->minimized) {
             toplevel->setMinimized(false);
             focusToplevel(toplevel);
@@ -1877,6 +1950,18 @@ void Server::windowAction(Toplevel* toplevel, const std::string& action)
         beginKeyboardGrab(toplevel, CursorMode::Move);
     } else if (action == "resize") {
         beginKeyboardGrab(toplevel, CursorMode::Resize);
+    } else if (action == "snap-left" || action == "snap-right") {
+        // Dalla Visualizzazione attività: "Aggancia a sinistra/destra".
+        focusToplevel(toplevel);
+        toplevel->setSnap(action == "snap-left" ? Snap::Left : Snap::Right);
+    } else if (action.rfind("move-to ", 0) == 0) {
+        moveToWorkspace(toplevel, std::atoi(action.c_str() + 8));
+    } else if (action == "move-to-new") {
+        moveToWorkspace(toplevel, addWorkspace());
+    } else if (action == "sticky" || action == "unsticky") {
+        setSticky(toplevel, action == "sticky");
+    } else if ((action == "app-sticky" || action == "app-unsticky") && toplevel->appId()) {
+        setAppSticky(toplevel->appId(), action == "app-sticky");
     }
 }
 

@@ -5,6 +5,19 @@ Page {
     PersonalizationPage.DesktopPreview {}
 
     CardGroup {
+        title: "Elementi della barra delle applicazioni"
+        Card {
+            icon: "view-grid"
+            title: "Visualizzazione attività"
+            description: "Le finestre aperte e i desktop virtuali (anche con Win+Tab)"
+            trailing: Toggle {
+                checked: Prefs.taskView
+                onToggled: on => Prefs.taskView = on
+            }
+        }
+    }
+
+    CardGroup {
         title: "Comportamenti della barra delle applicazioni"
         Card {
             icon: "format-justify-center"

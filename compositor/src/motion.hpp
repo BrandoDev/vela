@@ -134,6 +134,12 @@ inline constexpr double windowMinimizeScale = 0.3;
 // Anteprima dello snap: cresce dal centro dell'area e si accende.
 inline constexpr double snapPreviewMs = 150.0;
 
+// Cambio di desktop: il desktop che si lascia scivola via sfumando, il nuovo
+// arriva dall'altra parte. Lo scorrimento è una frazione dello schermo più
+// stretto: con più schermi le finestre non invadono quello accanto.
+inline constexpr double workspaceSwitchMs = 300.0;
+inline constexpr double workspaceSlideFraction = 0.25;
+
 } // namespace motion
 
 } // namespace vela

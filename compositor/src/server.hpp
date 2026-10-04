@@ -294,6 +294,14 @@ struct Toplevel : SceneOwner {
     bool fullscreen = false;
     bool minimized = false;
     Snap snap = Snap::None;
+    // Desktop virtuali (workspaces.cpp): quello della finestra, o tutti.
+    int workspace = 0;
+    bool sticky = false;
+    uint64_t mapSerial = 0; // ordine di apertura, per la taskbar
+    bool onCurrentWorkspace() const;
+    // La taskbar mostra solo le finestre del desktop in uso: la maniglia
+    // wlr-foreign-toplevel c'è solo per loro (quella ext resta sempre).
+    void showInTaskbar(bool on);
     wlr_box restore {}; // posizione e dimensione prima di massimizzare o agganciare
     wlr_box taskbarRect {}; // il suo pulsante nella taskbar (globali), se noto
 
@@ -353,6 +361,8 @@ struct Toplevel : SceneOwner {
 private:
     void createHandle();
     void destroyHandle();
+    void createTaskbarHandle();
+    void destroyTaskbarHandle();
     void updateExtHandle();
     void updateHandleParent();
     void onMap();
@@ -485,6 +495,40 @@ public:
     bool animateSnapshot(Toplevel* toplevel, SnapshotKind kind); // false se non parte
     void cancelSnapshotAnimations(Toplevel* toplevel);
 
+    // Desktop virtuali (workspaces.cpp), come Windows: ogni finestra sta su
+    // un desktop (o su tutti); si passa dall'uno all'altro con
+    // Win+Ctrl+frecce o dalla Visualizzazione attività della shell.
+    struct WorkspaceState {
+        std::vector<std::string> names; // uno per desktop; vuoto: "Desktop N"
+        int current = 0;
+        std::vector<std::string> stickyApps; // le loro finestre su tutti i desktop
+        uint64_t nextMapSerial = 1;
+        // Il passaggio: le uscenti scivolano via in layers.windowsOut, le
+        // entranti arrivano dall'altra parte.
+        std::vector<Toplevel*> outgoing;
+        double startMs = -1.0;
+        int direction = 0; // +1: si va a destra (il nuovo desktop entra da destra)
+    } workspaces;
+    void initWorkspaces();
+    int workspaceCount() const { return int(workspaces.names.size()); }
+    std::string workspaceName(int index) const;
+    void switchWorkspace(int index, bool refocusAfter = true);
+    int addWorkspace(); // l'indice del nuovo desktop
+    void removeWorkspace(int index);
+    void renameWorkspace(int index, const std::string& name);
+    void moveWorkspace(int from, int to);
+    void moveToWorkspace(Toplevel* toplevel, int index);
+    void setSticky(Toplevel* toplevel, bool on);
+    void setAppSticky(const std::string& appId, bool on);
+    void workspaceMapped(Toplevel* toplevel); // una finestra nuova: sul desktop in uso
+    void workspaceForget(Toplevel* toplevel);
+    std::string workspacesJson() const; // lo stato, per la shell
+    void announceWorkspaces(); // alla shell, a ogni cambiamento
+    void saveWorkspaces() const; // ~/.config/vela/desktop.conf
+    bool tickWorkspaceSwitch(double nowMs); // false quando ha finito
+    void finishWorkspaceSwitch();
+    void syncTaskbarHandles();
+
     // Alt+Tab: il compositor decide l'ordine e la selezione, la shell
     // disegna il pannello con le anteprime.
     void switcherStep(int direction);
@@ -606,6 +650,8 @@ public:
         std::unique_ptr<scene::Tree> fullscreen;
         std::unique_ptr<scene::Tree> x11Popups; // menu e tooltip delle app X11
         std::unique_ptr<scene::Tree> overlay;
+        // Le finestre del desktop che si lascia, mentre scivolano via.
+        std::unique_ptr<scene::Tree> windowsOut;
         std::unique_ptr<scene::Tree> drag; // l'icona di ciò che si trascina tra le app
         std::unique_ptr<scene::Tree> lock; // schermata di blocco, sopra tutto
     } layers;
