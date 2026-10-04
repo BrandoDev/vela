@@ -264,6 +264,10 @@ void ShellController::handleCommand(const QByteArray& command)
         emit runRequested();
     } else if (command == "show-desktop") {
         emit showDesktopRequested();
+    } else if (command == "quick-settings") {
+        emit quickSettingsRequested();
+    } else if (command == "notification-center") {
+        emit notificationCenterRequested();
     } else if (parts.first() == "window-menu" && parts.size() == 8) {
         // window-menu <id> <schermo> <x> <y> <massimizzata> <ridimensionabile> <da tastiera>
         emit windowMenuRequested(QString::fromLatin1(parts.at(1)), QString::fromUtf8(parts.at(2)), parts.at(3).toInt(),

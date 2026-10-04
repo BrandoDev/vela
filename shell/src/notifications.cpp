@@ -199,6 +199,29 @@ uint NotificationServer::Notify(const QString& app_name, uint replaces_id, const
         }
     }
     n.critical = hints.value(QStringLiteral("urgency")).toInt() == 2;
+    n.transient = hints.value(QStringLiteral("transient")).toBool();
+
+    // Già nel centro notifiche (sostituita): si aggiorna lì.
+    if (const int old = replaces_id ? historyRow(replaces_id) : -1; old >= 0 && existing < 0) {
+        NotificationHistory::Item& item = m_history.m_items[size_t(old)];
+        item.icon = n.icon;
+        item.summary = n.summary;
+        item.body = n.body;
+        item.actions = n.actions;
+        item.hasDefault = n.hasDefault;
+        item.time = QDateTime::currentDateTime();
+        Q_EMIT m_history.dataChanged(m_history.index(old), m_history.index(old));
+        return id;
+    }
+    // Non disturbare: dritta nel centro, senza popup (le critiche passano).
+    if (m_doNotDisturb && !n.critical) {
+        if (n.transient) {
+            Q_EMIT NotificationClosed(id, uint(Reason::Expired));
+        } else {
+            toHistory(n);
+        }
+        return id;
+    }
 
     // Scadenza: quella chiesta, o la nostra; 0 e le critiche restano.
     const int timeout = expire_timeout < 0 ? defaultTimeoutMs : expire_timeout;
@@ -236,14 +259,122 @@ void NotificationServer::close(uint id, Reason reason)
 {
     const int row = rowOf(id);
     if (row < 0) {
+        // Forse è nel centro notifiche (l'app la chiude, o la si chiude da lì).
+        if (const int old = historyRow(id); old >= 0) {
+            m_history.beginRemoveRows({}, old, old);
+            m_history.m_items.erase(m_history.m_items.begin() + old);
+            m_history.endRemoveRows();
+            Q_EMIT m_history.countChanged();
+            m_images.remove(id);
+            Q_EMIT NotificationClosed(id, uint(reason));
+        }
         return;
+    }
+    // Scaduta dal popup: come su Windows passa nel centro notifiche, ancora
+    // viva (un clic lì esegue la sua azione).
+    const bool keep = reason == Reason::Expired && !m_items[size_t(row)].transient;
+    if (keep) {
+        toHistory(m_items[size_t(row)]);
     }
     beginRemoveRows({}, row, row);
     m_items.erase(m_items.begin() + row);
     endRemoveRows();
     Q_EMIT countChanged();
-    m_images.remove(id);
-    Q_EMIT NotificationClosed(id, uint(reason));
+    if (!keep) {
+        m_images.remove(id);
+        Q_EMIT NotificationClosed(id, uint(reason));
+    }
+}
+
+void NotificationServer::toHistory(const Notification& n)
+{
+    m_history.beginInsertRows({}, 0, 0);
+    m_history.m_items.insert(m_history.m_items.begin(),
+        { n.id, n.appName, n.icon, n.summary, n.body, n.actions, n.hasDefault, QDateTime::currentDateTime() });
+    m_history.endInsertRows();
+    Q_EMIT m_history.countChanged();
+}
+
+int NotificationServer::historyRow(uint id) const
+{
+    for (size_t i = 0; i < m_history.m_items.size(); ++i) {
+        if (m_history.m_items[i].id == id) {
+            return int(i);
+        }
+    }
+    return -1;
+}
+
+void NotificationServer::setDoNotDisturb(bool on)
+{
+    if (on != m_doNotDisturb) {
+        m_doNotDisturb = on;
+        Q_EMIT doNotDisturbChanged();
+    }
+}
+
+void NotificationServer::invokeFromHistory(uint id, const QString& action)
+{
+    if (historyRow(id) >= 0) {
+        Q_EMIT ActionInvoked(id, action);
+        close(id, Reason::Dismissed);
+    }
+}
+
+void NotificationServer::dismissFromHistory(uint id)
+{
+    close(id, Reason::Dismissed);
+}
+
+void NotificationServer::clearHistory()
+{
+    std::vector<uint> ids;
+    for (const auto& item : m_history.m_items) {
+        ids.push_back(item.id);
+    }
+    for (uint id : ids) {
+        close(id, Reason::Dismissed);
+    }
+}
+
+// ---------------------------------------------------- NotificationHistory --
+
+int NotificationHistory::rowCount(const QModelIndex& parent) const
+{
+    return parent.isValid() ? 0 : int(m_items.size());
+}
+
+QVariant NotificationHistory::data(const QModelIndex& index, int role) const
+{
+    if (!index.isValid() || index.row() >= int(m_items.size())) {
+        return {};
+    }
+    const Item& n = m_items[size_t(index.row())];
+    switch (role) {
+    case NotificationServer::IdRole: return n.id;
+    case NotificationServer::AppNameRole: return n.appName;
+    case NotificationServer::IconRole: return n.icon;
+    case NotificationServer::SummaryRole: return n.summary;
+    case NotificationServer::BodyRole: return n.body;
+    case NotificationServer::ActionsRole: return n.actions;
+    case NotificationServer::HasDefaultActionRole: return n.hasDefault;
+    case Qt::UserRole + 100: return n.time;
+    default: return {};
+    }
+}
+
+QHash<int, QByteArray> NotificationHistory::roleNames() const
+{
+    return {
+        { NotificationServer::IdRole, "notificationId" },
+        { NotificationServer::AppNameRole, "appName" },
+        { NotificationServer::IconRole, "icon" },
+        { NotificationServer::SummaryRole, "summary" },
+        { NotificationServer::BodyRole, "body" },
+        { NotificationServer::ActionsRole, "actions" },
+        { NotificationServer::HasDefaultActionRole, "hasDefaultAction" },
+        { Qt::UserRole + 100, "time" },
+    };
 }
 
 QString NotificationServer::iconFor(uint id, const QString& appIcon, const QVariantMap& hints)

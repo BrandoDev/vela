@@ -24,6 +24,9 @@ QtObject {
     // Aperto: i pannelli da cui nasce (es. il menu Start) non si chiudono
     // quando perdono la tastiera a favore del menu.
     property bool isOpen: false
+    // I pannelli a destra della taskbar: si apre uno alla volta.
+    property bool quickSettingsOpen: false
+    property bool notificationCenterOpen: false
 
     signal openRequested(var entries, real x, real y, var options)
     signal closeRequested()

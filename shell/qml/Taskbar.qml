@@ -292,7 +292,7 @@ Window {
     // a sinistra dell'orologio come su Windows.
     Row {
         id: tray
-        anchors { right: clock.left; top: parent.top; bottom: parent.bottom; rightMargin: 4 }
+        anchors { right: systemIcons.left; top: parent.top; bottom: parent.bottom; rightMargin: 4 }
 
         Repeater {
             model: Tray
@@ -354,11 +354,83 @@ Window {
         }
     }
 
+    // Le icone di sistema (rete, volume, batteria) in un solo pulsante: apre
+    // le impostazioni rapide, come su Windows 11. La rotellina sul volume lo
+    // cambia; col tasto destro i loro menu (§14.5).
+    Item {
+        id: systemIcons
+        anchors { right: clock.left; top: parent.top; bottom: parent.bottom; rightMargin: 2 }
+        width: iconsRow.width + 16
+
+        Rectangle {
+            anchors { fill: parent; topMargin: 4; bottomMargin: 4 }
+            radius: Theme.radiusSmall
+            color: systemMouse.pressed ? Theme.pressed : Theme.hover
+            opacity: systemMouse.containsMouse || Menus.quickSettingsOpen ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: Theme.fast } }
+        }
+        Row {
+            id: iconsRow
+            anchors.centerIn: parent
+            spacing: 10
+            Image {
+                id: networkIcon
+                width: 16
+                height: 16
+                source: "image://icon/" + encodeURIComponent(Status.networkIconName)
+                sourceSize: Qt.size(width, height)
+            }
+            Image {
+                id: volumeIcon
+                visible: Status.volumeAvailable
+                width: 16
+                height: 16
+                source: "image://icon/" + encodeURIComponent(Status.volumeIconName)
+                sourceSize: Qt.size(width, height)
+            }
+            Image {
+                visible: Status.batteryPresent
+                width: 16
+                height: 16
+                source: "image://icon/" + encodeURIComponent(Status.batteryCharging ? "battery-good-charging" : "battery-good")
+                sourceSize: Qt.size(width, height)
+            }
+        }
+        MouseArea {
+            id: systemMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: mouse => {
+                if (mouse.button === Qt.LeftButton) {
+                    Shell.quickSettingsRequested()
+                    return
+                }
+                // Il menu dell'icona sotto il mouse: volume o rete.
+                const p = root.screenPoint(systemMouse, mouse.x, 0)
+                const overVolume = volumeIcon.visible && mouse.x >= volumeIcon.x + iconsRow.x - 5
+                    && mouse.x < volumeIcon.x + iconsRow.x + volumeIcon.width + 5
+                Menus.open(overVolume ? [
+                    { text: "Apri &mixer volume", icon: "audio-volume-high", enabled: System.available("volume-mixer"), action: () => System.trigger("volume-mixer") },
+                    { text: "&Impostazioni audio", icon: "preferences-desktop-sound", enabled: System.available("sound-settings"), action: () => System.trigger("sound-settings") }
+                ] : [
+                    { text: "&Diagnostica problemi di rete", icon: "network-workgroup", enabled: false },
+                    { text: "&Impostazioni di rete e Internet", icon: "preferences-system-network", enabled: System.available("network"), action: () => System.trigger("network") }
+                ], p.x, root.menuBottom, { above: true })
+            }
+            onWheel: wheel => {
+                if (Status.volumeAvailable) {
+                    Status.setVolume(Status.volume + (wheel.angleDelta.y > 0 ? 0.02 : -0.02))
+                }
+            }
+        }
+    }
+
     // Orologio: ora sopra, data sotto.
     Item {
         id: clock
         anchors { right: parent.right; top: parent.top; bottom: parent.bottom; rightMargin: 12 }
-        width: clockColumn.implicitWidth + 16
+        width: clockColumn.implicitWidth + 16 + (Notifications.history.count > 0 || Notifications.doNotDisturb ? 22 : 0)
 
         property date now: new Date()
 
@@ -373,13 +445,39 @@ Window {
             anchors { fill: parent; topMargin: 4; bottomMargin: 4 }
             radius: Theme.radiusSmall
             color: Theme.hover
-            opacity: clockMouse.containsMouse ? 1 : 0
+            opacity: clockMouse.containsMouse || Menus.notificationCenterOpen ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: Theme.fast } }
+        }
+        // Le notifiche da leggere: un numero accanto all'orologio, come Windows
+        // 11 (con "Non disturbare" una campana spenta).
+        Rectangle {
+            visible: Notifications.history.count > 0 || Notifications.doNotDisturb
+            anchors { right: parent.right; rightMargin: -2; verticalCenter: parent.verticalCenter }
+            width: 18
+            height: 18
+            radius: 9
+            color: Notifications.doNotDisturb ? "transparent" : Theme.accent
+            Text {
+                anchors.centerIn: parent
+                visible: !Notifications.doNotDisturb
+                text: Math.min(Notifications.history.count, 9)
+                color: "white"
+                font.pixelSize: 10
+                font.weight: Font.DemiBold
+            }
+            Image {
+                anchors.centerIn: parent
+                visible: Notifications.doNotDisturb
+                width: 14
+                height: 14
+                source: "image://icon/notifications-disabled"
+                sourceSize: Qt.size(width, height)
+            }
         }
 
         Column {
             id: clockColumn
-            anchors.centerIn: parent
+            anchors { left: parent.left; leftMargin: 8; verticalCenter: parent.verticalCenter }
             spacing: 1
 
             Text {
@@ -400,8 +498,12 @@ Window {
             id: clockMouse
             anchors.fill: parent
             hoverEnabled: true
-            acceptedButtons: Qt.RightButton
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
             onClicked: mouse => {
+                if (mouse.button === Qt.LeftButton) {
+                    Shell.notificationCenterRequested()
+                    return
+                }
                 const p = root.screenPoint(clock, mouse.x, 0)
                 Menus.open([
                     { text: "&Regola data e ora", icon: "preferences-system-time", enabled: System.available("datetime"), action: () => System.trigger("datetime") },

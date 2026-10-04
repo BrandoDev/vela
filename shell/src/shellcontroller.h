@@ -105,6 +105,8 @@ signals:
     void winXRequested(); // Win+X
     void runRequested(); // Win+R
     void showDesktopRequested(); // Win+D
+    void quickSettingsRequested(); // Win+A
+    void notificationCenterRequested(); // Win+N
     // Il menu della finestra (clic destro sulla barra del titolo,
     // Alt+Spazio): su quale schermo e dove, in coordinate dello schermo.
     void windowMenuRequested(const QString& window, const QString& output, int x, int y, bool maximized,

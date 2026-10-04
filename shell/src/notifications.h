@@ -5,6 +5,7 @@
 // Windows 11. Per il QML è un modello: una riga per notifica visibile.
 
 #include <QAbstractListModel>
+#include <QDateTime>
 #include <QDBusContext>
 #include <QHash>
 #include <QImage>
@@ -16,10 +17,45 @@
 #include <memory>
 #include <vector>
 
+// Il centro notifiche (Win+N): le notifiche passate, dalla più recente,
+// finché non le si chiude. Ci finiscono quelle scadute dal popup (non le
+// "transient") e, con "Non disturbare", tutte quelle non critiche.
+class NotificationHistory : public QAbstractListModel {
+    Q_OBJECT
+    Q_PROPERTY(int count READ count NOTIFY countChanged)
+
+public:
+    using QAbstractListModel::QAbstractListModel;
+    int count() const { return int(m_items.size()); }
+    int rowCount(const QModelIndex& parent = {}) const override;
+    QVariant data(const QModelIndex& index, int role) const override;
+    QHash<int, QByteArray> roleNames() const override;
+
+signals:
+    void countChanged();
+
+private:
+    friend class NotificationServer;
+    struct Item {
+        uint id;
+        QString appName;
+        QString icon;
+        QString summary;
+        QString body;
+        QVariantList actions;
+        bool hasDefault;
+        QDateTime time;
+    };
+    std::vector<Item> m_items; // la più recente in cima
+};
+
 class NotificationServer : public QAbstractListModel, protected QDBusContext {
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "org.freedesktop.Notifications")
     Q_PROPERTY(int count READ count NOTIFY countChanged)
+    Q_PROPERTY(QObject* history READ history CONSTANT)
+    // "Non disturbare": niente popup (tranne le critiche), tutto nel centro.
+    Q_PROPERTY(bool doNotDisturb READ doNotDisturb WRITE setDoNotDisturb NOTIFY doNotDisturbChanged)
 
 public:
     enum Role {
@@ -51,6 +87,14 @@ public:
     // Il mouse è sopra le notifiche: non scadono finché non se ne va.
     Q_INVOKABLE void setHovered(bool hovered);
 
+    // Il centro notifiche.
+    QObject* history() { return &m_history; }
+    bool doNotDisturb() const { return m_doNotDisturb; }
+    void setDoNotDisturb(bool on);
+    Q_INVOKABLE void invokeFromHistory(uint id, const QString& action);
+    Q_INVOKABLE void dismissFromHistory(uint id);
+    Q_INVOKABLE void clearHistory();
+
     QImage image(uint id) const { return m_images.value(id); }
 
     // --- D-Bus ---
@@ -64,6 +108,7 @@ public Q_SLOTS:
 
 Q_SIGNALS:
     void countChanged();
+    void doNotDisturbChanged();
     Q_SCRIPTABLE void NotificationClosed(uint id, uint reason);
     Q_SCRIPTABLE void ActionInvoked(uint id, const QString& action_key);
 
@@ -77,8 +122,11 @@ private:
         QVariantList actions;
         bool hasDefault;
         bool critical;
+        bool transient; // non va nel centro notifiche
         std::unique_ptr<QTimer> timer; // scadenza; null: resta finché non la si chiude
     };
+    void toHistory(const Notification& n);
+    int historyRow(uint id) const;
     enum class Reason : uint { Expired = 1, Dismissed = 2, Closed = 3 };
 
     void close(uint id, Reason reason);
@@ -89,6 +137,8 @@ private:
     QHash<uint, QImage> m_images;
     uint m_nextId = 1;
     bool m_hovered = false;
+    bool m_doNotDisturb = false;
+    NotificationHistory m_history;
 };
 
 // "image://notification/<id>": l'immagine allegata a una notifica.

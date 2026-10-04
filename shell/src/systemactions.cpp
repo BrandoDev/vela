@@ -124,6 +124,13 @@ QString SystemActions::command(const QString& name) const
     if (name == QLatin1String("installed-apps")) {
         return first({ { "plasma-discover", "plasma-discover --mode Installed" }, { "gnome-software", "gnome-software" } });
     }
+    if (name == QLatin1String("volume-mixer")) {
+        return first({ { "pavucontrol-qt", "pavucontrol-qt" }, { "pavucontrol", "pavucontrol" },
+            { "kcm_pulseaudio", "kcmshell6 kcm_pulseaudio" } });
+    }
+    if (name == QLatin1String("sound-settings")) {
+        return first({ { "kcm_pulseaudio", "kcmshell6 kcm_pulseaudio" }, { "pavucontrol", "pavucontrol" } });
+    }
     if (name == QLatin1String("datetime")) {
         return first({ { "kcm_clock", "kcmshell6 kcm_clock" } });
     }

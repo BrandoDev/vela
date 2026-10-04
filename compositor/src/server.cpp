@@ -1331,6 +1331,15 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
         sendShellCommand("show-desktop");
         return true;
     }
+    // Win+A: impostazioni rapide; Win+N: centro notifiche e calendario.
+    if ((super || altNested) && lower == XKB_KEY_a) {
+        sendShellCommand("quick-settings");
+        return true;
+    }
+    if ((super || altNested) && lower == XKB_KEY_n) {
+        sendShellCommand("notification-center");
+        return true;
+    }
     // Alt+Spazio: il menu della finestra, sotto la sua barra del titolo.
     if (alt && !super && sym == XKB_KEY_space) {
         if (Toplevel* active = focusedToplevel()) {

@@ -30,6 +30,8 @@ qt_add_executable(vela-shell
     src/servicemenus.h
     src/systemactions.cpp
     src/systemactions.h
+    src/systemstatus.cpp
+    src/systemstatus.h
     src/taskbarmodel.cpp
     src/tray.cpp
     src/taskbarmodel.h
@@ -95,7 +97,9 @@ set(VELA_QML_FILES
     qml/ConfirmDialog.qml
     qml/SourceChooser.qml
     qml/PropertiesDialog.qml
-    qml/PanelShadow.qml)
+    qml/PanelShadow.qml
+    qml/QuickSettings.qml
+    qml/NotificationCenter.qml)
 
 # I file stanno in qml/ per ordine, ma nel modulo devono stare alla radice:
 # così si vedono tra loro (Theme compreso, che è un singleton) senza import.
