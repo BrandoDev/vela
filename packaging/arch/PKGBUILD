@@ -1,0 +1,75 @@
+# Vela come pacchetto di Arch / CachyOS, dal repository git.
+#
+#   cd packaging/arch && makepkg -si      installa (e aggiorna: si rifà uguale)
+#
+# Il sorgente è il repository su GitHub (privato: serve la chiave SSH del
+# proprio account). Per costruire da una copia locale, anche con modifiche
+# non ancora pubblicate ma già nei commit:
+#
+#   VELA_GIT_URL=file:///percorso/di/vela makepkg -si
+#
+# La versione viene dal progetto e dai commit (0.1.0.r123.gabcdef0): ogni
+# commit nuovo è un aggiornamento.
+
+pkgname=vela-git
+_name=vela
+pkgver=0.1.0.r0.g0000000
+pkgrel=1
+pkgdesc="Desktop environment moderno, fluido e leggero, con l'aspetto e la comodità di Windows 11"
+arch=('x86_64')
+url="https://github.com/BrandoDev/vela"
+# Il progetto non ha ancora scelto una licenza.
+license=('LicenseRef-Vela')
+depends=(
+    'wlroots0.20' 'wayland' 'libxkbcommon' 'pixman' 'libinput' 'libdrm' 'mesa' 'vulkan-icd-loader'
+    'freetype2' 'harfbuzz' 'fontconfig' 'librsvg' 'cairo'
+    'qt6-base' 'qt6-declarative' 'qt6-svg' 'qt6-wayland' 'layer-shell-qt'
+    'pam' 'hicolor-icon-theme'
+)
+makedepends=('git' 'cmake' 'shaderc' 'vulkan-headers' 'wayland-protocols')
+optdepends=(
+    'xorg-xwayland: app X11 (Steam, molti giochi)'
+    'xdg-desktop-portal-wlr: condivisione dello schermo'
+    'xdg-desktop-portal-kde: scelta dei file e altri portali per le app'
+    'polkit-kde-agent: la password per le azioni di sistema'
+    'breeze-icons: le icone di Vela (breeze e breeze-dark)'
+    'plasma-workspace: colori delle app KDE chiari o scuri'
+    'networkmanager: rete e Wi-Fi (impostazioni rapide e Impostazioni)'
+    'bluez: Bluetooth'
+    'wireplumber: volume'
+    'libpulse: volume (pactl)'
+    'power-profiles-daemon: Risparmio energia'
+    'udisks2: unità non montate in Esplora'
+    'wlr-randr: Impostazioni > Schermo'
+    'xdg-utils: Condividi per posta, app predefinite'
+    'kdeconnect: Condividi con il telefono'
+    'bluedevil: Condividi via Bluetooth'
+    'konsole: il terminale (Win+Invio)'
+)
+provides=('vela')
+conflicts=('vela')
+backup=('etc/pam.d/vela-lock' 'etc/xdg/xdg-desktop-portal-wlr/Vela')
+source=("$_name::git+${VELA_GIT_URL:-ssh://git@github.com/BrandoDev/vela.git}")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "$_name"
+    local version
+    version=$(sed -n 's/^ *VERSION \([0-9.]*\)$/\1/p' CMakeLists.txt | head -n 1)
+    printf "%s.r%s.g%s" "$version" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+build() {
+    # Le opzioni di compilazione le dà makepkg.conf (CMAKE_BUILD_TYPE=None).
+    cmake -B build -S "$_name" \
+        -DCMAKE_BUILD_TYPE=None \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBEXECDIR=lib/vela \
+        -DVELA_BUILD_TOOLS=OFF \
+        -Wno-dev
+    cmake --build build
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install build
+}

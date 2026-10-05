@@ -65,10 +65,13 @@ void Config::reload()
         : QStringLiteral("center");
     const bool endTask = settings.value(QStringLiteral("taskbar/endTask"), true).toBool();
     const bool taskView = settings.value(QStringLiteral("taskbar/taskView"), true).toBool();
-    if (alignment != m_taskbarAlignment || endTask != m_endTask || taskView != m_taskView) {
+    const bool allScreens = settings.value(QStringLiteral("taskbar/allScreens"), true).toBool();
+    if (alignment != m_taskbarAlignment || endTask != m_endTask || taskView != m_taskView
+        || allScreens != m_taskbarAllScreens) {
         m_taskbarAlignment = alignment;
         m_endTask = endTask;
         m_taskView = taskView;
+        m_taskbarAllScreens = allScreens;
         emit taskbarChanged();
     }
 

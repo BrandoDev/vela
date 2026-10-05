@@ -130,7 +130,8 @@ private:
     void updateSurfaces(const std::vector<Element>& elements);
     // Scanout diretto (§5.3): una sola superficie opaca copre lo schermo,
     // 1:1, e il suo buffer va sul piano primario senza disegnare nulla.
-    const Element* scanoutCandidate(const std::vector<Element>& elements, wl_output_transform transform) const;
+    const Element* scanoutCandidate(const std::vector<Element>& elements, wl_output_transform transform);
+    const char* m_scanoutReason = nullptr; // perché non c'è scanout (VELA_DEBUG_SCANOUT)
     bool tryScanout(const Element& element, wlr_output_state& state);
     // Feedback dmabuf: all'app candidata allo scanout i formati del piano
     // primario, dopo qualche frame di conferma; poi di nuovo quelli normali.

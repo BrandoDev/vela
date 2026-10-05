@@ -304,6 +304,12 @@ void Server::loadAccessibilitySettings()
     a11y.colorFilterKind = setting(settings, "filtro-colore", "grigi");
     a11y.colorFilterShortcut = settingFlag(settings, "filtri-colore-scorciatoia", false);
     a11y.zoomStep = std::clamp(std::atoi(setting(settings, "lente-incremento", "100").c_str()), 25, 400);
+    const std::string vrr = setting(settings, "frequenza-variabile", "giochi");
+    vrrMode = vrr == "sempre" ? 2 : vrr == "no" ? 0 : 1;
+    if (const char* env = std::getenv("VELA_VRR"); env && *env) {
+        vrrMode = std::strcmp(env, "0") == 0 ? 0 : std::strcmp(env, "1") == 0 ? 2 : vrrMode;
+    }
+    scheduleFrames();
     sceneGraph->allowTearing = settingFlag(settings, "tearing", true) && !(std::getenv("VELA_TEARING")
         && std::strcmp(std::getenv("VELA_TEARING"), "0") == 0);
 

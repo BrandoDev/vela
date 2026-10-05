@@ -13,6 +13,7 @@
 
 #include <functional>
 #include <list>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -173,6 +174,10 @@ private:
         int count = 0;
         void add(int i, double ms) { sum[i] += ms; max[i] = std::max(max[i], ms); }
     } m_breakdown;
+    // Il VRR secondo la scelta dell'utente (Server::vrrMode): se va acceso
+    // o spento, lo mette in `state` e restituisce true.
+    bool vrrState(wlr_output_state& state);
+    bool m_vrrUnsupported = false;
     // Quando il frame era pronto: commit fatto e GPU finita. false se non
     // si sa ancora.
     bool readyTime(const Delivery& delivery, int64_t& when) const;
@@ -334,6 +339,14 @@ struct Toplevel : SceneOwner {
     // wlr-foreign-toplevel c'è solo per loro (quella ext resta sempre).
     void showInTaskbar(bool on);
     wlr_box restore {}; // posizione e dimensione prima di massimizzare o agganciare
+    // Lo schermo da cui è stata spostata perché scollegato (vuoto: nessuno)
+    // e dove stava lì: quando lo schermo torna, ci torna anche lei.
+    std::string homeOutput;
+    int homeX = 0;
+    int homeY = 0;
+    // La porta su `out` (rimessa dentro l'area utile, massimizzata,
+    // agganciata o a schermo intero come prima).
+    void moveToOutput(Output* out, int x, int y);
     wlr_box taskbarRect {}; // il suo pulsante nella taskbar (globali), se noto
 
     // Come la taskbar vede e comanda questa finestra (foreign-toplevel).
@@ -510,6 +523,15 @@ public:
     Output* outputNamed(const char* name) const;
     Output* outputUnderCursor() const;
     scene::Tree* layerTree(zwlr_layer_shell_v1_layer layer) const;
+
+    // Schermi collegati e scollegati (output.cpp): le finestre di uno schermo
+    // che sparisce vanno su un altro, e tornano quando lui torna.
+    void scheduleOutputCheck();
+    void checkWindowsOnOutputs();
+    std::map<std::string, wlr_box> outputBoxes; // dov'era ogni schermo l'ultima volta
+    wl_event_source* outputCheck = nullptr;
+    // Le prove senza schermo: "test-output add 1920x1080" / "test-output remove NOME".
+    void testOutputCommand(const std::string& arguments);
 
     // Interazione col puntatore
     void beginInteractive(Toplevel* toplevel, CursorMode mode, uint32_t edges, bool fromModifier = false);
@@ -819,6 +841,9 @@ public:
     // dalla shell: chiara la shell (tinta acrylic) e chiare le app (barre del titolo).
     bool lightShell = false;
     bool lightApps = false;
+    // Frequenza di aggiornamento variabile (VRR): 0 mai, 1 con un'app a
+    // schermo intero (i giochi), 2 sempre. vela.conf "frequenza-variabile".
+    int vrrMode = 1;
     // I bordi invisibili per ridimensionare le finestre con la barra di
     // Vela, come in Windows 11: la finestra e i bordi (WLR_EDGE_*) sotto
     // il punto, o null.

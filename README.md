@@ -95,6 +95,17 @@ alla volta.
 - **Tearing per i giochi** (wp-tearing-control): un gioco a schermo intero
   che lo chiede mostra ogni fotogramma appena è pronto, senza aspettare il
   vblank (si spegne nelle Impostazioni o con `VELA_TEARING=0`).
+- **Frequenza di aggiornamento variabile** (VRR, FreeSync, G-Sync): di
+  solito solo con un'app a schermo intero, come l'"Automatico" di KWin
+  (con alcuni monitor il desktop sfarfalla), oppure sempre o mai. Con VRR e
+  un gioco in scanout diretto, ogni suo fotogramma va sullo schermo appena
+  arriva. `VELA_DEBUG_SCANOUT=1` scrive nel log perché un'app a schermo
+  intero non va in scanout diretto (pannelli sopra, alfa, scala...).
+- **Più schermi**, ognuno con la sua scala: collegandone e scollegandone
+  uno a caldo, le finestre dello schermo che sparisce passano su quello
+  più vicino (massimizzate, agganciate e a schermo intero si risistemano) e
+  tornano al loro posto quando lo schermo torna. I desktop virtuali
+  valgono per tutti gli schermi insieme, come in Windows.
 - Barre del titolo chiare o scure secondo la modalità delle app, e tinta
   acrylic chiara o scura secondo quella della shell.
 - Touchpad come su Windows: tocco per cliccare, trascinamento col tocco,
@@ -212,6 +223,11 @@ alla volta.
   (PipeWire), batteria (UPower) e Impostazioni. Le icone di sistema seguono
   lo stato; la rotellina sul volume lo cambia, il tasto destro apre i loro
   menu.
+- **Una taskbar per schermo**, come Windows 11: Start, app e orologio su
+  ognuno, area di notifica e icone di sistema sul principale; Start, menu,
+  impostazioni rapide, centro notifiche e anteprime si aprono sullo schermo
+  della taskbar da cui si cliccano (da tastiera su quello principale). Si
+  può tenere solo sul principale (Impostazioni > Barra delle applicazioni).
 - **Anteprime della taskbar**: col mouse fermo sul pulsante di un'app
   aperta compaiono le sue finestre in miniatura (clic per andarci, clic
   centrale o ✕ per chiuderle), e i suoi gruppi di snap con le finestre nei
@@ -278,7 +294,8 @@ alla volta.
   - Sistema: **Schermo** (disposizione dei monitor trascinabile, scala,
     risoluzione, orientamento, frequenza, e "Mantenere queste impostazioni?"
     che torna indietro da solo dopo 15 secondi; **Luce notturna** con
-    intensità e pianificazione; tearing nei giochi), **Audio** (uscite e
+    intensità e pianificazione; frequenza variabile e tearing nei giochi),
+    **Audio** (uscite e
     ingressi con il loro volume), **Notifiche** (Non disturbare),
     **Alimentazione** (schermo spento dopo, blocco, modalità di
     alimentazione), **Informazioni** (specifiche, Rinomina questo PC);
@@ -288,7 +305,7 @@ alla volta.
   - Personalizzazione: **Sfondo** (immagini recenti, Sfoglia foto, sfondi
     del sistema), **Colori** (la tavolozza di Windows 11, modalità Chiara,
     Scura o Personalizzata), **Barra delle applicazioni** (allineamento al
-    centro o a sinistra, Termina attività);
+    centro o a sinistra, su tutti gli schermi, Termina attività);
   - App: **App installate** (cerca, disinstalla) e **App predefinite**;
   - Ora e lingua: **Data e ora** (fuso orario, sincronizzazione) e
     **Tastiera** (layout, con Win+Spazio per passare dall'uno all'altro, e
@@ -361,7 +378,27 @@ cmake -B build -DVELA_WLROOTS=wlroots-0.19
 ## Usarlo come sessione
 
 Installato, Vela compare nella schermata di accesso (SDDM o Plasma Login)
-accanto a Plasma:
+accanto a Plasma.
+
+**Arch / CachyOS: come pacchetto** (`vela-git`, in `/usr`). Si installa e si
+aggiorna come gli altri pacchetti: ogni volta che c'è un commit nuovo si
+rifà lo stesso comando, e `pacman -R vela-git` lo toglie del tutto.
+
+```sh
+cd packaging/arch
+makepkg -si                                            # dal repository su GitHub (chiave SSH)
+VELA_GIT_URL=file://$PWD/../.. makepkg -si             # oppure da questa copia (i commit, non le modifiche in sospeso)
+```
+
+Chi aveva installato prima con `cmake --install` toglie quella copia, che in
+`/usr/local` verrebbe prima del pacchetto (e i file in `/etc` farebbero
+rifiutare l'installazione a pacman):
+
+```sh
+sudo xargs rm -v < build/install_manifest.txt
+```
+
+**Altre distribuzioni, o senza pacchetto:**
 
 ```sh
 sudo cmake --install build        # in /usr/local (più /etc/pam.d e /etc/xdg)
@@ -452,10 +489,11 @@ resta alle app, che lo usano per aprire i propri menu.
 | `XKB_DEFAULT_LAYOUT` | layout tastiera (lo script usa `it` di default)      |
 | `VELA_TERMINAL`      | terminale da usare (predefinito: konsole)            |
 | `VELA_SCALE`         | scala degli schermi, es. `1.25`, o per schermo: `DP-1=1.5,HDMI-A-1=1`. Senza, Vela la sceglie dai DPI di ogni schermo (come Windows) |
-| `VELA_VRR=1`         | attiva il refresh variabile (spento di default)      |
+| `VELA_VRR=1` / `=0`  | refresh variabile sempre acceso / mai (vince sulle Impostazioni, che di solito lo accendono solo per le app a schermo intero) |
 | `VELA_LATCH=0`       | disegna appena arriva il vblank, invece che il più tardi possibile prima del successivo (late latching, per confronto) |
 | `VELA_LATCH_MARGIN`  | margine minimo del late latching in ms (predefinito 1; cresce da solo se un frame arriva tardi) |
 | `VELA_SCANOUT=0`     | niente scanout diretto delle app a schermo intero (per confronto e diagnosi) |
+| `VELA_DEBUG_SCANOUT=1` | nel log, perché un'app a schermo intero non va in scanout diretto |
 | `VELA_TEARING=0`     | niente tearing anche per i giochi che lo chiedono (vince sulle Impostazioni) |
 | `VELA_SCREEN_OFF`    | minuti di inattività prima di bloccare e spegnere gli schermi (predefinito 10; 0: mai). Vince sulla scelta fatta nelle Impostazioni |
 | `VELA_LOCK_ON_IDLE=0` | con l'inattività spegne gli schermi senza bloccare (vince sulle Impostazioni) |
@@ -506,6 +544,15 @@ build/tools/vela-shot cattura.png                      # screenshot PNG
 
 Funzionano anche con Vela annidato in KDE (per `vela-input` serve
 `VELA_DEBUG_INPUT=1`).
+
+**Più schermi senza schermi:** nella sessione headless si collegano e
+scollegano schermi a caldo col socket dei comandi
+(`$XDG_RUNTIME_DIR/vela-$WAYLAND_DISPLAY.sock`, una riga per comando):
+`test-output add 2560x1440` ne collega uno (`HEADLESS-2`, `HEADLESS-3`...),
+`test-output remove HEADLESS-2` lo stacca; la scala per nome con
+`VELA_SCALE=HEADLESS-1=1,HEADLESS-2=1.5`. Spegnere e riaccendere con
+`wlr-randr --output HEADLESS-2 --off` / `--on` fa tornare le finestre al loro
+schermo.
 
 **Test della nitidezza:** `sh scripts/test-sharpness.sh` prova le scale
 100–200% (o quelle passate come argomenti): la finestra di `vela-pattern`,
@@ -615,3 +662,19 @@ Per non perdere di vista "più leggero di Windows":
   in una cartella con migliaia di file).
 - Nessuna animazione legata a timer: sempre ai frame reali dello schermo.
 - Memoria della shell tenuta sotto controllo a ogni milestone.
+- A riposo (nessuno tocca niente) compositor e shell non consumano CPU e
+  si svegliano poche volte al secondo.
+
+Le misure si ripetono con `scripts/measure.sh` dentro una sessione di Vela
+(30 secondi senza toccare nulla; `--esplora` aggiunge l'avvio di Esplora,
+`--json` una riga da conservare per confrontare nel tempo): memoria (PSS)
+di compositor e shell, CPU a riposo, risvegli al secondo, e a batteria il
+consumo medio del computer. In una sessione di prova senza schermo, ottobre
+2026:
+
+| | memoria | CPU a riposo | risvegli/s |
+|---|---|---|---|
+| vela-compositor | 17 MiB | 0,1% | 3–7 |
+| vela-shell | 143 MiB | 0,1% | 1–4 |
+
+Esplora: primo fotogramma a 104 ms dall'avvio del processo (mediana di 5).

@@ -18,7 +18,7 @@ void printUsage(const char* program)
         "  VELA_TERMINAL      terminale per Alt/Super+Invio (predefinito: konsole)\n"
         "  VELA_SCALE         scala degli schermi (es. 1.25, o DP-1=1.5,HDMI-A-1=1);\n"
         "                     senza, Vela la sceglie dai DPI di ogni schermo\n"
-        "  VELA_VRR=1         attiva il refresh variabile\n"
+        "  VELA_VRR=1|0       refresh variabile sempre acceso, o mai\n"
         "  VELA_LATCH=0       disegna appena arriva il vblank, invece che il più tardi\n"
         "                     possibile prima del successivo (late latching)\n"
         "  VELA_LATCH_MARGIN  margine minimo del late latching in ms (predefinito 1)\n"

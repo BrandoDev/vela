@@ -27,6 +27,7 @@ Window {
         Menus.taskViewOpen = true
         refresh()
         Capture.capture(windows.map(w => w.id))
+        Menus.placeOnTargetScreen(root)
         visible = true
         content.opacity = 0
         content.scale = 1.03

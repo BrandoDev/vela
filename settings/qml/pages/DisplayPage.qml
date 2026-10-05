@@ -315,6 +315,17 @@ Page {
     CardGroup {
         title: "Giochi"
         Card {
+            icon: "chronometer"
+            title: "Frequenza di aggiornamento variabile"
+            description: "Il monitor si adegua ai fotogrammi del gioco (VRR, FreeSync, G-Sync): niente scatti né strappi. Con alcuni monitor il desktop può sfarfallare: per questo di solito solo a schermo intero"
+            trailing: Choice {
+                readonly property var modes: ["no", "giochi", "sempre"]
+                model: ["Disattivata", "Giochi a schermo intero", "Sempre"]
+                currentIndex: Math.max(0, modes.indexOf(Prefs.vrr))
+                onChosen: index => Prefs.vrr = modes[index]
+            }
+        }
+        Card {
             icon: "input-gaming"
             title: "Mostra subito ogni fotogramma nei giochi a schermo intero"
             description: "I giochi che lo chiedono vanno sullo schermo senza aspettare il monitor: meno latenza, con qualche strappo nell'immagine (tearing)"

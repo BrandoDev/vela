@@ -184,6 +184,7 @@ bool Server::init()
     on(&outputLayout->events.change, [this](void*) {
         updateOutputConfiguration();
         updateLockLayout();
+        scheduleOutputCheck();
     });
 
     sceneGraph = std::make_unique<scene::Scene>();
@@ -1634,24 +1635,13 @@ void Server::applyOutputConfiguration(wlr_output_configuration_v1* config, bool 
         return;
     }
 
-    // Le finestre rimaste fuori da ogni schermo tornano su quello principale.
-    Output* fallback = nullptr;
     for (Output* output : outputs) {
-        if (output->wlr->enabled && !wlr_box_empty(&output->usable)) {
-            fallback = fallback ? fallback : output;
-        }
         output->arrangeLayers();
     }
+    // Le finestre di uno schermo spento vanno su un altro (e tornano quando
+    // lui si riaccende), quelle massimizzate e agganciate si risistemano.
+    checkWindowsOnOutputs();
     for (Toplevel* toplevel : toplevels) {
-        const wlr_box frame = toplevel->frameBox();
-        if (fallback && !outputAt(frame.x + frame.width / 2.0, frame.y + frame.height / 2.0)) {
-            // Al centro dell'area utile, come una finestra appena aperta.
-            const wlr_box& area = fallback->usable;
-            const double marginX = frame.x - toplevel->tree->x(); // margine d'ombra
-            const double marginY = frame.y - toplevel->tree->y();
-            toplevel->tree->setPosition(area.x + std::max(0, (area.width - frame.width) / 2) - marginX,
-                area.y + std::max(0, (area.height - frame.height) / 2) - marginY);
-        }
         toplevel->keepInPlace();
     }
     scene::Scene::changed();
@@ -1935,6 +1925,8 @@ void Server::handleCommand(const std::string& command)
             m_switcher.selected = size_t(index);
             switcherFinish(true);
         }
+    } else if (command.rfind("test-output ", 0) == 0) {
+        testOutputCommand(command.substr(12));
     } else if (command == "lock") {
         lockScreen(); // per esempio prima di sospendere il computer
     } else if (command.rfind("window ", 0) == 0) {

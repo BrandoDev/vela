@@ -22,6 +22,8 @@ class ShellController : public QObject {
     Q_PROPERTY(bool startMenuOpen READ startMenuOpen WRITE setStartMenuOpen NOTIFY startMenuOpenChanged)
     // Le app aggiunte alla Start (id dei .desktop), nell'ordine scelto.
     Q_PROPERTY(QStringList startPins READ startPins NOTIFY startPinsChanged)
+    // Il nome dello schermo principale (lì si aprono i pannelli chiesti da tastiera).
+    Q_PROPERTY(QString primaryScreen READ primaryScreen NOTIFY primaryScreenChanged)
 
 public:
     explicit ShellController(QObject* parent = nullptr);
@@ -47,10 +49,14 @@ public:
     // Una finestra della shell ancorata in basso a sinistra (le anteprime
     // della taskbar): a `left` pixel dal bordo sinistro dello schermo.
     Q_INVOKABLE void placeAtLeft(QWindow* window, int left);
+    // Un pannello della shell (nascosto) sullo schermo `name`: alla prossima
+    // apertura compare lì.
+    Q_INVOKABLE void placeOnScreen(QWindow* window, const QString& name);
     // Alt+Tab: un clic sull'anteprima `index` (il compositor ci passa).
     Q_INVOKABLE void pickSwitcher(int index) { sendToCompositor("switcher-pick " + QByteArray::number(index)); }
 
     QString userName() const;
+    QString primaryScreen() const;
     QString userInitial() const;
 
     bool startMenuOpen() const { return m_startMenuOpen; }
@@ -98,6 +104,7 @@ signals:
     void switcherHidden();
     void startMenuOpenChanged();
     void startPinsChanged();
+    void primaryScreenChanged();
     void chooseSourceRequested();
     void chooseSourceCancelled();
     // Scorciatoie di Windows che arrivano dal compositor.

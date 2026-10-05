@@ -93,9 +93,15 @@ Window {
         const ids = windows.map(w => w.id)
         for (const g of groups) g.windows.forEach(m => { if (ids.indexOf(m.id) < 0) ids.push(m.id) })
         Capture.capture(ids)
-        // Centrato sul pulsante, dentro lo schermo.
+        // Sullo schermo della taskbar, centrato sul pulsante.
+        const screen = Qt.application.screens.find(s => s.name === info.screen)
+        if (screen && screen !== root.screen) {
+            visible = false
+            Shell.placeOnScreen(root, screen.name)
+        }
+        const screenWidth = screen ? screen.width : Screen.width
         const w = (windows.length + groups.length) * (cardWidth + 4) + 12 + 32
-        Shell.placeAtLeft(root, Math.round(Math.max(0, Math.min(Screen.width - w, info.center - w / 2))))
+        Shell.placeAtLeft(root, Math.round(Math.max(0, Math.min(screenWidth - w, info.center - w / 2))))
         if (!visible) {
             visible = true
             panel.opacity = 0

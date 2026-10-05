@@ -5,6 +5,10 @@ import QtQuick
 Window {
     id: root
     objectName: "taskbar"
+    // Una per schermo (ScreenWindows): sul principale anche l'area di
+    // notifica e le icone di sistema, sugli altri l'orologio, come Windows.
+    property bool primary: false
+    readonly property string screenName: screen ? screen.name : ""
 
     // Resta invisibile finché main.cpp non l'ha trasformata in un pannello
     // layer-shell. La larghezza la decide il compositor (ancorata ai lati).
@@ -47,7 +51,7 @@ Window {
         onTriggered: {
             if (!task || !task.hovered || task.windowCount === 0) return
             const p = task.mapToItem(null, task.width / 2, 0)
-            Menus.preview = { key: task.key, appIds: Tasks.appIds(task.index), center: p.x }
+            Menus.preview = { key: task.key, appIds: Tasks.appIds(task.index), center: p.x, screen: root.screenName }
         }
     }
 
@@ -63,8 +67,15 @@ Window {
 
     function openAbove(entries, item, centered, options) {
         const p = screenPoint(item, centered ? item.width / 2 : 0, 0)
-        Menus.open(entries, p.x, menuBottom, Object.assign({ above: true, centered: centered }, options || {}))
+        root.openMenu(entries, p.x, menuBottom, Object.assign({ above: true, centered: centered }, options || {}))
     }
+    // I menu della taskbar si aprono sul suo schermo; anche i pannelli che
+    // apre (Start, impostazioni rapide...) vanno lì.
+    function openMenu(entries, x, y, options) {
+        Menus.panelScreen = root.screenName
+        Menus.open(entries, x, y, Object.assign({ screen: root.screenName }, options || {}))
+    }
+    function fromHere() { Menus.panelScreen = root.screenName }
 
     // La jump list di un pulsante: file fissati e recenti, attività
     // dell'app, poi l'app, fissa/togli, chiudi.
@@ -143,8 +154,8 @@ Window {
             item("Gestione attivi&tà", "utilities-system-monitor", "task-manager"),
             item("&Impostazioni", "preferences-system", "settings"),
             item("&Esplora file", "system-file-manager", "files"),
-            { text: "&Cerca", icon: "search", action: () => { if (!Shell.startMenuOpen) Shell.toggleStartMenu() } },
-            { text: "E&segui", icon: "system-run", action: () => Shell.runRequested() },
+            { text: "&Cerca", icon: "search", action: () => { root.fromHere(); if (!Shell.startMenuOpen) Shell.toggleStartMenu() } },
+            { text: "E&segui", icon: "system-run", action: () => { root.fromHere(); Shell.runRequested() } },
             { separator: true },
             { text: "&Arresta il sistema o disconnetti", icon: "system-shutdown", children: [
                 { text: "&Disconnetti", icon: "system-log-out", action: () => Shell.logout() },
@@ -159,6 +170,7 @@ Window {
 
     Connections {
         target: Shell
+        enabled: root.primary
         function onWinXRequested() {
             root.openWinX(true)
         }
@@ -168,12 +180,13 @@ Window {
     }
     function openWinX(keyboard) {
         const p = screenPoint(startButton, 0, 0)
-        Menus.open(winXEntries(), p.x, menuBottom, { above: true, keyboard: keyboard })
+        root.openMenu(winXEntries(), p.x, menuBottom, { above: true, keyboard: keyboard })
     }
 
     // Il menu di un'icona dell'area di notifica (lo decide l'app).
     Connections {
         target: Tray
+        enabled: root.primary
         function onMenuReady(row, anchorX, entries) {
             const convert = list => list.map(e => e.separator ? { separator: true } : {
                 text: e.label,
@@ -184,7 +197,7 @@ Window {
                 children: e.children.length > 0 ? convert(e.children) : undefined,
                 action: () => Tray.activateMenuEntry(row, e.id)
             })
-            Menus.open(convert(entries), anchorX, root.menuBottom, { above: true, centered: true })
+            root.openMenu(convert(entries), anchorX, root.menuBottom, { above: true, centered: true })
         }
     }
 
@@ -199,7 +212,7 @@ Window {
             acceptedButtons: Qt.RightButton
             onClicked: mouse => {
                 const p = root.screenPoint(emptyArea, mouse.x, 0)
-                Menus.open([
+                root.openMenu([
                     { text: "Gestione &attività", icon: "utilities-system-monitor", enabled: System.available("task-manager"), action: () => System.trigger("task-manager") },
                     { text: "&Impostazioni della barra delle applicazioni", icon: "configure", enabled: System.available("taskbar-settings"), action: () => System.trigger("taskbar-settings") }
                 ], p.x, root.menuBottom, { above: true })
@@ -244,7 +257,7 @@ Window {
         TaskbarButton {
             id: startButton
             active: Shell.startMenuOpen
-            onClicked: Shell.toggleStartMenu()
+            onClicked: { root.fromHere(); Shell.toggleStartMenu() }
             onRightClicked: root.openWinX(false)
             StartGlyph { anchors.centerIn: parent }
         }
@@ -253,7 +266,7 @@ Window {
         TaskbarButton {
             visible: Config.taskView
             tooltip: "Visualizzazione attività"
-            onClicked: Shell.taskViewRequested()
+            onClicked: { root.fromHere(); Shell.taskViewRequested() }
             Item {
                 anchors.centerIn: parent
                 width: 20
@@ -356,6 +369,7 @@ Window {
     // a sinistra dell'orologio come su Windows.
     Row {
         id: tray
+        visible: root.primary
         anchors { right: systemIcons.left; top: parent.top; bottom: parent.bottom; rightMargin: 4 }
 
         Repeater {
@@ -423,8 +437,9 @@ Window {
     // cambia; col tasto destro i loro menu (§14.5).
     Item {
         id: systemIcons
+        visible: root.primary
         anchors { right: clock.left; top: parent.top; bottom: parent.bottom; rightMargin: 2 }
-        width: iconsRow.width + 16
+        width: visible ? iconsRow.width + 16 : 0
 
         Rectangle {
             anchors { fill: parent; topMargin: 4; bottomMargin: 4 }
@@ -467,6 +482,7 @@ Window {
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             onClicked: mouse => {
                 if (mouse.button === Qt.LeftButton) {
+                    root.fromHere()
                     Shell.quickSettingsRequested()
                     return
                 }
@@ -474,7 +490,7 @@ Window {
                 const p = root.screenPoint(systemMouse, mouse.x, 0)
                 const overVolume = volumeIcon.visible && mouse.x >= volumeIcon.x + iconsRow.x - 5
                     && mouse.x < volumeIcon.x + iconsRow.x + volumeIcon.width + 5
-                Menus.open(overVolume ? [
+                root.openMenu(overVolume ? [
                     { text: "Apri &mixer volume", icon: "audio-volume-high", enabled: System.available("volume-mixer"), action: () => System.trigger("volume-mixer") },
                     { text: "&Impostazioni audio", icon: "preferences-desktop-sound", enabled: System.available("sound-settings"), action: () => System.trigger("sound-settings") }
                 ] : [
@@ -565,11 +581,12 @@ Window {
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             onClicked: mouse => {
                 if (mouse.button === Qt.LeftButton) {
+                    root.fromHere()
                     Shell.notificationCenterRequested()
                     return
                 }
                 const p = root.screenPoint(clock, mouse.x, 0)
-                Menus.open([
+                root.openMenu([
                     { text: "&Regola data e ora", icon: "preferences-system-time", enabled: System.available("datetime"), action: () => System.trigger("datetime") },
                     { text: "Impostazioni di &notifica", icon: "preferences-desktop-notification", enabled: System.available("notification-settings"), action: () => System.trigger("notification-settings") }
                 ], p.x, root.menuBottom, { above: true })

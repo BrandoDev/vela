@@ -24,7 +24,7 @@
 #include "taskbarmodel.h"
 #include "tray.h"
 #include "wallpaperprovider.h"
-#include "wallpapers.h"
+#include "screenwindows.h"
 #include "workspaces.h"
 #include "windowcapture.h"
 
@@ -57,15 +57,29 @@ QQuickWindow* findWindow(QQmlApplicationEngine& engine, const char* objectName)
     return nullptr;
 }
 
-void setupTaskbar(QQuickWindow* window, int height)
+void setupTaskbar(QQuickWindow* window, QScreen* screen)
 {
     LayerWindow* layer = LayerWindow::get(window);
+    layer->setScreen(screen); // una per schermo (ScreenWindows)
     layer->setScope(QStringLiteral("vela-taskbar"));
     layer->setLayer(LayerWindow::LayerTop);
     layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorBottom) | LayerWindow::AnchorLeft
         | LayerWindow::AnchorRight);
-    layer->setExclusiveZone(height); // le finestre massimizzate non la coprono
+    layer->setExclusiveZone(window->height()); // le finestre massimizzate non la coprono
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityNone);
+}
+
+void setupWallpaper(QQuickWindow* window, QScreen* screen)
+{
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScreen(screen); // proprio questo schermo, non quello che sceglierebbe il compositor
+    layer->setScope(QStringLiteral("vela-wallpaper"));
+    layer->setLayer(LayerWindow::LayerBackground);
+    layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorTop) | LayerWindow::AnchorBottom
+        | LayerWindow::AnchorLeft | LayerWindow::AnchorRight);
+    layer->setExclusiveZone(-1); // tutto lo schermo, anche sotto la taskbar
+    // Le icone del desktop prendono la tastiera quando le clicchi (F2, Canc, Ctrl+C...).
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
 }
 
 void setupSwitcher(QQuickWindow* window)
@@ -245,46 +259,6 @@ void setupSidePanel(QQuickWindow* window, const QString& scope)
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
 }
 
-// La taskbar ci deve essere sempre (gli sfondi li segue Wallpapers). Il
-// compositor chiude le superfici della shell quando il loro schermo
-// sparisce: un monitor scollegato, o il cambio di console (wlroots toglie
-// tutti gli schermi e li ricrea al ritorno). Qui la si rimette sullo
-// schermo principale appena ce n'è uno vero.
-void keepShown(QGuiApplication& app, const QList<QQuickWindow*>& windows)
-{
-    auto* timer = new QTimer(&app);
-    timer->setSingleShot(true);
-    timer->setInterval(100); // gli schermi tornano uno alla volta: si aspetta che arrivino
-    auto retries = std::make_shared<int>(0);
-    QObject::connect(timer, &QTimer::timeout, &app, [windows] {
-        QScreen* screen = QGuiApplication::primaryScreen();
-        if (!screen || screen->name().isEmpty()) {
-            return; // solo il segnaposto di Qt: nessuno schermo vero, si aspetta screenAdded
-        }
-        for (QQuickWindow* window : windows) {
-            if (!window->isVisible()) {
-                qInfo("vela-shell: %s di nuovo su %s", qPrintable(window->objectName()), qPrintable(screen->name()));
-                window->setScreen(screen);
-                window->show();
-            }
-        }
-    });
-    for (QQuickWindow* window : windows) {
-        QObject::connect(window, &QWindow::visibleChanged, timer, [timer, retries](bool visible) {
-            // Pochi tentativi senza uno schermo nuovo: se il compositor la
-            // richiude subito, non si insiste all'infinito.
-            if (!visible && *retries < 5) {
-                ++*retries;
-                timer->start();
-            }
-        });
-    }
-    QObject::connect(&app, &QGuiApplication::screenAdded, timer, [timer, retries] {
-        *retries = 0;
-        timer->start();
-    });
-}
-
 } // namespace
 
 int main(int argc, char* argv[])
@@ -411,7 +385,6 @@ int main(int argc, char* argv[])
 
     // Le finestre QML partono invisibili: le trasformiamo in superfici
     // layer-shell PRIMA che vengano mostrate.
-    engine.loadFromModule("Vela.Shell", "Taskbar");
     engine.loadFromModule("Vela.Shell", "StartMenu");
     engine.loadFromModule("Vela.Shell", "Switcher");
     engine.loadFromModule("Vela.Shell", "NotificationPopups");
@@ -430,7 +403,6 @@ int main(int argc, char* argv[])
     engine.loadFromModule("Vela.Shell", "FileDialogs");
 
     QQuickWindow* switcher = findWindow(engine, "switcher");
-    QQuickWindow* taskbar = findWindow(engine, "taskbar");
     QQuickWindow* startMenu = findWindow(engine, "startMenu");
     QQuickWindow* notificationWindow = findWindow(engine, "notifications");
     QQuickWindow* contextMenu = findWindow(engine, "contextMenu");
@@ -446,13 +418,12 @@ int main(int argc, char* argv[])
     QQuickWindow* snapAssist = findWindow(engine, "snapAssist");
     QQuickWindow* taskbarPreview = findWindow(engine, "taskbarPreview");
     QQuickWindow* fileDialogs = findWindow(engine, "fileDialogs");
-    if (!taskbar || !startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog || !confirmDialog || !sourceChooser || !propertiesDialog || !quickSettings
+    if (!startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog || !confirmDialog || !sourceChooser || !propertiesDialog || !quickSettings
         || !notificationCenter || !taskView || !desktopOsd || !snapLayouts || !snapAssist || !taskbarPreview || !fileDialogs) {
         qCritical("vela-shell: impossibile caricare l'interfaccia QML");
         return 1;
     }
 
-    setupTaskbar(taskbar, taskbar->height());
     setupStartMenu(startMenu);
     placeStartMenu(startMenu, config.taskbarAlignment());
     QObject::connect(&config, &Config::taskbarChanged, startMenu, [&config, startMenu] {
@@ -474,10 +445,14 @@ int main(int argc, char* argv[])
     setupTaskbarPreview(taskbarPreview);
     setupPropertiesDialog(fileDialogs); // come Proprietà: al centro, sopra le finestre
     LayerWindow::get(fileDialogs)->setScope(QStringLiteral("vela-file-dialogs"));
-    taskbar->show();
-    keepShown(app, { taskbar });
-    Wallpapers wallpapers(&engine);
-    if (!wallpapers.start()) {
+    // Gli sfondi su ogni schermo; la taskbar anche, come in Windows (o
+    // solo sul principale, se l'utente la vuole così).
+    ScreenWindows wallpapers(&engine, "Wallpaper", setupWallpaper);
+    ScreenWindows taskbars(&engine, "Taskbar", setupTaskbar);
+    taskbars.setPrimaryOnly(!config.taskbarAllScreens());
+    QObject::connect(&config, &Config::taskbarChanged, &taskbars,
+        [&config, &taskbars] { taskbars.setPrimaryOnly(!config.taskbarAllScreens()); });
+    if (!wallpapers.start() || !taskbars.start()) {
         return 1;
     }
 

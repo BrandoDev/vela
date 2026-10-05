@@ -143,15 +143,7 @@ Output::Output(Server& s, wlr_output* output)
                 wlr->phys_height, scale * 100.0);
         }
     }
-    // VRR: utile nei giochi, ma su alcuni monitor fa sfarfallare il desktop.
-    // Spento di default, come su Windows; VELA_VRR=1 per provarlo.
-    if (envFlag("VELA_VRR")) {
-        wlr_output_state_set_adaptive_sync_enabled(&state, true);
-        if (!wlr_output_test_state(wlr, &state)) {
-            wlr_log(WLR_INFO, "%s: VRR non supportato", wlr->name);
-            wlr_output_state_set_adaptive_sync_enabled(&state, false);
-        }
-    }
+    // Il VRR lo accende e spegne il ciclo dei frame (Output::vrrState).
     wlr_output_commit_state(wlr, &state);
     wlr_output_state_finish(&state);
 
@@ -353,9 +345,11 @@ void Output::onFrameEvent()
         return; // già pianificato, o niente da fare
     }
     collectCosts();
-    // Tearing (un gioco a schermo intero che lo chiede): il suo frame va
-    // sullo schermo appena arriva, non al momento migliore prima del vblank.
-    if (sceneFrame->delivered().tearing) {
+    // Tearing (un gioco a schermo intero che lo chiede), o VRR con un gioco
+    // in scanout diretto: il suo frame va sullo schermo appena arriva, non al
+    // momento migliore prima di un vblank che col VRR non è fisso.
+    const scene::OutputFrame::Delivered& last = sceneFrame->delivered();
+    if (last.tearing || (last.scanout && wlr->adaptive_sync_status == WLR_OUTPUT_ADAPTIVE_SYNC_ENABLED)) {
         m_planned = false;
         onFrame();
         return;
@@ -395,7 +389,13 @@ void Output::onFrame()
     server.tickAnimations(plan.present);
 
     const wlr_box area = box();
-    if (sceneFrame->render(area.x, area.y)) {
+    // Il VRR da accendere o spegnere va nel commit di questo frame.
+    wlr_output_state vrr;
+    wlr_output_state_init(&vrr);
+    const bool vrrChange = vrrState(vrr);
+    const bool rendered = sceneFrame->render(area.x, area.y, vrrChange ? &vrr : nullptr);
+    wlr_output_state_finish(&vrr);
+    if (rendered) {
         server.outputRendered(this);
         const scene::OutputFrame::Delivered& delivered = sceneFrame->delivered();
         const Delivery delivery { wlr->commit_seq, plan.start, now, render::nowNs(), delivered.point,
@@ -437,6 +437,38 @@ void Output::onFrame()
         }
         m_breakdown = {};
     }
+}
+
+bool Output::vrrState(wlr_output_state& state)
+{
+    // "giochi": solo con un'app a schermo intero su questo schermo (come
+    // l'"Automatico" di KWin: il desktop non sfarfalla sui monitor che lo
+    // fanno); "sempre"; "no".
+    bool wanted = server.vrrMode == 2;
+    if (server.vrrMode == 1) {
+        for (Toplevel* toplevel : server.toplevels) {
+            if (toplevel->mapped && toplevel->fullscreen && !toplevel->minimized && toplevel->onCurrentWorkspace()
+                && toplevel->output() == this) {
+                wanted = true;
+                break;
+            }
+        }
+    }
+    const bool enabled = wlr->adaptive_sync_status == WLR_OUTPUT_ADAPTIVE_SYNC_ENABLED;
+    if (wanted == enabled || (wanted && m_vrrUnsupported)) {
+        return false;
+    }
+    wlr_output_state_set_adaptive_sync_enabled(&state, wanted);
+    if (!wlr_output_test_state(wlr, &state)) {
+        if (wanted) {
+            wlr_log(WLR_INFO, "%s: VRR non supportato", wlr->name);
+            m_vrrUnsupported = true;
+        }
+        state.committed &= ~WLR_OUTPUT_STATE_ADAPTIVE_SYNC_ENABLED;
+        return false;
+    }
+    wlr_log(WLR_INFO, "%s: VRR %s", wlr->name, wanted ? "acceso" : "spento");
+    return true;
 }
 
 bool Output::readyTime(const Delivery& delivery, int64_t& when) const
@@ -717,6 +749,147 @@ void Output::arrangeLayers()
             } else if (toplevel->snap != Snap::None) {
                 toplevel->applySnap(this);
             }
+        }
+    }
+}
+
+// ------------------------------------------------ schermi che vanno e vengono --
+
+void Server::scheduleOutputCheck()
+{
+    // Dopo che tutto si è sistemato (uno schermo che sparisce lascia il
+    // layout prima di essere distrutto).
+    if (outputCheck) {
+        return;
+    }
+    outputCheck = wl_event_loop_add_idle(
+        loop,
+        [](void* data) {
+            auto* self = static_cast<Server*>(data);
+            self->outputCheck = nullptr;
+            self->checkWindowsOnOutputs();
+        },
+        this);
+}
+
+void Toplevel::moveToOutput(Output* out, int x, int y)
+{
+    // Il riquadro con la barra di Vela sopra: tutto dentro l'area utile.
+    const int bar = titleBarHeight();
+    const wlr_box geometry = this->geometry();
+    const wlr_box frame = frameBox();
+    const wlr_box outer { x, y - bar, frame.width, frame.height + bar };
+    const wlr_box fitted = Server::fitInto(outer, *out);
+    if (!maximized && !fullscreen && snap == Snap::None
+        && (fitted.width != outer.width || fitted.height != outer.height)) {
+        configureSize(fitted.width, fitted.height - bar);
+    }
+    tree->setPosition(fitted.x - geometry.x, fitted.y + bar - geometry.y);
+    if (fullscreen) {
+        const Placement place = out->place(out->fullArea());
+        configureSize(place.width, place.height);
+        keepInPlace();
+    } else if (maximized) {
+        applyMaximized();
+    } else if (snap != Snap::None) {
+        applySnap(out);
+    }
+}
+
+void Server::checkWindowsOnOutputs()
+{
+    std::map<std::string, wlr_box> boxes;
+    for (Output* out : outputs) {
+        if (out->wlr->enabled && wlr_output_layout_get(outputLayout, out->wlr)) {
+            boxes[out->wlr->name] = out->box();
+        }
+    }
+    for (Toplevel* t : toplevels) {
+        if (!t->mapped) {
+            continue;
+        }
+        const wlr_box frame = t->frameBox();
+        const double cx = frame.x + frame.width / 2.0;
+        const double cy = frame.y + frame.height / 2.0;
+        // Tornato lo schermo da cui era stata spostata: ci torna.
+        if (!t->homeOutput.empty() && boxes.contains(t->homeOutput)) {
+            const wlr_box home = boxes[t->homeOutput];
+            if (Output* out = outputNamed(t->homeOutput.c_str())) {
+                wlr_log(WLR_INFO, "%s di nuovo collegato: \"%s\" torna lì", t->homeOutput.c_str(), t->title());
+                t->homeOutput.clear();
+                t->moveToOutput(out, home.x + t->homeX, home.y + t->homeY);
+            }
+            continue;
+        }
+        if (outputAt(cx, cy)) {
+            continue;
+        }
+        // Il suo schermo non c'è più: si ricorda quale era (dalle posizioni
+        // dell'ultima volta) e va sullo schermo più vicino.
+        std::string from;
+        for (const auto& [name, box] : outputBoxes) {
+            if (cx >= box.x && cx < box.x + box.width && cy >= box.y && cy < box.y + box.height) {
+                from = name;
+                t->homeX = frame.x - box.x;
+                t->homeY = frame.y - box.y;
+            }
+        }
+        double nx = 0.0;
+        double ny = 0.0;
+        wlr_output_layout_closest_point(outputLayout, nullptr, cx, cy, &nx, &ny);
+        Output* target = outputAt(nx, ny);
+        if (!target && !outputs.empty()) {
+            target = outputs.front();
+        }
+        if (!target || !wlr_output_layout_get(outputLayout, target->wlr)) {
+            continue; // nessuno schermo: si aspetta che ne torni uno
+        }
+        if (!from.empty() && t->homeOutput.empty()) {
+            t->homeOutput = from;
+        }
+        const wlr_box to = target->box();
+        wlr_log(WLR_INFO, "%s scollegato: \"%s\" va su %s", from.empty() ? "Uno schermo" : from.c_str(), t->title(),
+            target->wlr->name);
+        // Nello stesso punto relativo, se ci sta.
+        t->moveToOutput(target, to.x + (from.empty() ? 0 : t->homeX), to.y + (from.empty() ? 0 : t->homeY));
+    }
+    outputBoxes = std::move(boxes);
+}
+
+void Server::testOutputCommand(const std::string& arguments)
+{
+    // Solo senza schermi veri: collegare e scollegare a caldo nelle prove.
+    wlr_backend* headless = nullptr;
+    wlr_multi_for_each_backend(
+        backend,
+        [](wlr_backend* candidate, void* data) {
+            if (wlr_backend_is_headless(candidate)) {
+                *static_cast<wlr_backend**>(data) = candidate;
+            }
+        },
+        &headless);
+    if (!headless) {
+        wlr_log(WLR_ERROR, "test-output: solo col backend headless");
+        return;
+    }
+    int width = 0;
+    int height = 0;
+    char name[64] = {};
+    if (std::sscanf(arguments.c_str(), "add %dx%d", &width, &height) == 2 && width > 0 && height > 0) {
+        wlr_output* output = wlr_headless_add_output(headless, unsigned(width), unsigned(height));
+        // VELA_OUTPUT_SIZE vale per gli schermi di partenza: questo ha la sua.
+        if (Output* out = output ? static_cast<Output*>(output->data) : nullptr) {
+            wlr_output_state state;
+            wlr_output_state_init(&state);
+            wlr_output_state_set_custom_mode(&state, width, height, 0);
+            out->commitMode(state);
+            wlr_output_state_finish(&state);
+        }
+        wlr_log(WLR_INFO, "test-output: collegato %s (%dx%d)", output ? output->name : "(niente)", width, height);
+    } else if (std::sscanf(arguments.c_str(), "remove %63s", name) == 1) {
+        if (Output* out = outputNamed(name)) {
+            wlr_log(WLR_INFO, "test-output: scollego %s", name);
+            wlr_output_destroy(out->wlr);
         }
     }
 }

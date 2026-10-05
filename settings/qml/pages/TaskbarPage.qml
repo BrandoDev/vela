@@ -29,6 +29,15 @@ Page {
             }
         }
         Card {
+            icon: "video-display"
+            title: "Mostra la barra delle applicazioni su tutti gli schermi"
+            description: "Con più monitor: Start, le app e l'orologio su ognuno; area di notifica sul principale"
+            trailing: Toggle {
+                checked: Prefs.taskbarAllScreens
+                onToggled: on => Prefs.taskbarAllScreens = on
+            }
+        }
+        Card {
             icon: "process-stop"
             title: "Termina attività"
             description: "Nel menu dei pulsanti della barra delle applicazioni, per chiudere subito un'app che non risponde"

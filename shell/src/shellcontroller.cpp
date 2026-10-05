@@ -5,7 +5,9 @@
 #include <QImage>
 #include <QImageReader>
 #include <LayerShellQt/Window>
+#include <QGuiApplication>
 #include <QJsonArray>
+#include <QScreen>
 #include <QJsonDocument>
 #include <QSettings>
 
@@ -48,6 +50,7 @@ ShellController::ShellController(QObject* parent)
     : QObject(parent)
     , m_startPins(QSettings().value(QStringLiteral("start/pinned"), defaultStartPins).toStringList())
 {
+    connect(qGuiApp, &QGuiApplication::primaryScreenChanged, this, &ShellController::primaryScreenChanged);
     connect(&m_server, &QLocalServer::newConnection, this, [this] {
         while (QLocalSocket* socket = m_server.nextPendingConnection()) {
             connect(socket, &QLocalSocket::readyRead, this, [this, socket] {
@@ -338,6 +341,28 @@ void ShellController::placeAtLeft(QWindow* window, int left)
             layer->setMargins(QMargins(left, margins.top(), margins.right(), margins.bottom()));
         }
     }
+}
+
+void ShellController::placeOnScreen(QWindow* window, const QString& name)
+{
+    if (!window) {
+        return;
+    }
+    for (QScreen* screen : QGuiApplication::screens()) {
+        if (screen->name() == name) {
+            window->setScreen(screen);
+            if (auto* layer = LayerShellQt::Window::get(window)) {
+                layer->setScreen(screen);
+            }
+            return;
+        }
+    }
+}
+
+QString ShellController::primaryScreen() const
+{
+    const QScreen* screen = QGuiApplication::primaryScreen();
+    return screen ? screen->name() : QString();
 }
 
 QString ShellController::userName() const

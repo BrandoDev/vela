@@ -22,6 +22,7 @@ Window {
     function open() {
         Menus.notificationCenterOpen = false
         page = ""
+        Menus.placeOnTargetScreen(root)
         visible = true
         Menus.quickSettingsOpen = true
         panel.opacity = 0

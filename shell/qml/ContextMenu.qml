@@ -24,11 +24,14 @@ Window {
         function onOpenRequested(entries, x, y, options) {
             root.closeAll(false, true)
             root.options = options
-            if (options.screen) {
-                const screen = Qt.application.screens.find(s => s.name === options.screen)
+            // Lo schermo chiesto, o il principale (lo schermo resta quello
+            // dell'ultima volta finché non lo si cambia).
+            {
+                const name = options.screen || Shell.primaryScreen
+                const screen = Qt.application.screens.find(s => s.name === name)
                 if (screen && screen !== root.screen) {
                     root.visible = false // su un altro schermo: una superficie nuova
-                    root.screen = screen
+                    Shell.placeOnScreen(root, screen.name)
                 }
             }
             Menus.isOpen = true

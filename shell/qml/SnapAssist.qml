@@ -50,7 +50,7 @@ Window {
             const screen = Qt.application.screens.find(s => s.name === state.output)
             if (screen && screen !== root.screen) {
                 root.visible = false
-                root.screen = screen
+                Shell.placeOnScreen(root, screen.name)
             }
             root.zones = zones
             root.origin = state.window

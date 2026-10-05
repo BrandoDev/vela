@@ -112,6 +112,7 @@ void Preferences::reload()
         : QStringLiteral("center");
     m_endTask = settings.value(QStringLiteral("taskbar/endTask"), true).toBool();
     m_taskView = settings.value(QStringLiteral("taskbar/taskView"), true).toBool();
+    m_taskbarAllScreens = settings.value(QStringLiteral("taskbar/allScreens"), true).toBool();
     emit taskbarChanged();
     m_doNotDisturb = settings.value(QStringLiteral("notifications/doNotDisturb"), false).toBool();
     emit doNotDisturbChanged();
@@ -183,6 +184,7 @@ void Preferences::reloadCompositor()
     m_nightFrom = value(QStringLiteral("luce-notturna-dalle"), QStringLiteral("21:00"));
     m_nightTo = value(QStringLiteral("luce-notturna-alle"), QStringLiteral("07:00"));
     m_tearing = flag(QStringLiteral("tearing"), true);
+    m_vrr = value(QStringLiteral("frequenza-variabile"), QStringLiteral("giochi"));
     m_colorFilter = flag(QStringLiteral("filtri-colore"), false);
     m_colorFilterKind = value(QStringLiteral("filtro-colore"), QStringLiteral("grigi"));
     m_colorFilterShortcut = flag(QStringLiteral("filtri-colore-scorciatoia"), false);
@@ -406,6 +408,15 @@ void Preferences::setEndTask(bool on)
     }
 }
 
+void Preferences::setTaskbarAllScreens(bool on)
+{
+    if (on != m_taskbarAllScreens) {
+        m_taskbarAllScreens = on;
+        setShell(QStringLiteral("taskbar/allScreens"), on);
+        emit taskbarChanged();
+    }
+}
+
 void Preferences::setTaskView(bool on)
 {
     if (on != m_taskView) {
@@ -623,6 +634,15 @@ void Preferences::setTearing(bool on)
     if (on != m_tearing) {
         m_tearing = on;
         saveCompositor({ { QStringLiteral("tearing"), yesNo(on) } });
+        emit accessibilityChanged();
+    }
+}
+
+void Preferences::setVrr(const QString& mode)
+{
+    if (mode != m_vrr) {
+        m_vrr = mode;
+        saveCompositor({ { QStringLiteral("frequenza-variabile"), mode } });
         emit accessibilityChanged();
     }
 }

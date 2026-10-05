@@ -152,6 +152,7 @@ Window {
         grid.positionViewAtBeginning()
         panel.opacity = 0
         panel.y = panel.restY + panel.slide
+        Menus.placeOnTargetScreen(root) // lo schermo della taskbar da cui si apre
         visible = true
         Shell.startMenuOpen = true
         openAnimation.restart()

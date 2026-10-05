@@ -18,6 +18,7 @@ Window {
     function open() {
         Menus.quickSettingsOpen = false
         month = new Date()
+        Menus.placeOnTargetScreen(root)
         visible = true
         Menus.notificationCenterOpen = true
         column.opacity = 0

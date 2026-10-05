@@ -295,21 +295,23 @@ arriva il frame callback. I frame isolati (testo scritto in una finestra)
 ora hanno la stessa previsione esatta delle animazioni: errore 0,001 ms,
 contro fino a un periodo in S1.
 
-### 4.4 VRR (rinviato, non dimenticato)
+### 4.4 VRR
 
-Il VRR si tratterà dopo le prime tappe, ma il progetto non deve
-precluderlo. Cosa ne sappiamo già:
+Con VRR non c'è un vblank fisso: il monitor si rinfresca quando arriva il
+frame, entro i suoi limiti. Le animazioni restano corrette grazie al §4.2
+(tempo previsto di presentazione, non "un periodo fisso").
 
-- con VRR non c'è un vblank fisso: si presenta appena il frame è pronto,
-  entro i limiti del monitor, e il ciclo di frame non deve aspettare un
-  vblank che non arriva;
-- le animazioni restano corrette grazie al §4.2 (tempo previsto di
-  presentazione, non "un periodo fisso");
-- resta da decidere se durante le animazioni si sale al massimo del
-  monitor o si segue la frequenza del contenuto.
-
-Fino ad allora il VRR resta spento di default (`VELA_VRR=1` per provarlo),
-come oggi.
+- **Quando**: la scelta è in vela.conf ("frequenza-variabile"): `giochi`
+  (predefinita: solo con un'app a schermo intero su quello schermo, come
+  l'"Automatico" di KWin, perché con alcuni monitor il desktop sfarfalla),
+  `sempre` o `no`; `VELA_VRR=1/0` vince. Il ciclo dei frame di ogni schermo
+  controlla a ogni frame se va acceso o spento e lo mette nel commit di
+  quel frame (provato prima: se il monitor non lo accetta lo ricorda e non
+  ci riprova).
+- **Come**: con un gioco in scanout diretto (§5.3) il frame si consegna
+  appena il gioco fa il commit, senza pianificare il late latching (§4.3)
+  su un vblank che non c'è; per il resto il ciclo resta quello di sempre,
+  che col VRR acceso e frame regolari si comporta come a frequenza fissa.
 
 ### 4.4.1 Tearing
 

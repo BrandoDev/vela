@@ -34,6 +34,7 @@ class Preferences : public QObject {
     Q_PROPERTY(QString taskbarAlignment READ taskbarAlignment WRITE setTaskbarAlignment NOTIFY taskbarChanged)
     Q_PROPERTY(bool endTask READ endTask WRITE setEndTask NOTIFY taskbarChanged)
     Q_PROPERTY(bool taskView READ taskView WRITE setTaskView NOTIFY taskbarChanged)
+    Q_PROPERTY(bool taskbarAllScreens READ taskbarAllScreens WRITE setTaskbarAllScreens NOTIFY taskbarChanged)
     // --- Notifiche ---
     Q_PROPERTY(bool doNotDisturb READ doNotDisturb WRITE setDoNotDisturb NOTIFY doNotDisturbChanged)
     // --- Alimentazione ---
@@ -55,6 +56,8 @@ class Preferences : public QObject {
     Q_PROPERTY(QString sunset READ sunset NOTIFY nightLightChanged)
     Q_PROPERTY(QString sunrise READ sunrise NOTIFY nightLightChanged)
     Q_PROPERTY(bool tearing READ tearing WRITE setTearing NOTIFY accessibilityChanged)
+    // Frequenza di aggiornamento variabile: "no", "giochi" (app a schermo intero), "sempre".
+    Q_PROPERTY(QString vrr READ vrr WRITE setVrr NOTIFY accessibilityChanged)
     // --- Accessibilità ---
     Q_PROPERTY(bool magnifier READ magnifier WRITE setMagnifier NOTIFY accessibilityChanged)
     Q_PROPERTY(int magnifierStep READ magnifierStep WRITE setMagnifierStep NOTIFY accessibilityChanged)
@@ -100,6 +103,8 @@ public:
     void setEndTask(bool on);
     bool taskView() const { return m_taskView; }
     void setTaskView(bool on);
+    bool taskbarAllScreens() const { return m_taskbarAllScreens; }
+    void setTaskbarAllScreens(bool on);
 
     bool doNotDisturb() const { return m_doNotDisturb; }
     void setDoNotDisturb(bool on);
@@ -132,6 +137,8 @@ public:
     QString sunrise() const { return m_sunrise; }
     bool tearing() const { return m_tearing; }
     void setTearing(bool on);
+    QString vrr() const { return m_vrr; }
+    void setVrr(const QString& mode);
 
     bool magnifier() const { return m_magnifier; }
     void setMagnifier(bool on);
@@ -185,6 +192,7 @@ private:
     QString m_taskbarAlignment;
     bool m_endTask = true;
     bool m_taskView = true;
+    bool m_taskbarAllScreens = true;
     bool m_doNotDisturb = false;
     int m_screenOffMinutes = 10;
     bool m_lockOnIdle = true;
@@ -202,6 +210,7 @@ private:
     QString m_sunset;
     QString m_sunrise;
     bool m_tearing = true;
+    QString m_vrr = QStringLiteral("giochi");
     bool m_magnifier = false;
     int m_magnifierStep = 100;
     bool m_colorFilter = false;

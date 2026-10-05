@@ -36,6 +36,22 @@ QtObject {
     // (TaskbarPreview.qml): {key, appIds, center (x sullo schermo)}, o null.
     // Restano finché il mouse sta sul pulsante o sulle anteprime.
     property var preview: null
+    // Lo schermo della taskbar da cui si è aperto un pannello (Start,
+    // impostazioni rapide, centro notifiche, Visualizzazione attività): il
+    // pannello va lì. Vuoto: lo schermo principale (aperto da tastiera).
+    property string panelScreen: ""
+    function targetScreen() {
+        const name = panelScreen !== "" ? panelScreen : Shell.primaryScreen
+        panelScreen = ""
+        return Qt.application.screens.find(s => s.name === name) || null
+    }
+    // Mette `window` (nascosta) sullo schermo del pannello.
+    function placeOnTargetScreen(window) {
+        const screen = targetScreen()
+        if (screen) {
+            Shell.placeOnScreen(window, screen.name)
+        }
+    }
     property bool previewHovered: false
     property bool previewButtonHovered: false
 

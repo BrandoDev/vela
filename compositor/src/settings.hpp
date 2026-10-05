@@ -22,6 +22,7 @@
 //   lente-incremento=100     di quanto ingrandisce Win+più (percento)
 //   tasti-permanenti=no      Maiusc, Ctrl, Alt e Win restano premuti
 //   tearing=sì               i giochi a schermo intero che lo chiedono
+//   frequenza-variabile=giochi  VRR: no, giochi (app a schermo intero), sempre
 
 #include <map>
 #include <string>
