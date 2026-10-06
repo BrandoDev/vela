@@ -138,14 +138,15 @@ std::string Server::stateJson() const
         + ",\"workspaces\":" + std::to_string(workspaceCount()) + ",\"focused\":"
         + (focused && focused->extHandle && focused->extHandle->identifier ? jsonString(focused->extHandle->identifier)
                                                                           : std::string("null"))
-        + ",\"outputs\":[";
+        + ",\"held\":" + std::to_string(scene::ReadyCommits::heldTotal()) + ",\"outputs\":[";
     bool first = true;
     for (const Output* output : outputs) {
         const wlr_box box = output->box();
         json += std::string(first ? "" : ",") + "{\"name\":" + jsonString(output->wlr->name) + ",\"x\":"
             + std::to_string(box.x) + ",\"y\":" + std::to_string(box.y) + ",\"w\":" + std::to_string(box.width)
             + ",\"h\":" + std::to_string(box.height) + ",\"scale\":" + number(output->wlr->scale)
-            + ",\"enabled\":" + boolean(output->wlr->enabled) + ",\"powered\":" + boolean(output->powered) + "}";
+            + ",\"enabled\":" + boolean(output->wlr->enabled) + ",\"powered\":" + boolean(output->powered) + ",\"frames\":" + std::to_string(output->clock.framesTotal())
+            + ",\"missed\":" + std::to_string(output->clock.missedTotal()) + "}";
         first = false;
     }
     json += "],\"windows\":[";

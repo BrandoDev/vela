@@ -138,6 +138,7 @@ add_executable(vela-compositor
     src/scene/capture.cpp
     src/scene/effects.cpp
     src/scene/frame.cpp
+    src/scene/readiness.cpp
     src/scene/scene.cpp
     ${VELA_SHADERS}
     ${VELA_PROTOCOL_HEADERS}

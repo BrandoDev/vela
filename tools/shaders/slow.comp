@@ -1,0 +1,27 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// Il "rendering" di vela-slowgpu: un solo gruppo che gira a lungo su una
+// coda compute. Ogni passo dipende dal precedente, quindi la durata cresce
+// con le iterazioni e il compilatore non può accorciarla; il risultato va
+// in un buffer perché il ciclo non venga tolto.
+#version 450
+
+layout(local_size_x = 64) in;
+
+layout(push_constant) uniform Push {
+    uint iterations;
+} push;
+
+layout(std430, binding = 0) buffer Result {
+    float value[64];
+} result;
+
+void main()
+{
+    float v = float(gl_LocalInvocationID.x) * 0.01;
+    for (uint i = 0u; i < push.iterations; ++i) {
+        v = fract(sin(v * 1.618 + 0.5) * 43758.5453);
+    }
+    result.value[gl_LocalInvocationID.x] = v;
+}

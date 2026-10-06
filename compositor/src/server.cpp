@@ -142,6 +142,7 @@ bool Server::init()
     // Con il renderer, wlroots carica i buffer delle app nelle nostre
     // texture a ogni commit (solo la parte cambiata).
     compositor = wlr_compositor_create(display, 6, renderer);
+    readyCommits = std::make_unique<scene::ReadyCommits>(compositor);
     wlr_subcompositor_create(display);
     wlr_data_device_manager_create(display);
     wlr_primary_selection_v1_device_manager_create(display);
@@ -545,6 +546,7 @@ void Server::shutdown()
     // Dopo gli schermi, che la usano per disegnare.
     layers = {};
     sceneGraph.reset();
+    readyCommits.reset();
     // Renderer, allocatore e device Vulkan si smontano solo per cercare
     // risorse dimenticate (VELA_VULKAN_VALIDATION=1). Alla chiusura normale
     // il processo sta per finire e il kernel recupera tutto: da annidati,

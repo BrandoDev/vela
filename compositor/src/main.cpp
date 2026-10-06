@@ -31,6 +31,8 @@ void printUsage(const char* program)
         "                     possibile prima del successivo (late latching)\n"
         "  VELA_LATCH_MARGIN  margine minimo del late latching in ms (predefinito 1)\n"
         "  VELA_SCANOUT=0     niente scanout diretto delle app a schermo intero\n"
+        "  VELA_READY_WAIT=0  applica subito i commit delle app, anche se la loro GPU\n"
+        "                     non ha finito (il frame la aspetta: per confrontare)\n"
         "  VELA_REALTIME=0    niente scheduling realtime per il compositor\n"
         "  VELA_SCREEN_OFF    minuti di inattività prima di bloccare e spegnere (predefinito 10, 0: mai;\n"
         "                     altrimenti spegni-schermo= in ~/.config/vela/vela.conf)\n"

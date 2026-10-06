@@ -26,8 +26,8 @@ struct Texture {
     VkImageView view;
 
     // dmabuf importato: il buffer a cui è legata e il suo descrittore (piano
-    // 0) per la sincronizzazione implicita. Il buffer resta bloccato finché
-    // wlroots usa la texture; la texture vive finché vive il buffer.
+    // 0) per la sincronizzazione implicita. Il buffer resta bloccato, e
+    // importato, finché wlroots usa la texture.
     wlr_buffer* buffer;
     wlr_addon addon;
     int dmabufFd;

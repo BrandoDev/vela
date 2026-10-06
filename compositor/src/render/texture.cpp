@@ -73,13 +73,23 @@ void destroyTexture(wlr_texture* wlr)
 {
     Texture* texture = toTexture(wlr);
     --texture->refs;
-    if (texture->buffer) {
-        // Resta legata al buffer, pronta se l'app lo riusa: sparirà con lui.
-        // Sbloccarlo può distruggerlo (e con lui la texture): ultima cosa.
-        wlr_buffer_unlock(texture->buffer);
+    wlr_buffer* buffer = texture->buffer;
+    if (buffer && texture->refs > 0) {
+        wlr_buffer_unlock(buffer);
         return;
     }
+    // Un dmabuf che non usiamo più non resta importato, anche se l'app lo
+    // riuserà. RADV mette ogni memoria importata in tutti i nostri invii
+    // alla GPU, e il kernel fa aspettare a ciascun invio le fence di
+    // scrittura dei dmabuf in sincronizzazione implicita: un buffer in
+    // cache che l'app sta ridisegnando fermerebbe ogni nostro frame finché
+    // la sua GPU non ha finito (docs/renderer.md §7.3). Le risorse si
+    // liberano quando la GPU ha finito di leggerle; sbloccare il buffer può
+    // distruggerlo, quindi per ultimo.
     retire(texture);
+    if (buffer) {
+        wlr_buffer_unlock(buffer);
+    }
 }
 
 bool createView(Texture* texture)
@@ -118,7 +128,7 @@ Texture* newTexture(Renderer& renderer, const PixelFormat* format, int width, in
 
 wlr_texture* importDmabuf(Renderer& renderer, wlr_buffer* buffer, const wlr_dmabuf_attributes& dmabuf)
 {
-    // Già importato: le app riusano sempre gli stessi buffer.
+    // Già importato e ancora in uso (lo stesso buffer in più punti).
     if (wlr_addon* addon = wlr_addon_find(&buffer->addons, &renderer, &textureAddon)) {
         Texture* texture = fromAddon(addon);
         ++texture->refs;

@@ -82,6 +82,12 @@ input → state → predicted frame → render as late as possible → presentat
   measures what frames cost (worst case over the last second). It starts rendering as
   late as it safely can and widens its margin after a miss. It even tells a slow frame
   apart from constant latency added by a host compositor.
+- **A slow app can't hold the screen back.** A commit whose buffer the app's GPU is
+  still drawing waits for its fence (explicit sync or implicit, it doesn't matter), and
+  until then the screen keeps the app's previous frame: the cursor, the animations and
+  every other window stay on the vblank. Buffers stay imported only while they're on
+  screen, because the kernel would otherwise make every frame wait for the GPU of each
+  app that is redrawing one of them.
 - **Direct scanout done properly.** A single opaque surface covering the output 1:1
   goes straight to the display plane, with dmabuf feedback and explicit-sync timelines.
   The moment that stops being true, Vela falls back to compositing.
@@ -418,7 +424,7 @@ Everything runs with **`ctest --test-dir build`**:
 | **Compositor** (GoogleTest, 43 tests) | FrameClock (vblank grid, late latching, margin, learned host latency), animation curves, pixel-exact placement at every scale, default scale from DPI, night light and color filters, sunrise/sunset, `vela.conf` | nothing |
 | **Files** | copies and moves, including a full disk mid-copy (`RLIMIT_FSIZE`) | nothing |
 | **Shell** | `.desktop` `Exec=` parsing, default apps (`mimeapps.list`) | nothing |
-| **Functional** (`tests/functional`, 23 scenarios) | open, snap, maximize and restore, minimize and Alt+Tab, virtual desktops, hot-plugged outputs with their own scale, lock and unlock, screens off and on, crash recovery (also while locked) | a GPU |
+| **Functional** (`tests/functional`, 26 scenarios) | open, snap, maximize and restore, minimize and Alt+Tab, virtual desktops, hot-plugged outputs with their own scale, lock and unlock, screens off and on, crash recovery (also while locked), an app whose GPU finishes 150 ms late (explicit and implicit sync) without a single missed vblank | a GPU |
 | **Sharpness** | windows reach the screen bit for bit at 100–200%, opened, snapped, maximized, restored | a GPU, numpy, Pillow |
 
 The functional scenarios drive a real headless session like a person would, and assert on
@@ -445,6 +451,7 @@ skipped there. `main` also builds the package.
 | `VELA_VRR=1` / `0` | Variable refresh rate always on / never |
 | `VELA_TEARING=0` | No tearing, even for games that ask for it |
 | `VELA_SCANOUT=0` | Disable direct scanout (for comparison) |
+| `VELA_READY_WAIT=0` | Apply app commits right away even if their GPU hasn't finished, so frames wait for it (for comparison) |
 | `VELA_DEBUG_SCANOUT=1` | Log why a fullscreen app isn't scanned out directly |
 | `VELA_LATCH=0` | Draw right at vblank instead of late latching |
 | `VELA_LATCH_MARGIN` | Minimum late-latching margin in ms (default 1, grows on its own after a late frame) |
@@ -485,7 +492,7 @@ settings/         vela-settings, one QML page per settings page
 lock/             vela-lock
 session/          login entry, systemd target, portals
 packaging/arch/   PKGBUILD and vela-update
-tools/            vela-shot, vela-input, vela-windows, vela-pattern, vela-testlock
+tools/            vela-shot, vela-input, vela-windows, vela-pattern, vela-testlock, vela-slowgpu
 tests/functional/ headless scenarios (Python), run by ctest
 scripts/          nested and headless runs, sharpness test, measurements
 docs/             design documents and screenshots

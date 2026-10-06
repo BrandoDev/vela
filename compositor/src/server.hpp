@@ -11,6 +11,7 @@
 #include "render/vulkan.hpp"
 #include "scene/capture.hpp"
 #include "scene/frame.hpp"
+#include "scene/readiness.hpp"
 #include "scene/scene.hpp"
 #include "wlr.hpp"
 
@@ -757,6 +758,8 @@ public:
     void updateOutputConfiguration();
     void applyOutputConfiguration(wlr_output_configuration_v1* config, bool testOnly);
     std::unique_ptr<scene::Scene> sceneGraph;
+    // Commit delle app trattenuti finché la loro GPU non ha finito (§7.3).
+    std::unique_ptr<scene::ReadyCommits> readyCommits;
     wlr_xdg_shell* xdgShell = nullptr;
     wlr_layer_shell_v1* layerShell = nullptr;
     wlr_foreign_toplevel_manager_v1* foreignToplevels = nullptr;

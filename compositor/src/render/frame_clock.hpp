@@ -158,6 +158,7 @@ public:
             m_presentedPeriodNs = refreshNs;
         }
         ++m_frames;
+        ++m_framesTotal;
         Pending& p = m_pending[commitSeq % pendingSlots];
         if (!p.valid || p.seq != commitSeq) {
             return;
@@ -177,7 +178,9 @@ public:
             // Arrivato tardi. Se il margine può ancora crescere è colpa
             // nostra (frame lento): margine più ampio. Se non può, il ritardo
             // è dello schermo (compositor ospite): lo impara la latenza.
-            m_missed += int((error + period / 2) / period);
+            const int missed = int((error + period / 2) / period);
+            m_missed += missed;
+            m_missedTotal += missed;
             if (warmingUp) {
                 // niente da imparare
             } else if (budgetNs(when) < maxBudgetNs()) {
@@ -212,6 +215,10 @@ public:
         double marginMs;
         int missed; // vblank persi
     };
+    // Dall'avvio, senza azzerare (per le prove: "state").
+    uint64_t framesTotal() const { return m_framesTotal; }
+    uint64_t missedTotal() const { return m_missedTotal; }
+
     bool takeStats(int64_t now, Stats& out)
     {
         if (m_statsStartNs == 0) {
@@ -301,6 +308,8 @@ private:
     int m_frames = 0;
     int m_measured = 0;
     int m_missed = 0;
+    uint64_t m_framesTotal = 0;
+    uint64_t m_missedTotal = 0;
     double m_errorSumMs = 0.0;
     double m_errorMaxMs = 0.0;
     double m_latencySumMs = 0.0;

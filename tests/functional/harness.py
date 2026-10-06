@@ -188,13 +188,14 @@ class Session:
 
     # ------------------------------------------------------- finestre --
 
-    def open_window(self, width=400, height=300):
-        """Apre una finestra di vela-pattern; restituisce il suo identificativo."""
+    def open_window(self, width=400, height=300, command=None, timeout=5.0):
+        """Apre una finestra (vela-pattern, o `command`); restituisce il suo identificativo."""
         before = {w["id"] for w in self.state().windows}
-        client = subprocess.Popen([tool("vela-pattern"), str(width), str(height)], env=self.client_env,
+        client = subprocess.Popen(command or [tool("vela-pattern"), str(width), str(height)], env=self.client_env,
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.clients.append(client)
-        state = self.wait_for(lambda s: {w["id"] for w in s.windows} - before, what="una finestra nuova")
+        state = self.wait_for(lambda s: {w["id"] for w in s.windows} - before, timeout=timeout,
+                              what="una finestra nuova")
         identifier = next(iter({w["id"] for w in state.windows} - before))
         self.wait_still(identifier)  # finita l'animazione di apertura (sale di qualche pixel)
         return identifier

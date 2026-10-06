@@ -70,6 +70,29 @@ target_link_libraries(vela-testlock PRIVATE proto-session-lock)
 add_executable(vela-pattern vela-pattern.c)
 target_link_libraries(vela-pattern PRIVATE proto-xdg-shell proto-viewporter proto-fractional-scale)
 
-foreach(tool vela-shot vela-windows vela-input vela-pattern vela-testlock)
+# Un'app con la GPU lenta (tests/functional/test_ready.py): un lavoro di
+# calcolo Vulkan fa da rendering e la sua fence arriva tardi.
+pkg_check_modules(TOOLS_VULKAN REQUIRED IMPORTED_TARGET vulkan)
+pkg_check_modules(TOOLS_GBM REQUIRED IMPORTED_TARGET gbm)
+pkg_check_modules(TOOLS_DRM REQUIRED IMPORTED_TARGET libdrm)
+find_program(TOOLS_GLSLC NAMES glslc REQUIRED)
+vela_client_protocol(proto-linux-dmabuf
+    ${TOOLS_WAYLAND_PROTOCOLS_DIR}/stable/linux-dmabuf/linux-dmabuf-v1.xml linux-dmabuf-v1)
+vela_client_protocol(proto-linux-drm-syncobj
+    ${TOOLS_WAYLAND_PROTOCOLS_DIR}/staging/linux-drm-syncobj/linux-drm-syncobj-v1.xml linux-drm-syncobj-v1)
+set(TOOLS_SHADER ${CMAKE_CURRENT_BINARY_DIR}/shaders/slow.comp.spv.inc)
+add_custom_command(
+    OUTPUT ${TOOLS_SHADER}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/shaders
+    COMMAND ${TOOLS_GLSLC} --target-env=vulkan1.3 -O -mfmt=num -o ${TOOLS_SHADER}
+        ${CMAKE_CURRENT_SOURCE_DIR}/shaders/slow.comp
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/shaders/slow.comp
+    COMMENT "Compilo lo shader di vela-slowgpu")
+add_executable(vela-slowgpu vela-slowgpu.c ${TOOLS_SHADER})
+target_include_directories(vela-slowgpu PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/shaders)
+target_link_libraries(vela-slowgpu PRIVATE proto-xdg-shell proto-linux-dmabuf proto-linux-drm-syncobj
+    PkgConfig::TOOLS_VULKAN PkgConfig::TOOLS_GBM PkgConfig::TOOLS_DRM)
+
+foreach(tool vela-shot vela-windows vela-input vela-pattern vela-testlock vela-slowgpu)
     target_compile_options(${tool} PRIVATE -Wall -Wextra -Wno-unused-parameter)
 endforeach()

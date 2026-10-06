@@ -9,8 +9,9 @@ code follows them.
 > also summarized in §13). Stages **S0–S6 are done** (§11): Vela's scene and
 > renderer are the only ones, apps reach the screen bit for bit at every scale,
 > each frame is drawn as late as possible before the vblank, windows have
-> rounded corners and shadows, the shell's panels have acrylic blur, and Qt/KDE
-> apps have Vela's title bar. Next: S7.
+> rounded corners and shadows, the shell's panels have acrylic blur, Qt/KDE
+> apps have Vela's title bar, and an app whose GPU is late never makes the
+> screen wait (§7.3). Next: S7.
 
 ## 1. Goals
 
@@ -334,11 +335,15 @@ time it walks it directly from wlroots (`wlr_surface`, `wlr_subsurface`,
 synchronized states already resolved by wlroots). Less duplicated state = fewer
 bugs. The scene only keeps what is ours: position, effects, animations.
 
+What is live is always ready: a commit whose buffer the app's GPU hasn't
+finished drawing doesn't become the surface's current state until its fence is
+signaled (§7.3). Reading the current state never means waiting for an app.
+
 ### 5.3 What `wlr_scene` did and we now do
 
 | Task | How | Status |
 |---|---|---|
-| Buffer import | shm → our texture, re-uploaded only where the app drew (reusing wlroots' `wlr_client_buffer`); dmabuf → direct import (§7.3), once per buffer | ✔ S1 |
+| Buffer import | shm → our texture, re-uploaded only where the app drew (reusing wlroots' `wlr_client_buffer`); dmabuf → direct import (§7.3), kept while the buffer is in use | ✔ S1 |
 | Damage | on every frame the flattened scene is compared with the previous frame (elements that appeared, disappeared, moved, changed, rose above others); surface content comes from commits, with the app's precise damage; buffer age with `wlr_damage_ring` | ✔ S1 |
 | Occlusion | what is covered by opaque regions is not drawn and receives no frame callbacks | ✔ S1 |
 | Frame callbacks, presentation | §4.5: only to visible surfaces, from the output showing the larger visible part | ✔ S1 |
@@ -446,6 +451,54 @@ wlroots (captures) can also ask for wait and end-of-work points. Towards the
 output, implicit sync remains, and it is enough. `WLR_RENDER_NO_EXPLICIT_SYNC=1`
 turns the protocol off. Tested with vkcube and mpv (Vulkan, Mesa 26): the apps
 run without stalling, so the releases arrive.
+
+**Commits wait for their fences (after S6).** A frame must never wait for an
+app's GPU: one late app would make the whole output miss vblanks, cursor and
+animations included. So a commit with a buffer that isn't ready yet is held back
+(`wlr_surface_lock_pending`) and applied when its fence is signaled; meanwhile
+the surface keeps its previous, ready state, which is what every frame draws
+(`scene/readiness.cpp`). The fence is:
+
+- with explicit sync, the acquire point of the commit being held. wlroots 0.20
+  only exposes the current `linux-drm-syncobj-v1` state; the pending one is the
+  same synced object's state for `surface->pending`, found in the surface's
+  list of synced objects (private in wlroots: if it changes, the build stops
+  there). wlroots itself only waits for the point to *materialize*; we wait for
+  it to be *signaled*, with a `DRM_IOCTL_SYNCOBJ_EVENTFD` in the event loop;
+- with implicit sync, the dmabuf's write fences (`DMA_BUF_IOCTL_EXPORT_SYNC_FILE`
+  for reading, one per distinct plane fd), polled in the event loop;
+- shm buffers are always ready.
+
+Commits stay in order (wlroots applies cached states one after another), frame
+callbacks leave with the commit that carried them, so the app is naturally paced
+by its own GPU. `VELA_READY_WAIT=0` turns it off, for comparison. A limit: a
+synchronized subsurface whose buffer is late reaches the screen after its
+parent's commit, instead of together with it.
+
+**Imports last only as long as the buffer is in use.** Holding commits was not
+enough for implicit sync: RADV makes every `VkDeviceMemory`, imported dmabufs
+included, resident in *all* of the device's submissions, and the amdgpu kernel
+driver makes a submission wait for the write fences of every implicitly synced
+buffer in it. A dmabuf kept imported in a cache while its app redraws it (it was
+released, it isn't on screen) therefore blocked every frame until the app's GPU
+finished. So a client dmabuf's import is freed as soon as wlroots stops using it
+(when the GPU is done reading it) and redone if the app sends it again: 9 µs per
+import (median; 40 µs at most), against whole frames lost.
+
+Measured (headless at 60 Hz, `tools/vela-slowgpu`: an app whose GPU work, on a
+compute queue so as not to compete for the graphics one, ends ~150 ms after the
+commit; the cursor moving for 1 s):
+
+| | missed vblanks | frames |
+|---|---|---|
+| explicit sync, before | 47 | 8 |
+| explicit sync, now | 0 | 59 |
+| implicit sync, before | 47 | 9 |
+| implicit sync, holding commits only | 36 | 19 |
+| implicit sync, now | 0 | 58 |
+
+`tests/functional/test_ready.py` repeats the measurement on every run, and also
+checks that without the wait the output really does stall.
 
 ### 7.4 Shaders and pipelines
 
@@ -707,6 +760,7 @@ matched it; then `wlr_scene` went away. Each stage closes only with its tests.
 | **S4** Shape ✔ | rounded corners, shadows | done: SDF in physical pixels and a two-layer analytic shadow; `scripts/test-sharpness.sh` bit for bit at 100–225% outside the corners; validation layers: no messages |
 | **S5** Blur ✔ | `ext-background-effect`, dual Kawase, acrylic for the shell | done: taskbar, Start menu, menus, Alt+Tab and notifications blurred; 0.05–0.13 ms of GPU per frame while the Start menu opens; nothing at idle; validation layers: no messages. The blurred-background cache is postponed |
 | **S6** Title bar ✔ | `xdg-decoration`, text engine with KDE's font, buttons, SVG icons, wallpaper tint, interactions | done: apps accepting xdg-decoration (Qt/KDE) have Vela's bar, with the app icon (SVG from KDE's theme with librsvg, at physical size) and the wallpaper's Mica tint; invisible resize borders. Postponed: live blur behind the bar (solid tint for now), animated hover, resvg instead of librsvg |
+| **Ready commits** ✔ | commits wait for their fences; imports only while in use | done (§7.3): an app whose GPU ends 150 ms after the commit, explicit and implicit sync, headless at 60 Hz with the cursor moving: 0 missed vblanks (47 before). In the functional tests |
 | **S7** Color | 10 bit, HDR, `color-management-v1` | |
 | (later) VRR | refresh rate policy during animations | §4.4 |
 
@@ -730,7 +784,9 @@ matched it; then `wlr_scene` went away. Each stage closes only with its tests.
   window, 0 missed vblanks, 0.03 ms of CPU per frame, 0.01–0.03 ms of GPU work.
   Still to verify: scanout accepted by the primary plane, dmabuf feedback making
   apps change modifiers, a minimum margin under 1 ms.
-- **Slow apps hold the compositor back** (emerged in S3): a frame waits (on the
+- ~~**Slow apps hold the compositor back**~~ (emerged in S3). Solved after S6
+  (§7.3): commits wait for their fences, and imported buffers are released when
+  no longer in use. The original analysis: a frame waits (on the
   GPU, or in the kernel with scanout) for apps to finish drawing the buffers it
   shows. A late app can therefore make the whole output miss a vblank, cursor and
   animations included. KWin and Mutter apply an app's commit only when its buffer
