@@ -195,7 +195,7 @@ Toplevel::Toplevel(Server& s, wlr_xwayland_surface* surface)
     requestMinimize.connect(&x11->events.request_minimize, [this](void* data) {
         setMinimized(static_cast<wlr_xwayland_minimize_event*>(data)->minimize);
     });
-    requestActivate.connect(&x11->events.request_activate, [this](void*) { server.focusToplevel(this); });
+    requestActivate.connect(&x11->events.request_activate, [this](void*) { server.focusNewWindow(this); });
     setTitle.connect(&x11->events.set_title, [this](void*) {
         if (handle) {
             wlr_foreign_toplevel_handle_v1_set_title(handle, title());

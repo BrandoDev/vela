@@ -56,18 +56,20 @@ public:
     Snapshot& operator=(const Snapshot&) = delete;
 
     // Disegna l'istantanea col centro del riquadro in (cx, cy).
-    void apply(double cx, double cy, double scale, float opacity);
+    void apply(double cx, double cy, double scale, float opacity) { apply(cx, cy, scale, scale, opacity); }
+    // Con scale diverse in larghezza e in altezza (massimizzare, ripristinare).
+    void apply(double cx, double cy, double scaleX, double scaleY, float opacity);
 
     scene::Tree* tree() const { return m_tree.get(); }
     const wlr_box& frame() const { return m_frame; }
 
 private:
     struct Piece {
-        std::unique_ptr<scene::BufferNode> node;
+        std::unique_ptr<scene::Node> node; // BufferNode o RectNode
         double x, y; // rispetto al centro del riquadro
         double width, height;
     };
-    void collect(scene::Node* node, double lx, double ly);
+    void collect(scene::Node* node, double lx, double ly, bool hidden);
 
     std::unique_ptr<scene::Tree> m_tree;
     wlr_box m_frame;
@@ -277,7 +279,9 @@ struct Toplevel : SceneOwner {
     wlr_box frameBox() const; // geometria visibile, coordinate globali
     wlr_box minimizeTarget() const; // dove "va" quando si riduce a icona
 
-    void setMaximized(bool on);
+    // animate: false quando la finestra esce dalla massimizzazione perché la
+    // si trascina (segue già il cursore).
+    void setMaximized(bool on, bool animate = true);
     void setFullscreen(bool on);
     void setMinimized(bool on);
     void setSnap(Snap side, Output* out = nullptr); // out: lo schermo, se non quello attuale
@@ -289,6 +293,8 @@ struct Toplevel : SceneOwner {
     // Animazione di apertura. tickOpen restituisce false quando ha finito.
     void startOpenAnimation();
     bool tickOpen(double nowMs);
+    // Opacità di tutta la finestra (apertura, massimizza e ripristina).
+    void setOpacity(float opacity);
     void finishOpenAnimation();
 
     // ------------------------------------------------------ verso l'app --
@@ -299,6 +305,9 @@ struct Toplevel : SceneOwner {
     bool configurable() const; // può già ricevere dimensioni e stati
     const char* title() const;
     const char* appId() const;
+    // Un dialogo di sistema che aspetta una risposta (portachiavi, password
+    // di amministratore, PIN di GnuPG): sta sopra le finestre normali.
+    bool isSystemPrompt() const;
     Toplevel* parent() const;
     void configureSize(int width, int height); // 0x0: la sceglie l'app
     void sendMaximized(bool on);
@@ -423,7 +432,6 @@ private:
     void onUnmap();
     void onCommit();
     void applyOpenFrame(double progress);
-    void setOpacity(float opacity);
 
     bool m_animating = false;
     bool m_closeAnimated = false; // istantanea di chiusura già scattata
@@ -519,6 +527,11 @@ public:
 
     // Focus e ordine delle finestre
     void focusToplevel(Toplevel* toplevel);
+    // Una finestra che compare o chiede da sola il primo piano (non per un
+    // clic): se un dialogo di sistema aspetta, resta sotto di lui e non gli
+    // toglie la tastiera.
+    void focusNewWindow(Toplevel* toplevel);
+    Toplevel* visibleSystemPrompt() const;
     void focusLayer(LayerSurface* layer);
     void refocus();
     void forget(Toplevel* toplevel);
@@ -532,7 +545,9 @@ public:
     static wlr_box fitInto(wlr_box frame, const Output& output);
     Output* outputNamed(const char* name) const;
     Output* outputUnderCursor() const;
-    scene::Tree* layerTree(zwlr_layer_shell_v1_layer layer) const;
+    // Lo strato "top" con la tastiera (pannelli richiamati) sta sopra lo
+    // schermo intero.
+    scene::Tree* layerTree(zwlr_layer_shell_v1_layer layer, bool wantsKeyboard) const;
 
     // Schermi collegati e scollegati (output.cpp): le finestre di uno schermo
     // che sparisce vanno su un altro, e tornano quando lui torna.
@@ -566,8 +581,11 @@ public:
     void scheduleFrames();
 
     // Animazioni su un'istantanea della finestra
-    enum class SnapshotKind { Close, Minimize, Restore };
+    enum class SnapshotKind { Close, Minimize, Restore, Morph };
     bool animateSnapshot(Toplevel* toplevel, SnapshotKind kind); // false se non parte
+    // Massimizza e ripristina: il contenuto di adesso si deforma fino a `to`
+    // (riquadro globale) e sfuma, mentre la finestra vera vi compare.
+    bool animateMorph(Toplevel* toplevel, wlr_box to);
     void cancelSnapshotAnimations(Toplevel* toplevel);
 
     // Desktop virtuali (workspaces.cpp), come Windows: ogni finestra sta su
@@ -827,6 +845,10 @@ public:
         std::unique_ptr<scene::Tree> windows;
         std::unique_ptr<scene::Tree> top;
         std::unique_ptr<scene::Tree> fullscreen;
+        // I pannelli dello strato "top" che si richiamano (menu Start,
+        // impostazioni rapide, Esegui...): come su Windows compaiono anche
+        // sopra un gioco a schermo intero, che invece copre la taskbar.
+        std::unique_ptr<scene::Tree> topAboveFullscreen;
         std::unique_ptr<scene::Tree> x11Popups; // menu e tooltip delle app X11
         std::unique_ptr<scene::Tree> overlay;
         // Le finestre del desktop che si lascia, mentre scivolano via.
@@ -953,6 +975,7 @@ private:
         Tween tween;
         double fromX, fromY, toX, toY; // centro
         double fromScale, toScale;
+        double fromScaleY, toScaleY; // Morph: l'altezza scala per conto suo
         float fromOpacity, toOpacity;
     };
     std::list<SnapshotAnimation> m_snapshotAnimations;

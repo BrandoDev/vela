@@ -155,6 +155,7 @@ public:
     ~BufferNode() override;
 
     void setSize(double width, double height);
+    wlr_buffer* buffer() const { return m_buffer; }
     wlr_texture* texture() const { return m_texture; }
     const wlr_fbox& src() const { return m_src; }
     wl_output_transform transform() const { return m_transform; }

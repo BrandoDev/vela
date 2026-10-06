@@ -15,7 +15,7 @@
 // la ritrova e confronta tutto bit per bit. Righe e colonne alternate e
 // valori vicini tra loro sono il caso peggiore per qualunque filtro.
 //
-// Uso: vela-pattern [--scala1] [LARGHEZZA ALTEZZA]   (logiche; predefinito 401x301)
+// Uso: vela-pattern [--scala1] [--app-id ID] [LARGHEZZA ALTEZZA]   (logiche; predefinito 401x301)
 //
 // --scala1: come un'app vecchia, disegna sempre a scala 1 (il compositor
 // deve ingrandire): righe di un pixel e scacchiera, per giudicare il filtro.
@@ -189,9 +189,15 @@ static const struct xdg_toplevel_listener toplevelListener = {
 int main(int argc, char** argv)
 {
     int arg = 1;
+    const char* appId = "vela.pattern";
     if (arg < argc && !strcmp(argv[arg], "--scala1")) {
         legacy = 1;
         ++arg;
+    }
+    // --app-id: per le prove che dipendono dall'app (dialoghi di sistema).
+    if (arg + 1 < argc && !strcmp(argv[arg], "--app-id")) {
+        appId = argv[arg + 1];
+        arg += 2;
     }
     if (arg + 1 < argc) {
         logicalWidth = atoi(argv[arg]);
@@ -220,7 +226,7 @@ int main(int argc, char** argv)
     toplevel = xdg_surface_get_toplevel(xdgSurface);
     xdg_toplevel_add_listener(toplevel, &toplevelListener, NULL);
     xdg_toplevel_set_title(toplevel, "vela-pattern");
-    xdg_toplevel_set_app_id(toplevel, "vela.pattern");
+    xdg_toplevel_set_app_id(toplevel, appId);
     wl_surface_commit(surface);
 
     while (running && wl_display_dispatch(display) != -1) {

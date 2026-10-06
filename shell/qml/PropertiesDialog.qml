@@ -339,6 +339,25 @@ Window {
                     usable: false
                 }
             }
+            // Un programma o uno script si avvia con un doppio clic solo se
+            // è eseguibile: lo stesso bit "Esecuzione" delle Autorizzazioni,
+            // per chi può già leggerlo.
+            Row {
+                visible: root.single && !root.info.isDir
+                spacing: 16
+                Label { text: ""; width: 104 }
+                Check {
+                    label: "Consenti l'esecuzione come programma"
+                    usable: !!root.info.mine
+                    checked: (root.permissions & 0o111) !== 0
+                    onToggled: {
+                        if ((root.permissions & 0o111) !== 0)
+                            root.permissions = root.permissions & ~0o111
+                        else
+                            root.permissions = root.permissions | ((root.permissions & 0o444) >> 2) | 0o100
+                    }
+                }
+            }
         }
 
         // --- Autorizzazioni ---

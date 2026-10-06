@@ -15,6 +15,9 @@ BUILD=build
 SCALES="${*:-1 1.25 1.5 1.75 2}"
 TMP=$(mktemp -d)
 FAILED=0
+# Configurazione vuota: la luce notturna o un filtro colore di chi lancia la
+# prova cambierebbero tutti i pixel.
+export XDG_CONFIG_HOME="$TMP/config" XDG_DATA_HOME="$TMP/data" XDG_CACHE_HOME="$TMP/cache"
 
 for scale in $SCALES; do
     echo "== scala $scale"

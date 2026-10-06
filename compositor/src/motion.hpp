@@ -134,6 +134,10 @@ inline constexpr double windowCloseScale = 0.94;
 inline constexpr double windowMinimizeMs = 250.0;
 inline constexpr double windowMinimizeScale = 0.3;
 
+// Massimizzare e ripristinare: il contenuto di prima si deforma fino al
+// riquadro nuovo e sfuma nella finestra vera.
+inline constexpr double windowMaximizeMs = 250.0;
+
 // Anteprima dello snap: cresce dal centro dell'area e si accende.
 inline constexpr double snapPreviewMs = 150.0;
 

@@ -154,6 +154,31 @@ wlr_render_color micaColor(const wlr_render_color& base, const Server& server, f
         base.b + (safe[2] - base.b) * weight, 1.0f };
 }
 
+namespace {
+
+// La texture di un'immagine della barra vive quanto il suo buffer, non
+// quanto l'immagine: un'istantanea (animazioni di finestra) può tenere il
+// buffer bloccato dopo che la barra l'ha già sostituito.
+struct TextureOwner {
+    wlr_addon addon; // primo membro: ci si risale con un cast
+    wlr_texture* texture;
+};
+
+void destroyTextureOwner(wlr_addon* addon)
+{
+    auto* owner = reinterpret_cast<TextureOwner*>(addon);
+    wlr_texture_destroy(owner->texture);
+    wlr_addon_finish(addon);
+    delete owner;
+}
+
+const wlr_addon_interface textureOwnerImpl {
+    .name = "vela-decoration-texture",
+    .destroy = destroyTextureOwner,
+};
+
+} // namespace
+
 Decoration::~Decoration()
 {
     clearImage(m_icon);
@@ -165,11 +190,9 @@ Decoration::~Decoration()
 
 void Decoration::clearImage(Image& image)
 {
-    image.node.reset(); // prima il nodo: sblocca il buffer
-    if (image.texture) {
-        wlr_texture_destroy(image.texture);
-        image.texture = nullptr;
-    }
+    // Sblocca il buffer; la texture se ne va con lui (TextureOwner).
+    image.node.reset();
+    image.texture = nullptr;
 }
 
 void Decoration::setImage(Image& image, int width, int height, std::vector<uint32_t> pixels, double x, double y,
@@ -179,6 +202,8 @@ void Decoration::setImage(Image& image, int width, int height, std::vector<uint3
     wlr_buffer* buffer = render::createPixelBuffer(width, height, std::move(pixels));
     image.texture = wlr_texture_from_buffer(m_toplevel.server.renderer, buffer);
     if (image.texture) {
+        auto* owner = new TextureOwner { {}, image.texture };
+        wlr_addon_init(&owner->addon, &buffer->addons, owner, &textureOwnerImpl);
         image.node = std::make_unique<scene::BufferNode>(m_tree.get(), buffer, image.texture,
             wlr_fbox { 0, 0, double(width), double(height) }, WL_OUTPUT_TRANSFORM_NORMAL, logicalWidth, logicalHeight);
         image.node->setPosition(x, y);

@@ -185,6 +185,7 @@ bool Server::init()
     layers.windows = std::make_unique<scene::Tree>(root);
     layers.top = std::make_unique<scene::Tree>(root);
     layers.fullscreen = std::make_unique<scene::Tree>(root);
+    layers.topAboveFullscreen = std::make_unique<scene::Tree>(root);
     layers.x11Popups = std::make_unique<scene::Tree>(root);
     layers.overlay = std::make_unique<scene::Tree>(root);
     // Sopra le finestre e sotto i pannelli: il desktop che si lascia.
@@ -253,7 +254,7 @@ bool Server::init()
         auto* event = static_cast<wlr_xdg_activation_v1_request_activate_event*>(data);
         for (Toplevel* toplevel : toplevels) {
             if (toplevel->surface() == event->surface) {
-                focusToplevel(toplevel);
+                focusNewWindow(toplevel);
                 return;
             }
         }
@@ -606,10 +607,16 @@ void Server::focusToplevel(Toplevel* toplevel)
         return;
     }
 
-    // Porta in primo piano e in testa alla lista MRU in ogni caso.
+    // Porta in primo piano e in testa alla lista MRU in ogni caso. I dialoghi
+    // di sistema restano sopra (ma la tastiera va dove ha cliccato l'utente).
     toplevel->tree->raiseToTop();
     toplevels.remove(toplevel);
     toplevels.push_front(toplevel);
+    if (!toplevel->isSystemPrompt()) {
+        if (Toplevel* prompt = visibleSystemPrompt()) {
+            prompt->tree->raiseToTop();
+        }
+    }
 
     // Un pannello che ha chiesto la tastiera in modo esclusivo (es. schermata
     // di blocco) non la cede a una finestra.
@@ -633,6 +640,26 @@ void Server::focusToplevel(Toplevel* toplevel)
     }
     toplevel->setActivated(true);
     keyboardEnter(surface);
+}
+
+void Server::focusNewWindow(Toplevel* toplevel)
+{
+    focusToplevel(toplevel);
+    if (!toplevel->isSystemPrompt()) {
+        if (Toplevel* prompt = visibleSystemPrompt()) {
+            focusToplevel(prompt);
+        }
+    }
+}
+
+Toplevel* Server::visibleSystemPrompt() const
+{
+    for (Toplevel* toplevel : toplevels) {
+        if (toplevel->mapped && !toplevel->minimized && toplevel->onCurrentWorkspace() && toplevel->isSystemPrompt()) {
+            return toplevel;
+        }
+    }
+    return nullptr;
 }
 
 void Server::focusLayer(LayerSurface* layer)
@@ -766,7 +793,7 @@ Output* Server::outputUnderCursor() const
     return outputs.empty() ? nullptr : outputs.front();
 }
 
-scene::Tree* Server::layerTree(zwlr_layer_shell_v1_layer layer) const
+scene::Tree* Server::layerTree(zwlr_layer_shell_v1_layer layer, bool wantsKeyboard) const
 {
     switch (layer) {
     case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
@@ -774,7 +801,7 @@ scene::Tree* Server::layerTree(zwlr_layer_shell_v1_layer layer) const
     case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM:
         return layers.bottom.get();
     case ZWLR_LAYER_SHELL_V1_LAYER_TOP:
-        return layers.top.get();
+        return wantsKeyboard ? layers.topAboveFullscreen.get() : layers.top.get();
     case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY:
         return layers.overlay.get();
     }
@@ -1242,7 +1269,7 @@ void Server::beginInteractive(Toplevel* toplevel, CursorMode mode, uint32_t edge
         const double fraction = frame.width > 0 ? (cursor->x - frame.x) / frame.width : 0.5;
         const int restoredWidth = toplevel->restoreBox().width;
         if (toplevel->maximized) {
-            toplevel->setMaximized(false);
+            toplevel->setMaximized(false, false);
         } else {
             toplevel->setSnap(Snap::None);
         }

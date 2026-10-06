@@ -103,6 +103,19 @@ class Windows(unittest.TestCase):
         state = self.vela.wait_for(lambda s: s["workspaces"] == 1, what="un desktop solo")
         self.assertEqual(state.window(other)["workspace"], 0)
 
+    def test_system_prompt_keeps_focus_over_new_windows(self):
+        # Il portachiavi chiede la password mentre l'app che l'ha chiesto apre
+        # la sua finestra: il dialogo resta davanti e con la tastiera.
+        prompt = self.vela.open_window(300, 200, app_id="org.kde.ksecretd")
+        self.vela.wait_for(lambda s: s["focused"] == prompt)
+        app = self.vela.open_window()
+        state = self.vela.wait_for(lambda s: s.has(app), what="la finestra dell'app")
+        self.assertEqual(state["focused"], prompt)
+        self.assertEqual(state.windows[0]["id"], prompt)  # in cima
+        # Chiuso il dialogo, la tastiera passa all'app.
+        self.vela.keys("alt+F4")
+        self.vela.wait_for(lambda s: not s.has(prompt) and s["focused"] == app, what="il fuoco all'app")
+
     def test_close_with_alt_f4(self):
         window = self.vela.open_window()
         self.vela.wait_for(lambda s: s["focused"] == window)

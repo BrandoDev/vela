@@ -5,6 +5,10 @@
 
 #include "decoration.hpp"
 
+#include <algorithm>
+#include <cctype>
+#include <string>
+
 namespace vela {
 
 // ----------------------------------------------------------------- Popup --
@@ -192,6 +196,21 @@ const char* Toplevel::appId() const
     // X11: la classe della finestra (WM_CLASS), che fa da app id.
     const char* id = xdg ? xdg->app_id : x11->class_;
     return id ? id : "";
+}
+
+bool Toplevel::isSystemPrompt() const
+{
+    // Per app id (Wayland) o classe (X11): KWallet e ksecretd, l'agente
+    // polkit di KDE, pinentry, il prompt del portachiavi di GNOME.
+    std::string id = appId();
+    std::transform(id.begin(), id.end(), id.begin(), [](unsigned char c) { return std::tolower(c); });
+    for (const char* known : { "kwalletd", "ksecretd", "polkit-kde-authentication-agent", "pinentry", "gcr-prompter",
+             "systemprompter" }) {
+        if (id.find(known) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
 }
 
 Toplevel* Toplevel::parent() const
@@ -416,7 +435,7 @@ void Toplevel::onMap()
     server.toplevels.push_front(this);
     server.workspaceMapped(this);
     createHandle();
-    server.focusToplevel(this);
+    server.focusNewWindow(this);
     startOpenAnimation();
     server.announceWorkspaces();
 }
@@ -640,7 +659,7 @@ wlr_box Toplevel::restoreBox() const
     return frame;
 }
 
-void Toplevel::setMaximized(bool on)
+void Toplevel::setMaximized(bool on, bool animate)
 {
     if (!configurable()) {
         return;
@@ -653,8 +672,17 @@ void Toplevel::setMaximized(bool on)
         return;
     }
     finishOpenAnimation();
+    // Come Windows 11: la finestra si deforma fino al riquadro nuovo.
+    animate = animate && mapped && !minimized && tree->enabled() && onCurrentWorkspace();
 
     if (on) {
+        if (animate) {
+            if (Output* out = output()) {
+                const Placement place = out->place(out->usableArea());
+                server.animateMorph(this,
+                    { int(std::lround(place.x)), int(std::lround(place.y)), place.width, place.height });
+            }
+        }
         leaveSnapGroup();
         if (mapped && snap == Snap::None) {
             restore = frameBox(); // da agganciata si torna alla dimensione libera
@@ -671,6 +699,9 @@ void Toplevel::setMaximized(bool on)
         return;
     }
 
+    if (animate) {
+        server.animateMorph(this, restoreBox());
+    }
     maximized = false;
     sendMaximized(false);
     if (handle) {

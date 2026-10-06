@@ -25,7 +25,8 @@ LayerSurface::LayerSurface(Server& s, wlr_layer_surface_v1* surface)
     : SceneOwner(SceneKind::Layer)
     , server(s)
     , wlr(surface)
-    , tree(std::make_unique<scene::Tree>(s.layerTree(surface->pending.layer)))
+    , tree(std::make_unique<scene::Tree>(s.layerTree(surface->pending.layer,
+          surface->pending.keyboard_interactive != ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE)))
     , surfaceNode(std::make_unique<scene::SurfaceNode>(tree.get(), surface->surface))
     , layer(surface->pending.layer)
 {
@@ -81,10 +82,15 @@ void LayerSurface::onCommit()
 {
     const uint32_t committed = wlr->current.committed;
 
-    // Il client può spostarsi di strato (es. da "bottom" a "top").
-    if (wlr->initialized && (committed & WLR_LAYER_SURFACE_V1_STATE_LAYER)) {
+    // Il client può spostarsi di strato (es. da "bottom" a "top"), o
+    // chiedere la tastiera (e salire sopra lo schermo intero).
+    if (wlr->initialized
+        && (committed & (WLR_LAYER_SURFACE_V1_STATE_LAYER | WLR_LAYER_SURFACE_V1_STATE_KEYBOARD_INTERACTIVITY))) {
         layer = wlr->current.layer;
-        tree->reparent(server.layerTree(layer));
+        scene::Tree* target = server.layerTree(layer, wantsKeyboard());
+        if (tree->parent() != target) {
+            tree->reparent(target);
+        }
     }
 
     // Ridisponiamo solo quando cambia qualcosa che conta: ogni configure

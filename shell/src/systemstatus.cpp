@@ -3,6 +3,8 @@
 
 #include "systemstatus.h"
 
+#include "bluetoothpower.h"
+
 #include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusInterface>
@@ -239,10 +241,7 @@ void SystemStatus::refreshBluetooth()
 
 void SystemStatus::setBluetoothEnabled(bool on)
 {
-    if (!m_adapter.isEmpty()) {
-        dbusSet(QDBusConnection::systemBus(), QStringLiteral("org.bluez"), m_adapter,
-            QStringLiteral("org.bluez.Adapter1"), QStringLiteral("Powered"), on);
-    }
+    vela::bluetooth::setPowered(m_adapter, on); // anche se bloccato da rfkill
 }
 
 bool SystemStatus::airplaneMode() const

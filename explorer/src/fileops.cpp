@@ -535,12 +535,38 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
 
 // ------------------------------------------------------------- aprire --
 
+namespace {
+
+// Un programma Linux (ELF, AppImage compresi), non una libreria: si avvia
+// con un doppio clic, come un .exe su Windows. Gli script restano
+// documenti: si aprono con l'app del loro tipo.
+bool isProgram(const QFileInfo& info)
+{
+    if (!info.isFile() || info.fileName().contains(QLatin1String(".so"))) {
+        return false;
+    }
+    QFile file(info.absoluteFilePath());
+    return file.open(QIODevice::ReadOnly) && file.read(4) == QByteArray("\x7f" "ELF", 4);
+}
+
+} // namespace
+
 void FileOps::open(const QStringList& paths)
 {
     static const QMimeDatabase mimes;
     for (const QString& path : paths) {
         const QFileInfo info(path);
         if (path.endsWith(QLatin1String(".desktop")) && m_apps->launchDesktopFile(path)) {
+            continue;
+        }
+        if (isProgram(info)) {
+            if (!info.isExecutable()) {
+                emit failed(QStringLiteral("«%1» è un programma, ma non può essere eseguito. In Proprietà, "
+                                           "attiva «Consenti l'esecuzione come programma».")
+                                .arg(info.fileName()));
+            } else if (!runDetached(info.absoluteFilePath(), {}, info.absolutePath())) {
+                emit failed(QStringLiteral("Impossibile avviare «%1».").arg(info.fileName()));
+            }
             continue;
         }
         const QString app = defaultAppFor(mimes.mimeTypeForFile(info).name());

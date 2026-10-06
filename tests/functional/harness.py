@@ -188,10 +188,11 @@ class Session:
 
     # ------------------------------------------------------- finestre --
 
-    def open_window(self, width=400, height=300, command=None, timeout=5.0):
+    def open_window(self, width=400, height=300, command=None, timeout=5.0, app_id=None):
         """Apre una finestra (vela-pattern, o `command`); restituisce il suo identificativo."""
         before = {w["id"] for w in self.state().windows}
-        client = subprocess.Popen(command or [tool("vela-pattern"), str(width), str(height)], env=self.client_env,
+        pattern = [tool("vela-pattern")] + (["--app-id", app_id] if app_id else []) + [str(width), str(height)]
+        client = subprocess.Popen(command or pattern, env=self.client_env,
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.clients.append(client)
         state = self.wait_for(lambda s: {w["id"] for w in s.windows} - before, timeout=timeout,

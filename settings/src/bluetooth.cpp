@@ -3,6 +3,8 @@
 
 #include "bluetooth.h"
 
+#include "bluetoothpower.h"
+
 #include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusInterface>
@@ -205,12 +207,7 @@ void Bluetooth::fail(const QString& message)
 
 void Bluetooth::setPowered(bool on)
 {
-    if (m_adapter.isEmpty()) {
-        return;
-    }
-    QDBusMessage call = QDBusMessage::createMethodCall(bluez, m_adapter, propertiesInterface, QStringLiteral("Set"));
-    call << adapterInterface << QStringLiteral("Powered") << QVariant::fromValue(QDBusVariant(on));
-    QDBusConnection::systemBus().asyncCall(call);
+    vela::bluetooth::setPowered(m_adapter, on); // anche se bloccato da rfkill
 }
 
 void Bluetooth::startDiscovery()
