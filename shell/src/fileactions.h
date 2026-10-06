@@ -12,7 +12,7 @@
 //   computer associati con KDE Connect), per posta (xdg-email), via
 //   Bluetooth;
 // - "Scegli un'altra app": aprire con un'app qualsiasi, e farla diventare
-//   quella predefinita per quel tipo di file (xdg-mime);
+//   quella predefinita per quel tipo di file (mimeapps.h);
 // - Nuovo > Collegamento (links.h).
 class FileActions : public QObject {
     Q_OBJECT

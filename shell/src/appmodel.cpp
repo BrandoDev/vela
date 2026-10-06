@@ -3,6 +3,7 @@
 
 #include "appmodel.h"
 #include "desktopexec.h"
+#include "mimeapps.h"
 
 #include <QCollator>
 #include <QDir>
@@ -428,39 +429,10 @@ bool AppModel::launchWithFile(const QString& id, const QString& url)
     return launchEntry(*e, { QUrl(url) });
 }
 
-// L'app predefinita per un tipo di file, da mimeapps.list (prima quello
-// dell'utente, poi quelli di sistema), come fa xdg-mime.
+// L'app predefinita per un tipo di file, dai mimeapps.list (mimeapps.h).
 QString defaultAppFor(const QString& mime)
 {
-    QStringList files;
-    const QString config = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
-    files << config + QStringLiteral("/mimeapps.list") << config + QStringLiteral("/kde-mimeapps.list");
-    for (const QString& dir : QStandardPaths::standardLocations(QStandardPaths::GenericConfigLocation)) {
-        files << dir + QStringLiteral("/mimeapps.list");
-    }
-    for (const QString& dir : QStandardPaths::standardLocations(QStandardPaths::ApplicationsLocation)) {
-        files << dir + QStringLiteral("/mimeapps.list");
-    }
-    for (const QString& path : std::as_const(files)) {
-        QFile file(path);
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            continue;
-        }
-        bool inDefaults = false;
-        QTextStream stream(&file);
-        QString line;
-        while (stream.readLineInto(&line)) {
-            if (line.startsWith(u'[')) {
-                inDefaults = line.trimmed() == QLatin1String("[Default Applications]");
-            } else if (inDefaults && line.startsWith(mime + u'=')) {
-                const QString first = line.mid(mime.size() + 1).section(u';', 0, 0).trimmed();
-                if (!first.isEmpty()) {
-                    return first;
-                }
-            }
-        }
-    }
-    return {};
+    return MimeApps::defaultFor(mime);
 }
 
 QVariantList AppModel::allApps() const

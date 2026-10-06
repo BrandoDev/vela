@@ -41,6 +41,7 @@ Window {
         "apps": { title: "App", parent: "", file: "AppsPage.qml", icon: "preferences-desktop-default-applications" },
         "installed-apps": { title: "App installate", parent: "apps", file: "InstalledAppsPage.qml", icon: "view-list-details" },
         "default-apps": { title: "App predefinite", parent: "apps", file: "DefaultAppsPage.qml", icon: "preferences-desktop-default-applications" },
+        "default-app": { title: "App", parent: "default-apps", file: "DefaultAppPage.qml", icon: "preferences-desktop-default-applications" },
         "time-language": { title: "Ora e lingua", parent: "", file: "TimeLanguagePage.qml", icon: "preferences-system-time" },
         "datetime": { title: "Data e ora", parent: "time-language", file: "DateTimePage.qml", icon: "preferences-system-time" },
         "keyboard": { title: "Tastiera", parent: "time-language", file: "KeyboardPage.qml", icon: "input-keyboard" },
@@ -72,7 +73,9 @@ Window {
         const list = []
         let name = current
         while (name !== "" && pages[name]) {
-            list.unshift({ name: name, title: pages[name].title })
+            // L'app di App predefinite ha il suo nome nel percorso.
+            const title = name === "default-app" && DefaultApps.selectedName !== "" ? DefaultApps.selectedName : pages[name].title
+            list.unshift({ name: name, title: title })
             name = pages[name].parent
         }
         // Home non fa da genitore nel percorso, come su Windows.
@@ -131,6 +134,8 @@ Window {
         { page: "apps", text: "App", keys: "programmi applicazioni" },
         { page: "installed-apps", text: "App installate", keys: "disinstalla rimuovi programmi" },
         { page: "default-apps", text: "App predefinite", keys: "browser posta lettore apri con predefinito" },
+        { page: "default-apps", text: "Scegli l'app per un tipo di file", keys: "pdf mp3 video musica foto immagini estensione tipo di file collegamento mailto archivi zip documenti" },
+        { page: "default-apps", text: "Browser predefinito", keys: "browser web firefox chrome brave internet" },
         { page: "datetime", text: "Data e ora", keys: "orologio fuso orario sincronizza ntp" },
         { page: "keyboard", text: "Tastiera", keys: "layout lingua input digitazione ripetizione tasti" },
         { page: "mouse", text: "Mouse", keys: "puntatore velocità pulsante principale mancino rotellina scorrimento righe accelerazione precisione" },

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "fileproperties.h"
+#include "mimeapps.h"
 
 #include <QDateTime>
 #include <QDirIterator>
@@ -208,6 +209,8 @@ void FileProperties::setDefaultApp(const QString& path, const QString& desktopId
 {
     static const QMimeDatabase mimes;
     const QString mime = mimes.mimeTypeForFile(path).name();
-    // xdg-mime scrive mimeapps.list, lo stesso che leggono KDE e GNOME.
-    QProcess::startDetached(QStringLiteral("xdg-mime"), { QStringLiteral("default"), desktopId, mime });
+    // mimeapps.list, lo stesso che leggono KDE, GNOME e xdg-open.
+    if (!mime.isEmpty()) {
+        MimeApps::setDefault({ mime }, desktopId);
+    }
 }

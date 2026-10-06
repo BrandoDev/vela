@@ -14,6 +14,7 @@
 //   key COMBINAZIONE         es. super+Left, alt+F4, Return, super (da solo)
 //   keydown|keyup TASTO      tiene premuto / rilascia un tasto (es. alt per Alt+Tab)
 //   type TESTO               scrive del testo (layout us)
+//   scroll N                 la rotellina: N scatti, in giù se positivo
 //   sleep MS                 aspetta
 //
 // Esempio, trascinare una finestra contro il bordo sinistro:
@@ -308,12 +309,21 @@ static int typeText(const char* text)
 
 // ----------------------------------------------------------------- main --
 
+// N scatti della rotellina (15 unità l'uno, come libinput), in giù se N > 0.
+static void pointerScroll(int steps)
+{
+    zwlr_virtual_pointer_v1_axis_source(pointer, WL_POINTER_AXIS_SOURCE_WHEEL);
+    zwlr_virtual_pointer_v1_axis_discrete(
+        pointer, nowMs(), WL_POINTER_AXIS_VERTICAL_SCROLL, wl_fixed_from_int(15 * steps), steps);
+    zwlr_virtual_pointer_v1_frame(pointer);
+}
+
 static void usage(const char* program)
 {
     fprintf(stderr,
         "Uso: %s AZIONE [AZIONE...]\n"
         "  move X Y | down [left|right|middle|back|forward] | up [...] | click [...]\n"
-        "  key COMBINAZIONE (es. super+Left) | keydown|keyup TASTO | type TESTO | sleep MS\n",
+        "  key COMBINAZIONE (es. super+Left) | keydown|keyup TASTO | type TESTO | scroll N | sleep MS\n",
         program);
 }
 
@@ -388,6 +398,9 @@ int main(int argc, char** argv)
             ++i;
         } else if ((!strcmp(action, "keydown") || !strcmp(action, "keyup")) && arg1) {
             ok = pressKey(arg1, !strcmp(action, "keydown"));
+            ++i;
+        } else if (!strcmp(action, "scroll") && arg1) {
+            pointerScroll(atoi(arg1));
             ++i;
         } else if (!strcmp(action, "type") && arg1) {
             ok = typeText(arg1);

@@ -70,6 +70,7 @@ set(SETTINGS_QML_FILES
     qml/pages/AppsPage.qml
     qml/pages/InstalledAppsPage.qml
     qml/pages/DefaultAppsPage.qml
+    qml/pages/DefaultAppPage.qml
     qml/pages/TimeLanguagePage.qml
     qml/pages/DateTimePage.qml
     qml/pages/KeyboardPage.qml

@@ -1,0 +1,118 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// Le prove delle app predefinite (mimeapps.h): lettura secondo la
+// specifica freedesktop e scrittura che non rovina il resto del file. Tutto
+// in cartelle temporanee (XDG_CONFIG_HOME, XDG_DATA_HOME...).
+//
+//   ctest --test-dir build -R mimeapps      (o build/shell/vela-mimeapps-test)
+
+#include "mimeapps.h"
+
+#include <QTemporaryDir>
+#include <QTest>
+
+namespace {
+
+void write(const QString& path, const QByteArray& text)
+{
+    QDir().mkpath(QFileInfo(path).absolutePath());
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    file.write(text);
+}
+
+QString read(const QString& path)
+{
+    QFile file(path);
+    return file.open(QIODevice::ReadOnly) ? QString::fromUtf8(file.readAll()) : QString();
+}
+
+} // namespace
+
+class MimeAppsTest : public QObject {
+    Q_OBJECT
+
+    // Le cartelle temporanee che main() indica con le variabili XDG.
+    static QString config() { return qEnvironmentVariable("XDG_CONFIG_HOME"); }
+    static QString data() { return qEnvironmentVariable("XDG_DATA_HOME"); }
+
+private slots:
+    void init()
+    {
+        QDir(config()).removeRecursively();
+        QDir(data()).removeRecursively();
+        // Le app "installate": un .desktop vuoto basta a trovarle.
+        for (const char* app : { "kate.desktop", "okular.desktop", "firefox.desktop", "brave.desktop" }) {
+            write(data() + QStringLiteral("/applications/") + QLatin1String(app), "[Desktop Entry]\n");
+        }
+    }
+
+    void writePreservesTheRest()
+    {
+        write(config() + QStringLiteral("/mimeapps.list"),
+            "# un commento\n[Added Associations]\ntext/plain=okular.desktop;\n\n"
+            "[Default Applications]\nimage/png=gwenview.desktop;\n\n[Altro]\nchiave=valore\n");
+        QVERIFY(MimeApps::setDefault({ QStringLiteral("text/plain") }, QStringLiteral("kate.desktop")));
+        const QString text = read(config() + QStringLiteral("/mimeapps.list"));
+        QVERIFY(text.contains(QLatin1String("# un commento")));
+        QVERIFY(text.contains(QLatin1String("image/png=gwenview.desktop;")));
+        QVERIFY(text.contains(QLatin1String("[Altro]\nchiave=valore")));
+        // L'app scelta in testa alle associazioni, le altre restano.
+        QVERIFY(text.contains(QLatin1String("text/plain=kate.desktop;okular.desktop;")));
+        QCOMPARE(MimeApps::defaultFor(QStringLiteral("text/plain")), QStringLiteral("kate.desktop"));
+    }
+
+    void createsTheFile()
+    {
+        QVERIFY(MimeApps::setDefault({ QStringLiteral("application/pdf") }, QStringLiteral("okular.desktop")));
+        QCOMPARE(MimeApps::defaultFor(QStringLiteral("application/pdf")), QStringLiteral("okular.desktop"));
+        QCOMPARE(MimeApps::addedFor(QStringLiteral("application/pdf")), QStringList { QStringLiteral("okular.desktop") });
+    }
+
+    void desktopFileWins()
+    {
+        // Il file del desktop in uso vince su mimeapps.list (Vela prima di KDE).
+        write(config() + QStringLiteral("/mimeapps.list"), "[Default Applications]\nx-scheme-handler/https=firefox.desktop;\n");
+        write(config() + QStringLiteral("/kde-mimeapps.list"), "[Default Applications]\nx-scheme-handler/https=brave.desktop;\n");
+        QCOMPARE(MimeApps::defaultFor(QStringLiteral("x-scheme-handler/https")), QStringLiteral("brave.desktop"));
+        // Scegliendo, si aggiorna anche kde-mimeapps.list: la scelta vale davvero.
+        QVERIFY(MimeApps::setDefault({ QStringLiteral("x-scheme-handler/https") }, QStringLiteral("firefox.desktop")));
+        QCOMPARE(MimeApps::defaultFor(QStringLiteral("x-scheme-handler/https")), QStringLiteral("firefox.desktop"));
+        // Ma un file del desktop che non c'era non si crea.
+        QVERIFY(!QFile::exists(config() + QStringLiteral("/vela-mimeapps.list")));
+    }
+
+    void aliases()
+    {
+        // Scritto col vecchio nome, si trova anche col nuovo (e viceversa).
+        write(config() + QStringLiteral("/mimeapps.list"), "[Default Applications]\nvideo/x-matroska=kate.desktop;\n");
+        QCOMPARE(MimeApps::defaultFor(QStringLiteral("video/matroska")), QStringLiteral("kate.desktop"));
+        QVERIFY(MimeApps::setDefault({ QStringLiteral("video/matroska") }, QStringLiteral("okular.desktop")));
+        QCOMPARE(MimeApps::defaultFor(QStringLiteral("video/x-matroska")), QStringLiteral("okular.desktop"));
+    }
+
+    void skipsMissingApps()
+    {
+        write(config() + QStringLiteral("/mimeapps.list"),
+            "[Default Applications]\ntext/plain=nonesiste.desktop;kate.desktop;\n");
+        QCOMPARE(MimeApps::defaultFor(QStringLiteral("text/plain")), QStringLiteral("kate.desktop"));
+    }
+};
+
+int main(int argc, char* argv[])
+{
+    QTemporaryDir dir;
+    qputenv("XDG_CONFIG_HOME", QFile::encodeName(dir.filePath(QStringLiteral("config"))));
+    qputenv("XDG_CONFIG_DIRS", QFile::encodeName(dir.filePath(QStringLiteral("sys-config"))));
+    qputenv("XDG_DATA_HOME", QFile::encodeName(dir.filePath(QStringLiteral("data"))));
+    // Dopo quella finta, le cartelle di sistema: servono al database dei tipi
+    // (/usr/share/mime, per gli alias).
+    qputenv("XDG_DATA_DIRS", QFile::encodeName(dir.filePath(QStringLiteral("sys-data"))) + ":/usr/local/share:/usr/share");
+    qputenv("XDG_CURRENT_DESKTOP", "Vela:KDE");
+    QCoreApplication app(argc, argv);
+    MimeAppsTest test;
+    return QTest::qExec(&test, argc, argv);
+}
+
+#include "mimeapps.moc"

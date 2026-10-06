@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "fileactions.h"
+#include "mimeapps.h"
 
 #include "links.h"
 
@@ -116,7 +117,7 @@ void FileActions::setDefaultApp(const QString& appId, const QString& path) const
     static const QMimeDatabase mimes;
     const QString mime = mimes.mimeTypeForFile(path).name();
     if (!mime.isEmpty() && !appId.isEmpty()) {
-        QProcess::startDetached(QStringLiteral("xdg-mime"), { QStringLiteral("default"), appId, mime });
+        MimeApps::setDefault({ mime }, appId);
     }
 }
 

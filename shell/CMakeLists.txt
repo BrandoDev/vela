@@ -16,6 +16,7 @@ qt_add_executable(vela-shell
     src/appmodel.cpp
     src/appmodel.h
     src/desktopexec.h
+    src/mimeapps.h
     src/backgroundeffects.cpp
     src/clipboard.cpp
     src/clipboard.h
@@ -157,7 +158,7 @@ target_link_libraries(vela-shell PRIVATE
 
 install(TARGETS vela-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-# Le prove (ctest): la chiave Exec dei file .desktop.
+# Le prove (ctest): la chiave Exec dei file .desktop e le app predefinite.
 if(VELA_BUILD_TOOLS)
     find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
     qt_add_executable(vela-desktopexec-test tests/desktopexec.cpp src/desktopexec.h)
@@ -165,4 +166,10 @@ if(VELA_BUILD_TOOLS)
     target_compile_options(vela-desktopexec-test PRIVATE -Wall -Wextra)
     target_link_libraries(vela-desktopexec-test PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME shell-exec-desktop COMMAND vela-desktopexec-test)
+
+    qt_add_executable(vela-mimeapps-test tests/mimeapps.cpp src/mimeapps.h)
+    target_include_directories(vela-mimeapps-test PRIVATE src)
+    target_compile_options(vela-mimeapps-test PRIVATE -Wall -Wextra)
+    target_link_libraries(vela-mimeapps-test PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME shell-mimeapps COMMAND vela-mimeapps-test)
 endif()
