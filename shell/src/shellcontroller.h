@@ -126,6 +126,9 @@ signals:
     void openWithRequested(const QString& path); // "Scegli un'altra app", da Esplora
     void newShortcutRequested(const QString& folder); // "Nuovo > Collegamento", da Esplora
     void accessibilityReceived(const QByteArray& json); // dal compositor
+    void clipboardRequested(); // Win+V
+    void snipRequested(); // Win+Maiusc+S, Stamp
+    void clipboardClearRequested(); // dalle Impostazioni
     // Il menu della finestra (clic destro sulla barra del titolo,
     // Alt+Spazio): su quale schermo e dove, in coordinate dello schermo.
     void windowMenuRequested(const QString& window, const QString& output, int x, int y, bool maximized,

@@ -3,6 +3,7 @@ import QtQuick
 // Pulsante della taskbar: sfondo che sfuma al passaggio del mouse e un
 // leggero "rimbalzo" quando lo premi. Sotto l'icona, come su Windows 11, un
 // trattino grigio se l'app è aperta, più lungo e colorato se è quella attiva.
+// Con `draggable` lo si trascina di lato per spostarlo (dropped dice di quanto).
 Item {
     id: root
 
@@ -10,11 +11,18 @@ Item {
     readonly property bool hovered: mouse.containsMouse
     property bool active: false
     property bool running: false
+    property bool draggable: false
+    readonly property bool dragging: mouse.dragging
     default property alias content: holder.data
 
     signal clicked()
     signal middleClicked()
     signal rightClicked(bool shift) // Maiusc+clic destro: il menu della finestra
+    signal dropped(real dx)
+
+    // Mentre lo si trascina segue il mouse, sopra gli altri pulsanti.
+    z: mouse.dragging ? 10 : 0
+    transform: Translate { x: mouse.dragging ? mouse.dragX : 0 }
 
     width: 44
     height: 40
@@ -69,7 +77,33 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+        property real pressX: 0
+        property real dragX: 0
+        property bool dragging: false
+        property bool dragged: false // il rilascio di un trascinamento non è un clic
+        // In coordinate della finestra: il pulsante si sposta col mouse, le sue no.
+        onPressed: mouse => {
+            pressX = mapToItem(null, mouse.x, mouse.y).x
+            dragX = 0
+            dragged = false
+        }
+        onPositionChanged: mouse => {
+            if (!pressed || !root.draggable || !(pressedButtons & Qt.LeftButton)) return
+            dragX = mapToItem(null, mouse.x, mouse.y).x - pressX
+            if (!dragging && Math.abs(dragX) > 8) dragging = true
+        }
+        onReleased: mouse => {
+            if (dragging) {
+                dragging = false
+                dragged = true
+                root.dropped(dragX)
+            }
+        }
         onClicked: mouse => {
+            if (dragged) {
+                dragged = false
+                return
+            }
             if (mouse.button === Qt.MiddleButton) {
                 root.middleClicked()
             } else if (mouse.button === Qt.RightButton) {

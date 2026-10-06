@@ -7,6 +7,7 @@
 #include "accessibility.h"
 #include "appmodel.h"
 #include "backgroundeffects.h"
+#include "clipboard.h"
 #include "config.h"
 #include "desktopmodel.h"
 #include "fileactions.h"
@@ -19,6 +20,7 @@
 #include "notifications.h"
 #include "servicemenus.h"
 #include "shellcontroller.h"
+#include "snip.h"
 #include "systemactions.h"
 #include "systemstatus.h"
 #include "taskbarmodel.h"
@@ -353,6 +355,11 @@ int main(int argc, char* argv[])
     ServiceMenus serviceMenus;
     FileProperties properties;
     FileActions fileActions;
+    Clipboard clipboard;
+    QObject::connect(&shell, &ShellController::clipboardClearRequested, &clipboard, &Clipboard::clear);
+    // La cronologia accesa o spenta dalle Impostazioni (vela-shell.conf).
+    QObject::connect(&config, &Config::clipboardChanged, &clipboard,
+        [&config, &clipboard] { clipboard.setEnabled(config.clipboardHistory()); });
     BackgroundEffects effects;
     SystemStatus status;
 
@@ -364,6 +371,10 @@ int main(int argc, char* argv[])
     engine.addImageProvider(QStringLiteral("filethumb"), new FileThumbnailProvider);
     engine.addImageProvider(QStringLiteral("notification"), new NotificationImageProvider(&notifications));
     engine.addImageProvider(QStringLiteral("tray"), new TrayImageProvider(&tray));
+    engine.addImageProvider(QStringLiteral("clipboard"), new ClipboardImageProvider(&clipboard));
+    Snip snip(&engine, &capture, &clipboard, &notifications);
+    engine.addImageProvider(QStringLiteral("snip"), new SnipImageProvider(&snip));
+    QObject::connect(&shell, &ShellController::snipRequested, &snip, &Snip::start);
     engine.rootContext()->setContextProperty(QStringLiteral("Apps"), &apps);
     engine.rootContext()->setContextProperty(QStringLiteral("Shell"), &shell);
     engine.rootContext()->setContextProperty(QStringLiteral("Config"), &config);
@@ -378,6 +389,8 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("ServiceMenus"), &serviceMenus);
     engine.rootContext()->setContextProperty(QStringLiteral("Properties"), &properties);
     engine.rootContext()->setContextProperty(QStringLiteral("FileActions"), &fileActions);
+    engine.rootContext()->setContextProperty(QStringLiteral("Clip"), &clipboard);
+    engine.rootContext()->setContextProperty(QStringLiteral("Snip"), &snip);
     engine.rootContext()->setContextProperty(QStringLiteral("Effects"), &effects);
     engine.rootContext()->setContextProperty(QStringLiteral("Status"), &status);
     engine.rootContext()->setContextProperty(QStringLiteral("Access"), &accessibility);
@@ -401,6 +414,7 @@ int main(int argc, char* argv[])
     engine.loadFromModule("Vela.Shell", "SnapAssist");
     engine.loadFromModule("Vela.Shell", "TaskbarPreview");
     engine.loadFromModule("Vela.Shell", "FileDialogs");
+    engine.loadFromModule("Vela.Shell", "ClipboardPanel");
 
     QQuickWindow* switcher = findWindow(engine, "switcher");
     QQuickWindow* startMenu = findWindow(engine, "startMenu");
@@ -418,8 +432,9 @@ int main(int argc, char* argv[])
     QQuickWindow* snapAssist = findWindow(engine, "snapAssist");
     QQuickWindow* taskbarPreview = findWindow(engine, "taskbarPreview");
     QQuickWindow* fileDialogs = findWindow(engine, "fileDialogs");
+    QQuickWindow* clipboardPanel = findWindow(engine, "clipboardPanel");
     if (!startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog || !confirmDialog || !sourceChooser || !propertiesDialog || !quickSettings
-        || !notificationCenter || !taskView || !desktopOsd || !snapLayouts || !snapAssist || !taskbarPreview || !fileDialogs) {
+        || !notificationCenter || !taskView || !desktopOsd || !snapLayouts || !snapAssist || !taskbarPreview || !fileDialogs || !clipboardPanel) {
         qCritical("vela-shell: impossibile caricare l'interfaccia QML");
         return 1;
     }
@@ -438,6 +453,7 @@ int main(int argc, char* argv[])
     setupPropertiesDialog(propertiesDialog);
     setupSidePanel(quickSettings, QStringLiteral("vela-quick-settings"));
     setupSidePanel(notificationCenter, QStringLiteral("vela-notification-center"));
+    setupSidePanel(clipboardPanel, QStringLiteral("vela-clipboard"));
     setupTaskView(taskView);
     setupDesktopOsd(desktopOsd);
     setupSnapLayouts(snapLayouts);

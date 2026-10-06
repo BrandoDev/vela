@@ -1,0 +1,534 @@
+#include "clipboard.h"
+
+#include "shellcontroller.h"
+
+#include <QBuffer>
+#include <QDir>
+#include <QFile>
+#include <QGuiApplication>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSettings>
+#include <QStandardPaths>
+#include <QThread>
+#include <QVariantMap>
+
+#include <algorithm>
+#include <cstring>
+#include <utility>
+#include <fcntl.h>
+#include <poll.h>
+#include <thread>
+#include <unistd.h>
+
+#include <wayland-client.h>
+
+#include "ext-data-control-v1-client-protocol.h"
+
+namespace {
+
+constexpr int maxItems = 25; // come Windows
+constexpr qsizetype maxText = 1024 * 1024;
+constexpr qsizetype maxImage = 32 * 1024 * 1024;
+
+const char* const textTypes[] = { "text/plain;charset=utf-8", "text/plain", "UTF8_STRING", "STRING", "TEXT" };
+
+wl_display* waylandDisplay()
+{
+    auto* wayland = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>();
+    return wayland ? wayland->display() : nullptr;
+}
+
+QString storageDir()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/vela/clipboard");
+}
+
+} // namespace
+
+// Un'offerta degli appunti e i suoi formati (vive nel thread degli appunti).
+struct Clipboard::Offer {
+    ext_data_control_offer_v1* offer = nullptr;
+    QStringList types;
+};
+
+struct ClipboardCallbacks {
+    using Offer = Clipboard::Offer;
+
+    static void global(void* data, wl_registry* registry, uint32_t name, const char* interface, uint32_t)
+    {
+        auto* self = static_cast<Clipboard*>(data);
+        if (!std::strcmp(interface, ext_data_control_manager_v1_interface.name)) {
+            self->m_manager = static_cast<ext_data_control_manager_v1*>(
+                wl_registry_bind(registry, name, &ext_data_control_manager_v1_interface, 1));
+            auto* wayland = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>();
+            if (wayland && wayland->seat()) {
+                self->m_device = ext_data_control_manager_v1_get_data_device(self->m_manager, wayland->seat());
+                ext_data_control_device_v1_add_listener(self->m_device, &deviceListener, self);
+            }
+        }
+    }
+    static void globalRemove(void*, wl_registry*, uint32_t) { }
+    static constexpr wl_registry_listener registryListener { global, globalRemove };
+
+    // --- device ---
+    static void dataOffer(void* data, ext_data_control_device_v1*, ext_data_control_offer_v1* id)
+    {
+        auto* self = static_cast<Clipboard*>(data);
+        auto* offer = new Offer;
+        offer->offer = id;
+        self->m_offers.insert(id, offer);
+        ext_data_control_offer_v1_add_listener(id, &offerListener, offer);
+    }
+    static void selection(void* data, ext_data_control_device_v1*, ext_data_control_offer_v1* id)
+    {
+        auto* self = static_cast<Clipboard*>(data);
+        Offer* offer = id ? self->m_offers.value(id) : nullptr;
+        // Le offerte vecchie non servono più.
+        for (auto it = self->m_offers.begin(); it != self->m_offers.end();) {
+            if (it.value() != offer) {
+                ext_data_control_offer_v1_destroy(it.value()->offer);
+                delete it.value();
+                it = self->m_offers.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        if (!offer) {
+            return;
+        }
+        if (self->m_ignoreNext.exchange(false)) {
+            return; // l'abbiamo messa noi
+        }
+        self->readOffer(offer);
+        self->m_offers.remove(offer->offer);
+        ext_data_control_offer_v1_destroy(offer->offer);
+        delete offer;
+    }
+    static void finished(void* data, ext_data_control_device_v1* device)
+    {
+        auto* self = static_cast<Clipboard*>(data);
+        ext_data_control_device_v1_destroy(device);
+        self->m_device = nullptr;
+    }
+    static void primarySelection(void* data, ext_data_control_device_v1*, ext_data_control_offer_v1* id)
+    {
+        // La selezione primaria (il testo evidenziato) non va nella cronologia.
+        auto* self = static_cast<Clipboard*>(data);
+        if (Offer* offer = id ? self->m_offers.take(id) : nullptr) {
+            ext_data_control_offer_v1_destroy(offer->offer);
+            delete offer;
+        }
+    }
+    static constexpr ext_data_control_device_v1_listener deviceListener {
+        dataOffer, selection, finished, primarySelection
+    };
+
+    // --- offerta ---
+    static void offerType(void* data, ext_data_control_offer_v1*, const char* mimeType)
+    {
+        static_cast<Offer*>(data)->types << QString::fromUtf8(mimeType);
+    }
+    static constexpr ext_data_control_offer_v1_listener offerListener { offerType };
+
+    // --- la nostra sorgente ---
+    static void send(void* data, ext_data_control_source_v1*, const char* mimeType, int32_t fd)
+    {
+        auto* self = static_cast<Clipboard*>(data);
+        QByteArray payload;
+        {
+            QMutexLocker lock(&self->m_mutex);
+            payload = QByteArray(mimeType) == "image/png" ? self->m_sourcePng : self->m_sourceText;
+        }
+        // In un altro thread: un'immagine grande non ferma la shell mentre
+        // l'app la legge.
+        std::thread([fd, payload] {
+            qsizetype written = 0;
+            while (written < payload.size()) {
+                const ssize_t n = ::write(fd, payload.constData() + written, size_t(payload.size() - written));
+                if (n <= 0) {
+                    break;
+                }
+                written += n;
+            }
+            ::close(fd);
+        }).detach();
+    }
+    static void cancelled(void*, ext_data_control_source_v1* source)
+    {
+        ext_data_control_source_v1_destroy(source); // un'altra app ha copiato qualcosa
+    }
+    static constexpr ext_data_control_source_v1_listener sourceListener { send, cancelled };
+};
+
+// ------------------------------------------------------------- Clipboard --
+
+Clipboard::Clipboard(QObject* parent)
+    : QObject(parent)
+{
+    m_enabled = QSettings().value(QStringLiteral("clipboard/history"), false).toBool();
+    loadPinned();
+    wl_display* display = waylandDisplay();
+    if (!display || pipe2(m_wake, O_CLOEXEC | O_NONBLOCK) != 0) {
+        return;
+    }
+    // Una coda nostra: i suoi eventi li serve il thread degli appunti.
+    m_queue = wl_display_create_queue(display);
+    auto* wrapper = static_cast<wl_display*>(wl_proxy_create_wrapper(display));
+    wl_proxy_set_queue(reinterpret_cast<wl_proxy*>(wrapper), m_queue);
+    m_registry = wl_display_get_registry(wrapper);
+    wl_proxy_wrapper_destroy(wrapper);
+    wl_registry_add_listener(m_registry, &ClipboardCallbacks::registryListener, this);
+    wl_display_flush(display);
+    m_thread = QThread::create([this] { run(); });
+    m_thread->start();
+}
+
+Clipboard::~Clipboard()
+{
+    if (m_thread) {
+        m_stop = true;
+        (void)!::write(m_wake[1], "x", 1);
+        m_thread->wait();
+        delete m_thread;
+    }
+    for (Offer* offer : std::as_const(m_offers)) {
+        delete offer;
+    }
+    for (int fd : m_wake) {
+        if (fd >= 0) {
+            ::close(fd);
+        }
+    }
+}
+
+void Clipboard::run()
+{
+    // Il modo corretto di leggere da più thread la stessa connessione:
+    // prepare_read, poll, read_events, poi gli eventi della nostra coda.
+    wl_display* display = waylandDisplay();
+    while (!m_stop) {
+        while (wl_display_prepare_read_queue(display, m_queue) != 0) {
+            wl_display_dispatch_queue_pending(display, m_queue);
+        }
+        wl_display_flush(display);
+        pollfd fds[2] = { { wl_display_get_fd(display), POLLIN, 0 }, { m_wake[0], POLLIN, 0 } };
+        if (poll(fds, 2, -1) > 0 && (fds[0].revents & POLLIN)) {
+            wl_display_read_events(display);
+        } else {
+            wl_display_cancel_read(display);
+        }
+        wl_display_dispatch_queue_pending(display, m_queue);
+    }
+}
+
+void Clipboard::flush()
+{
+    if (wl_display* display = waylandDisplay()) {
+        wl_display_flush(display);
+    }
+}
+
+void Clipboard::setEnabled(bool on)
+{
+    if (on == m_enabled) {
+        return;
+    }
+    m_enabled = on;
+    QSettings settings;
+    settings.setValue(QStringLiteral("clipboard/history"), on);
+    if (!on) {
+        clear();
+    }
+    emit enabledChanged();
+}
+
+QVariantList Clipboard::items() const
+{
+    QVariantList out;
+    // Prima i fissati, poi gli altri; ognuno dal più recente.
+    for (const bool pinned : { true, false }) {
+        for (const Item& item : m_items) {
+            if (item.pinned != pinned) {
+                continue;
+            }
+            out.append(QVariantMap {
+                { QStringLiteral("id"), item.id },
+                { QStringLiteral("kind"), item.image.isNull() ? QStringLiteral("text") : QStringLiteral("image") },
+                { QStringLiteral("text"), item.text.left(2000) },
+                { QStringLiteral("pinned"), item.pinned },
+                { QStringLiteral("time"), item.time },
+            });
+        }
+    }
+    return out;
+}
+
+QImage Clipboard::image(int id) const
+{
+    for (const Item& item : m_items) {
+        if (item.id == id) {
+            return item.image;
+        }
+    }
+    return {};
+}
+
+void Clipboard::readOffer(Offer* offer)
+{
+    // Nel thread degli appunti: si legge fino in fondo, poi l'elemento va
+    // al thread principale.
+    const QStringList& types = offer->types;
+    // I gestori di password chiedono di non ricordare; i file copiati
+    // (Esplora, Dolphin) non sono "contenuto" e restano agli appunti normali.
+    if (types.contains(QStringLiteral("x-kde-passwordManagerHint")) || types.contains(QStringLiteral("text/uri-list"))
+        || types.contains(QStringLiteral("x-special/gnome-copied-files")) || !m_enabled) {
+        return;
+    }
+    QString chosen;
+    for (const char* type : textTypes) {
+        if (types.contains(QLatin1String(type))) {
+            chosen = QLatin1String(type);
+            break;
+        }
+    }
+    if (chosen.isEmpty()) {
+        for (const char* type : { "image/png", "image/jpeg", "image/webp", "image/bmp" }) {
+            if (types.contains(QLatin1String(type))) {
+                chosen = QLatin1String(type);
+                break;
+            }
+        }
+    }
+    if (chosen.isEmpty()) {
+        return;
+    }
+    int fds[2];
+    if (pipe2(fds, O_CLOEXEC) != 0) {
+        return;
+    }
+    ext_data_control_offer_v1_receive(offer->offer, chosen.toUtf8().constData(), fds[1]);
+    wl_display_flush(waylandDisplay());
+    ::close(fds[1]);
+    QByteArray data;
+    char chunk[65536];
+    for (;;) {
+        pollfd p { fds[0], POLLIN, 0 };
+        if (poll(&p, 1, 2000) <= 0) {
+            break; // l'app non risponde: si lascia perdere
+        }
+        const ssize_t n = ::read(fds[0], chunk, sizeof(chunk));
+        if (n <= 0) {
+            break;
+        }
+        data.append(chunk, n);
+        if (data.size() > maxImage) {
+            ::close(fds[0]);
+            return;
+        }
+    }
+    ::close(fds[0]);
+
+    Item item;
+    if (chosen.startsWith(QLatin1String("image/"))) {
+        item.image.loadFromData(data);
+        if (item.image.isNull()) {
+            return;
+        }
+        item.png = chosen == QLatin1String("image/png") ? data : QByteArray();
+    } else {
+        if (data.size() > maxText) {
+            return;
+        }
+        item.text = QString::fromUtf8(data);
+        if (item.text.trimmed().isEmpty()) {
+            return;
+        }
+    }
+    QMetaObject::invokeMethod(this, [this, item] { add(item); }, Qt::QueuedConnection);
+}
+
+void Clipboard::add(Item item)
+{
+    if (!m_enabled) {
+        return;
+    }
+    item.time = QDateTime::currentDateTime();
+    // Già nell'elenco: torna in cima (fissato se lo era).
+    for (qsizetype i = 0; i < m_items.size(); ++i) {
+        const Item& old = m_items[i];
+        if ((!item.text.isEmpty() && old.text == item.text) || (!item.image.isNull() && old.image == item.image)) {
+            item.pinned = old.pinned;
+            item.id = old.id;
+            m_items.removeAt(i);
+            break;
+        }
+    }
+    if (item.id == 0) {
+        item.id = m_nextId++;
+    }
+    m_items.prepend(item);
+    // Oltre il limite si perdono i più vecchi non fissati.
+    int unpinned = 0;
+    for (qsizetype i = 0; i < m_items.size();) {
+        if (!m_items[i].pinned && ++unpinned > maxItems) {
+            m_items.removeAt(i);
+        } else {
+            ++i;
+        }
+    }
+    emit itemsChanged();
+}
+
+void Clipboard::setSelection(const Item& item)
+{
+    if (!m_manager || !m_device) {
+        return;
+    }
+    QByteArray png = item.png;
+    if (!item.image.isNull() && png.isEmpty()) {
+        QBuffer buffer(&png);
+        buffer.open(QIODevice::WriteOnly);
+        item.image.save(&buffer, "PNG");
+    }
+    {
+        QMutexLocker lock(&m_mutex);
+        m_sourceText = item.image.isNull() ? item.text.toUtf8() : QByteArray();
+        m_sourcePng = item.image.isNull() ? QByteArray() : png;
+    }
+    auto* source = ext_data_control_manager_v1_create_data_source(m_manager);
+    ext_data_control_source_v1_add_listener(source, &ClipboardCallbacks::sourceListener, this);
+    if (item.image.isNull()) {
+        for (const char* type : textTypes) {
+            ext_data_control_source_v1_offer(source, type);
+        }
+    } else {
+        ext_data_control_source_v1_offer(source, "image/png");
+    }
+    m_ignoreNext = true;
+    ext_data_control_device_v1_set_selection(m_device, source);
+    flush();
+}
+
+void Clipboard::paste(int id)
+{
+    for (Item& item : m_items) {
+        if (item.id == id) {
+            setSelection(item);
+            // Come Windows: torna in cima.
+            Item copy = item;
+            add(copy);
+            ShellController::sendToCompositor("paste");
+            return;
+        }
+    }
+}
+
+void Clipboard::remove(int id)
+{
+    for (qsizetype i = 0; i < m_items.size(); ++i) {
+        if (m_items[i].id == id) {
+            const bool pinned = m_items[i].pinned;
+            m_items.removeAt(i);
+            if (pinned) {
+                savePinned();
+            }
+            emit itemsChanged();
+            return;
+        }
+    }
+}
+
+void Clipboard::togglePin(int id)
+{
+    for (Item& item : m_items) {
+        if (item.id == id) {
+            item.pinned = !item.pinned;
+            savePinned();
+            emit itemsChanged();
+            return;
+        }
+    }
+}
+
+void Clipboard::clear()
+{
+    m_items.erase(std::remove_if(m_items.begin(), m_items.end(), [](const Item& item) { return !item.pinned; }),
+        m_items.end());
+    emit itemsChanged();
+}
+
+void Clipboard::copyText(const QString& text)
+{
+    Item item;
+    item.text = text;
+    setSelection(item);
+    add(item);
+}
+
+void Clipboard::copyImage(const QImage& image)
+{
+    Item item;
+    item.image = image;
+    QBuffer buffer(&item.png);
+    buffer.open(QIODevice::WriteOnly);
+    image.save(&buffer, "PNG");
+    setSelection(item);
+    add(item);
+}
+
+// ---------------------------------------------------- elementi fissati --
+
+void Clipboard::savePinned() const
+{
+    const QDir dir(storageDir());
+    dir.mkpath(QStringLiteral("."));
+    // Le immagini di prima si riscrivono da capo.
+    for (const QString& old : dir.entryList({ QStringLiteral("*.png") }, QDir::Files)) {
+        QFile::remove(dir.filePath(old));
+    }
+    QJsonArray list;
+    int n = 0;
+    for (const Item& item : m_items) {
+        if (!item.pinned) {
+            continue;
+        }
+        if (item.image.isNull()) {
+            list.append(QJsonObject { { QStringLiteral("text"), item.text } });
+        } else {
+            const QString name = QStringLiteral("%1.png").arg(++n);
+            item.image.save(dir.filePath(name), "PNG");
+            list.append(QJsonObject { { QStringLiteral("image"), name } });
+        }
+    }
+    QFile file(dir.filePath(QStringLiteral("pinned.json")));
+    if (file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        file.write(QJsonDocument(list).toJson(QJsonDocument::Compact));
+    }
+}
+
+void Clipboard::loadPinned()
+{
+    const QDir dir(storageDir());
+    QFile file(dir.filePath(QStringLiteral("pinned.json")));
+    if (!file.open(QIODevice::ReadOnly)) {
+        return;
+    }
+    for (const QJsonValue& value : QJsonDocument::fromJson(file.readAll()).array()) {
+        const QJsonObject object = value.toObject();
+        Item item;
+        item.id = m_nextId++;
+        item.pinned = true;
+        item.time = QDateTime::currentDateTime();
+        if (object.contains(QStringLiteral("image"))) {
+            item.image.load(dir.filePath(object[QStringLiteral("image")].toString()));
+            if (item.image.isNull()) {
+                continue;
+            }
+        } else {
+            item.text = object[QStringLiteral("text")].toString();
+        }
+        m_items.append(item);
+    }
+}

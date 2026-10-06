@@ -64,29 +64,6 @@ double secondsSince(const timespec& start)
 // Touchpad configurati come su Windows: tocco per cliccare, trascinamento
 // col tocco, niente tocchi accidentali mentre si scrive, scorrimento
 // "naturale". Mouse e trackpoint restano come sono.
-void configurePointer(wlr_input_device* device)
-{
-#if WLR_HAS_LIBINPUT_BACKEND
-    if (!wlr_input_device_is_libinput(device)) {
-        return; // es. backend annidato: il puntatore è del sistema ospite
-    }
-    libinput_device* handle = wlr_libinput_get_device_handle(device);
-    if (libinput_device_config_tap_get_finger_count(handle) == 0) {
-        return;
-    }
-    libinput_device_config_tap_set_enabled(handle, LIBINPUT_CONFIG_TAP_ENABLED);
-    libinput_device_config_tap_set_drag_enabled(handle, LIBINPUT_CONFIG_DRAG_ENABLED);
-    if (libinput_device_config_dwt_is_available(handle)) {
-        libinput_device_config_dwt_set_enabled(handle, LIBINPUT_CONFIG_DWT_ENABLED);
-    }
-    if (libinput_device_config_scroll_has_natural_scroll(handle)) {
-        libinput_device_config_scroll_set_natural_scroll_enabled(handle,
-            envInt("VELA_NATURAL_SCROLL", 1) != 0);
-    }
-    wlr_log(WLR_INFO, "Touchpad configurato: %s", libinput_device_get_name(handle));
-#endif
-}
-
 } // namespace
 
 Listener& Server::on(wl_signal* signal, Listener::Callback callback)
@@ -164,6 +141,9 @@ bool Server::init()
     wlr_data_device_manager_create(display);
     wlr_primary_selection_v1_device_manager_create(display);
     wlr_data_control_manager_v1_create(display);
+    // Gli appunti per chi non ha una finestra: la cronologia degli appunti
+    // della shell (Win+V) e lo Strumento di cattura.
+    wlr_ext_data_control_manager_v1_create(display, 1);
     wlr_viewporter_create(display);
     wlr_single_pixel_buffer_manager_v1_create(display);
     wlr_fractional_scale_manager_v1_create(display, 1);
@@ -320,10 +300,13 @@ bool Server::init()
     on(&cursor->events.axis, [this](void* data) {
         auto* event = static_cast<wlr_pointer_axis_event*>(data);
         noteActivity();
+        // La rotellina del mouse: quante righe per scatto (Impostazioni > Mouse).
+        const double lines = event->source == WL_POINTER_AXIS_SOURCE_WHEEL ? input.wheelFactor : 1.0;
         wlr_seat_pointer_notify_axis(seat, event->time_msec, event->orientation,
-            event->delta, event->delta_discrete, event->source,
+            event->delta * lines, int32_t(std::lround(event->delta_discrete * lines)), event->source,
             event->relative_direction);
     });
+    initGestures();
     on(&cursor->events.frame, [this](void*) {
         wlr_seat_pointer_notify_frame(seat);
     });
@@ -905,7 +888,7 @@ void Server::onNewInput(wlr_input_device* device)
         new Keyboard(*this, wlr_keyboard_from_input_device(device));
         break;
     case WLR_INPUT_DEVICE_POINTER:
-        configurePointer(device);
+        addPointer(device); // input.cpp: velocità, touchpad, gesti...
         wlr_cursor_attach_input_device(cursor, device);
         break;
     default:
@@ -1352,6 +1335,16 @@ bool Server::handleBinding(uint32_t modifiers, xkb_keysym_t sym)
         setMagnifier(false);
         return true;
     }
+    // Win+V: la cronologia degli appunti; Win+Maiusc+S e Stamp: lo
+    // Strumento di cattura (li disegna la shell).
+    if (super && !ctrl && xkb_keysym_to_lower(sym) == XKB_KEY_v) {
+        sendShellCommand("clipboard");
+        return true;
+    }
+    if ((super && shift && xkb_keysym_to_lower(sym) == XKB_KEY_s) || sym == XKB_KEY_Print) {
+        sendShellCommand("snip");
+        return true;
+    }
     if ((super && tab) || (altNested && (sym == XKB_KEY_w || sym == XKB_KEY_W))) {
         sendShellCommand("task-view");
         return true;
@@ -1777,6 +1770,10 @@ void Server::listenForCommands()
                             // I desktop virtuali, per la shell appena partita.
                             const std::string reply = self->workspacesJson() + "\n";
                             (void)!write(fd, reply.data(), reply.size());
+                        } else if (line == "window-rects") {
+                            // Le finestre visibili, per lo Strumento di cattura.
+                            const std::string reply = self->windowRectsJson() + "\n";
+                            (void)!write(fd, reply.data(), reply.size());
                         } else if (line == "accessibility") {
                             // Luce notturna, filtri, lente: per la shell appena partita.
                             const std::string reply = self->accessibilityJson() + "\n";
@@ -1867,7 +1864,10 @@ void Server::handleCommand(const std::string& command)
                 }
             }
         }
-    } else if (command == "modifiers" || command == "workspaces" || command == "accessibility") {
+    } else if (command == "paste") {
+        pasteIntoFocused(); // Win+V: la shell ha messo l'elemento negli appunti
+    } else if (command == "modifiers" || command == "workspaces" || command == "accessibility"
+        || command == "window-rects") {
         // già risposto a chi l'ha chiesto (listenForCommands)
     } else if (command.rfind("workspace ", 0) == 0) {
         // workspace switch|close <n>, workspace new [switch], workspace
@@ -1905,6 +1905,7 @@ void Server::handleCommand(const std::string& command)
             wlr_seat_set_keyboard(seat, seat->keyboard_state.keyboard); // il layout nuovo alle app
         }
         loadAccessibilitySettings();
+        loadInputSettings();
     } else if (command.rfind("night-light ", 0) == 0) {
         // Dalle impostazioni rapide: night-light on|off|toggle (e così filtri, lente, tasti).
         const std::string what = command.substr(12);

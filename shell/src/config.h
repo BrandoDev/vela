@@ -23,6 +23,8 @@ class Config : public QObject {
     Q_PROPERTY(bool taskView READ taskView NOTIFY taskbarChanged)
     // La taskbar su tutti gli schermi (come Windows) o solo sul principale.
     Q_PROPERTY(bool taskbarAllScreens READ taskbarAllScreens NOTIFY taskbarChanged)
+    // La cronologia degli Appunti (Win+V).
+    Q_PROPERTY(bool clipboardHistory READ clipboardHistory NOTIFY clipboardChanged)
     // "Scegli la modalità": "dark" o "light", per la shell (taskbar, menu,
     // pannelli) e per le app (le loro finestre e le barre del titolo).
     Q_PROPERTY(QString shellTheme READ shellTheme NOTIFY themeChanged)
@@ -41,6 +43,7 @@ public:
     bool endTask() const { return m_endTask; }
     bool taskView() const { return m_taskView; }
     bool taskbarAllScreens() const { return m_taskbarAllScreens; }
+    bool clipboardHistory() const { return m_clipboardHistory; }
     bool doNotDisturb() const { return m_doNotDisturb; }
     QString shellTheme() const { return m_shellTheme; }
     QString appTheme() const { return m_appTheme; }
@@ -62,6 +65,7 @@ signals:
     void taskbarChanged();
     void doNotDisturbChanged(bool on);
     void themeChanged();
+    void clipboardChanged();
     void iconModeChanged();
 
 private:
@@ -77,6 +81,7 @@ private:
     bool m_endTask = true;
     bool m_taskView = true;
     bool m_taskbarAllScreens = true;
+    bool m_clipboardHistory = false;
     bool m_doNotDisturb = false;
     QString m_shellTheme = QStringLiteral("dark");
     QString m_appTheme = QStringLiteral("dark");

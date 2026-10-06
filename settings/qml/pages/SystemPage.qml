@@ -27,6 +27,12 @@ Page {
             onClicked: root.navigate("power")
         }
         LinkCard {
+            icon: "edit-paste"
+            title: "Appunti"
+            description: "Cronologia degli Appunti (Win+V), cancella"
+            onClicked: root.navigate("clipboard")
+        }
+        LinkCard {
             icon: "help-about"
             title: "Informazioni"
             description: "Specifiche del dispositivo, rinomina il PC, specifiche del sistema operativo"

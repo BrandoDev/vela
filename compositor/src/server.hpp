@@ -594,6 +594,45 @@ public:
     void finishWorkspaceSwitch();
     void syncTaskbarHandles();
 
+    // Mouse, touchpad e gesti (input.cpp), come Windows: velocità, pulsante
+    // principale, righe per scatto della rotellina, tocco per cliccare,
+    // direzione dello scorrimento; scorrimenti a tre e quattro dita per
+    // cambiare app o desktop, la Visualizzazione attività e il desktop.
+    // Le scelte stanno in vela.conf (Impostazioni > Bluetooth e dispositivi).
+    struct PointerDevice {
+        wlr_input_device* device = nullptr;
+        bool touchpad = false;
+        Listener destroy;
+    };
+    struct InputState {
+        std::list<std::unique_ptr<PointerDevice>> pointers;
+        double wheelFactor = 1.0; // righe per scatto / 3
+        std::string threeFingers = "app"; // "app", "desktop", "no"
+        std::string fourFingers = "desktop";
+        wlr_pointer_gestures_v1* gestures = nullptr;
+        // Lo scorrimento in corso: nostro (un'azione) o dell'app.
+        struct {
+            bool active = false;
+            bool ours = false;
+            std::string action;
+            double dx = 0.0;
+            double dy = 0.0;
+            int steps = 0; // passi di "cambia app" già fatti
+        } swipe;
+        wl_event_source* pasteTimer = nullptr;
+    } input;
+    void addPointer(wlr_input_device* device);
+    void configurePointer(PointerDevice& pointer);
+    void loadInputSettings(); // e la riapplica a tutti i dispositivi
+    void initGestures();
+    bool hasTouchpad() const;
+    // Win+V: incolla nell'app a fuoco ciò che la shell ha appena messo negli
+    // appunti (Ctrl+V, Ctrl+Maiusc+V nei terminali).
+    void pasteIntoFocused();
+    // Le finestre visibili del desktop in uso, dalla più in alto, col loro
+    // riquadro (barra compresa): per lo Strumento di cattura.
+    std::string windowRectsJson() const;
+
     // Accessibilità e colore dello schermo (accessibility.cpp), come in
     // Windows: Luce notturna (anche pianificata), filtri colore, lente di
     // ingrandimento (Win+più, Win+meno, Win+Esc), tasti permanenti. Le

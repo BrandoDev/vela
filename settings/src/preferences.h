@@ -58,6 +58,22 @@ class Preferences : public QObject {
     Q_PROPERTY(bool tearing READ tearing WRITE setTearing NOTIFY accessibilityChanged)
     // Frequenza di aggiornamento variabile: "no", "giochi" (app a schermo intero), "sempre".
     Q_PROPERTY(QString vrr READ vrr WRITE setVrr NOTIFY accessibilityChanged)
+    // --- Mouse e touchpad (vela.conf) ---
+    Q_PROPERTY(int mouseSpeed READ mouseSpeed WRITE setMouseSpeed NOTIFY inputChanged) // 1-20
+    Q_PROPERTY(bool mousePrecision READ mousePrecision WRITE setMousePrecision NOTIFY inputChanged)
+    Q_PROPERTY(bool mouseLeftHanded READ mouseLeftHanded WRITE setMouseLeftHanded NOTIFY inputChanged)
+    Q_PROPERTY(int wheelLines READ wheelLines WRITE setWheelLines NOTIFY inputChanged)
+    Q_PROPERTY(bool hasTouchpad READ hasTouchpad NOTIFY inputChanged) // lo dice il compositor
+    Q_PROPERTY(bool touchpad READ touchpad WRITE setTouchpad NOTIFY inputChanged)
+    Q_PROPERTY(bool touchpadWithMouse READ touchpadWithMouse WRITE setTouchpadWithMouse NOTIFY inputChanged)
+    Q_PROPERTY(int touchpadSpeed READ touchpadSpeed WRITE setTouchpadSpeed NOTIFY inputChanged)
+    Q_PROPERTY(bool touchpadTap READ touchpadTap WRITE setTouchpadTap NOTIFY inputChanged)
+    Q_PROPERTY(bool touchpadNatural READ touchpadNatural WRITE setTouchpadNatural NOTIFY inputChanged)
+    // "app", "desktop" o "no"
+    Q_PROPERTY(QString threeFingers READ threeFingers WRITE setThreeFingers NOTIFY inputChanged)
+    Q_PROPERTY(QString fourFingers READ fourFingers WRITE setFourFingers NOTIFY inputChanged)
+    // --- Appunti (vela-shell.conf) ---
+    Q_PROPERTY(bool clipboardHistory READ clipboardHistory WRITE setClipboardHistory NOTIFY clipboardChanged)
     // --- Accessibilità ---
     Q_PROPERTY(bool magnifier READ magnifier WRITE setMagnifier NOTIFY accessibilityChanged)
     Q_PROPERTY(int magnifierStep READ magnifierStep WRITE setMagnifierStep NOTIFY accessibilityChanged)
@@ -153,6 +169,35 @@ public:
     bool stickyKeys() const { return m_stickyKeys; }
     void setStickyKeys(bool on);
 
+    int mouseSpeed() const { return m_mouseSpeed; }
+    void setMouseSpeed(int value);
+    bool mousePrecision() const { return m_mousePrecision; }
+    void setMousePrecision(bool on);
+    bool mouseLeftHanded() const { return m_mouseLeftHanded; }
+    void setMouseLeftHanded(bool on);
+    int wheelLines() const { return m_wheelLines; }
+    void setWheelLines(int lines);
+    bool hasTouchpad() const { return m_hasTouchpad; }
+    bool touchpad() const { return m_touchpad; }
+    void setTouchpad(bool on);
+    bool touchpadWithMouse() const { return m_touchpadWithMouse; }
+    void setTouchpadWithMouse(bool on);
+    int touchpadSpeed() const { return m_touchpadSpeed; }
+    void setTouchpadSpeed(int value);
+    bool touchpadTap() const { return m_touchpadTap; }
+    void setTouchpadTap(bool on);
+    bool touchpadNatural() const { return m_touchpadNatural; }
+    void setTouchpadNatural(bool on);
+    QString threeFingers() const { return m_threeFingers; }
+    void setThreeFingers(const QString& action);
+    QString fourFingers() const { return m_fourFingers; }
+    void setFourFingers(const QString& action);
+
+    bool clipboardHistory() const { return m_clipboardHistory; }
+    void setClipboardHistory(bool on);
+    // "Cancella dati degli Appunti": la cronologia (tranne i fissati), nella shell.
+    Q_INVOKABLE void clearClipboard();
+
     QColor mica() const { return m_mica; }
     QColor micaInactive() const { return m_micaInactive; }
 
@@ -168,6 +213,8 @@ signals:
     void idleChanged();
     void keyboardChanged();
     void nightLightChanged();
+    void inputChanged();
+    void clipboardChanged();
     void iconModeChanged();
     void accessibilityChanged();
 
@@ -217,6 +264,19 @@ private:
     QString m_colorFilterKind = QStringLiteral("grigi");
     bool m_colorFilterShortcut = false;
     bool m_stickyKeys = false;
+    int m_mouseSpeed = 10;
+    bool m_mousePrecision = true;
+    bool m_mouseLeftHanded = false;
+    int m_wheelLines = 3;
+    bool m_hasTouchpad = false;
+    bool m_touchpad = true;
+    bool m_touchpadWithMouse = true;
+    int m_touchpadSpeed = 10;
+    bool m_touchpadTap = true;
+    bool m_touchpadNatural = true;
+    QString m_threeFingers = QStringLiteral("app");
+    QString m_fourFingers = QStringLiteral("desktop");
+    bool m_clipboardHistory = false;
     QList<QPair<QString, QString>> m_compositor; // vela.conf, nell'ordine del file
     QFileSystemWatcher m_watcher;
     QTimer m_debounce;

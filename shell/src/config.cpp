@@ -87,6 +87,12 @@ void Config::reload()
         emit themeChanged();
     }
 
+    const bool clipboard = settings.value(QStringLiteral("clipboard/history"), false).toBool();
+    if (clipboard != m_clipboardHistory) {
+        m_clipboardHistory = clipboard;
+        emit clipboardChanged();
+    }
+
     const bool dnd = settings.value(QStringLiteral("notifications/doNotDisturb"), false).toBool();
     if (dnd != m_doNotDisturb) {
         m_doNotDisturb = dnd;

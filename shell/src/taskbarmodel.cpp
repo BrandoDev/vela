@@ -48,6 +48,56 @@ void TaskbarModel::unpin(const QString& desktopId)
     }
 }
 
+void TaskbarModel::move(int from, int to)
+{
+    if (from < 0 || from >= m_items.size() || to < 0 || to >= m_items.size() || from == to) {
+        return;
+    }
+    const bool pinned = m_items[from].pinned;
+    // Dentro il proprio gruppo (fissate prima, poi le altre).
+    int first = 0;
+    int last = int(m_items.size()) - 1;
+    for (int i = 0; i < m_items.size(); ++i) {
+        if (m_items[i].pinned != pinned) {
+            if (pinned) {
+                last = std::min(last, i - 1);
+            } else {
+                first = std::max(first, i + 1);
+            }
+        }
+    }
+    to = std::clamp(to, first, last);
+    if (to == from) {
+        return;
+    }
+    QStringList keys;
+    for (const Item& item : std::as_const(m_items)) {
+        if (item.pinned == pinned) {
+            keys << (pinned ? item.desktopId : item.key);
+        }
+    }
+    keys.move(from - first, to - first);
+    if (pinned) {
+        // Anche le fissate non mostrate (app non installate) restano, in fondo.
+        QStringList ids = keys;
+        for (const QString& id : std::as_const(m_pinnedIds)) {
+            if (!ids.contains(id)) {
+                ids << id;
+            }
+        }
+        setPinnedIds(ids);
+    } else {
+        QStringList order = keys;
+        for (const QString& key : std::as_const(m_unpinnedOrder)) {
+            if (!order.contains(key)) {
+                order << key;
+            }
+        }
+        m_unpinnedOrder = order;
+        rebuild();
+    }
+}
+
 QList<TaskbarModel::Item> TaskbarModel::buildItems()
 {
     QList<Item> items;

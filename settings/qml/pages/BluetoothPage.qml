@@ -94,6 +94,19 @@ Page {
     CardGroup {
         title: "Impostazioni correlate"
         LinkCard {
+            icon: "input-mouse"
+            title: "Mouse"
+            description: "Pulsanti, velocità del puntatore, scorrimento"
+            onClicked: root.navigate("mouse")
+        }
+        LinkCard {
+            visible: Prefs.hasTouchpad
+            icon: "input-touchpad"
+            title: "Touchpad"
+            description: "Tocchi, gesti, scorrimento"
+            onClicked: root.navigate("touchpad")
+        }
+        LinkCard {
             icon: "audio-speakers"
             title: "Audio"
             description: "Dove va il suono dei dispositivi collegati"

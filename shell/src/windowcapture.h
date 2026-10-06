@@ -33,6 +33,11 @@ public:
     Q_INVOKABLE void capture(const QStringList& identifiers);
     // Una fotografia di ogni schermo: le miniature si chiamano "screen:<nome>".
     Q_INVOKABLE void captureScreens();
+    // Lo stesso a piena risoluzione (lo Strumento di cattura): poi
+    // screenCaptured e fullImage(nome). Il numero di schermi catturati.
+    int captureScreensFull();
+    QImage fullImage(const QString& screen) const { return m_full.value(screen); }
+    void clearFull() { m_full.clear(); }
     // Le finestre aperte: [{id, title, appId}], nell'ordine di apertura.
     Q_INVOKABLE QVariantList windowList() const;
     Q_INVOKABLE QString title(const QString& identifier) const;
@@ -44,6 +49,7 @@ public:
 
 signals:
     void thumbnailReady(const QString& identifier);
+    void screenCaptured(const QString& screen, bool ok);
 
 private:
     struct Window;
@@ -61,6 +67,7 @@ private:
 
     QHash<ext_foreign_toplevel_handle_v1*, Window*> m_windows;
     QHash<QString, QImage> m_thumbnails;
+    QHash<QString, QImage> m_full; // schermo -> immagine intera
     QList<Job*> m_jobs;
 };
 

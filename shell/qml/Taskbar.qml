@@ -17,8 +17,9 @@ Window {
     height: Theme.taskbarHeight
     color: "transparent"
 
-    // App fissate (id dei file .desktop). Quelle non installate si saltano.
-    // TODO: renderle configurabili e trascinabili.
+    // Le app fissate al primo avvio (id dei file .desktop; quelle non
+    // installate si saltano). Poi valgono quelle scelte dall'utente: si
+    // fissano e si tolgono dai menu, si riordinano trascinando i pulsanti.
     readonly property list<string> pinnedIds: [
         "vela-files.desktop",
         "org.kde.konsole.desktop",
@@ -294,10 +295,18 @@ Window {
         }
 
         Repeater {
+            id: taskRepeater
             model: Tasks
 
             TaskbarButton {
                 id: task
+                draggable: true
+                // Lasciato più in là: si sposta di tanti posti quanti pulsanti ha superato.
+                onDropped: dx => {
+                    const to = Math.max(0, Math.min(taskRepeater.count - 1, index + Math.round(dx / (width + buttons.spacing))))
+                    if (to !== index) Tasks.move(index, to)
+                }
+                onDraggingChanged: if (dragging) Menus.preview = null
                 required property int index
                 required property string key
                 required property string name

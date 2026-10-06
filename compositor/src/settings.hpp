@@ -23,6 +23,14 @@
 //   tasti-permanenti=no      Maiusc, Ctrl, Alt e Win restano premuti
 //   tearing=sì               i giochi a schermo intero che lo chiedono
 //   frequenza-variabile=giochi  VRR: no, giochi (app a schermo intero), sempre
+//   mouse-velocita=10        1-20, come il cursore di Windows
+//   mouse-precisione=sì      accelerazione del puntatore
+//   mouse-pulsante-principale=sinistro|destro
+//   mouse-righe=3            righe per scatto della rotellina
+//   touchpad=sì, touchpad-con-mouse=sì (resta acceso anche con un mouse)
+//   touchpad-velocita=10, touchpad-tocco=sì, touchpad-scorrimento-naturale=sì
+//   touchpad-tre-dita=app    gesti: app, desktop, no
+//   touchpad-quattro-dita=desktop
 
 #include <map>
 #include <string>

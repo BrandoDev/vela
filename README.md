@@ -108,8 +108,10 @@ alla volta.
   valgono per tutti gli schermi insieme, come in Windows.
 - Barre del titolo chiare o scure secondo la modalità delle app, e tinta
   acrylic chiara o scura secondo quella della shell.
-- Touchpad come su Windows: tocco per cliccare, trascinamento col tocco,
-  niente tocchi accidentali mentre scrivi, scorrimento naturale.
+- Mouse e touchpad come su Windows, regolati dalle Impostazioni: tocco per
+  cliccare (due dita: tasto destro), trascinamento col tocco, niente tocchi
+  accidentali mentre scrivi, scorrimento naturale, touchpad spento con un
+  mouse collegato se lo si vuole; gesti a tre e quattro dita.
 - Se la shell va in crash il compositor la rilancia (ma si arrende se
   continua a chiudersi appena avviata).
 - **App X11** con Xwayland (Steam, molti giochi, app vecchie): parte al
@@ -223,11 +225,25 @@ alla volta.
   (PipeWire), batteria (UPower) e Impostazioni. Le icone di sistema seguono
   lo stato; la rotellina sul volume lo cambia, il tasto destro apre i loro
   menu.
+- **Cronologia degli Appunti** (Win+V), come Windows 11: testo e immagini
+  copiati, i fissati che restano dopo il riavvio; un clic (o Invio)
+  incolla nell'app a fuoco, "…" fissa o elimina. Le password dei gestori di
+  password non si ricordano. Si accende dal pannello stesso o da
+  Impostazioni > Sistema > Appunti.
+- **Strumento di cattura** (Win+Maiusc+S o Stamp): lo schermo si ferma e si
+  sceglie un rettangolo, una finestra o uno schermo intero; il ritaglio va
+  negli Appunti e in Immagini > Screenshot, e una notifica lo apre.
+- **Gesti del touchpad** come Windows: tre o quattro dita verso l'alto la
+  Visualizzazione attività, verso il basso il desktop, di lato si cambia
+  app (Alt+Tab che segue le dita) o desktop virtuale; il pizzico e gli
+  altri gesti vanno alle app.
 - **Una taskbar per schermo**, come Windows 11: Start, app e orologio su
   ognuno, area di notifica e icone di sistema sul principale; Start, menu,
   impostazioni rapide, centro notifiche e anteprime si aprono sullo schermo
   della taskbar da cui si cliccano (da tastiera su quello principale). Si
   può tenere solo sul principale (Impostazioni > Barra delle applicazioni).
+- I pulsanti della taskbar si **riordinano trascinandoli** (le app fissate
+  restano davanti a quelle solo aperte, e l'ordine si ricorda).
 - **Anteprime della taskbar**: col mouse fermo sul pulsante di un'app
   aperta compaiono le sue finestre in miniatura (clic per andarci, clic
   centrale o ✕ per chiuderle), e i suoi gruppi di snap con le finestre nei
@@ -298,10 +314,13 @@ alla volta.
     **Audio** (uscite e
     ingressi con il loro volume), **Notifiche** (Non disturbare),
     **Alimentazione** (schermo spento dopo, blocco, modalità di
-    alimentazione), **Informazioni** (specifiche, Rinomina questo PC);
+    alimentazione), **Appunti** (cronologia, cancella), **Informazioni** (specifiche, Rinomina questo PC);
   - **Bluetooth e dispositivi** (Aggiungi dispositivo, connetti,
-    disconnetti, rimuovi, batteria) e **Rete e Internet** (reti Wi-Fi con
-    la password, proprietà dei collegamenti);
+    disconnetti, rimuovi, batteria; **Mouse**: pulsante principale,
+    velocità, precisione, righe per scatto della rotellina; **Touchpad**:
+    acceso o spento anche solo con un mouse, velocità, tocco per cliccare,
+    direzione dello scorrimento, gesti a tre e quattro dita) e **Rete e
+    Internet** (reti Wi-Fi con la password, proprietà dei collegamenti);
   - Personalizzazione: **Sfondo** (immagini recenti, Sfoglia foto, sfondi
     del sistema), **Colori** (la tavolozza di Windows 11, modalità Chiara,
     Scura o Personalizzata), **Barra delle applicazioni** (allineamento al
@@ -478,6 +497,8 @@ resta alle app, che lo usano per aprire i propri menu.
 | Layout di tastiera successivo    | Super+Spazio        |               |
 | Lente: ingrandisci / riduci / chiudi | Super+più / Super+meno / Super+Esc | |
 | Filtri colore (se attivata la scorciatoia) | Super+Ctrl+C |       |
+| Cronologia degli Appunti         | Super+V             |               |
+| Strumento di cattura             | Super+Maiusc+S, Stamp | Stamp       |
 | Sposta / ridimensiona una finestra | Super+trascina / Super+tasto destro |  |
 | Cambia console                   | Ctrl+Alt+F1…F12     |               |
 | Esci da Vela                     | Alt+Shift+Esc       | Alt+Shift+Esc |
@@ -499,7 +520,7 @@ resta alle app, che lo usano per aprire i propri menu.
 | `VELA_LOCK_ON_IDLE=0` | con l'inattività spegne gli schermi senza bloccare (vince sulle Impostazioni) |
 | `VELA_LOCK`          | programma di blocco da usare al posto di `vela-lock` (es. `swaylock`) |
 | `VELA_REALTIME=0`    | niente scheduling realtime per il thread principale del compositor (attivo se `ulimit -r` > 0 o con `CAP_SYS_NICE`) |
-| `VELA_NATURAL_SCROLL=0` | scorrimento classico sul touchpad (predef. naturale, come Windows) |
+| `VELA_NATURAL_SCROLL=0` | scorrimento classico sul touchpad (vince sulle Impostazioni) |
 | `VELA_ICON_THEME`    | tema di icone se Qt non lo trova (predef. breeze-dark) |
 | `VELA_WALLPAPER`     | immagine di sfondo (SVG, PNG, JPEG...), riempie lo schermo tagliando i bordi; vince su quella scelta nelle Impostazioni |
 | `VELA_STATS=1`       | ogni 2 s, per schermo: fps, costo dei frame, tempo dal disegno alla luce, vblank persi |
@@ -578,6 +599,7 @@ compositor/src/
   keyboard.cpp     tastiera e tasto Super
   accessibility.cpp  Luce notturna (anche pianificata), filtri colore, lente
                    di ingrandimento, tasti permanenti
+  input.cpp        mouse, touchpad e gesti; l'incolla di Win+V
   settings.*       ~/.config/vela/vela.conf (inattività, tastiera, Luce
                    notturna, accessibilità, tearing)
 shell/

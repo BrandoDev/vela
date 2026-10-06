@@ -71,7 +71,10 @@ set(SETTINGS_QML_FILES
     qml/pages/DateTimePage.qml
     qml/pages/KeyboardPage.qml
     qml/pages/NightLightPage.qml
-    qml/pages/AccessibilityPage.qml)
+    qml/pages/AccessibilityPage.qml
+    qml/pages/MousePage.qml
+    qml/pages/TouchpadPage.qml
+    qml/pages/ClipboardPage.qml)
 
 foreach(file IN LISTS SETTINGS_QML_FILES)
     get_filename_component(name ${file} NAME)

@@ -41,6 +41,7 @@ struct WindowCapture::Job {
     uint32_t width = 0;
     uint32_t height = 0;
     int format = -1; // formato wl_shm scelto, -1 = nessuno utilizzabile
+    bool full = false; // l'immagine intera, non la miniatura
 };
 
 namespace {
@@ -161,7 +162,7 @@ struct CaptureCallbacks {
         }
         const uint32_t stride = job->width * 4;
         job->size = size_t(stride) * job->height;
-        job->fd = memfd_create("vela-thumbnail", MFD_CLOEXEC);
+        job->fd = memfd_create("vela-capture", MFD_CLOEXEC);
         if (job->fd < 0 || ftruncate(job->fd, off_t(job->size)) < 0) {
             job->owner->finishJob(job, false);
             return;
@@ -312,15 +313,50 @@ void WindowCapture::captureScreens()
     }
 }
 
+int WindowCapture::captureScreensFull()
+{
+    if (!m_shm || !m_outputSources || !m_copier) {
+        qWarning("vela-shell: il compositor non offre la cattura degli schermi");
+        return 0;
+    }
+    int count = 0;
+    for (QScreen* screen : QGuiApplication::screens()) {
+        auto* native = screen->nativeInterface<QNativeInterface::QWaylandScreen>();
+        if (!native || !native->output()) {
+            continue;
+        }
+        auto* job = new Job;
+        job->owner = this;
+        job->full = true;
+        job->identifier = screen->name();
+        job->source = ext_output_image_capture_source_manager_v1_create_source(m_outputSources, native->output());
+        job->session = ext_image_copy_capture_manager_v1_create_session(m_copier, job->source, 0);
+        ext_image_copy_capture_session_v1_add_listener(job->session, &CaptureCallbacks::sessionListener, job);
+        m_jobs.append(job);
+        ++count;
+    }
+    if (auto* wayland = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>()) {
+        wl_display_flush(wayland->display());
+    }
+    return count;
+}
+
 void WindowCapture::finishJob(Job* job, bool ok)
 {
     if (ok && job->pixels) {
-        // Si tiene solo la miniatura: la cattura intera può essere grande
-        // quanto lo schermo.
         const QImage full(static_cast<const uchar*>(job->pixels), int(job->width), int(job->height),
             int(job->width * 4), imageFormat(uint32_t(job->format)));
-        m_thumbnails.insert(job->identifier,
-            full.scaled(thumbnailSize, thumbnailSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        if (job->full) {
+            // Una copia vera: i pixel della cattura si liberano qui sotto
+            // (convertToFormat non copierebbe, se il formato è già quello).
+            QImage copy = full.copy();
+            m_full.insert(job->identifier, copy.convertToFormat(QImage::Format_RGB32));
+        } else {
+            // Si tiene solo la miniatura: la cattura intera può essere
+            // grande quanto lo schermo.
+            m_thumbnails.insert(job->identifier,
+                full.scaled(thumbnailSize, thumbnailSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        }
     }
 
     if (job->frame) {
@@ -345,10 +381,13 @@ void WindowCapture::finishJob(Job* job, bool ok)
         close(job->fd);
     }
     const QString identifier = job->identifier;
+    const bool full = job->full;
     m_jobs.removeOne(job);
     delete job;
 
-    if (ok) {
+    if (full) {
+        emit screenCaptured(identifier, ok);
+    } else if (ok) {
         emit thumbnailReady(identifier);
     }
 }

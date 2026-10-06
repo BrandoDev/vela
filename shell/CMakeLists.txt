@@ -13,6 +13,10 @@ qt_add_executable(vela-shell
     src/appmodel.cpp
     src/appmodel.h
     src/backgroundeffects.cpp
+    src/clipboard.cpp
+    src/clipboard.h
+    src/snip.cpp
+    src/snip.h
     src/backgroundeffects.h
     src/config.cpp
     src/config.h
@@ -75,7 +79,8 @@ foreach(name
         ext-foreign-toplevel-list/ext-foreign-toplevel-list-v1
         ext-image-capture-source/ext-image-capture-source-v1
         ext-image-copy-capture/ext-image-copy-capture-v1
-        ext-background-effect/ext-background-effect-v1)
+        ext-background-effect/ext-background-effect-v1
+        ext-data-control/ext-data-control-v1)
     get_filename_component(base ${name} NAME)
     set(xml ${SHELL_WAYLAND_PROTOCOLS_DIR}/staging/${name}.xml)
     set(header ${SHELL_GENERATED_DIR}/${base}-client-protocol.h)
@@ -117,7 +122,9 @@ set(VELA_QML_FILES
     qml/SnapAssist.qml
     qml/TaskbarPreview.qml
     qml/FileDialogs.qml
-    qml/DialogButton.qml)
+    qml/DialogButton.qml
+    qml/ClipboardPanel.qml
+    qml/SnipOverlay.qml)
 
 # I file stanno in qml/ per ordine, ma nel modulo devono stare alla radice:
 # così si vedono tra loro (Theme compreso, che è un singleton) senza import.

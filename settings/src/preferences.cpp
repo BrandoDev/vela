@@ -116,6 +116,8 @@ void Preferences::reload()
     emit taskbarChanged();
     m_doNotDisturb = settings.value(QStringLiteral("notifications/doNotDisturb"), false).toBool();
     emit doNotDisturbChanged();
+    m_clipboardHistory = settings.value(QStringLiteral("clipboard/history"), false).toBool();
+    emit clipboardChanged();
 
     // La modalità: quella scelta qui (vela-shell.conf); per le app, se non
     // c'è ancora, quella che GTK e il portale conoscono già.
@@ -190,6 +192,18 @@ void Preferences::reloadCompositor()
     m_colorFilterShortcut = flag(QStringLiteral("filtri-colore-scorciatoia"), false);
     m_magnifierStep = value(QStringLiteral("lente-incremento"), QStringLiteral("100")).toInt();
     m_stickyKeys = flag(QStringLiteral("tasti-permanenti"), false);
+    m_mouseSpeed = std::clamp(value(QStringLiteral("mouse-velocita"), QStringLiteral("10")).toInt(), 1, 20);
+    m_mousePrecision = flag(QStringLiteral("mouse-precisione"), true);
+    m_mouseLeftHanded = value(QStringLiteral("mouse-pulsante-principale"), QStringLiteral("sinistro")) == QLatin1String("destro");
+    m_wheelLines = std::clamp(value(QStringLiteral("mouse-righe"), QStringLiteral("3")).toInt(), 1, 20);
+    m_touchpad = flag(QStringLiteral("touchpad"), true);
+    m_touchpadWithMouse = flag(QStringLiteral("touchpad-con-mouse"), true);
+    m_touchpadSpeed = std::clamp(value(QStringLiteral("touchpad-velocita"), QStringLiteral("10")).toInt(), 1, 20);
+    m_touchpadTap = flag(QStringLiteral("touchpad-tocco"), true);
+    m_touchpadNatural = flag(QStringLiteral("touchpad-scorrimento-naturale"), true);
+    m_threeFingers = value(QStringLiteral("touchpad-tre-dita"), QStringLiteral("app"));
+    m_fourFingers = value(QStringLiteral("touchpad-quattro-dita"), QStringLiteral("desktop"));
+    emit inputChanged();
     queryCompositor();
     emit nightLightChanged();
     emit accessibilityChanged();
@@ -226,6 +240,7 @@ void Preferences::queryCompositor()
         return;
     }
     m_magnifier = state[QStringLiteral("magnifier")].toBool();
+    m_hasTouchpad = state[QStringLiteral("touchpad")].toBool();
     m_sunset = state[QStringLiteral("sunset")].toString();
     m_sunrise = state[QStringLiteral("sunrise")].toString();
 }
@@ -698,5 +713,133 @@ void Preferences::setStickyKeys(bool on)
         m_stickyKeys = on;
         saveCompositor({ { QStringLiteral("tasti-permanenti"), yesNo(on) } });
         emit accessibilityChanged();
+    }
+}
+
+// ------------------------------------------------------ mouse e touchpad --
+
+void Preferences::setMouseSpeed(int value)
+{
+    value = std::clamp(value, 1, 20);
+    if (value != m_mouseSpeed) {
+        m_mouseSpeed = value;
+        saveCompositor({ { QStringLiteral("mouse-velocita"), QString::number(value) } });
+        emit inputChanged();
+    }
+}
+
+void Preferences::setMousePrecision(bool on)
+{
+    if (on != m_mousePrecision) {
+        m_mousePrecision = on;
+        saveCompositor({ { QStringLiteral("mouse-precisione"), yesNo(on) } });
+        emit inputChanged();
+    }
+}
+
+void Preferences::setMouseLeftHanded(bool on)
+{
+    if (on != m_mouseLeftHanded) {
+        m_mouseLeftHanded = on;
+        saveCompositor({ { QStringLiteral("mouse-pulsante-principale"), on ? QStringLiteral("destro") : QStringLiteral("sinistro") } });
+        emit inputChanged();
+    }
+}
+
+void Preferences::setWheelLines(int lines)
+{
+    lines = std::clamp(lines, 1, 20);
+    if (lines != m_wheelLines) {
+        m_wheelLines = lines;
+        saveCompositor({ { QStringLiteral("mouse-righe"), QString::number(lines) } });
+        emit inputChanged();
+    }
+}
+
+void Preferences::setTouchpad(bool on)
+{
+    if (on != m_touchpad) {
+        m_touchpad = on;
+        saveCompositor({ { QStringLiteral("touchpad"), yesNo(on) } });
+        emit inputChanged();
+    }
+}
+
+void Preferences::setTouchpadWithMouse(bool on)
+{
+    if (on != m_touchpadWithMouse) {
+        m_touchpadWithMouse = on;
+        saveCompositor({ { QStringLiteral("touchpad-con-mouse"), yesNo(on) } });
+        emit inputChanged();
+    }
+}
+
+void Preferences::setTouchpadSpeed(int value)
+{
+    value = std::clamp(value, 1, 20);
+    if (value != m_touchpadSpeed) {
+        m_touchpadSpeed = value;
+        saveCompositor({ { QStringLiteral("touchpad-velocita"), QString::number(value) } });
+        emit inputChanged();
+    }
+}
+
+void Preferences::setTouchpadTap(bool on)
+{
+    if (on != m_touchpadTap) {
+        m_touchpadTap = on;
+        saveCompositor({ { QStringLiteral("touchpad-tocco"), yesNo(on) } });
+        emit inputChanged();
+    }
+}
+
+void Preferences::setTouchpadNatural(bool on)
+{
+    if (on != m_touchpadNatural) {
+        m_touchpadNatural = on;
+        saveCompositor({ { QStringLiteral("touchpad-scorrimento-naturale"), yesNo(on) } });
+        emit inputChanged();
+    }
+}
+
+void Preferences::setThreeFingers(const QString& action)
+{
+    if (action != m_threeFingers) {
+        m_threeFingers = action;
+        saveCompositor({ { QStringLiteral("touchpad-tre-dita"), action } });
+        emit inputChanged();
+    }
+}
+
+void Preferences::setFourFingers(const QString& action)
+{
+    if (action != m_fourFingers) {
+        m_fourFingers = action;
+        saveCompositor({ { QStringLiteral("touchpad-quattro-dita"), action } });
+        emit inputChanged();
+    }
+}
+
+// ----------------------------------------------------------------- appunti --
+
+void Preferences::setClipboardHistory(bool on)
+{
+    if (on != m_clipboardHistory) {
+        m_clipboardHistory = on;
+        setShell(QStringLiteral("clipboard/history"), on);
+        emit clipboardChanged();
+    }
+}
+
+void Preferences::clearClipboard()
+{
+    // Alla shell, sul suo socket.
+    const QString runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+    const QString display = qEnvironmentVariable("WAYLAND_DISPLAY", QStringLiteral("wayland-0"));
+    QLocalSocket socket;
+    socket.connectToServer(runtimeDir + QStringLiteral("/vela-shell-") + display + QStringLiteral(".sock"));
+    if (socket.waitForConnected(200)) {
+        socket.write("clipboard-clear\n");
+        socket.waitForBytesWritten(200);
     }
 }

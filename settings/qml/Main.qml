@@ -41,6 +41,9 @@ Window {
         "time-language": { title: "Ora e lingua", parent: "", file: "TimeLanguagePage.qml", icon: "preferences-system-time" },
         "datetime": { title: "Data e ora", parent: "time-language", file: "DateTimePage.qml", icon: "preferences-system-time" },
         "keyboard": { title: "Tastiera", parent: "time-language", file: "KeyboardPage.qml", icon: "input-keyboard" },
+        "mouse": { title: "Mouse", parent: "bluetooth", file: "MousePage.qml", icon: "input-mouse" },
+        "touchpad": { title: "Touchpad", parent: "bluetooth", file: "TouchpadPage.qml", icon: "input-touchpad" },
+        "clipboard": { title: "Appunti", parent: "system", file: "ClipboardPage.qml", icon: "edit-paste" },
         "night-light": { title: "Luce notturna", parent: "display", file: "NightLightPage.qml", icon: "redshift-status-on" },
         "accessibility": { title: "Accessibilità", parent: "", file: "AccessibilityPage.qml", icon: "preferences-desktop-accessibility" }
     })
@@ -127,6 +130,11 @@ Window {
         { page: "default-apps", text: "App predefinite", keys: "browser posta lettore apri con predefinito" },
         { page: "datetime", text: "Data e ora", keys: "orologio fuso orario sincronizza ntp" },
         { page: "keyboard", text: "Tastiera", keys: "layout lingua input digitazione ripetizione tasti" },
+        { page: "mouse", text: "Mouse", keys: "puntatore velocità pulsante principale mancino rotellina scorrimento righe accelerazione precisione" },
+        { page: "touchpad", text: "Touchpad", keys: "tocco clic gesti dita scorrimento portatile trackpad" },
+        { page: "touchpad", text: "Gesti del touchpad", keys: "tre dita quattro dita cambia desktop app" },
+        { page: "clipboard", text: "Appunti", keys: "cronologia appunti win+v copia incolla" },
+        { page: "clipboard", text: "Strumento di cattura", keys: "screenshot cattura stamp schermata ritaglio" },
         { page: "night-light", text: "Luce notturna", keys: "notte colori caldi blu sera pianifica tramonto" },
         { page: "display", text: "Tearing nei giochi", keys: "giochi tearing latenza schermo intero vsync" },
         { page: "accessibility", text: "Accessibilità", keys: "ipovedenti daltonismo" },

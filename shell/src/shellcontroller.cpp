@@ -282,6 +282,12 @@ void ShellController::handleCommand(const QByteArray& command)
         emit settingsRequested();
     } else if (command == "files") {
         emit filesRequested();
+    } else if (command == "clipboard") {
+        emit clipboardRequested();
+    } else if (command == "snip") {
+        emit snipRequested();
+    } else if (command == "clipboard-clear") {
+        emit clipboardClearRequested();
     } else if (command == "task-view") {
         emit taskViewRequested();
     } else if (parts.first() == "workspaces") {

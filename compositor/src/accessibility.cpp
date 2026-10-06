@@ -675,7 +675,8 @@ std::string Server::accessibilityJson() const
     return std::string("{\"nightLight\":") + (a11y.nightLight ? "true" : "false")
         + ",\"colorFilter\":" + (a11y.colorFilter ? "true" : "false")
         + ",\"magnifier\":" + (a11y.magnifier ? "true" : "false")
-        + ",\"stickyKeys\":" + (a11y.stickyKeys ? "true" : "false") + sun + "}";
+        + ",\"stickyKeys\":" + (a11y.stickyKeys ? "true" : "false")
+        + ",\"touchpad\":" + (hasTouchpad() ? "true" : "false") + sun + "}";
 }
 
 void Server::announceAccessibility()

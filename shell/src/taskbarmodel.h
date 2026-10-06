@@ -50,6 +50,9 @@ public:
     // Clic sul pulsante: avvia l'app, oppure porta davanti la sua finestra,
     // oppure (se è già quella attiva) la riduce a icona.
     Q_INVOKABLE void activate(int row);
+    // Il pulsante trascinato in un altro posto: le app fissate restano
+    // davanti a quelle solo aperte, e il loro ordine si ricorda.
+    Q_INVOKABLE void move(int from, int to);
     // Clic centrale: una nuova finestra dell'app.
     Q_INVOKABLE void launchNew(int row);
     // "Chiudi finestra" / "Chiudi tutte le finestre".
