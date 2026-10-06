@@ -419,6 +419,12 @@ vela-update --sorgente ~/Scrivania/vela   # prende Vela da una copia locale (si 
 vela-update --jobs 2                   # meno compilazioni insieme
 ```
 
+A ogni push GitHub compila Vela in un container Arch
+([.github/workflows/compila.yml](.github/workflows/compila.yml)); per `main`
+costruisce anche il pacchetto, che si scarica dalla pagina dell'esecuzione
+(Actions > l'esecuzione > Artifacts, o `gh run download -n vela-git`) e si
+installa con `sudo pacman -U`, senza compilare sul proprio computer.
+
 Il repository e gli ultimi tre pacchetti restano in `~/.cache/vela-update`:
 per tornare alla versione di prima,
 `sudo pacman -U ~/.cache/vela-update/pacchetti/<pacchetto>`.

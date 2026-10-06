@@ -1,0 +1,99 @@
+# Compilazione automatica a ogni push, in un container Arch Linux (le
+# versioni di wlroots e Qt che usa Vela sono quelle di Arch).
+#
+# - compila: tutto il progetto, strumenti di prova compresi. Le prove
+#   grafiche (scripts/test-sharpness.sh) qui non girano: il renderer vuole
+#   una GPU con un nodo DRM, che i runner di GitHub non hanno.
+# - pacchetto: solo per main, il pacchetto vela-git costruito con il
+#   PKGBUILD, scaricabile dalla pagina dell'esecuzione (Artifacts) e
+#   installabile con sudo pacman -U.
+
+name: Compilazione
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Un push nuovo sullo stesso ramo ferma la compilazione precedente.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEPENDENZE: >-
+    base-devel git cmake ccache shaderc vulkan-headers vulkan-icd-loader
+    wayland wayland-protocols wlroots0.20 libxkbcommon pixman libinput libdrm
+    mesa freetype2 harfbuzz fontconfig librsvg cairo zlib pam
+    qt6-base qt6-declarative qt6-svg qt6-wayland layer-shell-qt
+    hicolor-icon-theme
+
+jobs:
+  compila:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Dipendenze
+        run: pacman -Syu --noconfirm --needed $DEPENDENZE
+
+      - uses: actions/checkout@v4
+
+      - name: Cache di ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ github.sha }}
+          restore-keys: ccache-
+
+      - name: Configura
+        run: >-
+          cmake -B build -S .
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          -DVELA_BUILD_TOOLS=ON
+
+      - name: Compila
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          CCACHE_MAXSIZE: 500M
+        run: |
+          cmake --build build -j "$(nproc)"
+          ccache --show-stats
+
+      - name: Script
+        run: |
+          for script in packaging/arch/vela-update session/vela-session-env scripts/*.sh; do
+            sh -n "$script"
+          done
+
+  pacchetto:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: compila
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Dipendenze
+        run: pacman -Syu --noconfirm --needed $DEPENDENZE
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # la versione del pacchetto conta i commit
+
+      # makepkg non gira come root: un utente apposta, che prende Vela da
+      # questa copia del repository.
+      - name: Pacchetto
+        run: |
+          useradd -m costruttore
+          cp -r packaging/arch /home/costruttore/pkgbuild
+          chown -R costruttore /home/costruttore/pkgbuild
+          git config --system --add safe.directory '*'
+          cd /home/costruttore/pkgbuild
+          su costruttore -c "VELA_GIT_URL=file://$GITHUB_WORKSPACE MAKEFLAGS=-j$(nproc) makepkg --noconfirm"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vela-git
+          path: /home/costruttore/pkgbuild/*.pkg.tar.zst
+          retention-days: 14
