@@ -405,17 +405,35 @@ build/tools/vela-windows list           # windows and their state
 build/tools/vela-shot screen.png        # PNG screenshot of the screen or a region
 ```
 
-- **Sharpness test**: `sh scripts/test-sharpness.sh` opens a pattern window whose every
-  pixel encodes its own coordinates. At 100–200% scaling, the window must reach the
-  screen bit for bit when opened, snapped, maximized and restored.
-- **Multiple monitors without monitors**: in a headless session, `test-output add
-  2560x1440` and `test-output remove HEADLESS-2` on the command socket hot-plug virtual
-  outputs, each with its own scale.
-- **Unit tests** (`ctest --test-dir build`): Files' copies and moves, including a full
-  disk mid-copy (simulated with `RLIMIT_FSIZE`), and the parsing of `.desktop` `Exec=`
-  lines.
-- **Continuous integration**: every push builds the whole project in an Arch Linux
-  container and runs the unit tests; `main` also builds the package.
+The command socket (`$XDG_RUNTIME_DIR/vela-$WAYLAND_DISPLAY.sock`, one command per line)
+also takes test commands in headless sessions: `test-output add 2560x1440` and
+`test-output remove HEADLESS-2` hot-plug virtual outputs, `test-power off|on` turns screens
+off like inactivity, and `state` answers with the whole visible state as JSON.
+`vela-testlock` is a locker that unlocks by itself, to test locking without a password.
+
+Everything runs with **`ctest --test-dir build`**:
+
+| Suite | What it covers | Needs |
+|---|---|---|
+| **Compositor** (GoogleTest, 43 tests) | FrameClock (vblank grid, late latching, margin, learned host latency), animation curves, pixel-exact placement at every scale, default scale from DPI, night light and color filters, sunrise/sunset, `vela.conf` | nothing |
+| **Files** | copies and moves, including a full disk mid-copy (`RLIMIT_FSIZE`) | nothing |
+| **Shell** | `.desktop` `Exec=` parsing, default apps (`mimeapps.list`) | nothing |
+| **Functional** (`tests/functional`, 23 scenarios) | open, snap, maximize and restore, minimize and Alt+Tab, virtual desktops, hot-plugged outputs with their own scale, lock and unlock, screens off and on, crash recovery (also while locked) | a GPU |
+| **Sharpness** | windows reach the screen bit for bit at 100–200%, opened, snapped, maximized, restored | a GPU, numpy, Pillow |
+
+The functional scenarios drive a real headless session like a person would, and assert on
+the compositor's own state (`state` on its command socket):
+
+```python
+with Session(scale=1.25) as vela:
+    window = vela.open_window()
+    vela.keys("super+Left")
+    vela.wait_for(lambda s: s.window(window)["snap"] == [0, 0, 6, 12])
+```
+
+Continuous integration builds everything in an Arch Linux container on every push and runs
+the tests; GitHub's runners have no GPU, so the functional and sharpness suites report as
+skipped there. `main` also builds the package.
 
 <details>
 <summary><b>Environment variables</b></summary>
@@ -450,7 +468,7 @@ build/tools/vela-shot screen.png        # PNG screenshot of the screen or a regi
 <summary><b>Project layout</b></summary>
 
 ```
-compositor/src/   the compositor
+compositor/src/   the compositor (compositor/tests: its unit tests)
   scene/, render/   scene graph and Vulkan renderer
   supervisor.cpp    crash recovery: socket holder and restarts
   server.*          startup, focus, bindings, commands, session
@@ -467,7 +485,8 @@ settings/         vela-settings, one QML page per settings page
 lock/             vela-lock
 session/          login entry, systemd target, portals
 packaging/arch/   PKGBUILD and vela-update
-tools/            vela-shot, vela-input, vela-windows, vela-pattern
+tools/            vela-shot, vela-input, vela-windows, vela-pattern, vela-testlock
+tests/functional/ headless scenarios (Python), run by ctest
 scripts/          nested and headless runs, sharpness test, measurements
 docs/             design documents and screenshots
 ```

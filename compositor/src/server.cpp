@@ -1619,8 +1619,9 @@ void Server::updateOutputConfiguration()
         wlr_box box {};
         wlr_output_layout_get_box(outputLayout, output->wlr, &box);
         head->state.enabled = output->wlr->enabled && !wlr_box_empty(&box);
-        head->state.x = box.x;
-        head->state.y = box.y;
+        const bool remembered = !head->state.enabled && output->hasLastPosition;
+        head->state.x = remembered ? output->lastX : box.x;
+        head->state.y = remembered ? output->lastY : box.y;
     }
     wlr_output_manager_v1_set_configuration(outputManager, config);
 }
@@ -1650,6 +1651,13 @@ void Server::applyOutputConfiguration(wlr_output_configuration_v1* config, bool 
             ok = output->commitMode(state) && ok;
             applied.push_back({ wanted.output, true, wanted.x, wanted.y });
         } else {
+            wlr_box box {};
+            wlr_output_layout_get_box(outputLayout, wanted.output, &box);
+            if (!wlr_box_empty(&box)) {
+                output->hasLastPosition = true;
+                output->lastX = box.x;
+                output->lastY = box.y;
+            }
             ok = wlr_output_commit_state(wanted.output, &state) && ok;
             wlr_output_layout_remove(outputLayout, wanted.output);
             applied.push_back({ wanted.output, false, 0, 0 });
@@ -1830,6 +1838,10 @@ void Server::listenForCommands()
                         } else if (line == "window-rects") {
                             // Le finestre visibili, per lo Strumento di cattura.
                             const std::string reply = self->windowRectsJson() + "\n";
+                            (void)!write(fd, reply.data(), reply.size());
+                        } else if (line == "state") {
+                            // Tutto lo stato visibile, per le prove funzionali.
+                            const std::string reply = self->stateJson() + "\n";
                             (void)!write(fd, reply.data(), reply.size());
                         } else if (line == "accessibility") {
                             // Luce notturna, filtri, lente: per la shell appena partita.

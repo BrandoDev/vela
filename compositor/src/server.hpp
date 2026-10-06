@@ -124,6 +124,12 @@ struct Output {
     // shell non perde i suoi pannelli.
     void setPowered(bool on);
     bool powered = true;
+    // Dove stava nel layout prima di essere spento (Impostazioni, wlr-randr):
+    // lo si annuncia ancora, così chi lo riaccende lo rimette lì e non sopra
+    // un altro schermo in (0, 0).
+    bool hasLastPosition = false;
+    int lastX = 0;
+    int lastY = 0;
 
     // Solo se Vela gira in una finestra dentro un'altra sessione.
     std::unique_ptr<NestedWindow> nested;
@@ -591,6 +597,10 @@ public:
     void workspaceMapped(Toplevel* toplevel); // una finestra nuova: sul desktop in uso
     void workspaceForget(Toplevel* toplevel);
     std::string workspacesJson() const; // lo stato, per la shell
+    // Tutto lo stato visibile in una volta (richiesta "state" sul socket dei
+    // comandi): finestre con geometria e stato, schermi, desktop, blocco. Lo
+    // usano le prove funzionali (tests/functional).
+    std::string stateJson() const;
     void announceWorkspaces(); // alla shell, a ogni cambiamento
     void saveWorkspaces() const; // ~/.config/vela/desktop.conf
     bool tickWorkspaceSwitch(double nowMs); // false quando ha finito

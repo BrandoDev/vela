@@ -38,4 +38,19 @@ if(VELA_BUILD_SHELL)
 endif()
 if(VELA_BUILD_TOOLS)
     add_subdirectory(tools)
+    # Le prove funzionali e quella di nitidezza, in sessioni senza schermo
+    # (tests/functional): servono il compositor e una GPU; senza GPU
+    # risultano saltate (codice 77).
+    if(VELA_BUILD_COMPOSITOR)
+        find_package(Python3 COMPONENTS Interpreter)
+        if(Python3_FOUND)
+            add_test(NAME funzionali COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/functional/run.py)
+            add_test(NAME nitidezza COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/functional/run.py --nitidezza)
+            set_tests_properties(funzionali nitidezza PROPERTIES
+                ENVIRONMENT "VELA_BUILD=${CMAKE_BINARY_DIR}"
+                SKIP_RETURN_CODE 77
+                TIMEOUT 600
+                RUN_SERIAL TRUE)
+        endif()
+    endif()
 endif()

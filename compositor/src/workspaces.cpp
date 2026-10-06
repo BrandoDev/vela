@@ -125,6 +125,55 @@ std::string Server::workspaceName(int index) const
                                                     : workspaces.names[size_t(index)];
 }
 
+std::string Server::stateJson() const
+{
+    auto number = [](double value) {
+        char text[32];
+        std::snprintf(text, sizeof(text), "%g", value);
+        return std::string(text);
+    };
+    auto boolean = [](bool value) { return std::string(value ? "true" : "false"); };
+    const Toplevel* focused = focusedToplevel();
+    std::string json = "{\"locked\":" + boolean(locked) + ",\"workspace\":" + std::to_string(workspaces.current)
+        + ",\"workspaces\":" + std::to_string(workspaceCount()) + ",\"focused\":"
+        + (focused && focused->extHandle && focused->extHandle->identifier ? jsonString(focused->extHandle->identifier)
+                                                                          : std::string("null"))
+        + ",\"outputs\":[";
+    bool first = true;
+    for (const Output* output : outputs) {
+        const wlr_box box = output->box();
+        json += std::string(first ? "" : ",") + "{\"name\":" + jsonString(output->wlr->name) + ",\"x\":"
+            + std::to_string(box.x) + ",\"y\":" + std::to_string(box.y) + ",\"w\":" + std::to_string(box.width)
+            + ",\"h\":" + std::to_string(box.height) + ",\"scale\":" + number(output->wlr->scale)
+            + ",\"enabled\":" + boolean(output->wlr->enabled) + ",\"powered\":" + boolean(output->powered) + "}";
+        first = false;
+    }
+    json += "],\"windows\":[";
+    first = true;
+    for (const Toplevel* t : toplevels) { // ordine MRU: la prima è quella sopra
+        if (!t->mapped || !t->extHandle || !t->extHandle->identifier) {
+            continue;
+        }
+        const wlr_box frame = t->frameBox();
+        const int bar = t->titleBarHeight();
+        const Output* output = t->output();
+        json += std::string(first ? "" : ",") + "{\"id\":" + jsonString(t->extHandle->identifier)
+            + ",\"app\":" + jsonString(t->appId()) + ",\"title\":" + jsonString(t->title())
+            + ",\"x\":" + std::to_string(frame.x) + ",\"y\":" + std::to_string(frame.y - bar)
+            + ",\"w\":" + std::to_string(frame.width) + ",\"h\":" + std::to_string(frame.height + bar)
+            + ",\"output\":" + (output ? jsonString(output->wlr->name) : std::string("null"))
+            + ",\"workspace\":" + std::to_string(t->workspace) + ",\"sticky\":" + boolean(t->sticky)
+            + ",\"maximized\":" + boolean(t->maximized) + ",\"minimized\":" + boolean(t->minimized)
+            + ",\"fullscreen\":" + boolean(t->fullscreen) + ",\"snap\":"
+            + (t->snap == Snap::None ? std::string("null")
+                                     : "[" + std::to_string(t->snap.x0) + "," + std::to_string(t->snap.y0) + ","
+                       + std::to_string(t->snap.x1) + "," + std::to_string(t->snap.y1) + "]")
+            + ",\"snapGroup\":" + std::to_string(t->snapGroup) + "}";
+        first = false;
+    }
+    return json + "]}";
+}
+
 std::string Server::workspacesJson() const
 {
     // {"current":0,"names":["Desktop 1"],"windows":{"<id ext>":0 (-1: tutti)},"stickyApps":[...]}
