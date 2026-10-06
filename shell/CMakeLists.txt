@@ -15,6 +15,7 @@ qt_add_executable(vela-shell
     src/accessibility.h
     src/appmodel.cpp
     src/appmodel.h
+    src/desktopexec.h
     src/backgroundeffects.cpp
     src/clipboard.cpp
     src/clipboard.h
@@ -155,3 +156,13 @@ target_link_libraries(vela-shell PRIVATE
     LayerShellQt::Interface)
 
 install(TARGETS vela-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# Le prove (ctest): la chiave Exec dei file .desktop.
+if(VELA_BUILD_TOOLS)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
+    qt_add_executable(vela-desktopexec-test tests/desktopexec.cpp src/desktopexec.h)
+    target_include_directories(vela-desktopexec-test PRIVATE src)
+    target_compile_options(vela-desktopexec-test PRIVATE -Wall -Wextra)
+    target_link_libraries(vela-desktopexec-test PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME shell-exec-desktop COMMAND vela-desktopexec-test)
+endif()

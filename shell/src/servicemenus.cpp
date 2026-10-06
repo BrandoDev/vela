@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "servicemenus.h"
+#include "desktopexec.h"
 
 #include <QDir>
 #include <QFile>
@@ -187,13 +188,45 @@ void ServiceMenus::run(int id, const QStringList& paths) const
         return;
     }
     const Action& a = m_actions.at(id);
-    QStringList files;
-    QStringList urls;
-    for (const QString& path : paths) {
-        files << quote(path);
-        urls << quote(QUrl::fromLocalFile(path).toString());
+    const QString directory = QFileInfo(paths.first()).absolutePath();
+    const DesktopExec::Parsed parsed = DesktopExec::split(a.exec);
+    if (!parsed.ok) {
+        qWarning("vela-shell: service menu con Exec non valido: %s", qPrintable(a.exec));
+        return;
     }
-    // I field code della specifica Desktop Entry.
+    QList<QUrl> files;
+    for (const QString& path : paths) {
+        files.append(QUrl::fromLocalFile(path));
+    }
+
+    // Come la specifica (desktopexec.h): il programma con i suoi argomenti,
+    // un processo per file se chiede %f o %u.
+    if (!parsed.shellSyntax) {
+        const DesktopExec::Context context { a.icon, a.name, QString() };
+        QList<QList<QUrl>> runs { files };
+        if (files.size() > 1 && DesktopExec::onePerFile(parsed.arguments)) {
+            runs.clear();
+            for (const QUrl& file : std::as_const(files)) {
+                runs.append({ file });
+            }
+        }
+        for (const QList<QUrl>& run : std::as_const(runs)) {
+            const QStringList arguments = DesktopExec::expand(parsed.arguments, run, context);
+            qInfo("vela-shell: service menu: %s", qPrintable(arguments.join(u' ')));
+            QProcess::startDetached(arguments.first(), arguments.mid(1), directory);
+        }
+        return;
+    }
+
+    // Una riga con la sintassi della shell (pipe, $VAR...): non ammessa
+    // dalla specifica, ma KIO la esegue con /bin/sh e alcuni service menu di
+    // KDE ci contano. Si fa lo stesso, con i file sempre tra apici.
+    QStringList quotedFiles;
+    QStringList quotedUrls;
+    for (const QString& path : paths) {
+        quotedFiles << quote(path);
+        quotedUrls << quote(QUrl::fromLocalFile(path).toString());
+    }
     QString command;
     for (qsizetype i = 0; i < a.exec.size(); ++i) {
         const QChar c = a.exec.at(i);
@@ -202,17 +235,16 @@ void ServiceMenus::run(int id, const QStringList& paths) const
             continue;
         }
         switch (a.exec.at(++i).unicode()) {
-        case 'f': command += files.first(); break;
-        case 'F': command += files.join(u' '); break;
-        case 'u': command += urls.first(); break;
-        case 'U': command += urls.join(u' '); break;
+        case 'f': command += quotedFiles.first(); break;
+        case 'F': command += quotedFiles.join(u' '); break;
+        case 'u': command += quotedUrls.first(); break;
+        case 'U': command += quotedUrls.join(u' '); break;
         case 'i': command += a.icon.isEmpty() ? QString() : QStringLiteral("--icon ") + quote(a.icon); break;
         case 'c': command += quote(a.name); break;
         case '%': command += u'%'; break;
-        default: break; // %k, %d... non servono qui
+        default: break; // %k, %d...: deprecati o senza senso qui
         }
     }
-    const QString directory = QFileInfo(paths.first()).absolutePath();
-    qInfo("vela-shell: service menu: %s", qPrintable(command));
+    qInfo("vela-shell: service menu (shell): %s", qPrintable(command));
     QProcess::startDetached(QStringLiteral("/bin/sh"), { QStringLiteral("-c"), command }, directory);
 }

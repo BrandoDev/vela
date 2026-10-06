@@ -7,6 +7,7 @@
 #include <QList>
 #include <QString>
 #include <QStringList>
+#include <QUrl>
 #include <QVariantMap>
 
 // Elenco delle applicazioni installate, letto dai file .desktop standard
@@ -43,7 +44,9 @@ public:
         QString comment;
         QString keywords;
         QString icon;
-        QString exec;
+        QString exec; // senza field code: per la ricerca
+        QString program; // il nome del programma (es. "kate"), dal primo argomento di Exec
+        QString workDir; // Path=: la cartella in cui avviarla (vuota: la home)
         QString wmClass; // StartupWMClass: l'app_id delle sue finestre, se diverso dall'id
         bool terminal = false;
     };
@@ -97,7 +100,9 @@ signals:
 
 private:
     void applyFilter();
-    bool launchEntry(const Entry& entry) const;
+    // Avvia l'app con i file dati (anche nessuno), secondo Exec (desktopexec.h):
+    // il programma con i suoi argomenti, senza passare dalla shell.
+    bool launchEntry(const Entry& entry, const QList<QUrl>& files = {}) const;
 
     QList<Entry> m_all; // ordinate per nome
     QList<int> m_visible; // indici in m_all che corrispondono alla ricerca

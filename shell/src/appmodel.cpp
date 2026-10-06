@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "appmodel.h"
+#include "desktopexec.h"
 
 #include <QCollator>
 #include <QDir>
@@ -61,12 +62,6 @@ QString cleanExec(const QString& exec)
     result.remove(fieldCodes);
     result.replace(QStringLiteral("%%"), QStringLiteral("%"));
     return result.simplified();
-}
-
-QString shellQuote(QString text)
-{
-    text.replace(u'\'', QStringLiteral("'\\''"));
-    return u'\'' + text + u'\'';
 }
 
 bool listContains(const QString& list, const QString& item)
@@ -149,6 +144,10 @@ bool parseDesktopFile(const QString& path, const QStringList& localeKeys, AppMod
     entry.icon = values.value(QStringLiteral("Icon"));
     entry.rawExec = unescape(values.value(QStringLiteral("Exec")));
     entry.exec = cleanExec(entry.rawExec);
+    if (const DesktopExec::Parsed parsed = DesktopExec::split(entry.rawExec); parsed.ok) {
+        entry.program = parsed.arguments.first().section(u'/', -1);
+    }
+    entry.workDir = unescape(values.value(QStringLiteral("Path")));
     entry.path = path;
     // Le azioni dell'app (le "attività" della jump list), nell'ordine dato.
     for (const QString& id : values.value(QStringLiteral("Actions")).split(u';', Qt::SkipEmptyParts)) {
@@ -352,10 +351,7 @@ QString AppModel::findDesktopId(const QString& appId) const
         return {};
     }
     const auto baseId = [](const Entry& e) { return e.id.chopped(8); }; // senza ".desktop"
-    const auto program = [](const Entry& e) {
-        const QString first = e.exec.section(u' ', 0, 0);
-        return first.section(u'/', -1);
-    };
+    const auto program = [](const Entry& e) { return e.program; };
     // Dalla regola più affidabile alla più approssimativa. Le app moderne
     // usano come app_id il nome del proprio file .desktop.
     const std::function<bool(const Entry&)> rules[] = {
@@ -414,7 +410,7 @@ bool AppModel::launchAction(const QString& id, const QString& actionId)
     for (const Action& a : e->actions) {
         if (a.id == actionId) {
             Entry copy = *e;
-            copy.exec = cleanExec(a.exec);
+            copy.rawExec = a.exec;
             return launchEntry(copy);
         }
     }
@@ -428,23 +424,8 @@ bool AppModel::launchWithFile(const QString& id, const QString& url)
         return false;
     }
     // Il file prende il posto dei field code (%f, %u...); se l'app non ne
-    // ha, va in fondo alla riga di comando.
-    const QUrl fileUrl(url);
-    const QString quoted = shellQuote(fileUrl.isLocalFile() ? fileUrl.toLocalFile() : url);
-    const QString quotedUrl = shellQuote(url);
-    static const QRegularExpression fileCodes(QStringLiteral("%[fF]"));
-    static const QRegularExpression urlCodes(QStringLiteral("%[uU]"));
-    QString exec = e->rawExec;
-    if (exec.contains(fileCodes)) {
-        exec.replace(fileCodes, quoted);
-    } else if (exec.contains(urlCodes)) {
-        exec.replace(urlCodes, quotedUrl);
-    } else {
-        exec += u' ' + quoted;
-    }
-    Entry copy = *e;
-    copy.exec = cleanExec(exec);
-    return launchEntry(copy);
+    // ha, va in fondo agli argomenti (vedi launchEntry).
+    return launchEntry(*e, { QUrl(url) });
 }
 
 // L'app predefinita per un tipo di file, da mimeapps.list (prima quello
@@ -553,18 +534,45 @@ QString AppModel::name(const QString& id) const
 QString AppModel::program(const QString& id) const
 {
     const Entry* e = find(id);
-    return e ? e->exec.section(u' ', 0, 0).section(u'/', -1) : QString();
+    return e ? e->program : QString();
 }
 
-bool AppModel::launchEntry(const Entry& entry) const
+bool AppModel::launchEntry(const Entry& entry, const QList<QUrl>& files) const
 {
-    QString command = entry.exec;
-    if (entry.terminal) {
-        const QString terminal = qEnvironmentVariable("VELA_TERMINAL", QStringLiteral("konsole"));
-        command = terminal + QStringLiteral(" -e ") + command;
+    const DesktopExec::Parsed parsed = DesktopExec::split(entry.rawExec);
+    if (!parsed.ok) {
+        qWarning("vela-shell: Exec non valido in %s: %s", qPrintable(entry.path), qPrintable(entry.rawExec));
+        return false;
     }
-    qInfo("vela-shell: avvio %s", qPrintable(command));
-    // "exec" fa sì che la shell venga sostituita dal programma.
-    return QProcess::startDetached(QStringLiteral("/bin/sh"),
-        { QStringLiteral("-c"), QStringLiteral("exec ") + command }, QDir::homePath());
+    const DesktopExec::Context context { entry.icon, entry.name, entry.path };
+    // %f o %u con più file: un processo per file. Un'app senza field code
+    // riceve comunque i file in fondo, come prima ("Apri con").
+    QList<QList<QUrl>> runs { files };
+    if (files.size() > 1 && DesktopExec::onePerFile(parsed.arguments)) {
+        runs.clear();
+        for (const QUrl& file : files) {
+            runs.append({ file });
+        }
+    }
+    const QString directory = !entry.workDir.isEmpty() && QFileInfo(entry.workDir).isDir() ? entry.workDir : QDir::homePath();
+    bool ok = true;
+    for (const QList<QUrl>& run : std::as_const(runs)) {
+        QStringList arguments = DesktopExec::expand(parsed.arguments, run, context);
+        if (!DesktopExec::takesFiles(parsed.arguments)) {
+            for (const QUrl& file : run) {
+                arguments.append(DesktopExec::asPath(file));
+            }
+        }
+        if (entry.terminal) {
+            arguments = QStringList { qEnvironmentVariable("VELA_TERMINAL", QStringLiteral("konsole")),
+                            QStringLiteral("-e") }
+                + arguments;
+        }
+        if (arguments.isEmpty()) {
+            return false;
+        }
+        qInfo("vela-shell: avvio %s", qPrintable(arguments.join(u' ')));
+        ok = QProcess::startDetached(arguments.first(), arguments.mid(1), directory) && ok;
+    }
+    return ok;
 }
