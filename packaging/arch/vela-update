@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Aggiorna Vela installata come pacchetto (vela-git): scarica i commit
 # nuovi, mostra cosa cambia, costruisce il pacchetto con makepkg e lo
 # installa con pacman (chiede la password). La versione nuova parte alla

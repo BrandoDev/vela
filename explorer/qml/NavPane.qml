@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import QtQuick
 
 // Il riquadro di navigazione a sinistra, come Windows 11: Home, le cartelle

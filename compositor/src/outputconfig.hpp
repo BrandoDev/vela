@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // La configurazione degli schermi che l'utente ha scelto (con un programma

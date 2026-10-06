@@ -1,4 +1,7 @@
 #version 450
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #extension GL_GOOGLE_include_directive : require
 
 // Tinta unita (anteprima dello snap, sfondo, catture): il colore arriva già

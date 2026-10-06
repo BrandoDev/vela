@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import QtQuick
 
 // La Home di Esplora, come Windows 11: le cartelle di Accesso rapido in

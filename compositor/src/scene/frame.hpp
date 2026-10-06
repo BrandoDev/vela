@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Dalla scena ai pixel di uno schermo (docs/renderer.md §6): la scena

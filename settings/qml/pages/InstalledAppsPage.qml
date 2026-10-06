@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import QtQuick
 
 // App > App installate: cerca e disinstalla, come Windows 11.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // vela-windows: elenca e comanda le finestre di Vela (wlr-foreign-toplevel).
 //
 // Uso: vela-windows [list]

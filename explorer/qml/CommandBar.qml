@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import QtQuick
 
 // La barra dei comandi di Windows 11: Nuovo; Taglia, Copia, Incolla,

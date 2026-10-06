@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Test della nitidezza (docs/renderer.md §3.10): a ogni scala, la finestra di
 # vela-pattern deve arrivare sullo schermo bit per bit, appena aperta,
 # agganciata a sinistra e a destra, massimizzata e ripristinata.

@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Collega Vela alla sessione dell'utente (systemd --user e D-Bus), così le app
 # avviate da loro (portali, agente polkit, app all'avvio) trovano questo
 # display. Lo chiama il compositor: "start" appena il display è pronto,

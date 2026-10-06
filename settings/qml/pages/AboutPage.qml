@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import QtQuick
 
 // Sistema > Informazioni: il dispositivo e il sistema, come Windows 11.

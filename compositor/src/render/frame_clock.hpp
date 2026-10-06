@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Il tempo di uno schermo (docs/renderer.md §4): quando verrà mostrato il

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // L'area di notifica (tray): le icone che le app mettono accanto

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Le icone delle app nella barra del titolo (docs/renderer.md §9.6): dal

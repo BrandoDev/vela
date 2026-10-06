@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // vela-lock: la schermata di blocco di Vela.
 //
 // Usa ext-session-lock-v1: il compositor mostra solo le nostre superfici

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // La scena di Vela (docs/renderer.md §5): cosa c'è sullo schermo, dal basso

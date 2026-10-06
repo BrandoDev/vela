@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # La sessione di Vela, avviata da SDDM (vela.desktop) o da una console.
 # Il log di ogni sessione resta in ~/.local/state/vela/ (l'ultimo e il
 # precedente), per capire cosa è successo se qualcosa va storto.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Il rettangolo arrotondato (docs/renderer.md §8.1): la distanza dal bordo
 // (SDF) calcolata per ogni pixel fisico, con un pixel esatto di
 // antialiasing. I lati dritti cadono sui bordi dei pixel e restano netti.

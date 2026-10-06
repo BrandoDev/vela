@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # vela-lock: la schermata di blocco (ext-session-lock-v1 + PAM).
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Gui Svg)

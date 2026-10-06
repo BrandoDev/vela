@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Esplora file (vela-files): Qt Quick senza Qt Quick Controls, per partire
 # in fretta. Riusa pezzi della shell: le app installate ("Apri con"), le
 # miniature, i service menu di KDE, le azioni di sistema e il componente

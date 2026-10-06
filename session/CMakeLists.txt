@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # La sessione: voce in SDDM, avvio, collegamento a systemd e ai portali.
 
 configure_file(vela-session.in vela-session @ONLY)

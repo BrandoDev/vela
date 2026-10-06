@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // vela-pattern: client di prova della nitidezza (docs/renderer.md §3.10).
 //
 // Apre una finestra senza decorazioni e la riempie, alla scala frazionaria

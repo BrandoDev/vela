@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Le misure degli "Obiettivi misurabili" del README, ripetibili: memoria di
 # compositor e shell, CPU a riposo e risvegli al secondo, consumo dalla
 # batteria, e a richiesta l'avvio a freddo di Esplora.

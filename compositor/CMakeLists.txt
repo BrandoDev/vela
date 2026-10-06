@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 find_package(PkgConfig REQUIRED)
 
 # wlroots cambia API a ogni versione minore e installa un pkg-config con la

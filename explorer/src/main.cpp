@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // vela-files: Esplora file di Vela, come quello di Windows 11.
 //
 //   vela-files [cartella o file...]   (un file: si apre la sua cartella, con il file selezionato)

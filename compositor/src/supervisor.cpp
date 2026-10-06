@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Il supervisore della sessione (vela-compositor --supervise ...).
 //
 // Se il compositor va in crash, la sessione non deve cadere con lui. Il

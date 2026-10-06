@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Controlla bit per bit la finestra di vela-pattern in uno screenshot.
 
 Ogni pixel del client codifica le sue coordinate nel buffer

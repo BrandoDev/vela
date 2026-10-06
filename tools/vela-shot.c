@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // vela-shot: cattura lo schermo di Vela in PNG (protocollo wlr-screencopy).
 //
 // Uso: vela-shot FILE.png [X Y LARGHEZZA ALTEZZA]

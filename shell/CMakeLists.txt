@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # GuiPrivate serve per un'unica API privata (la wl_surface della taskbar, vedi
 # foreigntoplevels.cpp): dopo un aggiornamento di Qt la shell va ricompilata.
 set(QT_NO_PRIVATE_MODULE_WARNING ON)

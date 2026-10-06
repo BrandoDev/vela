@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # xdg-desktop-portal-wlr dentro Vela (condivisione dello schermo).
 # Quando un'app chiede di condividere, la shell di Vela mostra cosa si può
 # scegliere: uno schermo intero o una finestra, con le anteprime. Risponde

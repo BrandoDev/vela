@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // vela-input: simula mouse e tastiera dentro Vela, per i test automatici.
 // Il compositor deve essere avviato con VELA_DEBUG_INPUT=1.
 //

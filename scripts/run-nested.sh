@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Avvia Vela dentro una finestra della tua sessione attuale (es. KDE),
 # con la shell già caricata. Chiudi con Alt+Shift+Esc o chiudendo la finestra.
 #

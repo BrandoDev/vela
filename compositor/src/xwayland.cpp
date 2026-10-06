@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Le app X11 (Steam, molti giochi, app vecchie) attraverso Xwayland.
 //
 // Xwayland parte solo quando la prima app X11 si collega. Ogni sua finestra

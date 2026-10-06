@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Blocco dello schermo e inattività.
 //
 // Il blocco è ext-session-lock-v1: un programma (vela-lock) chiede di

@@ -1,4 +1,7 @@
 #version 450
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #extension GL_GOOGLE_include_directive : require
 
 // Sfocatura dal vivo (docs/renderer.md §8.3), dual Kawase: riduzione a metà

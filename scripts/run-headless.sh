@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Avvia Vela senza finestra (backend "headless" di wlroots): nulla compare
 # sullo schermo, ma le app si aprono e si può guardare e comandare tutto con
 # gli strumenti in tools/ (vela-shot, vela-windows, vela-input).

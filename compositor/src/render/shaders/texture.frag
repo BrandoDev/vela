@@ -1,4 +1,7 @@
 #version 450
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #extension GL_GOOGLE_include_directive : require
 
 // Una texture (finestra, pannello, istantanea, cursore). I pixel delle app

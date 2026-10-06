@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Desktop virtuali, come Windows 11.
 //
 // Ogni finestra sta su un desktop (o su tutti: "Mostra questa finestra su

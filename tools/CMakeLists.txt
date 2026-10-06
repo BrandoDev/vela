@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Strumenti per provare Vela senza toccarlo con le mani: catture dello
 # schermo, elenco/comando delle finestre, mouse e tastiera simulati.
 # Parlano solo protocolli Wayland standard.

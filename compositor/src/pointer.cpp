@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Il mouse per i giochi e per le app che lo vogliono tutto per sé.
 //
 // - relative-pointer: i movimenti "grezzi" del mouse, anche quando il

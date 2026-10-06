@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Vela come pacchetto di Arch / CachyOS, dal repository git.
 #
 #   cd packaging/arch && makepkg -si      installa
@@ -19,8 +22,7 @@ pkgrel=1
 pkgdesc="Desktop environment moderno, fluido e leggero, con l'aspetto e la comodità di Windows 11"
 arch=('x86_64')
 url="https://github.com/BrandoDev/vela"
-# Il progetto non ha ancora scelto una licenza.
-license=('LicenseRef-Vela')
+license=('GPL-3.0-or-later')
 depends=(
     'wlroots0.20' 'wayland' 'libxkbcommon' 'pixman' 'libinput' 'libdrm' 'mesa' 'vulkan-icd-loader'
     'freetype2' 'harfbuzz' 'fontconfig' 'librsvg' 'cairo'

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // vela-shell: taskbar e menu Start di Vela.
 //
 // Ogni pezzo della shell è una finestra "layer-shell": il compositor sa che

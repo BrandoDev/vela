@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # L'app Impostazioni di Vela: Qt Quick, come la shell, di cui riusa alcuni
 # pezzi (le app installate, i programmi di sistema, lo stato del sistema).
 set(QT_NO_PRIVATE_MODULE_WARNING ON)
