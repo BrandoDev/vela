@@ -4,7 +4,8 @@
 # Compilazione automatica a ogni push, in un container Arch Linux (le
 # versioni di wlroots e Qt che usa Vela sono quelle di Arch).
 #
-# - compila: tutto il progetto, strumenti di prova compresi. Le prove
+# - compila: tutto il progetto, strumenti di prova compresi, e le prove che
+#   non hanno bisogno di uno schermo (ctest: le copie di Esplora). Le prove
 #   grafiche (scripts/test-sharpness.sh) qui non girano: il renderer vuole
 #   una GPU con un nodo DRM, che i runner di GitHub non hanno.
 # - pacchetto: solo per main, il pacchetto vela-git costruito con il
@@ -64,6 +65,9 @@ jobs:
         run: |
           cmake --build build -j "$(nproc)"
           ccache --show-stats
+
+      - name: Prove
+        run: ctest --test-dir build --output-on-failure
 
       - name: Script
         run: |

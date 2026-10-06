@@ -11,8 +11,8 @@ qt_standard_project_setup(REQUIRES 6.5)
 
 set(SHELL_SRC ${PROJECT_SOURCE_DIR}/shell/src)
 
-qt_add_executable(vela-files
-    src/main.cpp
+# Il codice C++ di Esplora, condiviso dall'app e dalle sue prove.
+add_library(vela-files-core OBJECT
     src/fileops.cpp
     src/fileops.h
     src/foldermodel.cpp
@@ -32,7 +32,17 @@ qt_add_executable(vela-files
     ${SHELL_SRC}/servicemenus.h
     ${SHELL_SRC}/systemactions.cpp
     ${SHELL_SRC}/systemactions.h)
-target_include_directories(vela-files PRIVATE ${SHELL_SRC})
+target_include_directories(vela-files-core PUBLIC src ${SHELL_SRC})
+target_compile_options(vela-files-core PRIVATE -Wall -Wextra)
+target_link_libraries(vela-files-core PUBLIC
+    Qt6::DBus
+    Qt6::Gui
+    Qt6::Network
+    Qt6::Qml
+    Qt6::Quick
+    Qt6::Svg)
+
+qt_add_executable(vela-files src/main.cpp)
 
 set(FILES_QML_FILES
     qml/Main.qml
@@ -69,13 +79,18 @@ qt_add_qml_module(vela-files
     QML_FILES ${FILES_QML_FILES})
 
 target_compile_options(vela-files PRIVATE -Wall -Wextra)
-target_link_libraries(vela-files PRIVATE
-    Qt6::DBus
-    Qt6::Gui
-    Qt6::Network
-    Qt6::Qml
-    Qt6::Quick
-    Qt6::Svg)
+target_link_libraries(vela-files PRIVATE vela-files-core)
+
+# Le prove (ctest): copie e spostamenti senza interfaccia, con i casi che
+# non devono mai perdere dati (sostituzione, disco pieno, cambio di tipo).
+if(VELA_BUILD_TOOLS)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
+    qt_add_executable(vela-files-test tests/transfers.cpp)
+    target_compile_options(vela-files-test PRIVATE -Wall -Wextra)
+    target_link_libraries(vela-files-test PRIVATE vela-files-core Qt6::Test)
+    add_test(NAME esplora-copie COMMAND vela-files-test)
+    set_tests_properties(esplora-copie PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()
 
 install(TARGETS vela-files RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES vela-files.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)

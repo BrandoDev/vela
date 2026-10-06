@@ -32,7 +32,9 @@
 #include <QUrl>
 #include <QVariantMap>
 
+#include <fcntl.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <functional>
 
@@ -62,6 +64,48 @@ QString copyName(const QFileInfo& source)
     const bool hasSuffix = !source.isDir() && !source.suffix().isEmpty() && !source.completeBaseName().isEmpty();
     return hasSuffix ? source.completeBaseName() + QStringLiteral(" - Copia.") + source.suffix()
                      : source.fileName() + QStringLiteral(" - Copia");
+}
+
+// Un nome nascosto e libero accanto a `destination`, sullo stesso disco:
+// lì si scrive la copia, che diventa `destination` con una rename atomica
+// solo quando è completa. "foto.jpg" -> ".foto.jpg.vela-copy-XXXXXX".
+// Con `directory` crea una cartella vuota, altrimenti un file vuoto (0600).
+QString makeTemporary(const QString& destination, bool directory)
+{
+    const QFileInfo info(destination);
+    QByteArray name = QFile::encodeName(info.fileName());
+    name.truncate(200); // il nome intero non deve superare NAME_MAX
+    QByteArray pattern = QFile::encodeName(info.absolutePath()) + "/." + name + ".vela-copy-XXXXXX";
+    if (directory) {
+        return ::mkdtemp(pattern.data()) ? QFile::decodeName(pattern) : QString();
+    }
+    const int fd = ::mkostemp(pattern.data(), O_CLOEXEC);
+    if (fd < 0) {
+        return {};
+    }
+    ::close(fd);
+    return QFile::decodeName(pattern);
+}
+
+void removeAny(const QString& path)
+{
+    const QFileInfo info(path);
+    info.isDir() && !info.isSymLink() ? QDir(path).removeRecursively() : QFile::remove(path);
+}
+
+// Scrive su disco tutto ciò che è in sospeso sul filesystem di `directory`.
+void syncDirectory(const QString& directory)
+{
+    const int fd = ::open(QFile::encodeName(directory).constData(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (fd >= 0) {
+        ::syncfs(fd);
+        ::close(fd);
+    }
+}
+
+bool renameOver(const QString& from, const QString& to)
+{
+    return ::rename(QFile::encodeName(from).constData(), QFile::encodeName(to).constData()) == 0;
 }
 
 void sendToShell(const QByteArray& command)
@@ -253,17 +297,29 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
         step.label = transfer.move ? QStringLiteral("Sposta") : QStringLiteral("Copia");
         QString firstArrived;
 
-        // Un file, a pezzi, con avanzamento e annullamento.
+        // Copia `from` in `to` senza mai lasciare `to` a metà. Un file si
+        // scrive in un temporaneo nascosto accanto a `to` e diventa `to` con
+        // una rename atomica solo a copia finita: se c'era già un file con
+        // quel nome, resta intatto fino a quell'istante. Errori, disco pieno
+        // e annullamento tolgono il temporaneo. Le cartelle si creano (o, se
+        // ci sono già, si uniscono) e si copiano file per file.
         std::function<bool(const QString&, const QString&)> copyOne = [&](const QString& from, const QString& to) {
             const QFileInfo info(from);
             if (job->cancelled) {
                 return false;
             }
             if (info.isSymLink()) {
-                QFile::remove(to);
-                const bool ok = QFile::link(info.symLinkTarget(), to);
+                const QString temporary = makeTemporary(to, false);
+                QFile::remove(temporary); // al suo posto il collegamento
+                // La destinazione così com'è scritta: un collegamento relativo
+                // resta relativo e punta al file accanto, nella copia.
+                if (temporary.isEmpty() || !QFile::link(info.readSymLink(), temporary) || !renameOver(temporary, to)) {
+                    QFile::remove(temporary);
+                    error = QStringLiteral("Impossibile creare il collegamento %1").arg(to);
+                    return false;
+                }
                 done += 1;
-                return ok;
+                return true;
             }
             if (info.isDir()) {
                 if (!QDir().mkpath(to)) {
@@ -282,32 +338,35 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                 return true;
             }
             QFile in(from);
-            QFile out(to);
             if (!in.open(QIODevice::ReadOnly)) {
                 error = QStringLiteral("Impossibile leggere %1").arg(info.fileName());
                 return false;
             }
-            if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-                error = QStringLiteral("Impossibile scrivere %1").arg(to);
+            const QString temporary = makeTemporary(to, false);
+            QFile out(temporary);
+            if (temporary.isEmpty() || !out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                QFile::remove(temporary);
+                error = QStringLiteral("Impossibile scrivere in %1").arg(QFileInfo(to).absolutePath());
                 return false;
             }
-            QByteArray buffer;
+            const auto fail = [&](const QString& message) {
+                out.close();
+                QFile::remove(temporary);
+                error = message;
+                return false;
+            };
             while (!in.atEnd()) {
                 if (job->cancelled) {
                     out.close();
-                    out.remove();
+                    QFile::remove(temporary);
                     return false;
                 }
-                buffer = in.read(4 << 20);
+                const QByteArray buffer = in.read(4 << 20);
                 if (buffer.isEmpty() && in.error() != QFile::NoError) {
-                    error = QStringLiteral("Errore leggendo %1").arg(info.fileName());
-                    return false;
+                    return fail(QStringLiteral("Errore leggendo %1").arg(info.fileName()));
                 }
                 if (out.write(buffer) != buffer.size()) {
-                    error = QStringLiteral("Spazio esaurito o errore scrivendo %1").arg(info.fileName());
-                    out.close();
-                    out.remove();
-                    return false;
+                    return fail(QStringLiteral("Spazio esaurito o errore scrivendo %1").arg(info.fileName()));
                 }
                 done += buffer.size();
                 if (lastPost.elapsed() > 100) {
@@ -315,11 +374,23 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                     lastPost.restart();
                 }
             }
-            out.close();
+            if (!out.flush()) {
+                return fail(QStringLiteral("Spazio esaurito o errore scrivendo %1").arg(info.fileName()));
+            }
+            // Gli attributi dopo l'ultima scrittura (che cambierebbe la data) e
+            // prima della rename: chi vede `to` lo vede già completo.
             out.setPermissions(info.permissions());
-            if (out.open(QIODevice::ReadWrite)) {
-                out.setFileTime(info.lastModified(), QFileDevice::FileModificationTime);
-                out.close();
+            out.setFileTime(info.lastModified(), QFileDevice::FileModificationTime);
+            // Si sostituisce un file che c'era: i dati nuovi su disco prima
+            // che il vecchio sparisca (gli altri li scrive syncfs alla fine).
+            if (QFileInfo::exists(to) && ::fdatasync(out.handle()) != 0) {
+                return fail(QStringLiteral("Spazio esaurito o errore scrivendo %1").arg(info.fileName()));
+            }
+            out.close();
+            if (!renameOver(temporary, to)) {
+                QFile::remove(temporary);
+                error = QStringLiteral("Impossibile scrivere %1").arg(to);
+                return false;
             }
             if (info.size() == 0) {
                 done += 1;
@@ -342,40 +413,98 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                 break;
             }
             QString name = info.fileName();
+            bool replacing = false;
             if (sameDir) {
                 name = uniqueNameIn(transfer.directory, copyName(info));
-            } else if (QFileInfo::exists(target.filePath(name))) {
+            } else if (QFileInfo::exists(target.filePath(name)) || QFileInfo(target.filePath(name)).isSymLink()) {
                 if (policy == QLatin1String("skip")) {
                     continue;
                 }
                 if (policy == QLatin1String("keep")) {
                     name = uniqueNameIn(transfer.directory, name);
-                } else if (!(info.isDir() && QFileInfo(target.filePath(name)).isDir())) {
-                    // Sostituisci: via il vecchio (le cartelle invece si uniscono).
-                    QFileInfo old(target.filePath(name));
-                    old.isDir() ? QDir(old.absoluteFilePath()).removeRecursively() : QFile::remove(old.absoluteFilePath());
+                } else {
+                    // Sostituisci: il vecchio resta finché il nuovo non è pronto
+                    // (due cartelle invece si uniscono).
+                    replacing = true;
                 }
             }
             const QString destination = target.filePath(name);
-            const bool merging = QFileInfo(destination).isDir();
+            const QFileInfo existing(destination);
+            const bool sourceIsDir = info.isDir() && !info.isSymLink();
+            const bool merging = replacing && sourceIsDir && existing.isDir() && !existing.isSymLink();
             post(done, total, info.fileName(), false, QString());
-            if (transfer.move && !merging && sameDevice(source, transfer.directory)
-                && ::rename(QFile::encodeName(source).constData(), QFile::encodeName(destination).constData()) == 0) {
+
+            // Spostamento sullo stesso disco: una rename, che sostituisce un
+            // file esistente in modo atomico (cartelle e tipi diversi no:
+            // passano dalla copia).
+            const bool sameKind = !existing.exists() || (!existing.isDir() && !sourceIsDir);
+            if (transfer.move && !merging && sameKind && sameDevice(source, transfer.directory)
+                && renameOver(source, destination)) {
                 done += 1;
                 step.moves.append({ destination, source });
-            } else if (copyOne(source, destination)) {
-                if (transfer.move) {
-                    info.isDir() && !info.isSymLink() ? QDir(source).removeRecursively() : QFile::remove(source);
-                    step.moves.append({ destination, source });
-                } else if (!merging) {
-                    step.created.append(destination);
+                if (firstArrived.isEmpty()) {
+                    firstArrived = destination;
                 }
+                continue;
+            }
+
+            bool copied = false;
+            if (merging || (!sourceIsDir && (!replacing || sameKind))) {
+                // Unione di cartelle, o un file (anche al posto di un altro
+                // file): atomico file per file.
+                copied = copyOne(source, destination);
             } else {
+                // Una cartella nuova, o un tipo al posto di un altro: tutto in
+                // un temporaneo accanto, poi via il vecchio e rename. Un errore
+                // non lascia mai un albero a metà.
+                const QString temporary = makeTemporary(destination, sourceIsDir);
+                if (temporary.isEmpty()) {
+                    error = QStringLiteral("Impossibile scrivere in %1").arg(transfer.directory);
+                } else if (!sourceIsDir) {
+                    copied = copyOne(source, temporary);
+                    if (copied) {
+                        removeAny(destination);
+                        copied = renameOver(temporary, destination);
+                    }
+                    if (!copied) {
+                        QFile::remove(temporary);
+                    }
+                } else {
+                    copied = copyOne(source, temporary);
+                    if (copied) {
+                        if (replacing) {
+                            removeAny(destination);
+                        }
+                        copied = renameOver(temporary, destination);
+                    }
+                    if (!copied) {
+                        QDir(temporary).removeRecursively();
+                    }
+                }
+                if (!copied && error.isEmpty() && !job->cancelled) {
+                    error = QStringLiteral("Impossibile scrivere %1").arg(destination);
+                }
+            }
+            if (!copied) {
                 break;
+            }
+            if (transfer.move) {
+                // Da un disco all'altro: la sorgente si cancella solo quando
+                // la copia è davvero su disco.
+                syncDirectory(transfer.directory);
+                removeAny(source);
+                step.moves.append({ destination, source });
+            } else if (!merging) {
+                step.created.append(destination);
             }
             if (firstArrived.isEmpty()) {
                 firstArrived = destination;
             }
+        }
+        // "Finito" vuol dire scritto su disco: un syncfs per tutto il lavoro,
+        // invece di un fsync per ogni file.
+        if (!step.created.isEmpty()) {
+            syncDirectory(transfer.directory);
         }
         const bool cancelled = job->cancelled;
         post(total, total, QString(), true, cancelled ? QStringLiteral("Annullato") : error);

@@ -21,7 +21,10 @@ include(GNUInstallDirs)
 
 option(VELA_BUILD_COMPOSITOR "Compila il compositor (richiede wlroots)" ON)
 option(VELA_BUILD_SHELL "Compila la shell e le Impostazioni (richiede Qt 6 e LayerShellQt)" ON)
-option(VELA_BUILD_TOOLS "Compila gli strumenti di prova (vela-shot, vela-windows, vela-input)" ON)
+option(VELA_BUILD_TOOLS "Compila gli strumenti di prova (vela-shot, vela-windows, vela-input) e le prove (ctest)" ON)
+if(VELA_BUILD_TOOLS)
+    enable_testing()
+endif()
 
 if(VELA_BUILD_COMPOSITOR)
     add_subdirectory(compositor)
