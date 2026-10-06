@@ -1652,7 +1652,38 @@ void Server::applyOutputConfiguration(wlr_output_configuration_v1* config, bool 
 // che nessuno (SDDM, l'utente) ha già scelto.
 void Server::setSessionEnvironment()
 {
-    setenv("XDG_CURRENT_DESKTOP", "Vela", false);
+    // Vela usa i servizi di KDE (portachiavi, portali, tema delle app):
+    // "KDE" dopo "Vela" fa sì che Brave, Chrome e le app Electron (VS Code)
+    // usino il portachiavi di KDE come dentro Plasma. Senza, cifrano i dati
+    // con una chiave fissa e non leggono più quelli salvati in Plasma:
+    // accessi ai siti persi, sincronizzazione e password non decifrabili.
+    // Le voci di avvio automatico di Plasma non partono: hanno
+    // X-systemd-skip, tranne il ripristino della sessione, che
+    // vela-session-env spegne.
+    // Plasma Login copia DesktopNames del .desktop così com'è ("Vela;KDE;"),
+    // mentre le app si aspettano i nomi separati da ':'.
+    std::string desktops;
+    if (const char* current = getenv("XDG_CURRENT_DESKTOP")) {
+        std::string name;
+        for (const char* c = current;; ++c) {
+            if (*c == ';' || *c == ':' || *c == '\0') {
+                if (!name.empty()) {
+                    desktops += (desktops.empty() ? "" : ":") + name;
+                }
+                name.clear();
+                if (*c == '\0') {
+                    break;
+                }
+            } else {
+                name += *c;
+            }
+        }
+    }
+    if (desktops.empty() || desktops == "Vela") {
+        desktops = "Vela:KDE";
+    }
+    setenv("XDG_CURRENT_DESKTOP", desktops.c_str(), true);
+    setenv("KDE_SESSION_VERSION", "6", false);
     setenv("XDG_SESSION_DESKTOP", "vela", false);
     setenv("XDG_SESSION_TYPE", "wayland", true); // da una console vale "tty"
     // Le app Qt e KDE con il tema scelto in KDE (stile, colori, font,

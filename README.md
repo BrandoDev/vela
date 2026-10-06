@@ -431,8 +431,11 @@ non compare, il gestore di accesso non guarda in `/usr/local`:
 `sudo ln -s /usr/local/share/wayland-sessions/vela.desktop /usr/share/wayland-sessions/`.
 La sessione:
 
-- dice alle app che il desktop è Vela (`XDG_CURRENT_DESKTOP=Vela`) e che le
-  app Qt/KDE devono usare il tema di KDE (stile, colori, font, icone);
+- dice alle app che il desktop è Vela, basato sui servizi di KDE
+  (`XDG_CURRENT_DESKTOP=Vela:KDE`): le app Qt/KDE usano il tema di KDE
+  (stile, colori, font, icone), e Brave, Chrome e le app Electron il
+  portachiavi di KDE, come dentro Plasma (accessi ai siti e password
+  restano gli stessi nelle due sessioni);
 - avvia i portali (selettore file di KDE; catture e condivisione dello
   schermo con `xdg-desktop-portal-wlr`: quando un'app chiede di condividere,
   la shell mostra cosa scegliere, uno schermo intero o una finestra, con le

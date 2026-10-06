@@ -305,6 +305,17 @@ Output* Toplevel::output() const
     return server.outputUnderCursor();
 }
 
+// La barra di Vela, a meno che l'app non chieda esplicitamente di
+// disegnare la sua (§9.1): Chromium e Firefox con la barra delle schede al
+// posto del titolo la disegnerebbero comunque, e i pulsanti sarebbero doppi.
+// Chi non chiede niente, o chiede la nostra, ha quella di Vela.
+static wlr_xdg_toplevel_decoration_v1_mode decorationModeFor(const wlr_xdg_toplevel_decoration_v1* deco)
+{
+    return deco->requested_mode == WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE
+        ? WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE
+        : WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE;
+}
+
 void Toplevel::onCommit()
 {
     if (xdg && xdg->base->initial_commit) {
@@ -314,9 +325,9 @@ void Toplevel::onCommit()
         wlr_xdg_toplevel_set_wm_capabilities(xdg,
             WLR_XDG_TOPLEVEL_WM_CAPABILITIES_MAXIMIZE | WLR_XDG_TOPLEVEL_WM_CAPABILITIES_FULLSCREEN
                 | WLR_XDG_TOPLEVEL_WM_CAPABILITIES_MINIMIZE | WLR_XDG_TOPLEVEL_WM_CAPABILITIES_WINDOW_MENU);
-        // La barra la disegna Vela, sempre (§9.1).
+        // La barra la disegna Vela, se l'app non ne vuole una sua (§9.1).
         if (xdgDecoration) {
-            wlr_xdg_toplevel_decoration_v1_set_mode(xdgDecoration, WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+            wlr_xdg_toplevel_decoration_v1_set_mode(xdgDecoration, decorationModeFor(xdgDecoration));
         }
         if (xdg->requested.fullscreen) {
             setFullscreen(true);
@@ -341,9 +352,8 @@ void Toplevel::setXdgDecoration(wlr_xdg_toplevel_decoration_v1* deco)
 {
     xdgDecoration = deco;
     decorationMode.connect(&deco->events.request_mode, [this](void*) {
-        // Qualunque cosa chieda l'app, la barra la disegna Vela (§9.1).
         if (xdg->base->initialized) {
-            wlr_xdg_toplevel_decoration_v1_set_mode(xdgDecoration, WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+            wlr_xdg_toplevel_decoration_v1_set_mode(xdgDecoration, decorationModeFor(xdgDecoration));
         }
     });
     decorationDestroy.connect(&deco->events.destroy, [this](void*) {
@@ -353,7 +363,7 @@ void Toplevel::setXdgDecoration(wlr_xdg_toplevel_decoration_v1* deco)
         updateDecoration();
     });
     if (xdg->base->initialized) {
-        wlr_xdg_toplevel_decoration_v1_set_mode(deco, WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+        wlr_xdg_toplevel_decoration_v1_set_mode(deco, decorationModeFor(deco));
     }
 }
 

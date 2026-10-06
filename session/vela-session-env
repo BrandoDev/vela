@@ -8,8 +8,12 @@
 # un'altra sessione grafica è già attiva (Plasma su un'altra console, mentre
 # si prova Vela da una TTY), non si tocca nulla, per non rompere quella.
 
-VARS="WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP QT_QPA_PLATFORMTHEME XDG_MENU_PREFIX"
+VARS="WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP KDE_SESSION_VERSION XDG_SESSION_TYPE XDG_SESSION_DESKTOP QT_QPA_PLATFORMTHEME XDG_MENU_PREFIX"
 STATE="${XDG_RUNTIME_DIR:-/tmp}/vela-session-${WAYLAND_DISPLAY:-none}"
+# Vela si dichiara anche KDE (per il portachiavi), ma il ripristino delle app
+# dell'ultima sessione di Plasma è compito di ksmserver, che qui non c'è: la
+# sua voce di avvio automatico si spegne per la durata della sessione.
+RESTORE='app-org.kde.plasma\x2dfallback\x2dsession\x2drestore@autostart.service'
 
 command -v systemctl > /dev/null || exit 0
 
@@ -32,6 +36,7 @@ start)
         dbus-update-activation-environment $SET
     fi
     : > "$STATE"
+    systemctl --user -q mask --runtime "$RESTORE" 2> /dev/null
     if systemctl --user cat vela-session.target > /dev/null 2>&1; then
         systemctl --user --no-block start vela-session.target
     fi
@@ -42,6 +47,7 @@ stop)
     if systemctl --user cat vela-session.target > /dev/null 2>&1; then
         systemctl --user --no-block stop vela-session.target
     fi
+    systemctl --user -q unmask --runtime "$RESTORE" 2> /dev/null
     # shellcheck disable=SC2086
     systemctl --user unset-environment $VARS
     ;;

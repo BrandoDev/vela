@@ -7,3 +7,9 @@ compile_commands.json
 # Script personali per le prove da TTY
 /start*.sh
 /logs/
+
+# Ciò che makepkg lascia accanto al PKGBUILD
+/packaging/arch/src/
+/packaging/arch/pkg/
+/packaging/arch/vela/
+/packaging/arch/*.pkg.tar.*

@@ -595,8 +595,8 @@ elemento "nostro" che unisce tutto ciò che il renderer sa fare: testo,
 sfocatura, angoli, ombre, animazioni.
 
 **Seconda versione (ottobre 2026)**: anche per le app Wayland, con
-`xdg-decoration` (Vela chiede sempre la barra lato server; Qt e KDE la
-accettano, GTK4 no). La barra fa parte della geometria anche per loro, e
+`xdg-decoration` (Vela offre la barra lato server a chi non chiede la
+propria; Qt e KDE la accettano, GTK4 no). La barra fa parte della geometria anche per loro, e
 alle app va la parte sotto. A sinistra l'icona dell'app (dal `.desktop`
 via `app_id` o `StartupWMClass`, dal tema di icone di KDE, SVG disegnato
 con librsvg alla dimensione fisica; senza librsvg, facoltativa, niente
@@ -622,7 +622,10 @@ ridimensionare e l'icona dell'app.
 ### 9.1 Chi la usa
 
 - Il protocollo `xdg-decoration` permette al compositor di dire "la
-  disegno io". Vela lo preferisce sempre.
+  disegno io". Vela lo preferisce, tranne quando l'app chiede
+  esplicitamente di disegnare la sua: Chromium e Brave con le schede nella
+  barra del titolo la disegnano comunque, e imporre la nostra dava pulsanti
+  doppi.
 - Le app Qt/KDE la accettano: guadagno immediato e visibile.
 - Firefox e Chromium lasciano scegliere all'utente; le app GTK4/libadwaita
   disegnano sempre la propria barra e non si possono convincere. Per loro
