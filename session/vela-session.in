@@ -7,5 +7,7 @@ STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/vela"
 mkdir -p "$STATE_DIR"
 [ -f "$STATE_DIR/vela.log" ] && mv -f "$STATE_DIR/vela.log" "$STATE_DIR/vela.log.old"
 
-exec "@CMAKE_INSTALL_FULL_BINDIR@/vela-compositor" -s "@CMAKE_INSTALL_FULL_BINDIR@/vela-shell" "$@" \
+# --supervise: se il compositor va in crash si riavvia, e le app Qt e KDE
+# si ricollegano (vedi compositor/src/supervisor.cpp).
+exec "@CMAKE_INSTALL_FULL_BINDIR@/vela-compositor" --supervise -s "@CMAKE_INSTALL_FULL_BINDIR@/vela-shell" "$@" \
     2> "$STATE_DIR/vela.log"

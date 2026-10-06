@@ -1,5 +1,7 @@
 #include "server.hpp"
+#include "supervisor.hpp"
 
+#include <cstring>
 #include <getopt.h>
 #include <sys/prctl.h>
 
@@ -8,10 +10,13 @@ namespace {
 void printUsage(const char* program)
 {
     std::printf(
-        "Uso: %s [-s comando]\n"
+        "Uso: %s [--supervise] [-s comando]\n"
         "\n"
         "  -s comando   esegue il comando all'avvio (es. la shell: -s vela-shell)\n"
         "               e lo riavvia se si chiude per errore\n"
+        "  --supervise  la sessione vera (vela-session): un processo a parte tiene\n"
+        "               il socket Wayland e riavvia il compositor se va in crash;\n"
+        "               le app Qt e KDE si ricollegano\n"
         "  -h           mostra questo aiuto\n"
         "\n"
         "Variabili d'ambiente:\n"
@@ -40,6 +45,12 @@ void printUsage(const char* program)
 
 int main(int argc, char* argv[])
 {
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--supervise") == 0) {
+            return vela::runSupervisor(argc, argv);
+        }
+    }
+
     std::string startup;
     int option;
     while ((option = getopt(argc, argv, "s:h")) != -1) {

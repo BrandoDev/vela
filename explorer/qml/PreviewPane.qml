@@ -46,7 +46,7 @@ Item {
             anchors.fill: parent
             visible: pane.image
             source: pane.image ? "file://" + encodeURI(pane.path).replace(/#/g, "%23").replace(/\?/g, "%3F") : ""
-            sourceSize: Qt.size(Math.round(width * Screen.devicePixelRatio), Math.round(height * Screen.devicePixelRatio))
+            sourceSize: Qt.size(width, height) // logico: Qt lo porta in pixel
             fillMode: Image.PreserveAspectFit
             asynchronous: true
             autoTransform: true

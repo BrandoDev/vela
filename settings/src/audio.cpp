@@ -6,6 +6,9 @@
 #include <QStandardPaths>
 #include <QVariantMap>
 
+#include <csignal>
+#include <sys/prctl.h>
+
 namespace {
 
 QByteArray pactl(const QStringList& arguments)
@@ -85,6 +88,8 @@ void Audio::refresh()
     }
     // La prima volta che la pagina si apre: da lì in poi si aggiorna da sé.
     if (m_subscribe.state() == QProcess::NotRunning) {
+        // Se usciamo di colpo (crash), pactl non deve restare orfano.
+        m_subscribe.setChildProcessModifier([] { prctl(PR_SET_PDEATHSIG, SIGTERM); });
         m_subscribe.start(QStringLiteral("pactl"), { QStringLiteral("subscribe") });
     }
     const QString defaultSink = QString::fromUtf8(pactl({ QStringLiteral("get-default-sink") })).trimmed();

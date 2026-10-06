@@ -461,7 +461,15 @@ La sessione:
   Si cambia da Impostazioni > Sistema > Schermo (che usa `wlr-randr`), o a
   mano: `wlr-randr --output HDMI-A-1 --pos -1920,0`;
 - tiene il log dell'ultima sessione (e della precedente) in
-  `~/.local/state/vela/`.
+  `~/.local/state/vela/`;
+- sopravvive a un crash del compositor: un piccolo supervisore
+  (`vela-compositor --supervise`) tiene il socket Wayland e avvia un
+  compositor nuovo sullo stesso socket. Le app Qt e KDE si ricollegano da
+  sole e ricompaiono, come in Plasma quando KWin si riavvia; Chromium,
+  Electron, GTK e X11 si chiudono. Se lo schermo era bloccato, si riparte
+  bloccati. Tre crash in un minuto e la sessione finisce. A fine sessione il
+  supervisore chiude le app rimaste, che altrimenti aspetterebbero per
+  sempre un compositor che non torna.
 
 Pacchetti consigliati su Arch: `xdg-desktop-portal-wlr` (condivisione dello
 schermo, screenshot dalle app) e `wlr-randr`.

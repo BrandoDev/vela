@@ -11,6 +11,9 @@
 #include <QRegularExpression>
 #include <QStandardPaths>
 
+#include <csignal>
+#include <sys/prctl.h>
+
 namespace {
 
 const QString nm = QStringLiteral("org.freedesktop.NetworkManager");
@@ -57,6 +60,8 @@ SystemStatus::SystemStatus(QObject* parent)
                     m_volumeTimer.start();
                 }
             });
+            // Se usciamo di colpo (crash), pactl non deve restare orfano.
+            m_subscribe.setChildProcessModifier([] { prctl(PR_SET_PDEATHSIG, SIGTERM); });
             m_subscribe.start(QStringLiteral("pactl"), { QStringLiteral("subscribe") });
         }
         refreshVolume();

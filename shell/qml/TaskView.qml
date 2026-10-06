@@ -375,7 +375,7 @@ Window {
                             Image {
                                 anchors { fill: parent; margins: 3 }
                                 source: "image://wallpaper/" + encodeURIComponent(Config.wallpaper)
-                                sourceSize: Qt.size(Math.round(width * Screen.devicePixelRatio), Math.round(height * Screen.devicePixelRatio))
+                                sourceSize: Qt.size(width, height) // logico: Qt lo porta in pixel
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                                 opacity: drop.containsDrag ? 0.6 : 1

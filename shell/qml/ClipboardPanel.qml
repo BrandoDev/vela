@@ -229,7 +229,7 @@ Window {
                                 fillMode: Image.PreserveAspectFit
                                 horizontalAlignment: Image.AlignLeft
                                 source: visible ? "image://clipboard/" + card.modelData.id : ""
-                                sourceSize: Qt.size(Math.round(width * Screen.devicePixelRatio), Math.round(height * Screen.devicePixelRatio))
+                                sourceSize: Qt.size(width, height) // logico: Qt lo porta in pixel
                                 asynchronous: true
                             }
                             MouseArea {

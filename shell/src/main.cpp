@@ -277,6 +277,12 @@ int main(int argc, char* argv[])
         return 0;
     }
 
+    // Testo con FreeType e l'hinting dei font, come Plasma e come Windows:
+    // più netto del testo predefinito di Qt Quick (campi di distanza, senza
+    // hinting), ai pixel veri dello schermo anche a scala frazionaria.
+    if (qEnvironmentVariableIsEmpty("QT_QUICK_DEFAULT_TEXT_RENDER_TYPE")) {
+        QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering);
+    }
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("vela-shell"));
     QGuiApplication::setOrganizationName(QStringLiteral("Vela"));

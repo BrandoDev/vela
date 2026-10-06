@@ -106,6 +106,7 @@ endforeach()
 
 add_executable(vela-compositor
     src/main.cpp
+    src/supervisor.cpp
     src/nested.cpp
     src/server.cpp
     src/output.cpp

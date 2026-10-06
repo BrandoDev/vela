@@ -791,6 +791,7 @@ public:
     bool locked = false;
     void initLock();
     void lockScreen(); // Win+L, inattività, prima di sospendere: avvia vela-lock
+    void engageLock(); // nasconde tutto tranne lo strato del blocco (nero finché vela-lock non c'è)
     void noteActivity(); // l'utente c'è: riaccende gli schermi e azzera l'attesa
     void loadIdleSettings(); // da ~/.config/vela/vela.conf (comando "reload-config")
     void outputRendered(Output* output); // a ogni frame consegnato

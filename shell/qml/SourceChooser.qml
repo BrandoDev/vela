@@ -28,8 +28,9 @@ Window {
                     screens.append({
                         identifier: "screen:" + screen.name,
                         answer: "Monitor: " + screen.name,
-                        title: screen.name + " (" + Math.round(screen.width * screen.devicePixelRatio) + "×"
-                            + Math.round(screen.height * screen.devicePixelRatio) + ")",
+                        // Il modello del monitor: la risoluzione qui non si sa (a
+                        // scala frazionaria devicePixelRatio è quella intera).
+                        title: screen.model !== "" ? screen.name + " (" + screen.model + ")" : screen.name,
                         icon: "video-display",
                         revision: 0
                     })

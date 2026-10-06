@@ -19,9 +19,12 @@ Window {
 
     Image {
         anchors.fill: parent
-        // Disegnata già alla dimensione esatta dello schermo, in pixel veri.
-        sourceSize: Qt.size(Math.round(width * Screen.devicePixelRatio),
-                            Math.round(height * Screen.devicePixelRatio))
+        // Disegnata già alla dimensione esatta dello schermo, in pixel veri:
+        // sourceSize è in unità logiche, e Qt lo moltiplica da sé per la
+        // scala della finestra (anche frazionaria). Screen.devicePixelRatio
+        // invece è la scala intera dello schermo (2 al 125%): usarlo qui
+        // chiedeva un'immagine doppia, poi dimezzata senza filtro.
+        sourceSize: Qt.size(width, height)
         source: width > 0 && height > 0
             ? "image://wallpaper/" + encodeURIComponent(Config.wallpaper)
             : ""

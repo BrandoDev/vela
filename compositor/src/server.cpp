@@ -1,5 +1,6 @@
 #include "server.hpp"
 #include "settings.hpp"
+#include "supervisor.hpp"
 
 #include "scene/effects.hpp"
 
@@ -11,6 +12,7 @@
 #include <csignal>
 #include <linux/input-event-codes.h>
 #include <sched.h>
+#include <sys/prctl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
@@ -427,7 +429,21 @@ bool Server::init()
 
 bool Server::start(const std::string& startupCommand)
 {
-    const char* socket = wl_display_add_socket_auto(display);
+    // Nella sessione supervisionata il socket lo tiene il supervisore, che
+    // lo passa a ogni compositor che avvia (supervisor.cpp).
+    const char* socket = nullptr;
+    std::string givenSocket;
+    const bool supervised = std::getenv("VELA_WAYLAND_SOCKET_FD") && std::getenv("VELA_WAYLAND_DISPLAY");
+    if (supervised) {
+        givenSocket = std::getenv("VELA_WAYLAND_DISPLAY");
+        if (wl_display_add_socket_fd(display, std::atoi(std::getenv("VELA_WAYLAND_SOCKET_FD"))) == 0) {
+            socket = givenSocket.c_str();
+        }
+        unsetenv("VELA_WAYLAND_SOCKET_FD");
+        unsetenv("VELA_WAYLAND_DISPLAY");
+    } else {
+        socket = wl_display_add_socket_auto(display);
+    }
     if (!socket) {
         wlr_log(WLR_ERROR, "Impossibile creare il socket Wayland");
         return false;
@@ -452,17 +468,32 @@ bool Server::start(const std::string& startupCommand)
     } else {
         unsetenv("DISPLAY");
     }
-    // Plasma la esporta perché le app sopravvivano a un crash di KWin. Qui
-    // non serve (Vela non si riavvia da solo) e fa danni: alla chiusura di
-    // Vela le app Qt provano a riconnettersi e vanno in crash dentro Qt.
-    unsetenv("QT_WAYLAND_RECONNECT");
+    // Le app Qt si ricollegano al compositor nuovo se questo va in crash:
+    // solo se c'è il supervisore che lo riavvia sullo stesso socket. Senza
+    // (annidati, headless) fa danni: alla chiusura di Vela le app Qt provano
+    // a riconnettersi e vanno in crash dentro Qt.
+    if (supervised) {
+        setenv("QT_WAYLAND_RECONNECT", "1", true);
+    } else {
+        unsetenv("QT_WAYLAND_RECONNECT");
+    }
 
     listenForCommands();
     if (session) {
         runSessionHook("start");
     }
 
-    wlr_log(WLR_INFO, "Vela in esecuzione su WAYLAND_DISPLAY=%s", socket);
+    wlr_log(WLR_INFO, "Vela in esecuzione su WAYLAND_DISPLAY=%s%s", socket,
+        std::getenv("VELA_RESTARTED") ? " (riavviato dopo un crash)" : "");
+    unsetenv("VELA_RESTARTED");
+    // Era bloccato quando il compositor di prima è caduto: si riparte
+    // bloccati, schermo nero finché vela-lock non si presenta.
+    if (std::getenv("VELA_START_LOCKED")) {
+        unsetenv("VELA_START_LOCKED");
+        wlr_log(WLR_INFO, "Lo schermo era bloccato: riparto bloccato");
+        engageLock();
+        lockScreen();
+    }
     if (nested) {
         wlr_log(WLR_INFO, "Modalità annidata: scorciatoie Alt attive");
     }
@@ -1511,6 +1542,10 @@ void Server::supervise(const std::string& command)
         return;
     }
     if (pid == 0) {
+        // La shell muore con il compositor: se questo va in crash, il
+        // supervisore ne avvia un altro con una shell nuova, e la vecchia non
+        // deve ricollegarsi (QT_WAYLAND_RECONNECT) e fare doppione.
+        prctl(PR_SET_PDEATHSIG, SIGKILL);
         execCommand(command);
     }
 
@@ -1700,22 +1735,10 @@ void Server::setSessionEnvironment()
 
 void Server::runSessionHook(const char* action)
 {
-    // Accanto al compositor (cartella di build), altrimenti installato.
-    std::string hook;
-    char self[PATH_MAX] {};
-    if (const ssize_t n = readlink("/proc/self/exe", self, sizeof(self) - 1); n > 0) {
-        std::string dir(self, size_t(n));
-        dir.resize(dir.rfind('/'));
-        if (access((dir + "/vela-session-env").c_str(), X_OK) == 0) {
-            hook = dir + "/vela-session-env";
-        }
-    }
+    const std::string hook = sessionHookPath();
     if (hook.empty()) {
-        hook = std::string(VELA_LIBEXECDIR) + "/vela-session-env";
-        if (access(hook.c_str(), X_OK) != 0) {
-            wlr_log(WLR_INFO, "Sessione: non trovo vela-session-env, niente collegamento a systemd");
-            return;
-        }
+        wlr_log(WLR_INFO, "Sessione: non trovo vela-session-env, niente collegamento a systemd");
+        return;
     }
     const pid_t pid = fork();
     if (pid == 0) {

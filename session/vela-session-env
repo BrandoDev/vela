@@ -8,7 +8,7 @@
 # un'altra sessione grafica è già attiva (Plasma su un'altra console, mentre
 # si prova Vela da una TTY), non si tocca nulla, per non rompere quella.
 
-VARS="WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP KDE_SESSION_VERSION XDG_SESSION_TYPE XDG_SESSION_DESKTOP QT_QPA_PLATFORMTHEME XDG_MENU_PREFIX"
+VARS="WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP KDE_SESSION_VERSION QT_WAYLAND_RECONNECT XDG_SESSION_TYPE XDG_SESSION_DESKTOP QT_QPA_PLATFORMTHEME XDG_MENU_PREFIX"
 STATE="${XDG_RUNTIME_DIR:-/tmp}/vela-session-${WAYLAND_DISPLAY:-none}"
 # Vela si dichiara anche KDE (per il portachiavi), ma il ripristino delle app
 # dell'ultima sessione di Plasma è compito di ksmserver, che qui non c'è: la
@@ -19,7 +19,10 @@ command -v systemctl > /dev/null || exit 0
 
 case "$1" in
 start)
-    if systemctl --user -q is-active graphical-session.target; then
+    # La sessione attiva può essere la nostra, se il compositor è stato
+    # riavviato dopo un crash (stesso display): allora si aggiornano solo le
+    # variabili (DISPLAY può cambiare).
+    if [ ! -e "$STATE" ] && systemctl --user -q is-active graphical-session.target; then
         echo "vela-session-env: c'è già un'altra sessione grafica, non la tocco" >&2
         exit 0
     fi

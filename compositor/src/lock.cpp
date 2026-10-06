@@ -18,6 +18,11 @@
 
 #include "server.hpp"
 #include "settings.hpp"
+#include "supervisor.hpp"
+
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "scene/surface.hpp"
 
@@ -103,25 +108,7 @@ void Server::initLock()
             return;
         }
         lockState.lock = lock;
-        if (!locked) {
-            locked = true;
-            for (scene::Tree* layer : unlockedLayers(*this)) {
-                layer->setEnabled(false);
-            }
-            layers.lock->setEnabled(true);
-            cursorMode = CursorMode::Passthrough;
-            grabbed = nullptr;
-            endSnapZone(false);
-            if (switcherActive()) {
-                switcherFinish(false);
-            }
-            wlr_seat_keyboard_clear_focus(seat);
-            wlr_seat_pointer_clear_focus(seat);
-            focusedLayerSurface = nullptr;
-            wlr_cursor_set_xcursor(cursor, cursorManager, "default");
-            updateLockLayout();
-            wlr_log(WLR_INFO, "Schermo bloccato");
-        }
+        engageLock();
         // "Bloccato" si dice all'app quando ogni schermo ha mostrato il nero.
         lockState.waitingFrames.clear();
         for (Output* output : outputs) {
@@ -143,6 +130,9 @@ void Server::initLock()
         lockState.unlock->connect(&lock->events.unlock, [this](void*) {
             // Sbloccato davvero: il desktop torna com'era.
             locked = false;
+            if (const std::string flag = lockFlagPath(std::getenv("WAYLAND_DISPLAY")); !flag.empty()) {
+                unlink(flag.c_str());
+            }
             for (scene::Tree* layer : unlockedLayers(*this)) {
                 layer->setEnabled(true);
             }
@@ -225,6 +215,38 @@ void Server::initLock()
         },
         this);
     loadIdleSettings();
+}
+
+void Server::engageLock()
+{
+    if (locked) {
+        return;
+    }
+    locked = true;
+    // Per il supervisore: se il compositor va in crash adesso, il prossimo
+    // riparte bloccato (supervisor.cpp).
+    if (const std::string flag = lockFlagPath(std::getenv("WAYLAND_DISPLAY")); !flag.empty()) {
+        if (const int fd = open(flag.c_str(), O_CREAT | O_WRONLY | O_CLOEXEC, S_IRUSR | S_IWUSR); fd >= 0) {
+            close(fd);
+        }
+    }
+    for (scene::Tree* layer : unlockedLayers(*this)) {
+        layer->setEnabled(false);
+    }
+    layers.lock->setEnabled(true);
+    cursorMode = CursorMode::Passthrough;
+    grabbed = nullptr;
+    endSnapZone(false);
+    if (switcherActive()) {
+        switcherFinish(false);
+    }
+    wlr_seat_keyboard_clear_focus(seat);
+    wlr_seat_pointer_clear_focus(seat);
+    focusedLayerSurface = nullptr;
+    wlr_cursor_set_xcursor(cursor, cursorManager, "default");
+    updateLockLayout();
+    scene::Scene::changed();
+    wlr_log(WLR_INFO, "Schermo bloccato");
 }
 
 void Server::loadIdleSettings()
