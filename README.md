@@ -4,11 +4,13 @@
 
 # Vela
 
-**A fluid, sharp and lightweight Linux desktop with the comfort of Windows 11.**
+**A modern, fluid and sharp Linux desktop built for today's hardware.**
 
-Its own Wayland compositor and Vulkan renderer, a Qt Quick shell, and a file manager and
-settings app built to match. Every animation is tied to your monitor's real frames.
-At 100%, 125% or 150% scaling, windows reach the screen pixel for pixel.
+Vela has its own Wayland compositor and Vulkan renderer, a Qt Quick shell, and a file
+manager and settings app built to match. It uses modern hardware where that improves the
+experience — smooth motion, precise rendering, rich effects — and avoids overhead where
+it does not. Every animation is tied to your monitor's real frames, and fractional scaling
+is designed around physical pixels rather than treated as an afterthought.
 
 [![Build](https://github.com/BrandoDev/vela/actions/workflows/compila.yml/badge.svg)](https://github.com/BrandoDev/vela/actions/workflows/compila.yml)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
@@ -19,7 +21,7 @@ At 100%, 125% or 150% scaling, windows reach the screen pixel for pixel.
 ![C++](https://img.shields.io/badge/C%2B%2B-20-00599c)
 
 [Screenshots](#screenshots) · [Features](#features) · [Install](#install) ·
-[Build](#build-from-source) · [How it works](#how-it-works) · [Roadmap](#roadmap)
+[Build](#build-from-source) · [How it works](#how-it-works) · [Docs](#documentation) · [Roadmap](#roadmap)
 
 <br>
 
@@ -31,85 +33,61 @@ At 100%, 125% or 150% scaling, windows reach the screen pixel for pixel.
 
 ## Why Vela
 
-Windows 11 got the everyday desktop right: Start, Snap layouts, Alt+Tab, Win+V. Linux
-desktops can be faster and lighter. Vela puts the two together, with no shortcuts
-taken on quality.
+Desktop hardware and displays have moved fast. A desktop should feel like it belongs on
+them. Vela aims for contemporary interaction design, high-refresh motion and precise
+rendering without treating visual quality and efficiency as opposing goals.
+
+> **Use hardware when it improves the experience. Avoid overhead when it doesn't.**
+> Vela does not remove motion or effects just to win a memory chart. Efficiency comes
+> from doing less unnecessary work, not from making the desktop feel less modern.
 
 <table>
 <tr>
-<td width="33%" valign="top">
+<td width="50%" valign="top">
+
+### Modern
+A coherent shell, polished motion, snap layouts, virtual desktops, quick settings,
+notifications and a file manager designed as one desktop rather than a collection of
+unrelated utilities. Vela targets current hardware and modern displays on purpose.
+
+</td>
+<td width="50%" valign="top">
 
 ### Fluid
-Animations advance on every real vblank, never on timers: at 180 Hz they take 180 steps
-per second. Late latching draws as late as safely possible before each vblank.
-Fullscreen games go straight to the display (direct scanout). Variable refresh rate and
-tearing are supported for games.
+Animations advance on real vblanks, never arbitrary timers: at 180 Hz they can take 180
+steps per second. Late latching draws as late as safely possible before each vblank.
+Fullscreen games can go straight to the display through direct scanout, with VRR and
+tearing support where appropriate.
 
 </td>
-<td width="33%" valign="top">
+</tr>
+<tr>
+<td width="50%" valign="top">
 
 ### Sharp
-Fractional scaling is pixel-exact. When an app renders at the screen's scale, its buffer
-is copied 1:1 with no filtering, even at 125% or 175%. An automated test checks this bit
-for bit after opening, snapping, maximizing and restoring a window.
+Fractional scaling is pixel-exact when an app renders at the screen's scale: its buffer
+can be copied 1:1 with no filtering, even at 125% or 175%. An automated test checks this
+bit for bit after opening, snapping, maximizing and restoring a window.
 
 </td>
-<td width="33%" valign="top">
+<td width="50%" valign="top">
 
-### Light
-The compositor uses **17 MiB** and **0.1% CPU** at idle, waking up 3–7 times a second.
-The file manager shows its first frame **about 100 ms** after launch, even in folders
-with thousands of files.
+### Efficient
+Efficiency through architecture, not austerity. Damage tracking avoids drawing what did
+not change, direct scanout bypasses compositing when possible, and native components stay
+responsive without heavyweight runtimes for simple desktop UI. The compositor idles at
+**17 MiB** and **0.1% CPU** on the primary development system.
 
 </td>
 </tr>
 </table>
 
-## It owns the whole pipeline
-
-Plenty of Linux desktops can be themed to look like Windows. What sets Vela apart is
-underneath: it controls the entire path, from the moment an app commits a Wayland surface
-to the moment the pixel lights up on your monitor.
-
-```
-input → state → predicted frame → render as late as possible → presentation feedback → correct the model
-```
-
-- **Its own scene graph and Vulkan renderer** on top of wlroots, with no `wlr_scene` and
-  no wlroots renderer. Flattening, occlusion, damage history with buffer age, damage
-  expanded for blur, and per-surface pacing are all Vela's.
-- **A frame clock that models time.** Each output keeps a grid of real vblanks and
-  measures what frames cost (worst case over the last second). It starts rendering as
-  late as it safely can and widens its margin after a miss. It even tells a slow frame
-  apart from constant latency added by a host compositor.
-- **A slow app can't hold the screen back.** A commit whose buffer the app's GPU is
-  still drawing waits for its fence (explicit sync or implicit, it doesn't matter), and
-  until then the screen keeps the app's previous frame: the cursor, the animations and
-  every other window stay on the vblank. Buffers stay imported only while they're on
-  screen, because the kernel would otherwise make every frame wait for the GPU of each
-  app that is redrawing one of them.
-- **Direct scanout done properly.** A single opaque surface covering the output 1:1
-  goes straight to the display plane, with dmabuf feedback and explicit-sync timelines.
-  The moment that stops being true, Vela falls back to compositing.
-- **Fractional scaling it can prove.** Exact preferred scales, pixel-snapped
-  positions, and nearest sampling whenever a buffer maps 1:1, verified bit for bit by
-  an automated test.
-
-The whole design is written down in [docs/renderer.md](docs/renderer.md).
-
-> [!NOTE]
-> **Vela is alpha software.** You can already pick it at the login screen and use it
-> every day: compositor, shell, file manager, settings, lock screen. Some behavior
-> (gamma, tearing, touchpad gestures) has only been verified on real hardware by hand,
-> not in the automated tests. **The interface is currently in Italian**; translations
-> are planned.
-
 ## Screenshots
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screenshots/snap.webp" alt="File manager and Settings snapped side by side"><br><sub><b>Snap</b>: windows side by side with Win+arrows or by dragging to an edge or corner.</sub></td>
-<td width="50%"><img src="docs/screenshots/task-view.webp" alt="Task View with two virtual desktops"><br><sub><b>Task View</b> (Win+Tab): live window previews and virtual desktops.</sub></td>
+<td width="50%"><img src="docs/screenshots/snap.webp" alt="File manager and Settings snapped side by side"><br><sub><b>Snap</b>: windows side by side with Super+arrows or by dragging to an edge or corner.</sub></td>
+<td width="50%"><img src="docs/screenshots/task-view.webp" alt="Task View with two virtual desktops"><br><sub><b>Task View</b> (Super+Tab): live window previews and virtual desktops.</sub></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/screenshots/files.webp" alt="The Vela file manager showing a Pictures folder"><br><sub><b>Files</b>: tabs, breadcrumbs, thumbnails and previews; first frame in about 100 ms.</sub></td>
@@ -123,20 +101,60 @@ The whole design is written down in [docs/renderer.md](docs/renderer.md).
 
 <table>
 <tr>
-<td width="34%" valign="top"><img src="docs/screenshots/snap-layouts.webp" alt="Snap layouts flyout over the maximize button"><br><sub><b>Snap layouts</b>: hover the maximize button or press Win+Z.</sub></td>
-<td width="33%" valign="top"><img src="docs/screenshots/context-menu.webp" alt="Windows 11 style desktop context menu"><br><sub><b>Context menus</b> modeled on Windows 11, with KDE service menus under "Show more options".</sub></td>
-<td width="33%" valign="top"><img src="docs/screenshots/panels.webp" alt="Quick settings and the notification center"><br><sub><b>Quick settings</b> (Win+A) and the <b>notification center</b> (Win+N).</sub></td>
+<td width="34%" valign="top"><img src="docs/screenshots/snap-layouts.webp" alt="Snap layouts flyout over the maximize button"><br><sub><b>Snap layouts</b>: hover the maximize button or press Super+Z.</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/context-menu.webp" alt="Vela desktop context menu"><br><sub><b>Context menus</b> with a compact primary view and KDE service menus under "Show more options".</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/panels.webp" alt="Quick settings and the notification center"><br><sub><b>Quick settings</b> (Super+A) and the <b>notification center</b> (Super+N).</sub></td>
 </tr>
 </table>
 
+
+## It owns the whole pipeline
+
+A modern shell is only the surface. Vela also controls the path underneath it, from the
+moment an app commits a Wayland surface to the moment the pixel lights up on your monitor.
+
+```
+input → state → predicted frame → render as late as possible → presentation feedback → correct the model
+```
+
+- **Its own scene graph and Vulkan renderer** on top of wlroots, with no `wlr_scene` and
+  no wlroots renderer. Flattening, occlusion, damage history with buffer age, damage
+  expanded for blur, and per-surface pacing are all Vela's.
+- **A frame clock that models time.** Each output keeps a grid of real vblanks and
+  measures what frames cost (worst case over the last second). It starts rendering as
+  late as it safely can and widens its margin after a miss. It even tells a slow frame
+  apart from constant latency added by a host compositor.
+- **A slow app can't hold the screen back.** A commit whose buffer the app's GPU is
+  still drawing waits for its fence (explicit or implicit sync), and until then the
+  screen keeps the app's previous frame: the cursor, the animations and every other
+  window stay on the vblank. Buffers stay imported only while they're on screen, because
+  the kernel would otherwise make every frame wait for each app redrawing one of them.
+  Measured with an app whose GPU finishes 150 ms late: 0 missed vblanks, down from 47.
+- **Direct scanout done properly.** A single opaque surface covering the output 1:1
+  goes straight to the display plane, with dmabuf feedback and explicit-sync timelines.
+  The moment that stops being true, Vela falls back to compositing.
+- **Fractional scaling it can prove.** Exact preferred scales, pixel-snapped
+  positions, and nearest sampling whenever a buffer maps 1:1, verified bit for bit by
+  an automated test.
+
+The whole design is written down in [docs/renderer.md](docs/renderer.md).
+
+> [!NOTE]
+> **Vela is alpha software.** You can already pick it at the login screen and use it
+> every day: compositor, shell, file manager, settings, lock screen. The complete GPU-
+> dependent functional and sharpness suites are run on the primary development machine
+> and currently pass; GitHub-hosted CI skips them because it has no usable DRM/Vulkan
+> device. Some hardware-specific paths still rely on manual verification. **The interface
+> is currently in Italian**; translations are planned.
+
 ## Features
 
-### Windows and multitasking
-- **Snap like Windows 11**: halves, quarters, and six snap layouts (thirds, 2/3 + 1/3,
+### Window management and multitasking
+- **Snap layouts**: halves, quarters, and six layouts (thirds, 2/3 + 1/3,
   and more). **Snap Assist** offers your other windows for the empty space. Windows you
   arrange this way form a **snap group** that the taskbar shows and restores together.
-- **Task View and virtual desktops** (Win+Tab): drag windows between desktops,
-  rename and reorder desktops, and switch with Win+Ctrl+←/→ and a sliding animation.
+- **Task View and virtual desktops** (Super+Tab): drag windows between desktops,
+  rename and reorder desktops, and switch with Super+Ctrl+←/→ and a sliding animation.
   Your desktops are remembered across sessions.
 - **Alt+Tab** with live previews, including minimized windows. A quick Alt+Tab just
   switches without showing the panel.
@@ -145,7 +163,7 @@ The whole design is written down in [docs/renderer.md](docs/renderer.md).
 - **Rounded corners and soft shadows**, drawn by the compositor and sharp at every
   scale. They turn off when a window is maximized, snapped or fullscreen.
 - **Vela's own title bar** for apps that accept server-side decorations (Qt, KDE, X11),
-  with the app icon and a Mica tint taken from your wallpaper. Apps that draw their own
+  with the app icon and a wallpaper-tinted translucent surface. Apps that draw their own
   title bar, such as Chromium with tabs on top, keep theirs.
 - Invisible resize borders, Super+drag to move, Super+right-drag to resize, and a window
   menu (Alt+Space) with keyboard move and resize.
@@ -154,18 +172,18 @@ The whole design is written down in [docs/renderer.md](docs/renderer.md).
 - **Taskbar**: pinned and running apps centered (or left-aligned), drag to reorder, jump
   lists with recent files, **hover previews**, a system tray (StatusNotifierItem), and
   one taskbar per monitor.
-- **Start menu**: instant search, pinned apps, keyboard navigation, and the Win+X menu.
-- **Quick settings** (Win+A): Wi-Fi network picker, Bluetooth, airplane mode, power
+- **App launcher**: instant search, pinned apps, keyboard navigation, and a Super+X power-user menu.
+- **Quick settings** (Super+A): Wi-Fi network picker, Bluetooth, airplane mode, power
   mode, Night light, accessibility, brightness, volume and battery.
-- **Notifications** with actions, a **notification center** with a calendar (Win+N),
+- **Notifications** with actions, a **notification center** with a calendar (Super+N),
   and Do Not Disturb.
-- **Clipboard history** (Win+V): text and images, pinned items that survive a reboot,
+- **Clipboard history** (Super+V): text and images, pinned items that survive a reboot,
   and one-click paste into the focused app.
-- **Snipping tool** (Win+Shift+S or PrtSc): capture a rectangle, a window or a full
+- **Snipping tool** (Super+Shift+S or PrtSc): capture a rectangle, a window or a full
   screen, straight to the clipboard and to `Pictures/Screenshots`.
 - **Desktop icons** with thumbnails, drag and drop to and from apps, Properties, and
-  undo. Also **Run** (Win+R) and **Show desktop** (Win+D).
-- **Light and dark** modes and a Windows 11 accent palette, applied to KDE and GTK apps
+  undo. Also **Run** (Super+R) and **Show desktop** (Super+D).
+- **Light and dark** modes and a coordinated accent palette, applied to KDE and GTK apps
   too.
 
 ### Files (`vela-files`)
@@ -173,10 +191,10 @@ The whole design is written down in [docs/renderer.md](docs/renderer.md).
   per folder), and a **preview pane** (images, text, video and PDF thumbnails).
 - Background copy and move with progress and conflict resolution, drag and drop
   everywhere, ZIP/7z/TAR, shortcuts, Favorites, Trash with restore.
-- **Copies that never lose data.** Each file is written to a hidden temporary next to its
-  destination and renamed into place only once complete. "Replace" keeps the old file
-  until the new one is safely on disk, even on a full disk, a read error or a crash, and
-  a failed folder copy never leaves a half-copied tree behind.
+- **Atomic file replacement and staged copies.** Each file is written to a hidden temporary
+  next to its destination and renamed into place only once complete. Replacing a file keeps
+  the previous contents until the new copy is safely written, so a full disk or read error
+  does not turn a good destination file into a partial one.
 - **Unmounted drives** (udisks) in This PC: double-click to mount, eject from the menu.
 
 ### Settings (`vela-settings`)
@@ -204,9 +222,9 @@ The whole design is written down in [docs/renderer.md](docs/renderer.md).
 - **Xwayland** on demand for Steam, games and older apps.
 
 ### Accessibility and input
-- Magnifier (Win+Plus), grayscale and color-blindness filters (Win+Ctrl+C), and sticky
+- Magnifier (Super+Plus), grayscale and color-blindness filters (Super+Ctrl+C), and sticky
   keys.
-- Windows-style touchpad defaults and gestures: three or four fingers up for Task View,
+- Familiar touchpad defaults and gestures: three or four fingers up for Task View,
   down for the desktop, sideways to switch apps or desktops.
 
 ### A session you can rely on
@@ -268,16 +286,19 @@ sudo ln -s /usr/local/share/wayland-sessions/vela.desktop /usr/share/wayland-ses
 
 ## Build from source
 
-You need CMake ≥ 3.22, a C++20 compiler, **wlroots 0.20**, Qt ≥ 6.5, LayerShellQt, the
-Vulkan headers, `glslc`, GBM and libdrm.
+You need CMake ≥ 3.22, Ninja, a C++20 compiler, **wlroots 0.20**, Qt ≥ 6.5, LayerShellQt,
+the Vulkan headers and loader, `glslc`, GBM, libdrm, FreeType, HarfBuzz, Fontconfig and
+PAM. librsvg is optional (app icons in the title bar). The tests also use GoogleTest and
+Python 3.
 
 <details>
 <summary><b>Arch / CachyOS / EndeavourOS</b></summary>
 
 ```sh
-sudo pacman -S --needed base-devel cmake pkgconf wlroots0.20 wayland-protocols \
+sudo pacman -S --needed base-devel cmake ninja pkgconf wlroots0.20 wayland-protocols \
     libxkbcommon pixman libinput qt6-declarative qt6-svg qt6-wayland layer-shell-qt \
-    vulkan-headers vulkan-icd-loader shaderc mesa libdrm librsvg
+    vulkan-headers vulkan-icd-loader shaderc mesa libdrm freetype2 harfbuzz fontconfig \
+    pam librsvg zlib gtest python
 ```
 </details>
 
@@ -285,10 +306,12 @@ sudo pacman -S --needed base-devel cmake pkgconf wlroots0.20 wayland-protocols \
 <summary><b>Fedora</b></summary>
 
 ```sh
-sudo dnf install cmake gcc-c++ wlroots-devel wayland-devel wayland-protocols-devel \
+sudo dnf install cmake ninja-build gcc-c++ wlroots-devel wayland-devel wayland-protocols-devel \
     libxkbcommon-devel pixman-devel libinput-devel qt6-qtdeclarative-devel \
     qt6-qtsvg-devel qt6-qtwayland-devel layer-shell-qt-devel \
-    vulkan-headers vulkan-loader-devel glslc mesa-libgbm-devel libdrm-devel
+    vulkan-headers vulkan-loader-devel glslc mesa-libgbm-devel libdrm-devel \
+    freetype-devel harfbuzz-devel fontconfig-devel pam-devel librsvg2-devel \
+    zlib-devel gtest-devel python3
 ```
 </details>
 
@@ -296,10 +319,12 @@ sudo dnf install cmake gcc-c++ wlroots-devel wayland-devel wayland-protocols-dev
 <summary><b>openSUSE Tumbleweed</b></summary>
 
 ```sh
-sudo zypper install cmake gcc-c++ wlroots-devel wayland-protocols-devel \
+sudo zypper install cmake ninja gcc-c++ wlroots-devel wayland-protocols-devel \
     libxkbcommon-devel pixman-devel libinput-devel qt6-declarative-devel \
     qt6-svg-devel qt6-waylandclient-devel layer-shell-qt6-devel \
-    vulkan-headers vulkan-devel shaderc libgbm-devel libdrm-devel
+    vulkan-headers vulkan-devel shaderc libgbm-devel libdrm-devel \
+    freetype2-devel harfbuzz-devel fontconfig-devel pam-devel librsvg-devel \
+    zlib-devel gtest python3
 ```
 </details>
 
@@ -307,8 +332,6 @@ sudo zypper install cmake gcc-c++ wlroots-devel wayland-protocols-devel \
 cmake -B build -G Ninja
 cmake --build build
 ```
-
-With wlroots 0.19 instead of 0.20, configure with `-DVELA_WLROOTS=wlroots-0.19`.
 
 ### Try it without logging out
 
@@ -325,31 +348,16 @@ your apps for their menu mnemonics.
 
 ## Keyboard shortcuts
 
-| Action | Shortcut | When nested |
-|---|---|---|
-| Start menu | <kbd>Super</kbd> | <kbd>Alt</kbd>+<kbd>S</kbd> |
-| Task View | <kbd>Super</kbd>+<kbd>Tab</kbd> | <kbd>Alt</kbd>+<kbd>W</kbd> |
-| Switch windows | <kbd>Alt</kbd>+<kbd>Tab</kbd> | <kbd>Alt</kbd>+<kbd>J</kbd> |
-| Snap left / right | <kbd>Super</kbd>+<kbd>←</kbd> / <kbd>→</kbd> | <kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd> |
-| Maximize / restore, then minimize | <kbd>Super</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> | <kbd>Alt</kbd>+<kbd>M</kbd> |
-| Snap layouts | <kbd>Super</kbd>+<kbd>Z</kbd> | <kbd>Alt</kbd>+<kbd>Z</kbd> |
-| Previous / next desktop | <kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>←</kbd> / <kbd>→</kbd> | <kbd>Alt</kbd>+<kbd>Ctrl</kbd>+<kbd>←</kbd> / <kbd>→</kbd> |
-| New / close desktop | <kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>F4</kbd> | <kbd>Alt</kbd>+<kbd>Ctrl</kbd>+<kbd>D</kbd> |
-| Show desktop | <kbd>Super</kbd>+<kbd>D</kbd> | <kbd>Alt</kbd>+<kbd>D</kbd> |
-| Files / Settings | <kbd>Super</kbd>+<kbd>E</kbd> / <kbd>I</kbd> | <kbd>Alt</kbd>+<kbd>E</kbd> / <kbd>I</kbd> |
-| Quick settings / notifications | <kbd>Super</kbd>+<kbd>A</kbd> / <kbd>N</kbd> | <kbd>Alt</kbd>+<kbd>A</kbd> / <kbd>N</kbd> |
-| Clipboard history | <kbd>Super</kbd>+<kbd>V</kbd> | |
-| Snipping tool | <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>, <kbd>PrtSc</kbd> | <kbd>PrtSc</kbd> |
-| Run / Win+X menu | <kbd>Super</kbd>+<kbd>R</kbd> / <kbd>X</kbd> | <kbd>Alt</kbd>+<kbd>R</kbd> / <kbd>X</kbd> |
-| Terminal | <kbd>Super</kbd>+<kbd>Enter</kbd> | <kbd>Alt</kbd>+<kbd>Enter</kbd> |
-| Lock | <kbd>Super</kbd>+<kbd>L</kbd> | <kbd>Alt</kbd>+<kbd>L</kbd> |
-| Close window / window menu | <kbd>Alt</kbd>+<kbd>F4</kbd> / <kbd>Alt</kbd>+<kbd>Space</kbd> | <kbd>Alt</kbd>+<kbd>Q</kbd> / <kbd>Alt</kbd>+<kbd>Space</kbd> |
-| Next keyboard layout | <kbd>Super</kbd>+<kbd>Space</kbd> | |
-| Magnifier in / out / off | <kbd>Super</kbd>+<kbd>+</kbd> / <kbd>-</kbd> / <kbd>Esc</kbd> | |
-| Color filters | <kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>C</kbd> | |
-| Move / resize any window | <kbd>Super</kbd>+drag / right-drag | |
-| Switch console | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F1</kbd>…<kbd>F12</kbd> | |
-| Quit Vela | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Esc</kbd> | <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Esc</kbd> |
+Vela uses familiar desktop shortcuts: <kbd>Super</kbd> opens the app launcher,
+<kbd>Super</kbd>+<kbd>Tab</kbd> opens Task View, <kbd>Super</kbd>+arrow keys snap windows,
+and <kbd>Super</kbd>+<kbd>A</kbd>/<kbd>N</kbd>/<kbd>V</kbd> open quick settings,
+notifications and clipboard history.
+
+When Vela runs nested inside another Wayland desktop, Alt-based alternatives are enabled
+for shortcuts that the host would otherwise capture.
+
+See **[docs/shortcuts.md](docs/shortcuts.md)** for the complete normal and nested-session
+shortcut reference.
 
 ## How it works
 
@@ -382,7 +390,9 @@ flowchart TB
 
 ## Performance
 
-Vela keeps itself honest with measurable goals:
+Vela does not chase low resource usage by stripping away the experience. It measures
+overhead so visual ambition does not quietly turn into waste:
+
 
 | Goal | Target | Today |
 |---|---|---|
@@ -393,111 +403,46 @@ Vela keeps itself honest with measurable goals:
 | Compositor at idle | no CPU, few wakeups | **17 MiB**, **0.1% CPU**, 3–7 wakeups/s |
 | Shell at idle | no CPU, few wakeups | **143 MiB**, **0.1% CPU**, 1–4 wakeups/s |
 
-Numbers come from `scripts/measure.sh`, which samples PSS memory, idle CPU, wakeups per
-second and, on battery, average power draw over 30 seconds. `--json` prints one line to
-compare over time.
+These measurements are from Vela's primary development system (Ryzen 9 9950X, Radeon
+RX 9070 XT, CachyOS, Mesa/RADV). Numbers come from `scripts/measure.sh`, which samples
+PSS memory, idle CPU, wakeups per second and, on battery, average power draw over 30
+seconds. `--json` prints one line to compare over time.
 
 ## Development
 
-Vela is developed with automated tests that drive a real session without showing
-anything on screen. `scripts/run-headless.sh` starts Vela on wlroots' headless backend.
-The tools in `build/tools/` then use it like a person would:
+Vela can be run nested inside the current Wayland session or headlessly for automated
+work:
 
 ```sh
-sh scripts/run-headless.sh &            # the log prints the WAYLAND_DISPLAY
-export WAYLAND_DISPLAY=wayland-1
-build/tools/vela-input key super+Left   # keys, clicks, drags, typing
-build/tools/vela-windows list           # windows and their state
-build/tools/vela-shot screen.png        # PNG screenshot of the screen or a region
+sh scripts/run-nested.sh
+sh scripts/run-headless.sh
 ```
 
-The command socket (`$XDG_RUNTIME_DIR/vela-$WAYLAND_DISPLAY.sock`, one command per line)
-also takes test commands in headless sessions: `test-output add 2560x1440` and
-`test-output remove HEADLESS-2` hot-plug virtual outputs, `test-power off|on` turns screens
-off like inactivity, and `state` answers with the whole visible state as JSON.
-`vela-testlock` is a locker that unlocks by itself, to test locking without a password.
+Build and run the complete CTest suite with:
 
-Everything runs with **`ctest --test-dir build`**:
-
-| Suite | What it covers | Needs |
-|---|---|---|
-| **Compositor** (GoogleTest, 43 tests) | FrameClock (vblank grid, late latching, margin, learned host latency), animation curves, pixel-exact placement at every scale, default scale from DPI, night light and color filters, sunrise/sunset, `vela.conf` | nothing |
-| **Files** | copies and moves, including a full disk mid-copy (`RLIMIT_FSIZE`) | nothing |
-| **Shell** | `.desktop` `Exec=` parsing, default apps (`mimeapps.list`) | nothing |
-| **Functional** (`tests/functional`, 26 scenarios) | open, snap, maximize and restore, minimize and Alt+Tab, virtual desktops, hot-plugged outputs with their own scale, lock and unlock, screens off and on, crash recovery (also while locked), an app whose GPU finishes 150 ms late (explicit and implicit sync) without a single missed vblank | a GPU |
-| **Sharpness** | windows reach the screen bit for bit at 100–200%, opened, snapped, maximized, restored | a GPU, numpy, Pillow |
-
-The functional scenarios drive a real headless session like a person would, and assert on
-the compositor's own state (`state` on its command socket):
-
-```python
-with Session(scale=1.25) as vela:
-    window = vela.open_window()
-    vela.keys("super+Left")
-    vela.wait_for(lambda s: s.window(window)["snap"] == [0, 0, 6, 12])
+```sh
+cmake -B build -G Ninja
+cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
-Continuous integration builds everything in an Arch Linux container on every push and runs
-the tests; GitHub's runners have no GPU, so the functional and sharpness suites report as
-skipped there. `main` also builds the package.
+The GPU-dependent functional and sharpness suites use Vela's real Vulkan renderer. They
+are run regularly on the primary development machine — an AMD Radeon RX 9070 XT with
+Mesa/RADV — and currently pass in full. GitHub-hosted CI runs the CPU-only tests and
+skips GPU suites because hosted runners do not expose a usable DRM/Vulkan device.
 
-<details>
-<summary><b>Environment variables</b></summary>
+For the full workflow, test harness, command socket, debug switches and project layout,
+see the documentation below.
 
-| Variable | Effect |
+## Documentation
+
+| Document | Contents |
 |---|---|
-| `VELA_SCALE` | Output scale, e.g. `1.25`, or per output: `DP-1=1.5,HDMI-A-1=1`. Without it, Vela picks a scale from each monitor's DPI, in 25% steps like Windows |
-| `VELA_TERMINAL` | Terminal for Super+Enter (default: konsole) |
-| `VELA_VRR=1` / `0` | Variable refresh rate always on / never |
-| `VELA_TEARING=0` | No tearing, even for games that ask for it |
-| `VELA_SCANOUT=0` | Disable direct scanout (for comparison) |
-| `VELA_READY_WAIT=0` | Apply app commits right away even if their GPU hasn't finished, so frames wait for it (for comparison) |
-| `VELA_DEBUG_SCANOUT=1` | Log why a fullscreen app isn't scanned out directly |
-| `VELA_LATCH=0` | Draw right at vblank instead of late latching |
-| `VELA_LATCH_MARGIN` | Minimum late-latching margin in ms (default 1, grows on its own after a late frame) |
-| `VELA_REALTIME=0` | No realtime scheduling for the compositor's main thread |
-| `VELA_SCREEN_OFF` | Minutes of inactivity before locking and turning screens off (default 10, 0 = never) |
-| `VELA_LOCK_ON_IDLE=0` | Turn screens off when idle without locking |
-| `VELA_LOCK` | Locker to use instead of `vela-lock` (e.g. `swaylock`) |
-| `VELA_NATURAL_SCROLL=0` | Classic touchpad scrolling |
-| `VELA_WALLPAPER` | Wallpaper image (SVG, PNG, JPEG...) |
-| `VELA_ICON_THEME` | Icon theme if Qt can't find one (default breeze-dark) |
-| `VELA_STATS=1` | Every 2 s, per output: fps, frame cost, draw-to-light latency, missed vblanks |
-| `VELA_OUTPUT_SIZE` | Resolution for nested/headless outputs, e.g. `1920x1080@144` |
-| `VELA_VULKAN_VALIDATION=1` | Enable the Vulkan validation layer |
-| `VELA_DEBUG_INPUT=1` | Virtual pointer and keyboard for `vela-input` (off by default) |
-| `VELA_DEBUG=1` | Verbose wlroots logging |
-| `XKB_DEFAULT_LAYOUT` | Keyboard layout (e.g. `it`) |
-
-</details>
-
-<details>
-<summary><b>Project layout</b></summary>
-
-```
-compositor/src/   the compositor (compositor/tests: its unit tests)
-  scene/, render/   scene graph and Vulkan renderer
-  supervisor.cpp    crash recovery: socket holder and restarts
-  server.*          startup, focus, bindings, commands, session
-  output.cpp        outputs, refresh rate, frames, VRR, hotplug
-  toplevel.cpp      windows, popups, decorations, animations
-  snap.cpp          halves, quarters, layouts, Snap Assist, snap groups
-  workspaces.cpp    virtual desktops
-  accessibility.cpp night light, color filters, magnifier, sticky keys
-  input.cpp         pointer, touchpad, gestures
-  lock.cpp          lock screen and idle
-shell/            taskbar, Start, panels, desktop (C++ models + QML)
-explorer/         vela-files, the file manager
-settings/         vela-settings, one QML page per settings page
-lock/             vela-lock
-session/          login entry, systemd target, portals
-packaging/arch/   PKGBUILD and vela-update
-tools/            vela-shot, vela-input, vela-windows, vela-pattern, vela-testlock, vela-slowgpu
-tests/functional/ headless scenarios (Python), run by ctest
-scripts/          nested and headless runs, sharpness test, measurements
-docs/             design documents and screenshots
-```
-</details>
+| **[Renderer](docs/renderer.md)** | Scene graph, Vulkan renderer, scaling, damage, frame scheduling and direct scanout. |
+| **[Development](docs/development.md)** | Build options, nested/headless workflows, development tools and repository layout. |
+| **[Testing](docs/testing.md)** | Unit, functional and sharpness suites; GPU requirements; local and CI coverage. |
+| **[Configuration](docs/configuration.md)** | `vela.conf`, display persistence, runtime overrides and renderer/debug environment variables. |
+| **[Keyboard shortcuts](docs/shortcuts.md)** | Complete normal-session and nested-session shortcut reference. |
 
 ## Roadmap
 
@@ -505,8 +450,8 @@ docs/             design documents and screenshots
 - [x] **A real session**: login entry, systemd and D-Bus, portals, polkit, Xwayland,
   lock screen, idle, notifications, system tray.
 - [x] **The look**: own Vulkan renderer, live acrylic blur, rounded corners and
-  shadows, Vela's title bar, Windows 11 context menus everywhere.
-- [x] **Replacing Plasma, day to day**: Settings, Files, desktop icons, virtual desktops,
+  shadows, Vela's title bar, and modern context menus throughout the shell.
+- [x] **A complete daily desktop**: Settings, Files, desktop icons, virtual desktops,
   Task View, Snap layouts and Snap Assist, light mode.
 - [x] **Gaming and displays**: tearing control, VRR, direct scanout, multi-monitor
   hotplug with per-output scale.
@@ -515,7 +460,7 @@ docs/             design documents and screenshots
 - [x] **Reliability**: compositor crash recovery, package and `vela-update`, CI.
 
 **Next**
-- [ ] Input methods (`text-input`, `input-method`) and an emoji panel (Win+.).
+- [ ] Input methods (`text-input`, `input-method`) and an emoji panel (Super+.).
 - [ ] An Updates page in Settings, with a notification when a new version is out.
 - [ ] Start menu: Recommended files, and search across files and settings.
 - [ ] Screen recording in the snipping tool.

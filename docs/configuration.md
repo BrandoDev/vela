@@ -1,0 +1,172 @@
+# Vela configuration
+
+Most user-facing settings should be changed through **Vela Settings**. This document describes the files and environment variables behind those controls, plus development/debug overrides that are intentionally kept out of the main README.
+
+## Persistent compositor settings
+
+The compositor stores non-display settings in:
+
+```text
+~/.config/vela/vela.conf
+```
+
+or, when `XDG_CONFIG_HOME` is set:
+
+```text
+$XDG_CONFIG_HOME/vela/vela.conf
+```
+
+The format is intentionally simple:
+
+```ini
+# comments begin with #
+key=value
+```
+
+Vela Settings preserves unrelated lines when it updates a key and asks the compositor to reload the file. Boolean values accept forms such as `sì`, `si`, `1`, `true` and `yes`.
+
+### `vela.conf` keys
+
+| Key | Default | Meaning |
+|---|---|---|
+| `spegni-schermo` | `10` | Minutes of inactivity before the idle action. `0` disables it. |
+| `blocca` | `sì` | Lock before turning displays off. |
+| `tastiera-layout` | system/default | Comma-separated XKB layouts, for example `it,us`. |
+| `tastiera-variante` | empty | Comma-separated XKB variants matching `tastiera-layout`. |
+| `tastiera-opzioni` | empty | XKB options. |
+| `tastiera-ritardo` | `400` | Key-repeat delay in milliseconds. |
+| `tastiera-velocita` | `30` | Key repeats per second. |
+| `luce-notturna` | `no` | Enable Night light. |
+| `luce-notturna-intensita` | `48` | Night-light strength, 0–100. |
+| `luce-notturna-pianifica` | `no` | Night-light schedule: `no`, `tramonto` or `ore`. |
+| `luce-notturna-dalle` | `21:00` | Manual Night-light start time. |
+| `luce-notturna-alle` | `07:00` | Manual Night-light end time. |
+| `filtri-colore` | `no` | Enable the color filter. |
+| `filtro-colore` | `grigi` | `grigi`, `deuteranopia`, `protanopia` or `tritanopia`. |
+| `filtri-colore-scorciatoia` | `no` | Allow Super+Ctrl+C to toggle color filters. |
+| `lente-incremento` | `100` | Magnifier step in percent. |
+| `tasti-permanenti` | `no` | Sticky modifier keys. |
+| `tearing` | `sì` | Allow fullscreen apps that explicitly request tearing. |
+| `frequenza-variabile` | `giochi` | VRR policy: `no`, `giochi` or `sempre`. |
+| `mouse-velocita` | `10` | Pointer speed, 1–20. |
+| `mouse-precisione` | `sì` | Pointer acceleration / enhanced precision. |
+| `mouse-pulsante-principale` | `sinistro` | Primary mouse button: `sinistro` or `destro`. |
+| `mouse-righe` | `3` | Scroll lines per wheel notch. |
+| `touchpad` | `sì` | Enable touchpad input. |
+| `touchpad-con-mouse` | `sì` | Keep the touchpad enabled when a mouse is connected. |
+| `touchpad-velocita` | `10` | Touchpad pointer speed, 1–20. |
+| `touchpad-tocco` | `sì` | Tap to click. |
+| `touchpad-scorrimento-naturale` | `sì` | Natural scrolling. |
+| `touchpad-tre-dita` | `app` | Three-finger gesture mode: `app`, `desktop` or `no`. |
+| `touchpad-quattro-dita` | `desktop` | Four-finger gesture mode. |
+
+The Settings app is the preferred way to edit these values because it applies validation and reloads the compositor at the correct time.
+
+## Display configuration
+
+Persistent display layout is stored separately in:
+
+```text
+~/.config/vela/schermi.conf
+```
+
+Each physical display gets its own section identified from make, model and serial when available:
+
+```ini
+[Vendor Model Serial]
+attivo=si
+modo=2560x1440@180.000
+scala=1.25
+rotazione=normale
+posizione=0,0
+```
+
+Supported rotation names are `normale`, `90`, `180`, `270`, `specchio`, `specchio-90`, `specchio-180` and `specchio-270`.
+
+Normally this file should be managed through **Settings → Displays** rather than edited by hand.
+
+## Runtime environment variables
+
+These are useful for one-off overrides, nested sessions, experiments and troubleshooting.
+
+### Display and input
+
+| Variable | Effect |
+|---|---|
+| `VELA_SCALE` | Force output scale. A single value applies to all outputs (`1.25`); per-output values can be supplied as `DP-1=1.5,HDMI-A-1=1`. Without it, Vela chooses a scale from each monitor's DPI. |
+| `VELA_OUTPUT_SIZE` | Resolution/refresh for nested or headless outputs, for example `1920x1080@144`. |
+| `VELA_NATURAL_SCROLL=0` | Force classic touchpad scrolling; this override wins over the stored natural-scrolling setting. |
+| `XKB_DEFAULT_LAYOUT` | Initial keyboard layout, for example `it`. |
+| `VELA_TERMINAL` | Terminal launched by Super+Enter. Default: `konsole`. |
+
+### Presentation, VRR and power
+
+| Variable | Effect |
+|---|---|
+| `VELA_VRR=1` | Force VRR always on where supported. |
+| `VELA_VRR=0` | Force VRR off. |
+| `VELA_TEARING=0` | Disable tearing even for applications that request it. |
+| `VELA_SCANOUT=0` | Disable direct scanout. Useful for A/B comparisons and debugging. |
+| `VELA_READY_WAIT=0` | Apply app commits immediately even if the app's GPU has not finished drawing the buffer, so frames wait for it. Only for comparison: by default commits wait for their fences and the screen never waits for an app. |
+| `VELA_LATCH=0` | Disable late latching and render when the backend frame event arrives. |
+| `VELA_LATCH_MARGIN` | Minimum late-latching safety margin in milliseconds. Default: `1`; the frame clock can grow the effective margin after late frames. |
+| `VELA_REALTIME=0` | Disable realtime scheduling for the compositor main thread. |
+| `VELA_SCREEN_OFF` | Override idle timeout in minutes. Default is 10 if no stored setting exists; `0` disables idle screen-off. |
+| `VELA_LOCK_ON_IDLE=0` | Turn displays off on idle without locking first. |
+| `VELA_LOCK` | Use another locker instead of `vela-lock`, for example `swaylock`. |
+
+### Appearance and shell integration
+
+| Variable | Effect |
+|---|---|
+| `VELA_WALLPAPER` | Override the wallpaper image. SVG, PNG, JPEG and other supported formats can be used. |
+| `VELA_ICON_THEME` | Fallback icon theme when Qt cannot resolve one. Default: `breeze-dark`. |
+
+## Development and renderer diagnostics
+
+These variables are for diagnosis rather than normal user configuration.
+
+| Variable | Effect |
+|---|---|
+| `VELA_STATS=1` | Print per-output FPS, frame cost, draw-to-light latency and missed vblanks every two seconds. |
+| `VELA_VULKAN_VALIDATION=1` | Enable Vulkan validation layers. |
+| `VELA_DEBUG=1` | Enable verbose wlroots logging. |
+| `VELA_DEBUG_SCANOUT=1` | Log why a fullscreen surface is not eligible for direct scanout. |
+| `VELA_DEBUG_DAMAGE=1` | Force full-output damage every frame, bypassing normal damage reduction for diagnosis. |
+| `VELA_DEBUG_SYNC=1` | Make the CPU wait for the GPU on every renderer submission; useful when isolating synchronization problems. |
+| `VELA_DEBUG_LINEAR=1` | Force linear render buffers instead of normal tiled/modifier allocation; useful for allocator/modifier diagnosis. |
+| `VELA_DEBUG_INPUT=1` | Enable the virtual keyboard/pointer protocol used by `vela-input`. Off by default for security. |
+| `VELA_FILES_TIMING=1` | Make `vela-files` print startup timing data; used by `scripts/measure.sh`. |
+| `VELA_SHOT_OUTPUT` | Select which output `vela-shot` captures by zero-based index. |
+
+## Internal variables
+
+The supervisor, session launcher and test harness also use internal variables such as `VELA_WAYLAND_SOCKET_FD`, `VELA_WAYLAND_DISPLAY`, `VELA_START_LOCKED`, `VELA_RESTARTED`, `VELA_BUILD` and `VELA_TEST_MARK`.
+
+They are implementation details, are not intended as stable user configuration, and may change without notice.
+
+## Examples
+
+Run Vela nested at 1440p/180 Hz with 125% scale:
+
+```sh
+VELA_OUTPUT_SIZE=2560x1440@180 VELA_SCALE=1.25 sh scripts/run-nested.sh
+```
+
+Compare composited fullscreen rendering against direct scanout:
+
+```sh
+VELA_SCANOUT=0 VELA_DEBUG_SCANOUT=1 sh scripts/run-nested.sh
+```
+
+Run with Vulkan validation and renderer statistics:
+
+```sh
+VELA_VULKAN_VALIDATION=1 VELA_STATS=1 sh scripts/run-nested.sh
+```
+
+Force full damage while diagnosing rendering artifacts:
+
+```sh
+VELA_DEBUG_DAMAGE=1 sh scripts/run-nested.sh
+```
