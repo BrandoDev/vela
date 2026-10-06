@@ -65,6 +65,32 @@ with thousands of files.
 </tr>
 </table>
 
+## It owns the whole pipeline
+
+Plenty of Linux desktops can be themed to look like Windows. What sets Vela apart is
+underneath: it controls the entire path, from the moment an app commits a Wayland surface
+to the moment the pixel lights up on your monitor.
+
+```
+input → state → predicted frame → render as late as possible → presentation feedback → correct the model
+```
+
+- **Its own scene graph and Vulkan renderer** on top of wlroots, with no `wlr_scene` and
+  no wlroots renderer. Flattening, occlusion, damage history with buffer age, damage
+  expanded for blur, and per-surface pacing are all Vela's.
+- **A frame clock that models time.** Each output keeps a grid of real vblanks and
+  measures what frames cost (worst case over the last second). It starts rendering as
+  late as it safely can and widens its margin after a miss. It even tells a slow frame
+  apart from constant latency added by a host compositor.
+- **Direct scanout done properly.** A single opaque surface covering the output 1:1
+  goes straight to the display plane, with dmabuf feedback and explicit-sync timelines.
+  The moment that stops being true, Vela falls back to compositing.
+- **Fractional scaling it can prove.** Exact preferred scales, pixel-snapped
+  positions, and nearest sampling whenever a buffer maps 1:1, verified bit for bit by
+  an automated test.
+
+The whole design is written down in [docs/renderer.md](docs/renderer.md).
+
 > [!NOTE]
 > **Vela is alpha software.** You can already pick it at the login screen and use it
 > every day: compositor, shell, file manager, settings, lock screen. Some behavior
@@ -141,6 +167,10 @@ with thousands of files.
   per folder), and a **preview pane** (images, text, video and PDF thumbnails).
 - Background copy and move with progress and conflict resolution, drag and drop
   everywhere, ZIP/7z/TAR, shortcuts, Favorites, Trash with restore.
+- **Copies that never lose data.** Each file is written to a hidden temporary next to its
+  destination and renamed into place only once complete. "Replace" keeps the old file
+  until the new one is safely on disk, even on a full disk, a read error or a crash, and
+  a failed folder copy never leaves a half-copied tree behind.
 - **Unmounted drives** (udisks) in This PC: double-click to mount, eject from the menu.
 
 ### Settings (`vela-settings`)
@@ -330,11 +360,10 @@ flowchart TB
     C --> HW["DRM/KMS · libinput · GBM"]
 ```
 
-- **The compositor** owns the screen. It runs its own scene graph and a Vulkan 1.4
-  renderer: SDF rounded corners, analytic two-layer shadows, dual Kawase blur, late
-  latching, direct scanout, explicit sync, and night light in the gamma LUT. It also
-  implements `wlr_renderer`, so wlroots' cursor, screencopy and shm uploads share the same
-  device. The full design is in [docs/renderer.md](docs/renderer.md).
+- **The compositor** owns the screen (see [above](#it-owns-the-whole-pipeline)). Its
+  Vulkan 1.4 renderer draws SDF rounded corners, analytic two-layer shadows, dual Kawase
+  blur and night light in the gamma LUT. It also implements `wlr_renderer`, so wlroots'
+  cursor, screencopy and shm uploads share the same device.
 - **The shell** is a separate Qt Quick process using LayerShellQt. It talks to the
   compositor through standard Wayland protocols, plus a small command socket (for
   example, Super opens Start). A shell crash never takes your windows down.
@@ -382,8 +411,11 @@ build/tools/vela-shot screen.png        # PNG screenshot of the screen or a regi
 - **Multiple monitors without monitors**: in a headless session, `test-output add
   2560x1440` and `test-output remove HEADLESS-2` on the command socket hot-plug virtual
   outputs, each with its own scale.
+- **Unit tests** (`ctest --test-dir build`): Files' copies and moves, including a full
+  disk mid-copy (simulated with `RLIMIT_FSIZE`), and the parsing of `.desktop` `Exec=`
+  lines.
 - **Continuous integration**: every push builds the whole project in an Arch Linux
-  container; `main` also builds the package.
+  container and runs the unit tests; `main` also builds the package.
 
 <details>
 <summary><b>Environment variables</b></summary>
