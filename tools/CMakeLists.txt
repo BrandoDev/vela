@@ -59,10 +59,17 @@ add_executable(vela-input vela-input.c)
 target_link_libraries(vela-input PRIVATE
     proto-virtual-pointer proto-virtual-keyboard proto-xdg-output PkgConfig::TOOLS_XKBCOMMON)
 
+vela_client_protocol(proto-session-lock
+    ${TOOLS_WAYLAND_PROTOCOLS_DIR}/staging/ext-session-lock/ext-session-lock-v1.xml ext-session-lock-v1)
+
+# Programma di blocco di prova: blocca e si sblocca da solo, senza password.
+add_executable(vela-testlock vela-testlock.c)
+target_link_libraries(vela-testlock PRIVATE proto-session-lock)
+
 # Client di prova della nitidezza (scripts/test-sharpness.sh).
 add_executable(vela-pattern vela-pattern.c)
 target_link_libraries(vela-pattern PRIVATE proto-xdg-shell proto-viewporter proto-fractional-scale)
 
-foreach(tool vela-shot vela-windows vela-input vela-pattern)
+foreach(tool vela-shot vela-windows vela-input vela-pattern vela-testlock)
     target_compile_options(${tool} PRIVATE -Wall -Wextra -Wno-unused-parameter)
 endforeach()

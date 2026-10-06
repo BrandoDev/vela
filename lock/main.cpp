@@ -121,12 +121,37 @@ QImage wallpaperFor(int width, int height)
     return image;
 }
 
-// Una sfocatura economica: rimpicciolire e ringrandire con filtro.
+// Lo sfondo sfocato dietro la password, come il dual Kawase del compositor:
+// si dimezza più volte e si raddoppia più volte, sempre con filtro. Un solo
+// salto (1/24 e ritorno) lasciava blocchi e gradini ben visibili. Alla fine
+// un velo di rumore leggero, che sotto lo scurimento evita le bande.
 QImage blurred(const QImage& image)
 {
-    const QImage small = image.scaled(std::max(1, image.width() / 24), std::max(1, image.height() / 24),
-        Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-    return small.scaled(image.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    QList<QSize> sizes;
+    QImage current = image;
+    while (sizes.size() < 5 && current.width() > 32 && current.height() > 32) {
+        sizes.append(current.size());
+        current = current.scaled(current.width() / 2, current.height() / 2, Qt::IgnoreAspectRatio,
+            Qt::SmoothTransformation);
+    }
+    while (!sizes.isEmpty()) {
+        current = current.scaled(sizes.takeLast(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    }
+    current = current.convertToFormat(QImage::Format_RGB32);
+    uint32_t seed = 0x9e3779b9u;
+    for (int y = 0; y < current.height(); ++y) {
+        auto* line = reinterpret_cast<QRgb*>(current.scanLine(y));
+        for (int x = 0; x < current.width(); ++x) {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            const int n = int(seed % 5) - 2; // da -2 a +2
+            const QRgb c = line[x];
+            line[x] = qRgb(std::clamp(qRed(c) + n, 0, 255), std::clamp(qGreen(c) + n, 0, 255),
+                std::clamp(qBlue(c) + n, 0, 255));
+        }
+    }
+    return current;
 }
 
 // ------------------------------------------------------------ disegno --

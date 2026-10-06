@@ -1985,6 +1985,14 @@ void Server::handleCommand(const std::string& command)
         }
     } else if (command.rfind("test-output ", 0) == 0) {
         testOutputCommand(command.substr(12));
+    } else if (command == "test-power off" || command == "test-power on") {
+        // Per le prove: spegne e riaccende gli schermi come l'inattività,
+        // solo quelli headless (come test-output).
+        for (Output* output : outputs) {
+            if (wlr_output_is_headless(output->wlr)) {
+                output->setPowered(command == "test-power on");
+            }
+        }
     } else if (command == "lock") {
         lockScreen(); // per esempio prima di sospendere il computer
     } else if (command.rfind("window ", 0) == 0) {
