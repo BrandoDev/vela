@@ -83,6 +83,9 @@ Window {
     onActiveChanged: if (!active && visible && !Menus.isOpen) close()
 
     readonly property real panelY: Math.min(anchorY + 4, height - panel.height - 8)
+    // Alla prima apertura l'altezza della finestra arriva dopo: la zona
+    // sfocata segue la posizione del pannello, non solo la finestra.
+    onPanelYChanged: updateBlur()
 
     ParallelAnimation {
         id: appear

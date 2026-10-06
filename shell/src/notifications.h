@@ -89,6 +89,9 @@ public:
     Q_INVOKABLE void dismiss(uint id);
     // Il mouse è sopra le notifiche: non scadono finché non se ne va.
     Q_INVOKABLE void setHovered(bool hovered);
+    // Si apre il centro notifiche: i popup ancora a schermo ci entrano,
+    // come su Windows (prima restavano sopra, a coprire il calendario).
+    Q_INVOKABLE void collectPopups();
 
     // Il centro notifiche.
     QObject* history() { return &m_history; }

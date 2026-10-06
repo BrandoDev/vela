@@ -20,6 +20,7 @@ Window {
 
     function open() {
         Menus.quickSettingsOpen = false
+        Notifications.collectPopups()
         month = new Date()
         Menus.placeOnTargetScreen(root)
         visible = true

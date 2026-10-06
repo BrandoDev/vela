@@ -4,6 +4,7 @@
 #include "backgroundeffects.h"
 
 #include <QGuiApplication>
+#include <QPlatformSurfaceEvent>
 #include <QRectF>
 #include <QtDebug>
 #include <QtGui/qguiapplication_platform.h>
@@ -95,9 +96,28 @@ void BackgroundEffects::setBlur(QWindow* window, const QVariantList& rects)
                 apply(m_entries[window]);
             }
         });
+        // Chiesta mentre la finestra nativa non c'era ancora (un pannello
+        // appena reso visibile): la si segue da quando nasce. Senza, la
+        // prima apertura restava senza sfocatura.
+        window->installEventFilter(this);
     }
     follow(entry);
     apply(entry);
+}
+
+bool BackgroundEffects::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::PlatformSurface
+        && static_cast<QPlatformSurfaceEvent*>(event)->surfaceEventType() == QPlatformSurfaceEvent::SurfaceCreated) {
+        // Subito dopo l'evento: la finestra nativa è appena nata.
+        QMetaObject::invokeMethod(this, [this, window = QPointer<QWindow>(qobject_cast<QWindow*>(watched))] {
+            if (window && m_entries.contains(window)) {
+                follow(m_entries[window]);
+                apply(m_entries[window]);
+            }
+        }, Qt::QueuedConnection);
+    }
+    return QObject::eventFilter(watched, event);
 }
 
 void BackgroundEffects::follow(Entry& entry)

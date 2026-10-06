@@ -39,6 +39,9 @@ public:
 signals:
     void blurAvailableChanged();
 
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 private:
     friend struct EffectCallbacks;
     struct Entry {

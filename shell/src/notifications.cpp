@@ -151,6 +151,17 @@ void NotificationServer::dismiss(uint id)
     close(id, Reason::Dismissed);
 }
 
+void NotificationServer::collectPopups()
+{
+    std::vector<uint> ids;
+    for (const Notification& n : m_items) {
+        ids.push_back(n.id);
+    }
+    for (uint id : ids) {
+        close(id, Reason::Expired); // "scadute": nel centro, ancora vive
+    }
+}
+
 void NotificationServer::setHovered(bool hovered)
 {
     // Mentre le si legge non scadono; uscito il mouse ripartono da capo.
