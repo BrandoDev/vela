@@ -399,15 +399,29 @@ cmake -B build -DVELA_WLROOTS=wlroots-0.19
 Installato, Vela compare nella schermata di accesso (SDDM o Plasma Login)
 accanto a Plasma.
 
-**Arch / CachyOS: come pacchetto** (`vela-git`, in `/usr`). Si installa e si
-aggiorna come gli altri pacchetti: ogni volta che c'è un commit nuovo si
-rifà lo stesso comando, e `pacman -R vela-git` lo toglie del tutto.
+**Arch / CachyOS: come pacchetto** (`vela-git`, in `/usr`). La prima volta
+si installa da qui; `pacman -R vela-git` lo toglie del tutto.
 
 ```sh
 cd packaging/arch
 makepkg -si                                            # dal repository su GitHub (chiave SSH)
 VELA_GIT_URL=file://$PWD/../.. makepkg -si             # oppure da questa copia (i commit, non le modifiche in sospeso)
 ```
+
+Poi si aggiorna con `vela-update`: scarica i commit nuovi, mostra cosa
+cambia, costruisce il pacchetto e lo installa (chiede la password); la
+versione nuova parte alla sessione dopo.
+
+```sh
+vela-update                            # aggiorna, se c'è qualcosa di nuovo
+vela-update --controlla                # dice solo se c'è un aggiornamento e cosa cambia
+vela-update --sorgente ~/Scrivania/vela   # prende Vela da una copia locale (si ricorda)
+vela-update --jobs 2                   # meno compilazioni insieme
+```
+
+Il repository e gli ultimi tre pacchetti restano in `~/.cache/vela-update`:
+per tornare alla versione di prima,
+`sudo pacman -U ~/.cache/vela-update/pacchetti/<pacchetto>`.
 
 Chi aveva installato prima con `cmake --install` toglie quella copia, che in
 `/usr/local` verrebbe prima del pacchetto (e i file in `/etc` farebbero

@@ -1,0 +1,157 @@
+#!/bin/sh
+# Aggiorna Vela installata come pacchetto (vela-git): scarica i commit
+# nuovi, mostra cosa cambia, costruisce il pacchetto con makepkg e lo
+# installa con pacman (chiede la password). La versione nuova parte alla
+# prossima sessione.
+#
+# Il repository si tiene in ~/.cache/vela-update, così ogni volta si
+# scaricano solo i commit nuovi; lì restano anche gli ultimi pacchetti, per
+# tornare indietro: sudo pacman -U ~/.cache/vela-update/pacchetti/<file>.
+
+set -eu
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/vela/aggiornamenti.conf"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/vela-update"
+MIRROR="$CACHE/vela.git"
+PACKAGES="$CACHE/pacchetti"
+DEFAULT_SOURCE="ssh://git@github.com/BrandoDev/vela.git"
+KEEP=3 # pacchetti vecchi da tenere
+
+usage() {
+    cat << EOF
+Uso: vela-update [opzioni]
+
+Aggiorna Vela all'ultimo commit e la installa.
+
+  --controlla         dice solo se c'è un aggiornamento e cosa cambia
+                      (esce con 0 se c'è, 1 se Vela è già aggiornata)
+  --forza             ricostruisce e reinstalla anche se è già aggiornata
+  --jobs N            compilazioni in parallelo (altrimenti quelle di
+                      /etc/makepkg.conf); con 1 si va piano ma sicuri
+  --sorgente URL|DIR  da dove prendere Vela: un repository git o una
+                      cartella (ne prende i commit, non le modifiche in
+                      sospeso). Si ricorda per le volte dopo.
+                      Predefinito: $DEFAULT_SOURCE
+EOF
+}
+
+check=0
+force=0
+jobs=""
+source=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+    --controlla) check=1 ;;
+    --forza) force=1 ;;
+    --jobs) shift; jobs="${1:-}" ;;
+    --jobs=*) jobs="${1#*=}" ;;
+    --sorgente) shift; source="${1:-}" ;;
+    --sorgente=*) source="${1#*=}" ;;
+    -h | --help) usage; exit 0 ;;
+    *) echo "vela-update: opzione sconosciuta: $1" >&2; usage >&2; exit 2 ;;
+    esac
+    shift
+done
+if [ -n "$jobs" ]; then
+    case "$jobs" in
+    *[!0-9]* | 0) echo "vela-update: --jobs vuole un numero" >&2; exit 2 ;;
+    esac
+fi
+
+# Da dove: quella data adesso (e la si ricorda), quella ricordata, GitHub.
+if [ -n "$source" ]; then
+    if [ -d "$source" ]; then
+        source=$(cd "$source" && pwd)
+    fi
+    mkdir -p "$(dirname "$CONFIG")"
+    printf 'sorgente=%s\n' "$source" > "$CONFIG"
+elif [ -f "$CONFIG" ]; then
+    source=$(sed -n 's/^sorgente=//p' "$CONFIG" | head -n 1)
+fi
+source="${source:-$DEFAULT_SOURCE}"
+
+# Il repository: scaricato la prima volta, poi solo i commit nuovi.
+mkdir -p "$CACHE"
+if [ -d "$MIRROR" ] && [ "$(git -C "$MIRROR" config remote.origin.url)" != "$source" ]; then
+    rm -rf "$MIRROR"
+fi
+echo ":: Cerco aggiornamenti in $source"
+if [ -d "$MIRROR" ]; then
+    fetched=$(git -C "$MIRROR" remote update --prune > /dev/null 2>&1 && echo sì || echo no)
+else
+    fetched=$(git clone --quiet --mirror "$source" "$MIRROR" > /dev/null 2>&1 && echo sì || echo no)
+fi
+if [ "$fetched" = no ]; then
+    [ -d "$MIRROR/refs" ] || rm -rf "$MIRROR"
+    echo "vela-update: non riesco a scaricare Vela da $source." >&2
+    case "$source" in
+    ssh://git@github.com/* | git@github.com:*)
+        echo "Il repository è privato: serve la chiave SSH del tuo account GitHub, e" >&2
+        echo "GitHub tra gli host conosciuti (prova: ssh -T git@github.com)." >&2
+        echo "Oppure prendi Vela da una copia locale: vela-update --sorgente ~/percorso/di/vela" >&2
+        ;;
+    esac
+    exit 1
+fi
+
+latest=$(git -C "$MIRROR" rev-parse --short=7 HEAD)
+installed=$(pacman -Q vela-git 2> /dev/null | sed -n 's/.*\.g\([0-9a-f]*\)-[0-9]*$/\1/p')
+
+if [ -n "$installed" ] && [ "${latest#"$installed"}" != "$latest" ] && [ "$force" = 0 ]; then
+    echo ":: Vela è già aggiornata ($(pacman -Q vela-git | cut -d' ' -f2))."
+    [ "$check" = 1 ] && exit 1
+    exit 0
+fi
+
+# Le novità: i commit dopo quello installato (se è tra questi).
+if [ -n "$installed" ] && git -C "$MIRROR" cat-file -e "$installed^{commit}" 2> /dev/null \
+    && git -C "$MIRROR" merge-base --is-ancestor "$installed" HEAD 2> /dev/null; then
+    count=$(git -C "$MIRROR" rev-list --count "$installed..HEAD")
+    if [ "$count" -gt 0 ]; then
+        echo ":: Novità ($count):"
+        git -C "$MIRROR" log --format='   %s' "$installed..HEAD"
+    fi
+elif [ -n "$installed" ]; then
+    echo ":: Versione installata: $(pacman -Q vela-git | cut -d' ' -f2); nuova: $latest"
+else
+    echo ":: Vela non è installata come pacchetto: la installo ($latest)."
+fi
+if [ "$check" = 1 ]; then
+    exit 0
+fi
+
+# La costruzione, con il PKGBUILD della versione nuova.
+WORK="$CACHE/costruzione"
+rm -rf "$WORK"
+mkdir -p "$WORK" "$PACKAGES"
+git -C "$MIRROR" show HEAD:packaging/arch/PKGBUILD > "$WORK/PKGBUILD"
+cd "$WORK"
+export VELA_GIT_URL="file://$MIRROR"
+if [ -n "$jobs" ]; then
+    export MAKEFLAGS="-j$jobs"
+fi
+echo ":: Costruisco il pacchetto (qualche minuto)"
+if ! BUILDDIR="$WORK" PKGDEST="$PACKAGES" SRCDEST="$CACHE/sorgenti" \
+    makepkg --syncdeps --install --clean --force; then
+    echo >&2
+    # Costruito, ma pacman non l'ha installato (annullato, password sbagliata).
+    built=$(ls -t "$PACKAGES"/vela-git-*."g$latest"-*.pkg.tar.* 2> /dev/null | head -n 1)
+    if [ -n "$built" ]; then
+        echo "vela-update: il pacchetto è pronto ma non è stato installato. Per installarlo:" >&2
+        echo "   sudo pacman -U $built" >&2
+        exit 1
+    fi
+    echo "vela-update: l'aggiornamento non è riuscito (i messaggi sono qui sopra)." >&2
+    echo "Se il compilatore è andato in crash (\"internal compiler error\"), riprova" >&2
+    echo "con meno compilazioni insieme: vela-update --jobs 2" >&2
+    exit 1
+fi
+rm -rf "$WORK"
+
+# Solo gli ultimi pacchetti, per poter tornare indietro.
+ls -t "$PACKAGES"/vela-git-*.pkg.tar.* 2> /dev/null | tail -n +$((KEEP + 1)) | while read -r old; do
+    rm -f "$old"
+done
+
+echo ":: Vela è aggiornata ($(pacman -Q vela-git | cut -d' ' -f2)). La versione nuova"
+echo "   parte alla prossima sessione: esci e rientra."

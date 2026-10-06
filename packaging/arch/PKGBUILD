@@ -1,6 +1,7 @@
 # Vela come pacchetto di Arch / CachyOS, dal repository git.
 #
-#   cd packaging/arch && makepkg -si      installa (e aggiorna: si rifà uguale)
+#   cd packaging/arch && makepkg -si      installa
+#   vela-update                           poi aggiorna (vedi vela-update --help)
 #
 # Il sorgente è il repository su GitHub (privato: serve la chiave SSH del
 # proprio account). Per costruire da una copia locale, anche con modifiche
@@ -72,4 +73,5 @@ build() {
 
 package() {
     DESTDIR="$pkgdir" cmake --install build
+    install -Dm755 "$_name/packaging/arch/vela-update" "$pkgdir/usr/bin/vela-update"
 }
