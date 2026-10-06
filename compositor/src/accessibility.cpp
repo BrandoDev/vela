@@ -3,6 +3,8 @@
 
 #include "server.hpp"
 #include "settings.hpp"
+#include "colorscience.hpp"
+#include "suntime.hpp"
 
 #include <algorithm>
 #include <array>
@@ -32,111 +34,10 @@ namespace vela {
 
 namespace {
 
-// --------------------------------------------------------------- colori --
-
-float srgbToLinear(float c)
-{
-    return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
-}
-
-// Il bianco di un corpo nero a `kelvin` (Tanner Helland), in sRGB 0-1.
-void blackbody(double kelvin, double out[3])
-{
-    const double t = kelvin / 100.0;
-    double r = 255.0;
-    double g = 0.0;
-    double b = 255.0;
-    if (t <= 66.0) {
-        g = 99.4708025861 * std::log(t) - 161.1195681661;
-        b = t <= 19.0 ? 0.0 : 138.5177312231 * std::log(t - 10.0) - 305.0447927307;
-    } else {
-        r = 329.698727446 * std::pow(t - 60.0, -0.1332047592);
-        g = 288.1221695283 * std::pow(t - 60.0, -0.0755148492);
-    }
-    out[0] = std::clamp(r, 0.0, 255.0) / 255.0;
-    out[1] = std::clamp(g, 0.0, 255.0) / 255.0;
-    out[2] = std::clamp(b, 0.0, 255.0) / 255.0;
-}
-
-// Quanto resta di rosso, verde e blu (in luce lineare) a quella
-// temperatura, rispetto al bianco normale dello schermo (6500 K).
-void nightGains(double kelvin, float out[3])
-{
-    double white[3];
-    double warm[3];
-    blackbody(6500.0, white);
-    blackbody(kelvin, warm);
-    for (int i = 0; i < 3; ++i) {
-        const float reference = srgbToLinear(float(white[i]));
-        out[i] = std::clamp(srgbToLinear(float(warm[i])) / std::max(reference, 1e-4f), 0.0f, 1.0f);
-    }
-}
-
-using Matrix = std::array<float, 9>;
-
-constexpr Matrix identity { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
-
-Matrix multiply(const Matrix& a, const Matrix& b)
-{
-    Matrix out {};
-    for (int r = 0; r < 3; ++r) {
-        for (int c = 0; c < 3; ++c) {
-            float sum = 0.0f;
-            for (int k = 0; k < 3; ++k) {
-                sum += a[r * 3 + k] * b[k * 3 + c];
-            }
-            out[r * 3 + c] = sum;
-        }
-    }
-    return out;
-}
-
-// Correzione dei daltonismi (daltonizzazione): ciò che chi ha quel
-// daltonismo perde (la differenza dalla simulazione di Machado, Oliveira
-// e Fernandes 2009, gravità piena) si sposta sui canali che vede.
-Matrix daltonize(const Matrix& simulation, const Matrix& shift)
-{
-    Matrix lost {};
-    for (int i = 0; i < 9; ++i) {
-        lost[i] = identity[i] - simulation[i];
-    }
-    const Matrix moved = multiply(shift, lost);
-    Matrix out {};
-    for (int i = 0; i < 9; ++i) {
-        out[i] = identity[i] + moved[i];
-    }
-    return out;
-}
-
-Matrix filterMatrix(const std::string& kind)
-{
-    // Rosso e verde persi finiscono su verde e blu; il blu perso sul rosso e sul verde.
-    constexpr Matrix redGreenShift { 0, 0, 0, 0.7f, 1, 0, 0.7f, 0, 1 };
-    constexpr Matrix blueShift { 1, 0, 0.7f, 0, 1, 0.7f, 0, 0, 0 };
-    if (kind == "deuteranopia") {
-        return daltonize({ 0.367322f, 0.860646f, -0.227968f, 0.280085f, 0.672501f, 0.047413f, -0.011820f, 0.042940f,
-                             0.968881f },
-            redGreenShift);
-    }
-    if (kind == "protanopia") {
-        return daltonize({ 0.152286f, 1.052583f, -0.204868f, 0.114503f, 0.786281f, 0.099216f, -0.003882f, -0.048116f,
-                             1.051998f },
-            redGreenShift);
-    }
-    if (kind == "tritanopia") {
-        return daltonize({ 1.255528f, -0.076749f, -0.178779f, -0.078411f, 0.930809f, 0.147602f, 0.004733f, 0.691367f,
-                             0.303900f },
-            blueShift);
-    }
-    // Scala di grigi: la luminanza su tutti e tre i canali.
-    return { 0.2126f, 0.7152f, 0.0722f, 0.2126f, 0.7152f, 0.0722f, 0.2126f, 0.7152f, 0.0722f };
-}
-
-// L'intensità di Windows (0-100) in gradi: da 6500 K (spenta) fino a 1700 K.
-double nightKelvin(int strength)
-{
-    return 6500.0 - std::clamp(strength, 0, 100) / 100.0 * (6500.0 - 1700.0);
-}
+using namespace color;
+using sun::inRange;
+using sun::parseClock;
+using sun::sunTime;
 
 // ------------------------------------------------------------------ sole --
 
@@ -160,27 +61,6 @@ bool timezoneCoordinates(double& latitude, double& longitude)
         }
         zone = zone.substr(at + 9);
     }
-    // ±GGPP o ±GGPPSS, latitudine e longitudine di seguito.
-    auto parse = [](const std::string& text, size_t& pos, int degreeDigits, double& value) {
-        if (pos >= text.size() || (text[pos] != '+' && text[pos] != '-')) {
-            return false;
-        }
-        const double sign = text[pos] == '-' ? -1.0 : 1.0;
-        size_t end = pos + 1;
-        while (end < text.size() && std::isdigit(static_cast<unsigned char>(text[end]))) {
-            ++end;
-        }
-        const std::string digits = text.substr(pos + 1, end - pos - 1);
-        if (int(digits.size()) < degreeDigits + 2) {
-            return false;
-        }
-        const double degrees = std::stod(digits.substr(0, size_t(degreeDigits)));
-        const double minutes = std::stod(digits.substr(size_t(degreeDigits), 2));
-        const double seconds = int(digits.size()) >= degreeDigits + 4 ? std::stod(digits.substr(size_t(degreeDigits) + 2, 2)) : 0.0;
-        value = sign * (degrees + minutes / 60.0 + seconds / 3600.0);
-        pos = end;
-        return true;
-    };
     for (const char* table : { "/usr/share/zoneinfo/zone1970.tab", "/usr/share/zoneinfo/zone.tab" }) {
         std::ifstream in(table);
         std::string line;
@@ -193,59 +73,10 @@ bool timezoneCoordinates(double& latitude, double& longitude)
             if (!(fields >> codes >> coordinates >> name) || name != zone) {
                 continue;
             }
-            size_t pos = 0;
-            return parse(coordinates, pos, 2, latitude) && parse(coordinates, pos, 3, longitude);
+            return sun::parseCoordinates(coordinates, latitude, longitude);
         }
     }
     return false;
-}
-
-// L'ora locale (minuti dalla mezzanotte) dell'alba o del tramonto di oggi,
-// con l'algoritmo dell'"Almanac for Computers" (US Naval Observatory).
-// -1: il sole quel giorno non sorge o non tramonta.
-int sunTime(bool sunrise, const tm& today, double latitude, double longitude)
-{
-    constexpr double pi = 3.14159265358979323846;
-    auto rad = [](double d) { return d * pi / 180.0; };
-    auto deg = [](double r) { return r * 180.0 / pi; };
-    auto wrap = [](double v, double range) { return v - range * std::floor(v / range); };
-
-    const double day = today.tm_yday + 1;
-    const double lngHour = longitude / 15.0;
-    const double t = day + ((sunrise ? 6.0 : 18.0) - lngHour) / 24.0;
-    const double anomaly = 0.9856 * t - 3.289;
-    const double trueLong = wrap(anomaly + 1.916 * std::sin(rad(anomaly)) + 0.020 * std::sin(rad(2 * anomaly)) + 282.634, 360.0);
-    double ascension = wrap(deg(std::atan(0.91764 * std::tan(rad(trueLong)))), 360.0);
-    ascension += std::floor(trueLong / 90.0) * 90.0 - std::floor(ascension / 90.0) * 90.0;
-    ascension /= 15.0;
-    const double sinDec = 0.39782 * std::sin(rad(trueLong));
-    const double cosDec = std::cos(std::asin(sinDec));
-    const double cosHour = (std::cos(rad(90.833)) - sinDec * std::sin(rad(latitude))) / (cosDec * std::cos(rad(latitude)));
-    if (cosHour > 1.0 || cosHour < -1.0) {
-        return -1;
-    }
-    double hour = sunrise ? 360.0 - deg(std::acos(cosHour)) : deg(std::acos(cosHour));
-    hour /= 15.0;
-    const double local = hour + ascension - 0.06571 * t - 6.622;
-    const double utc = wrap(local - lngHour, 24.0);
-    const double offsetHours = double(today.tm_gmtoff) / 3600.0;
-    return int(std::lround(wrap(utc + offsetHours, 24.0) * 60.0)) % (24 * 60);
-}
-
-// "21:30" -> minuti dalla mezzanotte.
-int parseClock(const std::string& text, int fallback)
-{
-    int h = 0;
-    int m = 0;
-    if (std::sscanf(text.c_str(), "%d:%d", &h, &m) == 2 && h >= 0 && h < 24 && m >= 0 && m < 60) {
-        return h * 60 + m;
-    }
-    return fallback;
-}
-
-bool inRange(int now, int from, int to)
-{
-    return from <= to ? (now >= from && now < to) : (now >= from || now < to);
 }
 
 uint32_t stickyBit(xkb_keysym_t sym)

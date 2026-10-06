@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "server.hpp"
+#include "geometry.hpp"
 
 #include "outputconfig.hpp"
 
@@ -38,54 +39,17 @@ bool envFlag(const char* name)
     return value && *value && std::strcmp(value, "0") != 0;
 }
 
-// La scala scelta a mano: VELA_SCALE=1.25 per tutti gli schermi, oppure
-// per nome: VELA_SCALE=DP-1=1.5,HDMI-A-1=1. 0 se non c'è.
+// La scala scelta a mano (VELA_SCALE), 0 se non c'è.
 float requestedScale(const char* name)
 {
-    const char* value = std::getenv("VELA_SCALE");
-    if (!value || !*value) {
-        return 0.0f;
-    }
-    if (!std::strchr(value, '=')) {
-        return std::strtof(value, nullptr);
-    }
-    const std::string list = value;
-    size_t start = 0;
-    while (start < list.size()) {
-        const size_t end = std::min(list.find(',', start), list.size());
-        const std::string item = list.substr(start, end - start);
-        const size_t eq = item.find('=');
-        if (eq != std::string::npos && item.substr(0, eq) == name) {
-            return std::strtof(item.c_str() + eq + 1, nullptr);
-        }
-        start = end + 1;
-    }
-    return 0.0f;
+    return geometry::requestedScale(std::getenv("VELA_SCALE"), name);
 }
 
-// La scala predefinita, come fa Windows (docs/renderer.md §3.8): dai DPI
-// dello schermo, a passi del 25%, tra 100% e 300%. I pannelli dei portatili
-// si guardano più da vicino: riferimento 105,6 DPI invece di 96.
+// La scala predefinita dai DPI dello schermo (geometry.hpp).
 float defaultScale(const wlr_output* output, int width, int height, double& dpi)
 {
-    dpi = 0.0;
-    const double physWidth = output->phys_width; // mm, dall'EDID
-    const double physHeight = output->phys_height;
-    if (physWidth <= 0.0 || physHeight <= 0.0 || width <= 0 || height <= 0) {
-        return 1.0f;
-    }
-    // Misure assurde (proiettori, TV, adattatori che inventano l'EDID):
-    // diagonale fuori da 8"–100", o proporzioni diverse da quelle dei pixel.
-    const double diagonalMm = std::hypot(physWidth, physHeight);
-    const double aspectError = std::abs((physWidth / physHeight) / (double(width) / height) - 1.0);
-    if (diagonalMm < 8 * 25.4 || diagonalMm > 100 * 25.4 || aspectError > 0.1) {
-        return 1.0f;
-    }
-    dpi = std::hypot(width, height) / (diagonalMm / 25.4);
-    const std::string name = output->name;
-    const bool internal = name.starts_with("eDP") || name.starts_with("LVDS") || name.starts_with("DSI");
-    const double reference = internal ? 105.6 : 96.0;
-    return float(std::clamp(std::round(dpi / reference * 4.0) / 4.0, 1.0, 3.0));
+    return geometry::scaleForDpi(output->phys_width, output->phys_height, width, height,
+        geometry::isInternalPanel(output->name), dpi);
 }
 
 } // namespace
@@ -625,19 +589,10 @@ wlr_box Output::physicalUsable() const
     int height = 0;
     wlr_output_transformed_resolution(wlr, &width, &height);
     const double scale = wlr->scale;
-    auto edge = [scale](int logical, int fullStart, int fullEnd, int pixels) {
-        if (logical <= fullStart) {
-            return 0;
-        }
-        if (logical >= fullEnd) {
-            return pixels;
-        }
-        return int(std::lround((logical - fullStart) * scale));
-    };
-    const int x1 = edge(usable.x, full.x, full.x + full.width, width);
-    const int x2 = edge(usable.x + usable.width, full.x, full.x + full.width, width);
-    const int y1 = edge(usable.y, full.y, full.y + full.height, height);
-    const int y2 = edge(usable.y + usable.height, full.y, full.y + full.height, height);
+    const int x1 = geometry::physicalEdge(usable.x, full.x, full.x + full.width, width, scale);
+    const int x2 = geometry::physicalEdge(usable.x + usable.width, full.x, full.x + full.width, width, scale);
+    const int y1 = geometry::physicalEdge(usable.y, full.y, full.y + full.height, height, scale);
+    const int y2 = geometry::physicalEdge(usable.y + usable.height, full.y, full.y + full.height, height, scale);
     return { x1, y1, std::max(0, x2 - x1), std::max(0, y2 - y1) };
 }
 
@@ -656,8 +611,6 @@ Placement Output::place(const Area& area) const
     int screenHeight = 0;
     wlr_output_transformed_resolution(wlr, &screenWidth, &screenHeight);
     const double scale = wlr->scale;
-    const int64_t scale120 = std::lround(scale * 120.0);
-    auto buffer = [scale120](int64_t logical) { return (logical * scale120 + 60) / 120; };
 
     // Un bordo dello schermo senza un altro schermo accanto: ciò che sborda
     // lì non si vede.
@@ -667,49 +620,15 @@ Placement Output::place(const Area& area) const
     const double midX = full.x + full.width / 2.0;
     const double midY = full.y + full.height / 2.0;
 
-    struct Axis {
-        double position;
-        int size;
-    };
-    auto axis = [&](double origin, int start, int size, int screen, bool openBefore, bool openAfter) -> Axis {
-        const bool touchesStart = start <= 0 && openBefore;
-        const bool touchesEnd = start + size >= screen && openAfter;
-        int exact = 0;
-        int above = 0; // il più piccolo che sfora
-        int below = 1; // il più grande che resta dentro
-        for (int64_t w = int64_t(std::floor(size / scale)) - 1; w <= int64_t(std::ceil(size / scale)) + 1; ++w) {
-            if (w <= 0) {
-                continue;
-            }
-            const int64_t pixels = buffer(w);
-            if (pixels == size) {
-                exact = int(w);
-            } else if (pixels > size && !above) {
-                above = int(w);
-            } else if (pixels < size) {
-                below = int(w);
-            }
-        }
-        if (exact) {
-            return { origin + start / scale, exact };
-        }
-        if ((touchesStart || touchesEnd) && above) {
-            // Si sfora dal lato dello schermo: oltre la fine, o prima
-            // dell'inizio se è lì il bordo libero.
-            const int64_t excess = buffer(above) - size;
-            const double first = touchesEnd ? start : double(start - excess);
-            return { origin + first / scale, above };
-        }
-        return { origin + start / scale, below };
-    };
-
     const int px = int(std::lround((area.x - full.x) * scale));
     const int py = int(std::lround((area.y - full.y) * scale));
     const int pw = int(std::lround(area.width * scale));
     const int ph = int(std::lround(area.height * scale));
-    const Axis x = axis(full.x, px, pw, screenWidth, open(full.x - 0.5, midY), open(full.x + full.width + 0.5, midY));
-    const Axis y = axis(full.y, py, ph, screenHeight, open(midX, full.y - 0.5), open(midX, full.y + full.height + 0.5));
-    return { x.position, y.position, x.size, y.size };
+    const geometry::Axis x = geometry::placeAxis(px, pw, screenWidth, scale, open(full.x - 0.5, midY),
+        open(full.x + full.width + 0.5, midY));
+    const geometry::Axis y = geometry::placeAxis(py, ph, screenHeight, scale, open(midX, full.y - 0.5),
+        open(midX, full.y + full.height + 0.5));
+    return { full.x + x.offset, full.y + y.offset, x.size, y.size };
 }
 
 void Output::arrangeLayers()

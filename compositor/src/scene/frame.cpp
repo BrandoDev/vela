@@ -6,6 +6,8 @@
 #include "scene/effects.hpp"
 #include "scene/surface.hpp"
 
+#include "geometry.hpp"
+
 #include <algorithm>
 #include <cmath>
 
@@ -62,11 +64,8 @@ int64_t regionArea(const pixman_region32_t* region)
 // dimensione (§3.2), così due rettangoli adiacenti restano adiacenti.
 wlr_box toPixels(double x, double y, double width, double height, const BuildParams& p)
 {
-    const int x1 = int(std::lround((x - p.originX) * p.scale));
-    const int y1 = int(std::lround((y - p.originY) * p.scale));
-    const int x2 = int(std::lround((x + width - p.originX) * p.scale));
-    const int y2 = int(std::lround((y + height - p.originY) * p.scale));
-    return { x1, y1, x2 - x1, y2 - y1 };
+    const geometry::PixelBox box = geometry::edgesToPixels(x, y, width, height, p.originX, p.originY, p.scale);
+    return { box.x, box.y, box.width, box.height };
 }
 
 bool onScreen(const wlr_box& box, const BuildParams& p)
@@ -79,11 +78,8 @@ bool onScreen(const wlr_box& box, const BuildParams& p)
 // esattamente su un pixel dello schermo (§3.3).
 bool isOneToOne(const wlr_fbox& src, const wlr_box& box, wl_output_transform transform)
 {
-    const bool swapped = transform & WL_OUTPUT_TRANSFORM_90;
-    const double width = swapped ? src.height : src.width;
-    const double height = swapped ? src.width : src.height;
-    return src.x == std::floor(src.x) && src.y == std::floor(src.y) && width == double(box.width)
-        && height == double(box.height);
+    return geometry::oneToOne(src.x, src.y, src.width, src.height, box.width, box.height,
+        transform & WL_OUTPUT_TRANSFORM_90);
 }
 
 // L'ampiezza della sfocatura in pixel dello schermo: il raggio è in unità
@@ -189,9 +185,7 @@ void addSurface(wlr_surface* surface, double lx, double ly, float opacity, const
     const bool swapped = transform & WL_OUTPUT_TRANSFORM_90;
     const double bufferWidth = swapped ? src.height : src.width;
     const double bufferHeight = swapped ? src.width : src.height;
-    const bool whole = src.x == std::floor(src.x) && src.y == std::floor(src.y)
-        && bufferWidth == std::floor(bufferWidth) && bufferHeight == std::floor(bufferHeight);
-    if (whole && std::abs(bufferWidth - width * p.scale) < 1.0 && std::abs(bufferHeight - height * p.scale) < 1.0) {
+    if (geometry::bufferMatchesArea(src.x, src.y, bufferWidth, bufferHeight, width, height, p.scale)) {
         box.width = int(bufferWidth);
         box.height = int(bufferHeight);
     }

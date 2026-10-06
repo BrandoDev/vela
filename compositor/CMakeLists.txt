@@ -171,3 +171,26 @@ else()
 endif()
 
 install(TARGETS vela-compositor RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# Le prove del compositor (ctest), senza GPU né wlroots: il tempo dei frame,
+# le curve, la geometria della nitidezza, il colore, il sole, le impostazioni.
+# Servono GoogleTest (pacchetto gtest) e gli strumenti di prova accesi.
+if(VELA_BUILD_TOOLS)
+    find_package(GTest)
+    if(GTest_FOUND)
+        add_executable(vela-compositor-tests
+            tests/frame_clock_test.cpp
+            tests/motion_test.cpp
+            tests/geometry_test.cpp
+            tests/color_sun_test.cpp
+            tests/settings_test.cpp
+            src/settings.cpp)
+        target_include_directories(vela-compositor-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_compile_options(vela-compositor-tests PRIVATE -Wall -Wextra)
+        target_link_libraries(vela-compositor-tests PRIVATE GTest::gtest_main)
+        include(GoogleTest)
+        gtest_discover_tests(vela-compositor-tests TEST_PREFIX "compositor.")
+    else()
+        message(STATUS "GoogleTest non trovato: niente prove del compositor (pacchetto gtest)")
+    endif()
+endif()
