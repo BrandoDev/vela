@@ -37,7 +37,7 @@ struct EffectCallbacks {
     {
         auto* self = static_cast<BackgroundEffects*>(data);
         const bool blur = flags & EXT_BACKGROUND_EFFECT_MANAGER_V1_CAPABILITY_BLUR;
-        qInfo("vela-shell: sfocatura del compositor %s", blur ? "disponibile" : "assente");
+        qInfo("vela-shell: compositor blur %s", blur ? "available" : "missing");
         if (blur != self->m_blurAvailable) {
             self->m_blurAvailable = blur;
             // Le regioni chieste prima che la capacità arrivasse.

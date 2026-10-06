@@ -601,7 +601,7 @@ bool Toplevel::tickOpen(double nowMs)
     applyOpenFrame(m_openTween.progress(nowMs));
     ++m_openFrames;
     if (m_openTween.finished(nowMs)) {
-        wlr_log(WLR_DEBUG, "Animazione di apertura: %d frame", m_openFrames);
+        wlr_log(WLR_DEBUG, "Open animation: %d frames", m_openFrames);
         finishOpenAnimation();
         return false;
     }

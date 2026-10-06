@@ -16,7 +16,7 @@ Window {
 
     property string title
     property string text
-    property string yesText: "Sì"
+    property string yesText: qsTr("Yes")
     property var action: null
 
     Connections {
@@ -24,7 +24,7 @@ Window {
         function onConfirmRequested(title, text, yesText, action) {
             root.title = title
             root.text = text
-            root.yesText = yesText || "Sì"
+            root.yesText = yesText || qsTr("Yes")
             root.action = action
             root.visible = true
             panel.forceActiveFocus()
@@ -112,7 +112,7 @@ Window {
                 onClicked: root.answer(true)
             }
             DialogButton {
-                label: "No"
+                label: qsTr("No")
                 onClicked: root.answer(false)
             }
         }

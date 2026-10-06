@@ -18,10 +18,10 @@ Page {
     Card {
         icon: DefaultApps.selectedIcon
         title: DefaultApps.selectedName
-        description: page.allDefault ? "È l'app predefinita per tutti i tipi che sa aprire"
-            : "Rendila l'app predefinita per tutti i tipi di file e collegamenti che sa aprire"
+        description: page.allDefault ? qsTr("It's the default app for every type it can open")
+            : qsTr("Make it the default app for every file and link type it can open")
         trailing: Button {
-            text: "Imposta come predefinita"
+            text: qsTr("Set as default")
             accent: true
             usable: !page.allDefault
             onClicked: DefaultApps.setDefaultForAll(DefaultApps.selectedApp)
@@ -29,7 +29,7 @@ Page {
     }
 
     CardGroup {
-        title: "Tipi di file e collegamenti"
+        title: qsTr("File and link types")
         Repeater {
             model: page.types
             delegate: Card {
@@ -37,12 +37,12 @@ Page {
                 icon: modelData.icon
                 title: modelData.label
                 description: (modelData.patterns ? modelData.patterns + " · " : "")
-                    + (modelData.isDefault ? "Si apre con quest'app"
-                        : modelData.current.name ? "Ora si apre con " + modelData.current.name
-                        : "Nessuna app predefinita")
+                    + (modelData.isDefault ? qsTr("Opens with this app")
+                        : modelData.current.name ? qsTr("Currently opens with ") + modelData.current.name
+                        : qsTr("No default app"))
                 trailing: Button {
                     visible: !modelData.isDefault
-                    text: "Usa quest'app"
+                    text: qsTr("Use this app")
                     onClicked: DefaultApps.setDefaultForType(modelData.mime, DefaultApps.selectedApp)
                 }
             }

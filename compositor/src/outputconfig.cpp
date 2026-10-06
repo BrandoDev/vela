@@ -12,29 +12,55 @@ namespace vela {
 
 namespace {
 
-std::string configPath()
+std::string configPath(const char* name = "outputs.conf")
 {
     const char* config = std::getenv("XDG_CONFIG_HOME");
     const char* home = std::getenv("HOME");
     if (config && *config) {
-        return std::string(config) + "/vela/schermi.conf";
+        return std::string(config) + "/vela/" + name;
     }
-    return home ? std::string(home) + "/.config/vela/schermi.conf" : std::string();
+    return home ? std::string(home) + "/.config/vela/" + name : std::string();
+}
+
+// Fino a ottobre 2026 il file era schermi.conf, con chiavi e valori in
+// italiano: si legge ancora, e alla prima scrittura diventa outputs.conf.
+std::string legacyPath()
+{
+    return configPath("schermi.conf");
+}
+
+void modernizeLegacy(std::string& key, std::string& value)
+{
+    static const std::pair<const char*, const char*> keys[] = {
+        { "attivo", "enabled" }, { "modo", "mode" }, { "scala", "scale" }, { "rotazione", "rotation" }, { "posizione", "position" },
+    };
+    for (const auto& [from, to] : keys) {
+        if (key == from) {
+            key = to;
+        }
+    }
+    if (value == "si" || value == "sì") {
+        value = "yes";
+    } else if (value == "normale") {
+        value = "normal";
+    } else if (value.rfind("specchio", 0) == 0) {
+        value = "flipped" + value.substr(8);
+    }
 }
 
 const char* transformName(wl_output_transform transform)
 {
     switch (transform) {
-    case WL_OUTPUT_TRANSFORM_NORMAL: return "normale";
+    case WL_OUTPUT_TRANSFORM_NORMAL: return "normal";
     case WL_OUTPUT_TRANSFORM_90: return "90";
     case WL_OUTPUT_TRANSFORM_180: return "180";
     case WL_OUTPUT_TRANSFORM_270: return "270";
-    case WL_OUTPUT_TRANSFORM_FLIPPED: return "specchio";
-    case WL_OUTPUT_TRANSFORM_FLIPPED_90: return "specchio-90";
-    case WL_OUTPUT_TRANSFORM_FLIPPED_180: return "specchio-180";
-    case WL_OUTPUT_TRANSFORM_FLIPPED_270: return "specchio-270";
+    case WL_OUTPUT_TRANSFORM_FLIPPED: return "flipped";
+    case WL_OUTPUT_TRANSFORM_FLIPPED_90: return "flipped-90";
+    case WL_OUTPUT_TRANSFORM_FLIPPED_180: return "flipped-180";
+    case WL_OUTPUT_TRANSFORM_FLIPPED_270: return "flipped-270";
     }
-    return "normale";
+    return "normal";
 }
 
 wl_output_transform transformFromName(const std::string& name)
@@ -68,6 +94,10 @@ ConfigFile readConfig()
 {
     ConfigFile file;
     std::ifstream in(configPath());
+    const bool legacy = !in.is_open();
+    if (legacy) {
+        in.open(legacyPath());
+    }
     std::string line;
     Section* current = nullptr;
     while (std::getline(in, line)) {
@@ -81,7 +111,12 @@ ConfigFile readConfig()
         }
         const size_t eq = line.find('=');
         if (current && eq != std::string::npos) {
-            (*current)[line.substr(0, eq)] = line.substr(eq + 1);
+            std::string key = line.substr(0, eq);
+            std::string value = line.substr(eq + 1);
+            if (legacy) {
+                modernizeLegacy(key, value);
+            }
+            (*current)[key] = value;
         }
     }
     return file;
@@ -115,18 +150,18 @@ std::optional<SavedOutput> loadSavedOutput(const wlr_output* output)
         auto it = section->find(key);
         return it == section->end() ? std::string() : it->second;
     };
-    saved.enabled = value("attivo") != "no";
-    if (const std::string mode = value("modo"); !mode.empty()) {
+    saved.enabled = value("enabled") != "no";
+    if (const std::string mode = value("mode"); !mode.empty()) {
         double hz = 0.0;
         if (std::sscanf(mode.c_str(), "%dx%d@%lf", &saved.width, &saved.height, &hz) >= 2) {
             saved.refreshMhz = int(hz * 1000.0 + 0.5);
         }
     }
-    if (const std::string scale = value("scala"); !scale.empty()) {
+    if (const std::string scale = value("scale"); !scale.empty()) {
         saved.scale = std::strtof(scale.c_str(), nullptr);
     }
-    saved.transform = transformFromName(value("rotazione"));
-    if (const std::string position = value("posizione"); !position.empty()) {
+    saved.transform = transformFromName(value("rotation"));
+    if (const std::string position = value("position"); !position.empty()) {
         saved.hasPosition = std::sscanf(position.c_str(), "%d,%d", &saved.x, &saved.y) == 2;
     }
     return saved;
@@ -148,38 +183,40 @@ void saveOutputs(const std::vector<CurrentOutput>& outputs)
             section = &file.sections.back().second;
         }
         Section& s = *section;
-        s["attivo"] = current.enabled ? "si" : "no";
+        s["enabled"] = current.enabled ? "yes" : "no";
         if (current.enabled) {
             char buffer[64];
             std::snprintf(buffer, sizeof(buffer), "%dx%d@%.3f", output->width, output->height,
                 output->refresh / 1000.0);
-            s["modo"] = buffer;
+            s["mode"] = buffer;
             std::snprintf(buffer, sizeof(buffer), "%g", double(output->scale));
-            s["scala"] = buffer;
-            s["rotazione"] = transformName(output->transform);
+            s["scale"] = buffer;
+            s["rotation"] = transformName(output->transform);
             std::snprintf(buffer, sizeof(buffer), "%d,%d", current.x, current.y);
-            s["posizione"] = buffer;
+            s["position"] = buffer;
         }
     }
 
     const std::string dir = path.substr(0, path.rfind('/'));
     mkdir(dir.substr(0, dir.rfind('/')).c_str(), 0755);
     mkdir(dir.c_str(), 0755);
-    const std::string temporary = path + ".nuovo";
+    const std::string temporary = path + ".tmp";
     {
         std::ofstream out(temporary);
-        out << "# Gli schermi di Vela, scritto da Vela quando cambi la configurazione.\n"
-               "# Un monitor per sezione: [marca modello numero di serie].\n";
+        out << "# Vela's outputs, written by Vela when you change the configuration.\n"
+               "# One monitor per section: [make model serial number].\n";
         for (const auto& [name, section] : file.sections) {
             out << "\n[" << name << "]\n";
-            for (const char* key : { "attivo", "modo", "scala", "rotazione", "posizione" }) {
+            for (const char* key : { "enabled", "mode", "scale", "rotation", "position" }) {
                 if (auto it = section.find(key); it != section.end()) {
                     out << key << '=' << it->second << '\n';
                 }
             }
         }
     }
-    std::rename(temporary.c_str(), path.c_str());
+    if (std::rename(temporary.c_str(), path.c_str()) == 0) {
+        std::remove(legacyPath().c_str()); // ora c'è outputs.conf
+    }
 }
 
 wlr_output_mode* findMode(wlr_output* output, int width, int height, int refreshMhz)

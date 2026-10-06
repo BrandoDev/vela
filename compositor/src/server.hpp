@@ -673,7 +673,7 @@ public:
     struct Accessibility {
         bool nightLight = false; // accesa, a mano o dalla pianificazione
         int nightStrength = 48; // 0-100, come l'"Intensità" di Windows
-        std::string schedule = "no"; // "no", "tramonto" (dal tramonto all'alba), "ore"
+        std::string schedule = "no"; // "no", "sunset" (dal tramonto all'alba), "hours"
         int nightFrom = 21 * 60; // minuti dalla mezzanotte
         int nightTo = 7 * 60;
         std::string scheduleKey; // la pianificazione letta l'ultima volta
@@ -685,7 +685,7 @@ public:
         bool levelAnimating = false;
 
         bool colorFilter = false;
-        std::string colorFilterKind = "grigi"; // grigi, deuteranopia, protanopia, tritanopia
+        std::string colorFilterKind = "grayscale"; // grayscale, deuteranopia, protanopia, tritanopia
         bool colorFilterShortcut = false; // Win+Ctrl+C
 
         bool magnifier = false;
@@ -920,7 +920,7 @@ public:
     bool lightShell = false;
     bool lightApps = false;
     // Frequenza di aggiornamento variabile (VRR): 0 mai, 1 con un'app a
-    // schermo intero (i giochi), 2 sempre. vela.conf "frequenza-variabile".
+    // schermo intero (i giochi), 2 sempre. vela.conf "variable-refresh".
     int vrrMode = 1;
     // I bordi invisibili per ridimensionare le finestre con la barra di
     // Vela, come in Windows 11: la finestra e i bordi (WLR_EDGE_*) sotto

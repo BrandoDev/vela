@@ -6,6 +6,7 @@
 #include "foldermodel.h"
 #include "links.h"
 
+#include <QCoreApplication>
 #include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusMessage>
@@ -118,10 +119,10 @@ QString Places::iconFor(const QString& path) const
 QString Places::displayName(const QString& path) const
 {
     if (path == QStringLiteral("/")) {
-        return QStringLiteral("Disco locale");
+        return QCoreApplication::translate("Files", "Local Disk");
     }
     if (path == trash()) {
-        return QStringLiteral("Cestino");
+        return QCoreApplication::translate("Files", "Recycle Bin");
     }
     if (path == QDir::homePath()) {
         return userName();
@@ -200,7 +201,7 @@ void Places::refreshDrives()
         devices.append(device);
         const QString root = volume.rootPath();
         const bool removable = root.startsWith(QLatin1String("/run/media/")) || root.startsWith(QLatin1String("/media/"));
-        QString name = root == QLatin1String("/") ? QStringLiteral("Disco locale") : volume.displayName();
+        QString name = root == QLatin1String("/") ? QCoreApplication::translate("Files", "Local Disk") : volume.displayName();
         if (name == root) {
             name = QFileInfo(root).fileName();
         }
@@ -283,7 +284,7 @@ void Places::readVolumes()
             const double size = block.value(QStringLiteral("Size")).toDouble();
             QString name = block.value(QStringLiteral("IdLabel")).toString();
             if (name.isEmpty()) {
-                name = QStringLiteral("Volume da ") + formatSize(qint64(size));
+                name = QCoreApplication::translate("Files", "Volume of ") + formatSize(qint64(size));
             }
             volumes.append(QVariantMap {
                 { QStringLiteral("name"), name },
@@ -346,7 +347,7 @@ void Places::mount(const QString& volume)
             const QString name = reply.error().name();
             emit mounted(volume, {},
                 name.endsWith(QLatin1String("NotAuthorizedDismissed")) ? QString()
-                    : QStringLiteral("Impossibile aprire l'unità: ") + reply.error().message());
+                    : QCoreApplication::translate("Files", "Couldn't open the drive: ") + reply.error().message());
         } else {
             emit mounted(volume, reply.value(), {});
         }
@@ -358,7 +359,7 @@ void Places::eject(const QString& device)
 {
     const QVariantMap known = m_devices.value(device);
     if (known.isEmpty()) {
-        emit ejected(QStringLiteral("Impossibile trovare l'unità."));
+        emit ejected(QCoreApplication::translate("Files", "Couldn't find the drive."));
         return;
     }
     QDBusMessage unmount = QDBusMessage::createMethodCall(udisks, known.value(QStringLiteral("block")).toString(),
@@ -370,8 +371,8 @@ void Places::eject(const QString& device)
         const QDBusPendingReply<> reply = *watcher;
         if (reply.isError()) {
             emit ejected(reply.error().name().endsWith(QLatin1String("DeviceBusy"))
-                    ? QStringLiteral("L'unità è in uso: chiudi i file aperti e riprova.")
-                    : QStringLiteral("Impossibile espellere l'unità: ") + reply.error().message());
+                    ? QCoreApplication::translate("Files", "The drive is in use: close any open files and try again.")
+                    : QCoreApplication::translate("Files", "Couldn't eject the drive: ") + reply.error().message());
             refreshDrives();
             return;
         }

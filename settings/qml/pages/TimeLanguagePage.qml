@@ -7,14 +7,25 @@ Page {
     CardGroup {
         LinkCard {
             icon: "preferences-system-time"
-            title: "Data e ora"
-            description: "Fuso orario, impostazioni automatiche dell'orologio"
+            title: qsTr("Date & time")
+            description: qsTr("Time zone, automatic clock settings")
             onClicked: root.navigate("datetime")
+        }
+        Card {
+            icon: "preferences-desktop-locale"
+            title: qsTr("Vela language")
+            description: qsTr("The language of Vela's menus, windows and settings")
+            // I nomi delle lingue restano nella loro lingua, come su Windows.
+            trailing: Choice {
+                model: [qsTr("Same as the system"), "Italiano", "English"]
+                currentIndex: Prefs.language === "it" ? 1 : Prefs.language === "en" ? 2 : 0
+                onChosen: index => Prefs.language = ["", "it", "en"][index]
+            }
         }
         LinkCard {
             icon: "input-keyboard"
-            title: "Tastiera"
-            description: "Layout di tastiera, ripetizione dei tasti"
+            title: qsTr("Keyboard")
+            description: qsTr("Keyboard layouts, key repeat")
             onClicked: root.navigate("keyboard")
         }
     }

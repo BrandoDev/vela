@@ -4,16 +4,16 @@
 # Compilazione automatica a ogni push, in un container Arch Linux (le
 # versioni di wlroots e Qt che usa Vela sono quelle di Arch).
 #
-# - compila: tutto il progetto, strumenti di prova compresi, e le prove
+# - build: tutto il progetto, strumenti di prova compresi, e le prove
 #   (ctest): quelle del compositor (FrameClock, geometria, colore...), di
 #   Esplora, dei .desktop e delle app predefinite. Le prove funzionali e di
 #   nitidezza (tests/functional) qui risultano saltate: il renderer vuole una
 #   GPU con un nodo DRM, che i runner di GitHub non hanno.
-# - pacchetto: solo per main, il pacchetto vela-git costruito con il
+# - package: solo per main, il pacchetto vela-git costruito con il
 #   PKGBUILD, scaricabile dalla pagina dell'esecuzione (Artifacts) e
 #   installabile con sudo pacman -U.
 
-name: Compilazione
+name: Build
 
 on:
   push:
@@ -27,31 +27,31 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DEPENDENZE: >-
+  DEPENDENCIES: >-
     base-devel git cmake ccache shaderc vulkan-headers vulkan-icd-loader gtest python
     wayland wayland-protocols wlroots0.20 libxkbcommon pixman libinput libdrm
     mesa freetype2 harfbuzz fontconfig librsvg cairo zlib pam
-    qt6-base qt6-declarative qt6-svg qt6-wayland layer-shell-qt
+    qt6-base qt6-declarative qt6-svg qt6-wayland qt6-tools layer-shell-qt
     hicolor-icon-theme
 
 jobs:
-  compila:
+  build:
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
-      - name: Dipendenze
-        run: pacman -Syu --noconfirm --needed $DEPENDENZE
+      - name: Dependencies
+        run: pacman -Syu --noconfirm --needed $DEPENDENCIES
 
       - uses: actions/checkout@v7
 
-      - name: Cache di ccache
+      - name: ccache cache
         uses: actions/cache@v6
         with:
           path: .ccache
           key: ccache-${{ github.sha }}
           restore-keys: ccache-
 
-      - name: Configura
+      - name: Configure
         run: >-
           cmake -B build -S .
           -DCMAKE_BUILD_TYPE=RelWithDebInfo
@@ -59,7 +59,7 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           -DVELA_BUILD_TOOLS=ON
 
-      - name: Compila
+      - name: Build
         env:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
           CCACHE_MAXSIZE: 500M
@@ -67,23 +67,23 @@ jobs:
           cmake --build build -j "$(nproc)"
           ccache --show-stats
 
-      - name: Prove
+      - name: Tests
         run: ctest --test-dir build --output-on-failure
 
-      - name: Script
+      - name: Scripts
         run: |
           for script in packaging/arch/vela-update session/vela-session-env scripts/*.sh; do
             sh -n "$script"
           done
 
-  pacchetto:
+  package:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: compila
+    needs: build
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
-      - name: Dipendenze
-        run: pacman -Syu --noconfirm --needed $DEPENDENZE
+      - name: Dependencies
+        run: pacman -Syu --noconfirm --needed $DEPENDENCIES
 
       - uses: actions/checkout@v7
         with:
@@ -91,19 +91,19 @@ jobs:
 
       # makepkg non gira come root: un utente apposta, che prende Vela da
       # questa copia del repository.
-      - name: Pacchetto
+      - name: Package
         run: |
-          useradd -m costruttore
-          cp -r packaging/arch /home/costruttore/pkgbuild
-          chown -R costruttore /home/costruttore/pkgbuild
+          useradd -m builder
+          cp -r packaging/arch /home/builder/pkgbuild
+          chown -R builder /home/builder/pkgbuild
           git config --system --add safe.directory '*'
           # Niente pacchetto -debug: raddoppia il tempo e pesa dieci volte tanto.
           sed -i '/^OPTIONS=/s/\([( ]\)debug\b/\1!debug/' /etc/makepkg.conf
-          cd /home/costruttore/pkgbuild
-          su costruttore -c "VELA_GIT_URL=file://$GITHUB_WORKSPACE MAKEFLAGS=-j$(nproc) makepkg --noconfirm"
+          cd /home/builder/pkgbuild
+          su builder -c "VELA_GIT_URL=file://$GITHUB_WORKSPACE MAKEFLAGS=-j$(nproc) makepkg --noconfirm"
 
       - uses: actions/upload-artifact@v7
         with:
           name: vela-git
-          path: /home/costruttore/pkgbuild/vela-git-[0-9]*.pkg.tar.zst
+          path: /home/builder/pkgbuild/vela-git-[0-9]*.pkg.tar.zst
           retention-days: 14

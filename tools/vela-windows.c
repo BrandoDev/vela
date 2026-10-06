@@ -124,7 +124,7 @@ static const struct wl_registry_listener registryListener = { registryGlobal, re
 
 static void printList(void)
 {
-    static const char* names[] = { " [massimizzata]", " [ridotta]", " [attiva]", " [schermo intero]" };
+    static const char* names[] = { " [maximized]", " [minimized]", " [active]", " [fullscreen]" };
     for (int i = 0; i < windowCount; ++i) {
         const struct window* w = &windows[i];
         if (w->closed) {
@@ -144,13 +144,13 @@ int main(int argc, char** argv)
 {
     struct wl_display* display = wl_display_connect(NULL);
     if (!display) {
-        fprintf(stderr, "vela-windows: nessuna sessione Wayland (WAYLAND_DISPLAY)\n");
+        fprintf(stderr, "vela-windows: no Wayland session (WAYLAND_DISPLAY)\n");
         return 1;
     }
     wl_registry_add_listener(wl_display_get_registry(display), &registryListener, NULL);
     wl_display_roundtrip(display);
     if (!manager) {
-        fprintf(stderr, "vela-windows: il compositor non offre wlr-foreign-toplevel\n");
+        fprintf(stderr, "vela-windows: the compositor doesn't offer wlr-foreign-toplevel\n");
         return 1;
     }
     wl_display_roundtrip(display);
@@ -162,7 +162,7 @@ int main(int argc, char** argv)
         return 0;
     }
     if (argc < 3) {
-        fprintf(stderr, "Uso: %s [list] | AZIONE APP_ID\n", argv[0]);
+        fprintf(stderr, "Usage: %s [list] | ACTION APP_ID\n", argv[0]);
         return 2;
     }
 
@@ -173,7 +173,7 @@ int main(int argc, char** argv)
         }
     }
     if (!target) {
-        fprintf(stderr, "vela-windows: nessuna finestra con app_id '%s'\n", argv[2]);
+        fprintf(stderr, "vela-windows: no window with app_id '%s'\n", argv[2]);
         return 1;
     }
 
@@ -191,7 +191,7 @@ int main(int argc, char** argv)
     } else if (!strcmp(action, "close")) {
         zwlr_foreign_toplevel_handle_v1_close(h);
     } else {
-        fprintf(stderr, "vela-windows: azione sconosciuta '%s'\n", action);
+        fprintf(stderr, "vela-windows: unknown action '%s'\n", action);
         return 2;
     }
     wl_display_roundtrip(display);

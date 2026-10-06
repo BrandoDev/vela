@@ -155,18 +155,18 @@ static int writePng(const char* path, const unsigned char* pixels, int x, int y,
 int main(int argc, char** argv)
 {
     if (argc != 2 && argc != 6) {
-        fprintf(stderr, "Uso: %s FILE.png [X Y LARGHEZZA ALTEZZA]\n", argv[0]);
+        fprintf(stderr, "Usage: %s FILE.png [X Y WIDTH HEIGHT]\n", argv[0]);
         return 2;
     }
     struct wl_display* display = wl_display_connect(NULL);
     if (!display) {
-        fprintf(stderr, "vela-shot: nessuna sessione Wayland (WAYLAND_DISPLAY)\n");
+        fprintf(stderr, "vela-shot: no Wayland session (WAYLAND_DISPLAY)\n");
         return 1;
     }
     wl_registry_add_listener(wl_display_get_registry(display), &registryListener, NULL);
     wl_display_roundtrip(display);
     if (!manager || !shm || !output) {
-        fprintf(stderr, "vela-shot: il compositor non offre wlr-screencopy\n");
+        fprintf(stderr, "vela-shot: the compositor doesn't offer wlr-screencopy\n");
         return 1;
     }
 
@@ -174,7 +174,7 @@ int main(int argc, char** argv)
     zwlr_screencopy_frame_v1_add_listener(capture, &frameListener, NULL);
     while (!frame.haveBuffer && !frame.failed && wl_display_dispatch(display) != -1) { }
     if (frame.failed) {
-        fprintf(stderr, "vela-shot: cattura rifiutata\n");
+        fprintf(stderr, "vela-shot: capture refused\n");
         return 1;
     }
 
@@ -191,7 +191,7 @@ int main(int argc, char** argv)
     zwlr_screencopy_frame_v1_copy(capture, buffer);
     while (!frame.ready && !frame.failed && wl_display_dispatch(display) != -1) { }
     if (frame.failed) {
-        fprintf(stderr, "vela-shot: copia fallita\n");
+        fprintf(stderr, "vela-shot: copy failed\n");
         return 1;
     }
 
@@ -202,7 +202,7 @@ int main(int argc, char** argv)
         w = atoi(argv[4]);
         h = atoi(argv[5]);
         if (x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > (int)frame.width || y + h > (int)frame.height) {
-            fprintf(stderr, "vela-shot: zona fuori dallo schermo (%ux%u)\n", frame.width, frame.height);
+            fprintf(stderr, "vela-shot: region outside the output (%ux%u)\n", frame.width, frame.height);
             return 2;
         }
     }

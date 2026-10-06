@@ -27,17 +27,17 @@ Item {
     // I pezzi del percorso: [{label, location, icon}].
     readonly property var crumbs: {
         const loc = tab.location
-        if (loc === "home:") return [{ label: "Home", location: "home:", icon: "go-home" }]
-        if (loc === "thispc:") return [{ label: "Questo PC", location: "thispc:", icon: "computer" }]
-        if (loc === Places.trash) return [{ label: "Cestino", location: Places.trash, icon: "user-trash" }]
+        if (loc === "home:") return [{ label: qsTr("Home"), location: "home:", icon: "go-home" }]
+        if (loc === "thispc:") return [{ label: qsTr("This PC"), location: "thispc:", icon: "computer" }]
+        if (loc === Places.trash) return [{ label: qsTr("Recycle Bin"), location: Places.trash, icon: "user-trash" }]
         const out = []
         let rest
         if (loc === Places.home || loc.startsWith(Places.home + "/")) {
             out.push({ label: Places.userName, location: Places.home, icon: "user-home" })
             rest = loc.slice(Places.home.length)
         } else {
-            out.push({ label: "Questo PC", location: "thispc:", icon: "computer" })
-            out.push({ label: "Disco locale", location: "/" })
+            out.push({ label: qsTr("This PC"), location: "thispc:", icon: "computer" })
+            out.push({ label: qsTr("Local Disk"), location: "/" })
             rest = loc
         }
         let path = out[out.length - 1].location === "/" ? "" : out[out.length - 1].location
@@ -53,10 +53,10 @@ Item {
         x: 8
         anchors.verticalCenter: parent.verticalCenter
         spacing: 2
-        ToolButton { icon: "go-previous"; tooltip: "Indietro (Alt+Freccia SINISTRA)"; usable: bar.tab.canGoBack; onClicked: bar.tab.back(); width: 36 }
-        ToolButton { icon: "go-next"; tooltip: "Avanti (Alt+Freccia DESTRA)"; usable: bar.tab.canGoForward; onClicked: bar.tab.forward(); width: 36 }
-        ToolButton { icon: "go-up"; tooltip: "Su (Alt+Freccia SU)"; usable: bar.tab.canGoUp; onClicked: bar.tab.up(); width: 36 }
-        ToolButton { icon: "view-refresh"; tooltip: "Aggiorna (F5)"; onClicked: bar.tab.refresh(); width: 36 }
+        ToolButton { icon: "go-previous"; tooltip: qsTr("Back (Alt+Left Arrow)"); usable: bar.tab.canGoBack; onClicked: bar.tab.back(); width: 36 }
+        ToolButton { icon: "go-next"; tooltip: qsTr("Forward (Alt+Right Arrow)"); usable: bar.tab.canGoForward; onClicked: bar.tab.forward(); width: 36 }
+        ToolButton { icon: "go-up"; tooltip: qsTr("Up (Alt+Up Arrow)"); usable: bar.tab.canGoUp; onClicked: bar.tab.up(); width: 36 }
+        ToolButton { icon: "view-refresh"; tooltip: qsTr("Refresh (F5)"); onClicked: bar.tab.refresh(); width: 36 }
     }
 
     Rectangle {
@@ -162,7 +162,7 @@ Item {
                                         text: n.replace(/&/g, "&&"), icon: "folder",
                                         action: () => bar.tab.navigate((base === "/" ? "" : base) + "/" + n)
                                     }))
-                                    if (entries.length === 0) entries.push({ text: "Nessuna cartella", enabled: false })
+                                    if (entries.length === 0) entries.push({ text: qsTr("No folders"), enabled: false })
                                     const p = mapToItem(null, 0, height)
                                     bar.tab.menus.open(entries, p.x, p.y + 2)
                                 }
@@ -192,7 +192,7 @@ Item {
                     bar.tab.navigate(path)
                     bar.tab.focusView()
                 } else {
-                    bar.tab.showError("Impossibile trovare \"" + text + "\". Controlla l'ortografia e riprova.")
+                    bar.tab.showError(qsTr("Can't find \"") + text + qsTr("\". Check the spelling and try again."))
                 }
             }
             onActiveFocusChanged: if (!activeFocus) bar.editing = false
@@ -219,7 +219,7 @@ Item {
         Text {
             visible: search.text === ""
             anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 32 }
-            text: "Cerca in " + bar.tab.title
+            text: qsTr("Search ") + bar.tab.title
             color: Theme.textDim
             font.pixelSize: Theme.fontNormal
             elide: Text.ElideRight

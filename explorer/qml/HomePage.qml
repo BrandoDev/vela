@@ -72,15 +72,15 @@ Flickable {
                     const path = row.modelData.path
                     const favorite = Places.isFavorite(path)
                     page.tab.menus.open([
-                        { text: "&Apri", icon: "document-open", action: () => Ops.open([path]) },
-                        { text: "Apri &percorso file", icon: "folder-open", action: () => page.tab.navigate(row.modelData.location, path) },
+                        { text: qsTr("&Open"), icon: "document-open", action: () => Ops.open([path]) },
+                        { text: qsTr("Open file &location"), icon: "folder-open", action: () => page.tab.navigate(row.modelData.location, path) },
                         { separator: true },
                         favorite
-                            ? { text: "Rimuovi da &Preferiti", icon: "starred-symbolic", action: () => Places.setFavorite(path, false) }
-                            : { text: "Aggiungi a &Preferiti", icon: "starred-symbolic", action: () => Places.setFavorite(path, true) },
-                        { text: "C&ondividi", icon: "document-share", action: () => Ops.share([path]) },
-                        { text: "Copia come &percorso", icon: "edit-copy-path", action: () => Ops.copyAsPath([path]) },
-                        { text: "P&roprietà", icon: "document-properties", action: () => Ops.showProperties([path]) }
+                            ? { text: qsTr("Remove from &Favorites"), icon: "starred-symbolic", action: () => Places.setFavorite(path, false) }
+                            : { text: qsTr("Add to &Favorites"), icon: "starred-symbolic", action: () => Places.setFavorite(path, true) },
+                        { text: qsTr("&Share"), icon: "document-share", action: () => Ops.share([path]) },
+                        { text: qsTr("Copy as &path"), icon: "edit-copy-path", action: () => Ops.copyAsPath([path]) },
+                        { text: qsTr("P&roperties"), icon: "document-properties", action: () => Ops.showProperties([path]) }
                     ], p.x, p.y)
                 }
             }
@@ -95,7 +95,7 @@ Flickable {
         spacing: 8
 
         Text {
-            text: "Accesso rapido"
+            text: qsTr("Quick access")
             color: Theme.text
             font.pixelSize: Theme.fontNormal
             font.weight: Font.DemiBold
@@ -134,7 +134,7 @@ Flickable {
                         }
                         Text {
                             width: parent.width
-                            text: "Aggiunta"
+                            text: qsTr("Pinned")
                             color: Theme.textDim
                             font.pixelSize: Theme.fontSmall
                         }
@@ -151,11 +151,11 @@ Flickable {
                             } else if (mouse.button === Qt.RightButton) {
                                 const p = mapToItem(null, mouse.x, mouse.y)
                                 page.tab.menus.open([
-                                    { text: "&Apri", icon: "document-open", action: () => page.tab.navigate(tile.modelData.path) },
-                                    { text: "Apri in una nuova &scheda", icon: "tab-new", action: () => page.tab.openInNewTab(tile.modelData.path) },
+                                    { text: qsTr("&Open"), icon: "document-open", action: () => page.tab.navigate(tile.modelData.path) },
+                                    { text: qsTr("Open in new &tab"), icon: "tab-new", action: () => page.tab.openInNewTab(tile.modelData.path) },
                                     { separator: true },
-                                    { text: "&Rimuovi da Accesso rapido", icon: "window-unpin", action: () => Places.unpin(tile.modelData.path) },
-                                    { text: "P&roprietà", icon: "document-properties", action: () => Ops.showProperties([tile.modelData.path]) }
+                                    { text: qsTr("&Unpin from Quick access"), icon: "window-unpin", action: () => Places.unpin(tile.modelData.path) },
+                                    { text: qsTr("P&roperties"), icon: "document-properties", action: () => Ops.showProperties([tile.modelData.path]) }
                                 ], p.x, p.y)
                             }
                         }
@@ -173,7 +173,7 @@ Flickable {
         }
 
         Text {
-            text: "Preferiti"
+            text: qsTr("Favorites")
             color: Theme.text
             font.pixelSize: Theme.fontNormal
             font.weight: Font.DemiBold
@@ -182,7 +182,7 @@ Flickable {
         }
         Text {
             visible: page.favorites.length === 0
-            text: "Dopo aver aggiunto dei file ai Preferiti, li mostreremo qui."
+            text: qsTr("After you've added some files to Favorites, we'll show them here.")
             color: Theme.textDim
             font.pixelSize: Theme.fontNormal
         }
@@ -192,7 +192,7 @@ Flickable {
         }
 
         Text {
-            text: "Recenti"
+            text: qsTr("Recent")
             color: Theme.text
             font.pixelSize: Theme.fontNormal
             font.weight: Font.DemiBold
@@ -201,7 +201,7 @@ Flickable {
         }
         Text {
             visible: page.recent.length === 0
-            text: "I file aperti di recente compariranno qui."
+            text: qsTr("Files you've opened recently will show up here.")
             color: Theme.textDim
             font.pixelSize: Theme.fontNormal
         }

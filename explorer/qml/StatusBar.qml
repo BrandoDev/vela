@@ -23,12 +23,12 @@ Item {
         font.pixelSize: Theme.fontSmall
         text: {
             if (!bar.model) return bar.message
-            let s = bar.plural(bar.model.count, "elemento", "elementi")
+            let s = bar.plural(bar.model.count, qsTr("item"), qsTr("items"))
             if (bar.model.selectionCount > 0) {
-                s += "      " + bar.plural(bar.model.selectionCount, "elemento selezionato", "elementi selezionati")
+                s += "      " + bar.plural(bar.model.selectionCount, qsTr("item selected"), qsTr("items selected"))
                 if (bar.model.selectionSize > 0) s += "  " + Ops.formatSize(bar.model.selectionSize)
             }
-            if (bar.model.loading) s += "      Caricamento..."
+            if (bar.model.loading) s += qsTr("      Loading...")
             return s
         }
     }

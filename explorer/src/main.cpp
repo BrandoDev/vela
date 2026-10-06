@@ -13,6 +13,7 @@
 #include "appearance.h"
 #include "appmodel.h"
 #include "fileops.h"
+#include "language.h"
 #include "filethumbnails.h"
 #include "foldermodel.h"
 #include "iconprovider.h"
@@ -72,7 +73,14 @@ int main(int argc, char* argv[])
     }
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("vela-files"));
-    QGuiApplication::setApplicationDisplayName(QStringLiteral("Esplora file"));
+    QQmlApplicationEngine* qmlEngine = nullptr;
+    vela::language::install(QStringLiteral("vela-files"), [&qmlEngine] {
+        QGuiApplication::setApplicationDisplayName(QCoreApplication::translate("Files", "File Explorer"));
+        if (qmlEngine) {
+            qmlEngine->retranslate();
+        }
+    });
+    QGuiApplication::setApplicationDisplayName(QCoreApplication::translate("Files", "File Explorer"));
     QGuiApplication::setOrganizationName(QStringLiteral("Vela"));
     QGuiApplication::setDesktopFileName(QStringLiteral("vela-files"));
     QGuiApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("system-file-manager")));
@@ -106,6 +114,7 @@ int main(int argc, char* argv[])
     ServiceMenus serviceMenus;
 
     QQmlApplicationEngine engine;
+    qmlEngine = &engine;
     engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
     engine.addImageProvider(QStringLiteral("fileicon"), new IconProvider(32));
     engine.addImageProvider(QStringLiteral("filethumb"), new FileThumbnailProvider);
@@ -132,7 +141,7 @@ int main(int argc, char* argv[])
             }
             first = false;
             if (timing) {
-                std::fprintf(stderr, "vela-files: primo fotogramma dopo %.0f ms da main, %.0f ms dall'avvio del processo\n",
+                std::fprintf(stderr, "vela-files: first frame %.0f ms after main, %.0f ms after process start\n",
                     double(sinceMain.nsecsElapsed()) / 1e6, sinceProcessStart());
             }
             // Ciò che non serve al primo fotogramma.

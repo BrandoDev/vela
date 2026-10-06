@@ -7,6 +7,7 @@
 #include "notifications.h"
 #include "windowcapture.h"
 
+#include <QCoreApplication>
 #include <LayerShellQt/Window>
 
 #include <QDateTime>
@@ -87,7 +88,7 @@ void Snip::start()
         return;
     }
     if (m_component.isError()) {
-        qWarning() << "vela-shell: strumento di cattura" << m_component.errors();
+        qWarning() << "vela-shell: snipping tool" << m_component.errors();
         return;
     }
     m_active = true;
@@ -119,7 +120,7 @@ void Snip::showOverlays()
         QObject* object = m_component.create();
         auto* window = qobject_cast<QQuickWindow*>(object);
         if (!window) {
-            qWarning() << "vela-shell: strumento di cattura" << m_component.errors();
+            qWarning() << "vela-shell: snipping tool" << m_component.errors();
             delete object;
             continue;
         }
@@ -198,11 +199,11 @@ void Snip::finish(const QString& screenName, qreal x, qreal y, qreal width, qrea
     const QString path = folder + QStringLiteral("/Screenshot ")
         + QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HHmmss")) + QStringLiteral(".png");
     const bool saved = cut.save(path, "PNG");
-    const uint id = m_notifications->Notify(QStringLiteral("Strumento di cattura"), 0,
-        QStringLiteral("accessories-screenshot"), QStringLiteral("Screenshot copiato negli Appunti"),
-        saved ? QStringLiteral("Salvato in Immagini > Screenshot. Fai clic per aprirlo.")
-              : QStringLiteral("Non è stato possibile salvarlo in Immagini > Screenshot."),
-        saved ? QStringList { QStringLiteral("default"), QStringLiteral("Apri") } : QStringList(),
+    const uint id = m_notifications->Notify(QCoreApplication::translate("Snip", "Snipping Tool"), 0,
+        QStringLiteral("accessories-screenshot"), QCoreApplication::translate("Snip", "Screenshot copied to clipboard"),
+        saved ? QCoreApplication::translate("Snip", "Saved to Pictures > Screenshot. Click to open it.")
+              : QCoreApplication::translate("Snip", "Couldn't save it to Pictures > Screenshot."),
+        saved ? QStringList { QStringLiteral("default"), QCoreApplication::translate("Snip", "Open") } : QStringList(),
         QVariantMap { { QStringLiteral("image-path"), path } }, 6000);
     if (saved) {
         m_saved.insert(id, path);

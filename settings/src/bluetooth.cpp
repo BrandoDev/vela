@@ -5,6 +5,7 @@
 
 #include "bluetoothpower.h"
 
+#include <QCoreApplication>
 #include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusInterface>
@@ -35,19 +36,19 @@ QString describe(const QDBusError& error)
 {
     const QString name = error.name();
     if (name.endsWith(QLatin1String("AuthenticationFailed")) || name.endsWith(QLatin1String("AuthenticationRejected"))) {
-        return QStringLiteral("Associazione non riuscita: il dispositivo l'ha rifiutata.");
+        return QCoreApplication::translate("Bluetooth", "Pairing failed: the device rejected it.");
     }
     if (name.endsWith(QLatin1String("AuthenticationTimeout")) || name.endsWith(QLatin1String("ConnectionAttemptFailed"))
         || error.message().contains(QLatin1String("page-timeout"))) {
-        return QStringLiteral("Il dispositivo non risponde. Controlla che sia acceso e vicino.");
+        return QCoreApplication::translate("Bluetooth", "The device isn't responding. Make sure it's on and nearby.");
     }
     if (name.endsWith(QLatin1String("AlreadyExists"))) {
         return {};
     }
     if (name.endsWith(QLatin1String("NotReady"))) {
-        return QStringLiteral("Il Bluetooth è spento.");
+        return QCoreApplication::translate("Bluetooth", "Bluetooth is turned off.");
     }
-    return error.message().isEmpty() ? QStringLiteral("Operazione non riuscita.") : error.message();
+    return error.message().isEmpty() ? QCoreApplication::translate("Bluetooth", "The operation failed.") : error.message();
 }
 
 } // namespace

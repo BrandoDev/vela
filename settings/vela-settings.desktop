@@ -3,12 +3,16 @@
 
 [Desktop Entry]
 Type=Application
-Name=Impostazioni
-GenericName=Impostazioni di sistema
-Comment=Schermi, audio, rete, Bluetooth, sfondo, colori, app e altro
+Name=Settings
+Name[it]=Impostazioni
+GenericName=System Settings
+GenericName[it]=Impostazioni di sistema
+Comment=Displays, sound, network, Bluetooth, background, colors, apps and more
+Comment[it]=Schermi, audio, rete, Bluetooth, sfondo, colori, app e altro
 Exec=vela-settings
 Icon=preferences-system
 Categories=Settings;System;
-Keywords=impostazioni;schermo;sfondo;tema;tastiera;rete;bluetooth;audio;settings;
+Keywords=settings;display;background;theme;keyboard;network;bluetooth;sound;language;
+Keywords[it]=impostazioni;schermo;sfondo;tema;tastiera;rete;bluetooth;audio;lingua;settings;
 OnlyShowIn=Vela;
 StartupNotify=true

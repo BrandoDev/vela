@@ -701,7 +701,7 @@ bool Pass::submit()
         if (fd >= 0) {
             waits.push_back(fd);
         } else {
-            wlr_log(WLR_ERROR, "Pass: impossibile aspettare il punto %" PRIu64 " di un'app", wait.point);
+            wlr_log(WLR_ERROR, "Pass: can't wait for point %" PRIu64 " of an app", wait.point);
         }
     }
 

@@ -81,10 +81,10 @@ Window {
     function classicDesktopEntries() {
         const modern = desktopEntries()
         const entries = [modern[0], modern[1], modern[2], { separator: true },
-            { text: "&Incolla", enabled: Desktop.canPaste, action: () => Desktop.paste() },
-            { text: "Incolla c&ollegamento", enabled: Desktop.canPaste, action: () => { FileActions.pasteLinks(Desktop.directory); Desktop.refresh() } }]
+            { text: qsTr("&Paste"), enabled: Desktop.canPaste, action: () => Desktop.paste() },
+            { text: qsTr("Paste &shortcut"), enabled: Desktop.canPaste, action: () => { FileActions.pasteLinks(Desktop.directory); Desktop.refresh() } }]
         if (Desktop.undoText !== "") {
-            entries.push({ text: "&Annulla " + Desktop.undoText, shortcut: "Ctrl+Z", action: () => Desktop.undo() })
+            entries.push({ text: qsTr("&Undo ") + Desktop.undoText, shortcut: "Ctrl+Z", action: () => Desktop.undo() })
         }
         const services = serviceEntries([Desktop.directory])
         entries.push({ separator: true })
@@ -92,10 +92,10 @@ Window {
             entries.push(...services, { separator: true })
         }
         entries.push(
-            modern.find(e => e.text === "&Nuovo"),
+            modern.find(e => e.text === qsTr("&New")),
             { separator: true },
-            modern.find(e => e.text === "&Impostazioni schermo"),
-            modern.find(e => e.text === "&Personalizza"))
+            modern.find(e => e.text === qsTr("&Display settings")),
+            modern.find(e => e.text === qsTr("&Personalize")))
         return entries
     }
 
@@ -107,8 +107,8 @@ Window {
         const files = items.map(i => i.path)
         const single = files.length === 1 ? items[0] : null
         const modern = fileEntries(files)
-        const entries = [{ text: "&Apri", action: () => Desktop.open(files) }]
-        const openWith = modern.find(e => e.text === "Apri &con")
+        const entries = [{ text: qsTr("&Open"), action: () => Desktop.open(files) }]
+        const openWith = modern.find(e => e.text === qsTr("Open &with"))
         if (openWith) {
             entries.push(openWith)
         }
@@ -118,14 +118,14 @@ Window {
         }
         entries.push(
             { separator: true },
-            { text: "&Taglia", action: () => Desktop.cut(files) },
-            { text: "&Copia", action: () => Desktop.copy(files) },
+            { text: qsTr("Cu&t"), action: () => Desktop.cut(files) },
+            { text: qsTr("&Copy"), action: () => Desktop.copy(files) },
             { separator: true },
-            { text: "Crea c&ollegamento", action: () => { FileActions.createLinks(files, Desktop.directory); Desktop.refresh() } },
-            { text: "&Elimina", action: () => Desktop.trash(files) },
-            { text: "Ri&nomina", enabled: !!single, action: () => icons.startRename(single.path) },
+            { text: qsTr("Create &shortcut"), action: () => { FileActions.createLinks(files, Desktop.directory); Desktop.refresh() } },
+            { text: qsTr("&Delete"), action: () => Desktop.trash(files) },
+            { text: qsTr("Re&name"), enabled: !!single, action: () => icons.startRename(single.path) },
             { separator: true },
-            { text: "P&roprietà", action: () => Menus.showProperties(files) })
+            { text: qsTr("P&roperties"), action: () => Menus.showProperties(files) })
         return entries
     }
 
@@ -135,44 +135,44 @@ Window {
         const size = (text, value, shortcut) => ({ text: text, radio: true, checked: Desktop.iconSize === value, shortcut: shortcut, action: () => Desktop.iconSize = value })
         const sort = (text, value) => ({ text: text, radio: true, checked: Desktop.sortMode === value, action: () => Desktop.sortBy(value) })
         const newEntries = [
-            { text: "&Cartella", icon: "folder-new", action: () => Desktop.createFolder() },
-            { text: "C&ollegamento", icon: "insert-link", action: () => Menus.newShortcut(Desktop.directory) },
+            { text: qsTr("&Folder"), icon: "folder-new", action: () => Desktop.createFolder() },
+            { text: qsTr("&Shortcut"), icon: "insert-link", action: () => Menus.newShortcut(Desktop.directory) },
             { separator: true },
-            { text: "Documento di &testo", icon: "text-plain", action: () => Desktop.createFile("") }
+            { text: qsTr("&Text Document"), icon: "text-plain", action: () => Desktop.createFile("") }
         ]
         Desktop.templates().forEach(t => newEntries.push({ text: t.name.replace(/&/g, "&&"), icon: t.icon, action: () => Desktop.createFile(t.path) }))
         const entries = [
-            { text: "&Visualizza", icon: "view-list-icons", children: [
-                size("Icone &grandi", 0, "Ctrl+Maiusc+2"),
-                size("Icone &medie", 1, "Ctrl+Maiusc+3"),
-                size("Icone &piccole", 2, "Ctrl+Maiusc+4"),
+            { text: qsTr("&View"), icon: "view-list-icons", children: [
+                size(qsTr("&Large icons"), 0, qsTr("Ctrl+Shift+2")),
+                size(qsTr("&Medium icons"), 1, qsTr("Ctrl+Shift+3")),
+                size(qsTr("&Small icons"), 2, qsTr("Ctrl+Shift+4")),
                 { separator: true },
-                { text: "&Disponi icone automaticamente", checked: Desktop.autoArrange, action: () => Desktop.autoArrange = !Desktop.autoArrange },
-                { text: "&Allinea icone alla griglia", checked: Desktop.alignToGrid, action: () => Desktop.alignToGrid = !Desktop.alignToGrid },
+                { text: qsTr("&Auto arrange icons"), checked: Desktop.autoArrange, action: () => Desktop.autoArrange = !Desktop.autoArrange },
+                { text: qsTr("Al&ign icons to grid"), checked: Desktop.alignToGrid, action: () => Desktop.alignToGrid = !Desktop.alignToGrid },
                 { separator: true },
-                { text: "Mostra &icone del desktop", checked: Desktop.showIcons, action: () => Desktop.showIcons = !Desktop.showIcons }
+                { text: qsTr("Show desktop &icons"), checked: Desktop.showIcons, action: () => Desktop.showIcons = !Desktop.showIcons }
             ] },
-            { text: "&Ordina per", icon: "view-sort", children: [
-                sort("&Nome", 0), sort("&Dimensione", 1), sort("&Tipo elemento", 2), sort("Data &ultima modifica", 3)
+            { text: qsTr("S&ort by"), icon: "view-sort", children: [
+                sort(qsTr("&Name"), 0), sort(qsTr("&Size"), 1), sort(qsTr("Item &type"), 2), sort(qsTr("Date &modified"), 3)
             ] },
-            { text: "A&ggiorna", icon: "view-refresh", action: () => Desktop.refresh() }
+            { text: qsTr("R&efresh"), icon: "view-refresh", action: () => Desktop.refresh() }
         ]
         if (Desktop.undoText !== "") {
-            entries.push({ text: "&Annulla " + Desktop.undoText, icon: "edit-undo", shortcut: "Ctrl+Z", action: () => Desktop.undo() })
+            entries.push({ text: qsTr("&Undo ") + Desktop.undoText, icon: "edit-undo", shortcut: "Ctrl+Z", action: () => Desktop.undo() })
         }
         if (Desktop.canPaste) {
-            entries.push({ text: "&Incolla", icon: "edit-paste", shortcut: "Ctrl+V", action: () => Desktop.paste() })
+            entries.push({ text: qsTr("&Paste"), icon: "edit-paste", shortcut: "Ctrl+V", action: () => Desktop.paste() })
         }
         entries.push(
             { separator: true },
-            { text: "&Nuovo", icon: "list-add", children: newEntries },
+            { text: qsTr("&New"), icon: "list-add", children: newEntries },
             { separator: true },
-            system("&Impostazioni schermo", "preferences-desktop-display", "display"),
-            system("&Personalizza", "preferences-desktop-wallpaper", "personalize"),
+            system(qsTr("&Display settings"), "preferences-desktop-display", "display"),
+            system(qsTr("&Personalize"), "preferences-desktop-wallpaper", "personalize"),
             { separator: true },
-            { text: "Apri in &Terminale", icon: "utilities-terminal", action: () => System.openTerminal(Desktop.directory) },
+            { text: qsTr("Open in &Terminal"), icon: "utilities-terminal", action: () => System.openTerminal(Desktop.directory) },
             { separator: true },
-            { text: "Mostra altre opzioni", icon: "view-more-symbolic", shortcut: "Maiusc+F10", action: () => root.showMoreOptions([]) }
+            { text: qsTr("Show more options"), icon: "view-more-symbolic", shortcut: qsTr("Shift+F10"), action: () => root.showMoreOptions([]) }
         )
         return entries
     }
@@ -181,8 +181,8 @@ Window {
     function favoriteEntry(files) {
         const all = files.length > 0 && files.every(p => FileActions.isFavorite(p))
         return all
-            ? { text: "Rimuovi da &Preferiti", icon: "starred-symbolic", action: () => files.forEach(p => FileActions.setFavorite(p, false)) }
-            : { text: "Aggiungi a &Preferiti", icon: "starred-symbolic", enabled: files.length > 0, action: () => files.forEach(p => FileActions.setFavorite(p, true)) }
+            ? { text: qsTr("Remove from &Favorites"), icon: "starred-symbolic", action: () => files.forEach(p => FileActions.setFavorite(p, false)) }
+            : { text: qsTr("Add to &Favorites"), icon: "starred-symbolic", enabled: files.length > 0, action: () => files.forEach(p => FileActions.setFavorite(p, true)) }
     }
 
     // Uno o più file: la riga di icone, poi Apri, Apri con...
@@ -194,53 +194,53 @@ Window {
         const first = items[0]
         if (first.isTrash && items.length === 1) {
             return [
-                { text: "&Apri", icon: "document-open", shortcut: "Invio", action: () => Desktop.open([first.path]) },
-                { text: "&Svuota Cestino", icon: "trash-empty", enabled: !Desktop.trashEmpty(), action: () => icons.askEmptyTrash() },
+                { text: qsTr("&Open"), icon: "document-open", shortcut: qsTr("Enter"), action: () => Desktop.open([first.path]) },
+                { text: qsTr("&Empty Recycle Bin"), icon: "trash-empty", enabled: !Desktop.trashEmpty(), action: () => icons.askEmptyTrash() },
                 { separator: true },
-                { text: "P&roprietà", icon: "document-properties", shortcut: "Alt+Invio", enabled: false }
+                { text: qsTr("P&roperties"), icon: "document-properties", shortcut: qsTr("Alt+Enter"), enabled: false }
             ]
         }
         const files = items.filter(i => !i.isTrash).map(i => i.path)
         const single = files.length === 1 ? items.find(i => !i.isTrash) : null
         const entries = [{ iconRow: [
-            { icon: "edit-cut", text: "Taglia", action: () => Desktop.cut(files) },
-            { icon: "edit-copy", text: "Copia", action: () => Desktop.copy(files) },
-            { icon: "edit-rename", text: "Rinomina", enabled: !!single, action: () => icons.startRename(single.path) },
-            { icon: "document-share", text: "Condividi", enabled: items.some(i => !i.isDir && !i.isTrash), action: () => Menus.share(items.filter(i => !i.isDir && !i.isTrash).map(i => i.path)) },
-            { icon: "edit-delete", text: "Elimina", action: () => Desktop.trash(files) }
+            { icon: "edit-cut", text: qsTr("Cut"), action: () => Desktop.cut(files) },
+            { icon: "edit-copy", text: qsTr("Copy"), action: () => Desktop.copy(files) },
+            { icon: "edit-rename", text: qsTr("Rename"), enabled: !!single, action: () => icons.startRename(single.path) },
+            { icon: "document-share", text: qsTr("Share"), enabled: items.some(i => !i.isDir && !i.isTrash), action: () => Menus.share(items.filter(i => !i.isDir && !i.isTrash).map(i => i.path)) },
+            { icon: "edit-delete", text: qsTr("Delete"), action: () => Desktop.trash(files) }
         ] }]
-        entries.push({ text: "&Apri", icon: "document-open", shortcut: "Invio", action: () => Desktop.open(files) })
+        entries.push({ text: qsTr("&Open"), icon: "document-open", shortcut: qsTr("Enter"), action: () => Desktop.open(files) })
         if (single && !single.isDir && !single.isApp) {
             const apps = Apps.appsForFile(single.path)
             const openWith = apps.map(a => ({ text: a.name.replace(/&/g, "&&"), icon: a.icon, action: () => Apps.launchWithFile(a.id, single.url) }))
             if (openWith.length > 0) {
                 openWith.push({ separator: true })
             }
-            openWith.push({ text: "Scegli un'altra app", action: () => Menus.chooseApp(single.path) })
-            entries.push({ text: "Apri &con", icon: "document-open", children: openWith })
+            openWith.push({ text: qsTr("Choose another app"), action: () => Menus.chooseApp(single.path) })
+            entries.push({ text: qsTr("Open &with"), icon: "document-open", children: openWith })
         }
         if (single && single.isDir) {
-            entries.push({ text: "Apri in &Terminale", icon: "utilities-terminal", action: () => System.openTerminal(single.path) })
+            entries.push({ text: qsTr("Open in &Terminal"), icon: "utilities-terminal", action: () => System.openTerminal(single.path) })
         }
         if (single && single.isApp) {
             const id = Apps.idForDesktopFile(single.path)
             if (id !== "") {
                 entries.push(Shell.startPins.indexOf(id) >= 0
-                    ? { text: "Rimuovi da &Start", icon: "window-unpin", action: () => Shell.unpinFromStart(id) }
-                    : { text: "Aggiungi a &Start", icon: "window-pin", action: () => Shell.pinToStart(id) })
+                    ? { text: qsTr("Unpin from &Start"), icon: "window-unpin", action: () => Shell.unpinFromStart(id) }
+                    : { text: qsTr("Pin to &Start"), icon: "window-pin", action: () => Shell.pinToStart(id) })
             }
         }
         entries.push(
             favoriteEntry(items.filter(i => !i.isTrash && !i.isDir).map(i => i.path)),
-            { text: "Compri&mi in", icon: "archive-insert", children: [
-                { text: "File &ZIP", icon: "application-zip", action: () => Desktop.compress(files, "zip") },
-                { text: "File &7z", icon: "application-x-7z-compressed", action: () => Desktop.compress(files, "7z") },
-                { text: "File &TAR", icon: "application-x-tar", action: () => Desktop.compress(files, "tar") }
+            { text: qsTr("Co&mpress to"), icon: "archive-insert", children: [
+                { text: qsTr("&ZIP file"), icon: "application-zip", action: () => Desktop.compress(files, "zip") },
+                { text: qsTr("&7z file"), icon: "application-x-7z-compressed", action: () => Desktop.compress(files, "7z") },
+                { text: qsTr("&TAR file"), icon: "application-x-tar", action: () => Desktop.compress(files, "tar") }
             ] },
-            { text: "Copia come &percorso", icon: "edit-copy-path", shortcut: "Ctrl+Maiusc+C", action: () => Desktop.copyAsPath(files) },
-            { text: "P&roprietà", icon: "document-properties", shortcut: "Alt+Invio", action: () => Menus.showProperties(files) },
+            { text: qsTr("Copy as &path"), icon: "edit-copy-path", shortcut: qsTr("Ctrl+Shift+C"), action: () => Desktop.copyAsPath(files) },
+            { text: qsTr("P&roperties"), icon: "document-properties", shortcut: qsTr("Alt+Enter"), action: () => Menus.showProperties(files) },
             { separator: true },
-            { text: "Mostra altre opzioni", icon: "view-more-symbolic", shortcut: "Maiusc+F10", action: () => root.showMoreOptions(files) }
+            { text: qsTr("Show more options"), icon: "view-more-symbolic", shortcut: qsTr("Shift+F10"), action: () => root.showMoreOptions(files) }
         )
         return entries
     }
@@ -342,7 +342,7 @@ Window {
             }
         }
         function askEmptyTrash() {
-            Menus.confirm("Elimina più elementi", "Eliminare definitivamente tutti gli elementi del Cestino?", "Sì",
+            Menus.confirm(qsTr("Delete multiple items"), qsTr("Permanently delete all the items in the Recycle Bin?"), qsTr("Yes"),
                 () => Desktop.emptyTrash())
         }
         // Il menu per la selezione o per lo sfondo: col tasto Menu quello

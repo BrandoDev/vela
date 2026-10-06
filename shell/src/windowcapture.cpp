@@ -260,7 +260,7 @@ QString WindowCapture::appId(const QString& identifier) const
 void WindowCapture::capture(const QStringList& identifiers)
 {
     if (!m_shm || !m_sources || !m_copier) {
-        qWarning("vela-shell: il compositor non offre la cattura delle finestre");
+        qWarning("vela-shell: the compositor doesn't offer window capture");
         return;
     }
     for (const Window* window : std::as_const(m_windows)) {
@@ -295,7 +295,7 @@ QVariantList WindowCapture::windowList() const
 void WindowCapture::captureScreens()
 {
     if (!m_shm || !m_outputSources || !m_copier) {
-        qWarning("vela-shell: il compositor non offre la cattura degli schermi");
+        qWarning("vela-shell: the compositor doesn't offer output capture");
         return;
     }
     for (QScreen* screen : QGuiApplication::screens()) {
@@ -319,7 +319,7 @@ void WindowCapture::captureScreens()
 int WindowCapture::captureScreensFull()
 {
     if (!m_shm || !m_outputSources || !m_copier) {
-        qWarning("vela-shell: il compositor non offre la cattura degli schermi");
+        qWarning("vela-shell: the compositor doesn't offer output capture");
         return 0;
     }
     int count = 0;

@@ -2,45 +2,45 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Le misure degli "Obiettivi misurabili" del README, ripetibili: memoria di
-# compositor e shell, CPU a riposo e risvegli al secondo, consumo dalla
-# batteria, e a richiesta l'avvio a freddo di Esplora.
+# Repeatable measurements for the README's performance table: memory of the
+# compositor and the shell, idle CPU and wakeups per second, battery power
+# draw, and on request the cold start of File Explorer.
 #
-# Uso: scripts/measure.sh [-s SECONDI] [-d WAYLAND_DISPLAY] [--esplora] [--json]
+# Usage: scripts/measure.sh [-s SECONDS] [-d WAYLAND_DISPLAY] [--files] [--json]
 #
-#   -s SECONDI   quanto osservare la CPU e la batteria (predefinito 30): non
-#                toccare mouse e tastiera nel frattempo, è "a riposo".
-#   -d DISPLAY   la sessione di Vela da misurare (predefinita quella da cui
-#                parte lo script, $WAYLAND_DISPLAY).
-#   --esplora    apre e chiude Esplora 5 volte e misura il primo fotogramma
-#                (compaiono finestre).
-#   --json       una riga JSON invece della tabella (per confrontare nel tempo).
+#   -s SECONDS   how long to watch CPU and battery (default 30): don't touch
+#                the mouse or keyboard meanwhile, it's "idle".
+#   -d DISPLAY   the Vela session to measure (default: the one the script
+#                runs in, $WAYLAND_DISPLAY).
+#   --files      opens and closes File Explorer 5 times and measures its
+#                first frame (windows appear).
+#   --json       one JSON line instead of the table (to compare over time).
 #
-# Ciò che si misura:
-#   memoria   PSS da /proc/PID/smaps_rollup: la memoria propria più la parte
-#             delle librerie condivise che spetta al processo (la misura
-#             giusta per "quanto pesa");
-#   CPU       tempo di CPU (utente + sistema) nell'intervallo, in percento di
-#             un core;
-#   risvegli  cambi di contesto volontari al secondo: quante volte il
-#             processo si sveglia senza che succeda nulla;
-#   batteria  potenza media scaricata (W) da /sys/class/power_supply, solo se
-#             si è a batteria.
+# What is measured:
+#   memory    PSS from /proc/PID/smaps_rollup: the process's own memory plus
+#             its share of the shared libraries (the right measure for
+#             "how much it weighs");
+#   CPU       CPU time (user + system) over the interval, as a percentage
+#             of one core;
+#   wakeups   voluntary context switches per second: how often the process
+#             wakes up while nothing happens;
+#   battery   average power drawn (W) from /sys/class/power_supply, only
+#             on battery.
 
 set -eu
 
 SECONDS_IDLE=30
 DISPLAY_NAME="${WAYLAND_DISPLAY:-}"
-ESPLORA=0
+FILES_RUN=0
 JSON=0
 while [ $# -gt 0 ]; do
     case "$1" in
     -s) SECONDS_IDLE="$2"; shift 2 ;;
     -d) DISPLAY_NAME="$2"; shift 2 ;;
-    --esplora) ESPLORA=1; shift ;;
+    --files) FILES_RUN=1; shift ;;
     --json) JSON=1; shift ;;
     -h|--help) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "Opzione sconosciuta: $1 (vedi --help)" >&2; exit 2 ;;
+    *) echo "Unknown option: $1 (see --help)" >&2; exit 2 ;;
     esac
 done
 
@@ -56,12 +56,12 @@ for pid in $(pgrep -u "$(id -u)" -x vela-shell || true); do
     fi
 done
 if [ -z "$SHELL_PID" ]; then
-    echo "Non trovo una shell di Vela${DISPLAY_NAME:+ su $DISPLAY_NAME} (vedi -d)." >&2
+    echo "No Vela shell found${DISPLAY_NAME:+ on $DISPLAY_NAME} (see -d)." >&2
     exit 1
 fi
 COMPOSITOR_PID=$(awk '{ print $4 }' "/proc/$SHELL_PID/stat")
 if [ "$(cat "/proc/$COMPOSITOR_PID/comm" 2>/dev/null)" != "vela-compositor" ]; then
-    echo "Il padre della shell ($COMPOSITOR_PID) non è vela-compositor." >&2
+    echo "The shell's parent ($COMPOSITOR_PID) isn't vela-compositor." >&2
     exit 1
 fi
 
@@ -98,7 +98,7 @@ c0=$(cpu_ticks "$COMPOSITOR_PID"); s0=$(cpu_ticks "$SHELL_PID")
 w0c=$(wakeups "$COMPOSITOR_PID"); w0s=$(wakeups "$SHELL_PID")
 power_sum=0
 power_samples=0
-[ "$JSON" = 1 ] || echo "Vela su $DISPLAY_NAME: osservo per $SECONDS_IDLE s, non toccare mouse e tastiera..." >&2
+[ "$JSON" = 1 ] || echo "Vela on $DISPLAY_NAME: watching for $SECONDS_IDLE s, don't touch the mouse or keyboard..." >&2
 i=0
 while [ "$i" -lt "$SECONDS_IDLE" ]; do
     sleep 1
@@ -126,13 +126,13 @@ fi
 
 # Avvio a freddo di Esplora: il primo fotogramma, dall'avvio del processo.
 FILES_MS=""
-if [ "$ESPLORA" = 1 ]; then
+if [ "$FILES_RUN" = 1 ]; then
     FILES=$(command -v vela-files || true)
     [ -n "$FILES" ] || FILES="$(dirname "$0")/../build/explorer/vela-files"
     times=""
     for _ in 1 2 3 4 5; do
         t=$(WAYLAND_DISPLAY="$DISPLAY_NAME" VELA_FILES_TIMING=1 timeout 4 "$FILES" 2>&1 \
-            | sed -n 's/.*, \([0-9]*\) ms dall.avvio del processo.*/\1/p' | head -n 1 || true)
+            | sed -n 's/.*, \([0-9]*\) ms after process start.*/\1/p' | head -n 1 || true)
         [ -n "$t" ] && times="$times $t"
     done
     # La mediana delle cinque prove.
@@ -147,15 +147,15 @@ if [ "$JSON" = 1 ]; then
     exit 0
 fi
 
-printf '\n%-16s %12s %12s %16s\n' "" "memoria" "CPU a riposo" "risvegli/s"
+printf '\n%-16s %12s %12s %16s\n' "" "memory" "idle CPU" "wakeups/s"
 printf '%-16s %8s MiB %11s%% %16s\n' "vela-compositor" "$MEM_C" "$CPU_C" "$WAKE_C"
 printf '%-16s %8s MiB %11s%% %16s\n' "vela-shell" "$MEM_S" "$CPU_S" "$WAKE_S"
 echo
 if [ -n "$POWER" ]; then
-    echo "Batteria: $POWER W in media (tutto il computer)"
+    echo "Battery: $POWER W on average (the whole computer)"
 else
-    echo "Batteria: non misurata (nessuna batteria che si scarica: si è a rete)"
+    echo "Battery: not measured (no discharging battery: on AC power)"
 fi
-if [ "$ESPLORA" = 1 ]; then
-    echo "Esplora: primo fotogramma a ${FILES_MS:-?} ms dall'avvio del processo (mediana di 5)"
+if [ "$FILES_RUN" = 1 ]; then
+    echo "File Explorer: first frame ${FILES_MS:-?} ms after process start (median of 5)"
 fi

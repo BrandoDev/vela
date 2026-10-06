@@ -87,7 +87,7 @@ void Server::initXwayland()
     // Pigro: il server X parte al primo client, niente costo se non serve.
     xwayland = wlr_xwayland_create(display, compositor, true);
     if (!xwayland) {
-        wlr_log(WLR_ERROR, "Xwayland non disponibile: le app solo-X11 non partiranno");
+        wlr_log(WLR_ERROR, "Xwayland not available: X11-only apps won't start");
         return;
     }
     xwaylandReady.connect(&xwayland->events.ready, [this](void*) {
@@ -100,7 +100,7 @@ void Server::initXwayland()
                     int32_t(image->hotspot_y));
             }
         }
-        wlr_log(WLR_INFO, "Xwayland pronto su DISPLAY=%s", xwayland->display_name);
+        wlr_log(WLR_INFO, "Xwayland ready on DISPLAY=%s", xwayland->display_name);
     });
     xwaylandNewSurface.connect(&xwayland->events.new_surface, [this](void* data) {
         auto* surface = static_cast<wlr_xwayland_surface*>(data);
@@ -110,7 +110,7 @@ void Server::initXwayland()
             new Toplevel(*this, surface);
         }
     });
-    wlr_log(WLR_INFO, "Xwayland su DISPLAY=%s (parte al primo client X11)", xwayland->display_name);
+    wlr_log(WLR_INFO, "Xwayland on DISPLAY=%s (starts with the first X11 client)", xwayland->display_name);
 #endif
 }
 

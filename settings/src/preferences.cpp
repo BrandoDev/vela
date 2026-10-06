@@ -3,6 +3,8 @@
 
 #include "preferences.h"
 
+#include "legacysettings.hpp"
+
 #include "iconprovider.h"
 #include "mica.h"
 
@@ -144,6 +146,17 @@ void Preferences::reload()
     reloadCompositor();
 }
 
+namespace {
+
+// Una riga di vela.conf con i nomi di adesso (compositor/src/legacysettings.hpp).
+QString modernLine(const QString& line)
+{
+    std::string text = line.toStdString();
+    return vela::legacy::modernizeLine(text) ? QString::fromStdString(text) : line;
+}
+
+} // namespace
+
 void Preferences::reloadCompositor()
 {
     // vela.conf
@@ -152,7 +165,7 @@ void Preferences::reloadCompositor()
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         QTextStream in(&file);
         while (!in.atEnd()) {
-            const QString line = in.readLine();
+            const QString line = modernLine(in.readLine());
             const qsizetype eq = line.indexOf(u'=');
             if (!line.startsWith(u'#') && eq > 0) {
                 m_compositor.append({ line.left(eq), line.mid(eq + 1) });
@@ -164,48 +177,50 @@ void Preferences::reloadCompositor()
         return v.isNull() ? fallback : v;
     };
     auto flag = [&](const QString& key, bool fallback) {
-        const QString v = value(key, fallback ? QStringLiteral("sì") : QStringLiteral("no"));
-        return v == QStringLiteral("sì") || v == QLatin1String("si") || v == QLatin1String("1") || v == QLatin1String("true");
+        const QString v = value(key, fallback ? QStringLiteral("yes") : QStringLiteral("no"));
+        return v == QLatin1String("yes") || v == QLatin1String("1") || v == QLatin1String("true");
     };
-    m_screenOffMinutes = value(QStringLiteral("spegni-schermo"), QStringLiteral("10")).toInt();
-    const QString lock = value(QStringLiteral("blocca"), QStringLiteral("sì"));
+    m_screenOffMinutes = value(QStringLiteral("screen-off"), QStringLiteral("10")).toInt();
+    const QString lock = value(QStringLiteral("lock-on-idle"), QStringLiteral("yes"));
     m_lockOnIdle = lock != QLatin1String("0") && lock != QLatin1String("no");
     emit idleChanged();
+    m_language = value(QStringLiteral("language"), {});
+    emit languageChanged();
 
     m_layouts.clear();
-    const QStringList layouts = value(QStringLiteral("tastiera-layout"), {}).split(u',', Qt::SkipEmptyParts);
-    const QStringList variants = value(QStringLiteral("tastiera-variante"), {}).split(u',');
+    const QStringList layouts = value(QStringLiteral("keyboard-layout"), {}).split(u',', Qt::SkipEmptyParts);
+    const QStringList variants = value(QStringLiteral("keyboard-variant"), {}).split(u',');
     for (qsizetype i = 0; i < layouts.size(); ++i) {
         m_layouts.append(QVariantMap { { QStringLiteral("layout"), layouts[i].trimmed() },
             { QStringLiteral("variant"), i < variants.size() ? variants[i].trimmed() : QString() } });
     }
-    m_repeatDelay = value(QStringLiteral("tastiera-ritardo"), QStringLiteral("400")).toInt();
-    m_repeatRate = value(QStringLiteral("tastiera-velocita"), QStringLiteral("30")).toInt();
+    m_repeatDelay = value(QStringLiteral("keyboard-repeat-delay"), QStringLiteral("400")).toInt();
+    m_repeatRate = value(QStringLiteral("keyboard-repeat-rate"), QStringLiteral("30")).toInt();
     emit keyboardChanged();
 
-    m_nightLight = flag(QStringLiteral("luce-notturna"), false);
-    m_nightStrength = std::clamp(value(QStringLiteral("luce-notturna-intensita"), QStringLiteral("48")).toInt(), 0, 100);
-    m_nightSchedule = value(QStringLiteral("luce-notturna-pianifica"), QStringLiteral("no"));
-    m_nightFrom = value(QStringLiteral("luce-notturna-dalle"), QStringLiteral("21:00"));
-    m_nightTo = value(QStringLiteral("luce-notturna-alle"), QStringLiteral("07:00"));
+    m_nightLight = flag(QStringLiteral("night-light"), false);
+    m_nightStrength = std::clamp(value(QStringLiteral("night-light-strength"), QStringLiteral("48")).toInt(), 0, 100);
+    m_nightSchedule = value(QStringLiteral("night-light-schedule"), QStringLiteral("no"));
+    m_nightFrom = value(QStringLiteral("night-light-from"), QStringLiteral("21:00"));
+    m_nightTo = value(QStringLiteral("night-light-to"), QStringLiteral("07:00"));
     m_tearing = flag(QStringLiteral("tearing"), true);
-    m_vrr = value(QStringLiteral("frequenza-variabile"), QStringLiteral("giochi"));
-    m_colorFilter = flag(QStringLiteral("filtri-colore"), false);
-    m_colorFilterKind = value(QStringLiteral("filtro-colore"), QStringLiteral("grigi"));
-    m_colorFilterShortcut = flag(QStringLiteral("filtri-colore-scorciatoia"), false);
-    m_magnifierStep = value(QStringLiteral("lente-incremento"), QStringLiteral("100")).toInt();
-    m_stickyKeys = flag(QStringLiteral("tasti-permanenti"), false);
-    m_mouseSpeed = std::clamp(value(QStringLiteral("mouse-velocita"), QStringLiteral("10")).toInt(), 1, 20);
-    m_mousePrecision = flag(QStringLiteral("mouse-precisione"), true);
-    m_mouseLeftHanded = value(QStringLiteral("mouse-pulsante-principale"), QStringLiteral("sinistro")) == QLatin1String("destro");
-    m_wheelLines = std::clamp(value(QStringLiteral("mouse-righe"), QStringLiteral("3")).toInt(), 1, 20);
+    m_vrr = value(QStringLiteral("variable-refresh"), QStringLiteral("games"));
+    m_colorFilter = flag(QStringLiteral("color-filters"), false);
+    m_colorFilterKind = value(QStringLiteral("color-filter"), QStringLiteral("grayscale"));
+    m_colorFilterShortcut = flag(QStringLiteral("color-filters-shortcut"), false);
+    m_magnifierStep = value(QStringLiteral("magnifier-step"), QStringLiteral("100")).toInt();
+    m_stickyKeys = flag(QStringLiteral("sticky-keys"), false);
+    m_mouseSpeed = std::clamp(value(QStringLiteral("mouse-speed"), QStringLiteral("10")).toInt(), 1, 20);
+    m_mousePrecision = flag(QStringLiteral("mouse-precision"), true);
+    m_mouseLeftHanded = value(QStringLiteral("mouse-primary-button"), QStringLiteral("left")) == QLatin1String("right");
+    m_wheelLines = std::clamp(value(QStringLiteral("mouse-scroll-lines"), QStringLiteral("3")).toInt(), 1, 20);
     m_touchpad = flag(QStringLiteral("touchpad"), true);
-    m_touchpadWithMouse = flag(QStringLiteral("touchpad-con-mouse"), true);
-    m_touchpadSpeed = std::clamp(value(QStringLiteral("touchpad-velocita"), QStringLiteral("10")).toInt(), 1, 20);
-    m_touchpadTap = flag(QStringLiteral("touchpad-tocco"), true);
-    m_touchpadNatural = flag(QStringLiteral("touchpad-scorrimento-naturale"), true);
-    m_threeFingers = value(QStringLiteral("touchpad-tre-dita"), QStringLiteral("app"));
-    m_fourFingers = value(QStringLiteral("touchpad-quattro-dita"), QStringLiteral("desktop"));
+    m_touchpadWithMouse = flag(QStringLiteral("touchpad-with-mouse"), true);
+    m_touchpadSpeed = std::clamp(value(QStringLiteral("touchpad-speed"), QStringLiteral("10")).toInt(), 1, 20);
+    m_touchpadTap = flag(QStringLiteral("touchpad-tap"), true);
+    m_touchpadNatural = flag(QStringLiteral("touchpad-natural-scroll"), true);
+    m_threeFingers = value(QStringLiteral("touchpad-three-fingers"), QStringLiteral("app"));
+    m_fourFingers = value(QStringLiteral("touchpad-four-fingers"), QStringLiteral("desktop"));
     emit inputChanged();
     queryCompositor();
     emit nightLightChanged();
@@ -459,19 +474,21 @@ void Preferences::saveCompositorKeys(const QStringList& keys)
 {
     QList<QPair<QString, QString>> changes;
     for (const QString& key : keys) {
-        if (key == QLatin1String("spegni-schermo")) {
+        if (key == QLatin1String("screen-off")) {
             changes.append({ key, QString::number(m_screenOffMinutes) });
-        } else if (key == QLatin1String("blocca")) {
-            changes.append({ key, m_lockOnIdle ? QStringLiteral("sì") : QStringLiteral("no") });
-        } else if (key == QLatin1String("tastiera-layout") || key == QLatin1String("tastiera-variante")) {
+        } else if (key == QLatin1String("lock-on-idle")) {
+            changes.append({ key, m_lockOnIdle ? QStringLiteral("yes") : QStringLiteral("no") });
+        } else if (key == QLatin1String("language")) {
+            changes.append({ key, m_language });
+        } else if (key == QLatin1String("keyboard-layout") || key == QLatin1String("keyboard-variant")) {
             QStringList values;
             for (const QVariant& value : std::as_const(m_layouts)) {
-                values << value.toMap()[key == QLatin1String("tastiera-layout") ? QStringLiteral("layout") : QStringLiteral("variant")].toString();
+                values << value.toMap()[key == QLatin1String("keyboard-layout") ? QStringLiteral("layout") : QStringLiteral("variant")].toString();
             }
             changes.append({ key, values.join(u',') });
-        } else if (key == QLatin1String("tastiera-ritardo")) {
+        } else if (key == QLatin1String("keyboard-repeat-delay")) {
             changes.append({ key, QString::number(m_repeatDelay) });
-        } else if (key == QLatin1String("tastiera-velocita")) {
+        } else if (key == QLatin1String("keyboard-repeat-rate")) {
             changes.append({ key, QString::number(m_repeatRate) });
         }
     }
@@ -487,13 +504,16 @@ void Preferences::saveCompositor(const QList<QPair<QString, QString>>& changes)
         QFile in(path);
         if (in.open(QIODevice::ReadOnly | QIODevice::Text)) {
             lines = QString::fromUtf8(in.readAll()).split(u'\n');
+            for (QString& line : lines) {
+                line = modernLine(line); // i nomi italiani di prima, se il compositor non li ha già cambiati
+            }
             while (!lines.isEmpty() && lines.last().isEmpty()) {
                 lines.removeLast();
             }
         }
     }
     if (lines.isEmpty()) {
-        lines << QStringLiteral("# Impostazioni di Vela (le scrive l'app Impostazioni)");
+        lines << QStringLiteral("# Vela settings (written by the Settings app)");
     }
     for (const auto& [key, value] : changes) {
         bool found = false;
@@ -524,7 +544,7 @@ void Preferences::setScreenOffMinutes(int minutes)
 {
     if (minutes != m_screenOffMinutes) {
         m_screenOffMinutes = std::max(0, minutes);
-        saveCompositorKeys(QStringList { QStringLiteral("spegni-schermo") });
+        saveCompositorKeys(QStringList { QStringLiteral("screen-off") });
         emit idleChanged();
     }
 }
@@ -533,14 +553,23 @@ void Preferences::setLockOnIdle(bool on)
 {
     if (on != m_lockOnIdle) {
         m_lockOnIdle = on;
-        saveCompositorKeys(QStringList { QStringLiteral("blocca") });
+        saveCompositorKeys(QStringList { QStringLiteral("lock-on-idle") });
         emit idleChanged();
+    }
+}
+
+void Preferences::setLanguage(const QString& language)
+{
+    if (language != m_language) {
+        m_language = language;
+        saveCompositorKeys(QStringList { QStringLiteral("language") });
+        emit languageChanged();
     }
 }
 
 void Preferences::saveLayouts()
 {
-    saveCompositorKeys(QStringList { QStringLiteral("tastiera-layout"), QStringLiteral("tastiera-variante") });
+    saveCompositorKeys(QStringList { QStringLiteral("keyboard-layout"), QStringLiteral("keyboard-variant") });
     emit keyboardChanged();
 }
 
@@ -576,7 +605,7 @@ void Preferences::setRepeatDelay(int ms)
 {
     if (ms != m_repeatDelay) {
         m_repeatDelay = std::clamp(ms, 100, 2000);
-        saveCompositorKeys(QStringList { QStringLiteral("tastiera-ritardo") });
+        saveCompositorKeys(QStringList { QStringLiteral("keyboard-repeat-delay") });
         emit keyboardChanged();
     }
 }
@@ -585,7 +614,7 @@ void Preferences::setRepeatRate(int perSecond)
 {
     if (perSecond != m_repeatRate) {
         m_repeatRate = std::clamp(perSecond, 1, 100);
-        saveCompositorKeys(QStringList { QStringLiteral("tastiera-velocita") });
+        saveCompositorKeys(QStringList { QStringLiteral("keyboard-repeat-rate") });
         emit keyboardChanged();
     }
 }
@@ -596,7 +625,7 @@ namespace {
 
 QString yesNo(bool on)
 {
-    return on ? QStringLiteral("sì") : QStringLiteral("no");
+    return on ? QStringLiteral("yes") : QStringLiteral("no");
 }
 
 } // namespace
@@ -605,7 +634,7 @@ void Preferences::setNightLight(bool on)
 {
     if (on != m_nightLight) {
         m_nightLight = on;
-        saveCompositor({ { QStringLiteral("luce-notturna"), yesNo(on) } });
+        saveCompositor({ { QStringLiteral("night-light"), yesNo(on) } });
         emit nightLightChanged();
     }
 }
@@ -615,7 +644,7 @@ void Preferences::setNightStrength(int strength)
     strength = std::clamp(strength, 0, 100);
     if (strength != m_nightStrength) {
         m_nightStrength = strength;
-        saveCompositor({ { QStringLiteral("luce-notturna-intensita"), QString::number(strength) } });
+        saveCompositor({ { QStringLiteral("night-light-strength"), QString::number(strength) } });
         emit nightLightChanged();
     }
 }
@@ -624,7 +653,7 @@ void Preferences::setNightSchedule(const QString& schedule)
 {
     if (schedule != m_nightSchedule) {
         m_nightSchedule = schedule;
-        saveCompositor({ { QStringLiteral("luce-notturna-pianifica"), schedule } });
+        saveCompositor({ { QStringLiteral("night-light-schedule"), schedule } });
         emit nightLightChanged();
     }
 }
@@ -633,7 +662,7 @@ void Preferences::setNightFrom(const QString& time)
 {
     if (time != m_nightFrom && QTime::fromString(time, QStringLiteral("HH:mm")).isValid()) {
         m_nightFrom = time;
-        saveCompositor({ { QStringLiteral("luce-notturna-dalle"), time } });
+        saveCompositor({ { QStringLiteral("night-light-from"), time } });
         emit nightLightChanged();
     }
 }
@@ -642,7 +671,7 @@ void Preferences::setNightTo(const QString& time)
 {
     if (time != m_nightTo && QTime::fromString(time, QStringLiteral("HH:mm")).isValid()) {
         m_nightTo = time;
-        saveCompositor({ { QStringLiteral("luce-notturna-alle"), time } });
+        saveCompositor({ { QStringLiteral("night-light-to"), time } });
         emit nightLightChanged();
     }
 }
@@ -660,7 +689,7 @@ void Preferences::setVrr(const QString& mode)
 {
     if (mode != m_vrr) {
         m_vrr = mode;
-        saveCompositor({ { QStringLiteral("frequenza-variabile"), mode } });
+        saveCompositor({ { QStringLiteral("variable-refresh"), mode } });
         emit accessibilityChanged();
     }
 }
@@ -678,7 +707,7 @@ void Preferences::setMagnifierStep(int percent)
 {
     if (percent != m_magnifierStep) {
         m_magnifierStep = percent;
-        saveCompositor({ { QStringLiteral("lente-incremento"), QString::number(percent) } });
+        saveCompositor({ { QStringLiteral("magnifier-step"), QString::number(percent) } });
         emit accessibilityChanged();
     }
 }
@@ -687,7 +716,7 @@ void Preferences::setColorFilter(bool on)
 {
     if (on != m_colorFilter) {
         m_colorFilter = on;
-        saveCompositor({ { QStringLiteral("filtri-colore"), yesNo(on) } });
+        saveCompositor({ { QStringLiteral("color-filters"), yesNo(on) } });
         emit accessibilityChanged();
     }
 }
@@ -696,7 +725,7 @@ void Preferences::setColorFilterKind(const QString& kind)
 {
     if (kind != m_colorFilterKind) {
         m_colorFilterKind = kind;
-        saveCompositor({ { QStringLiteral("filtro-colore"), kind } });
+        saveCompositor({ { QStringLiteral("color-filter"), kind } });
         emit accessibilityChanged();
     }
 }
@@ -705,7 +734,7 @@ void Preferences::setColorFilterShortcut(bool on)
 {
     if (on != m_colorFilterShortcut) {
         m_colorFilterShortcut = on;
-        saveCompositor({ { QStringLiteral("filtri-colore-scorciatoia"), yesNo(on) } });
+        saveCompositor({ { QStringLiteral("color-filters-shortcut"), yesNo(on) } });
         emit accessibilityChanged();
     }
 }
@@ -714,7 +743,7 @@ void Preferences::setStickyKeys(bool on)
 {
     if (on != m_stickyKeys) {
         m_stickyKeys = on;
-        saveCompositor({ { QStringLiteral("tasti-permanenti"), yesNo(on) } });
+        saveCompositor({ { QStringLiteral("sticky-keys"), yesNo(on) } });
         emit accessibilityChanged();
     }
 }
@@ -726,7 +755,7 @@ void Preferences::setMouseSpeed(int value)
     value = std::clamp(value, 1, 20);
     if (value != m_mouseSpeed) {
         m_mouseSpeed = value;
-        saveCompositor({ { QStringLiteral("mouse-velocita"), QString::number(value) } });
+        saveCompositor({ { QStringLiteral("mouse-speed"), QString::number(value) } });
         emit inputChanged();
     }
 }
@@ -735,7 +764,7 @@ void Preferences::setMousePrecision(bool on)
 {
     if (on != m_mousePrecision) {
         m_mousePrecision = on;
-        saveCompositor({ { QStringLiteral("mouse-precisione"), yesNo(on) } });
+        saveCompositor({ { QStringLiteral("mouse-precision"), yesNo(on) } });
         emit inputChanged();
     }
 }
@@ -744,7 +773,7 @@ void Preferences::setMouseLeftHanded(bool on)
 {
     if (on != m_mouseLeftHanded) {
         m_mouseLeftHanded = on;
-        saveCompositor({ { QStringLiteral("mouse-pulsante-principale"), on ? QStringLiteral("destro") : QStringLiteral("sinistro") } });
+        saveCompositor({ { QStringLiteral("mouse-primary-button"), on ? QStringLiteral("right") : QStringLiteral("left") } });
         emit inputChanged();
     }
 }
@@ -754,7 +783,7 @@ void Preferences::setWheelLines(int lines)
     lines = std::clamp(lines, 1, 20);
     if (lines != m_wheelLines) {
         m_wheelLines = lines;
-        saveCompositor({ { QStringLiteral("mouse-righe"), QString::number(lines) } });
+        saveCompositor({ { QStringLiteral("mouse-scroll-lines"), QString::number(lines) } });
         emit inputChanged();
     }
 }
@@ -772,7 +801,7 @@ void Preferences::setTouchpadWithMouse(bool on)
 {
     if (on != m_touchpadWithMouse) {
         m_touchpadWithMouse = on;
-        saveCompositor({ { QStringLiteral("touchpad-con-mouse"), yesNo(on) } });
+        saveCompositor({ { QStringLiteral("touchpad-with-mouse"), yesNo(on) } });
         emit inputChanged();
     }
 }
@@ -782,7 +811,7 @@ void Preferences::setTouchpadSpeed(int value)
     value = std::clamp(value, 1, 20);
     if (value != m_touchpadSpeed) {
         m_touchpadSpeed = value;
-        saveCompositor({ { QStringLiteral("touchpad-velocita"), QString::number(value) } });
+        saveCompositor({ { QStringLiteral("touchpad-speed"), QString::number(value) } });
         emit inputChanged();
     }
 }
@@ -791,7 +820,7 @@ void Preferences::setTouchpadTap(bool on)
 {
     if (on != m_touchpadTap) {
         m_touchpadTap = on;
-        saveCompositor({ { QStringLiteral("touchpad-tocco"), yesNo(on) } });
+        saveCompositor({ { QStringLiteral("touchpad-tap"), yesNo(on) } });
         emit inputChanged();
     }
 }
@@ -800,7 +829,7 @@ void Preferences::setTouchpadNatural(bool on)
 {
     if (on != m_touchpadNatural) {
         m_touchpadNatural = on;
-        saveCompositor({ { QStringLiteral("touchpad-scorrimento-naturale"), yesNo(on) } });
+        saveCompositor({ { QStringLiteral("touchpad-natural-scroll"), yesNo(on) } });
         emit inputChanged();
     }
 }
@@ -809,7 +838,7 @@ void Preferences::setThreeFingers(const QString& action)
 {
     if (action != m_threeFingers) {
         m_threeFingers = action;
-        saveCompositor({ { QStringLiteral("touchpad-tre-dita"), action } });
+        saveCompositor({ { QStringLiteral("touchpad-three-fingers"), action } });
         emit inputChanged();
     }
 }
@@ -818,7 +847,7 @@ void Preferences::setFourFingers(const QString& action)
 {
     if (action != m_fourFingers) {
         m_fourFingers = action;
-        saveCompositor({ { QStringLiteral("touchpad-quattro-dita"), action } });
+        saveCompositor({ { QStringLiteral("touchpad-four-fingers"), action } });
         emit inputChanged();
     }
 }

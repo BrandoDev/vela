@@ -12,7 +12,7 @@ experience — smooth motion, precise rendering, rich effects — and avoids ove
 it does not. Every animation is tied to your monitor's real frames, and fractional scaling
 is designed around physical pixels rather than treated as an afterthought.
 
-[![Build](https://github.com/BrandoDev/vela/actions/workflows/compila.yml/badge.svg)](https://github.com/BrandoDev/vela/actions/workflows/compila.yml)
+[![Build](https://github.com/BrandoDev/vela/actions/workflows/build.yml/badge.svg)](https://github.com/BrandoDev/vela/actions/workflows/build.yml)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 [![License: GPL v3+](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 ![wlroots](https://img.shields.io/badge/wlroots-0.20-4b8bbe)
@@ -144,8 +144,8 @@ The whole design is written down in [docs/renderer.md](docs/renderer.md).
 > every day: compositor, shell, file manager, settings, lock screen. The complete GPU-
 > dependent functional and sharpness suites are run on the primary development machine
 > and currently pass; GitHub-hosted CI skips them because it has no usable DRM/Vulkan
-> device. Some hardware-specific paths still rely on manual verification. **The interface
-> is currently in Italian**; translations are planned.
+> device. Some hardware-specific paths still rely on manual verification. The interface
+> speaks **English and Italian** (Settings → Time & language), switched live.
 
 ## Features
 
@@ -262,9 +262,9 @@ builds the package locally.
 
 ```sh
 vela-update                 # update if something new is available
-vela-update --controlla     # only check, and list the changes
-vela-update --scarica       # use GitHub's package without asking
-vela-update --compila       # always build locally
+vela-update --check         # only check, and list the changes
+vela-update --download      # use GitHub's package without asking
+vela-update --build         # always build locally
 vela-update --jobs 2        # fewer parallel compile jobs
 ```
 
@@ -286,7 +286,7 @@ sudo ln -s /usr/local/share/wayland-sessions/vela.desktop /usr/share/wayland-ses
 
 ## Build from source
 
-You need CMake ≥ 3.22, Ninja, a C++20 compiler, **wlroots 0.20**, Qt ≥ 6.5, LayerShellQt,
+You need CMake ≥ 3.22, Ninja, a C++20 compiler, **wlroots 0.20**, Qt ≥ 6.7 with its Linguist tools, LayerShellQt,
 the Vulkan headers and loader, `glslc`, GBM, libdrm, FreeType, HarfBuzz, Fontconfig and
 PAM. librsvg is optional (app icons in the title bar). The tests also use GoogleTest and
 Python 3.
@@ -296,7 +296,7 @@ Python 3.
 
 ```sh
 sudo pacman -S --needed base-devel cmake ninja pkgconf wlroots0.20 wayland-protocols \
-    libxkbcommon pixman libinput qt6-declarative qt6-svg qt6-wayland layer-shell-qt \
+    libxkbcommon pixman libinput qt6-declarative qt6-svg qt6-wayland qt6-tools layer-shell-qt \
     vulkan-headers vulkan-icd-loader shaderc mesa libdrm freetype2 harfbuzz fontconfig \
     pam librsvg zlib gtest python
 ```
@@ -307,7 +307,7 @@ sudo pacman -S --needed base-devel cmake ninja pkgconf wlroots0.20 wayland-proto
 
 ```sh
 sudo dnf install cmake ninja-build gcc-c++ wlroots-devel wayland-devel wayland-protocols-devel \
-    libxkbcommon-devel pixman-devel libinput-devel qt6-qtdeclarative-devel \
+    libxkbcommon-devel pixman-devel libinput-devel qt6-qtdeclarative-devel qt6-qttools-devel \
     qt6-qtsvg-devel qt6-qtwayland-devel layer-shell-qt-devel \
     vulkan-headers vulkan-loader-devel glslc mesa-libgbm-devel libdrm-devel \
     freetype-devel harfbuzz-devel fontconfig-devel pam-devel librsvg2-devel \
@@ -320,7 +320,7 @@ sudo dnf install cmake ninja-build gcc-c++ wlroots-devel wayland-devel wayland-p
 
 ```sh
 sudo zypper install cmake ninja gcc-c++ wlroots-devel wayland-protocols-devel \
-    libxkbcommon-devel pixman-devel libinput-devel qt6-declarative-devel \
+    libxkbcommon-devel pixman-devel libinput-devel qt6-declarative-devel qt6-linguist-devel \
     qt6-svg-devel qt6-waylandclient-devel layer-shell-qt6-devel \
     vulkan-headers vulkan-devel shaderc libgbm-devel libdrm-devel \
     freetype2-devel harfbuzz-devel fontconfig-devel pam-devel librsvg-devel \
@@ -458,21 +458,22 @@ see the documentation below.
 - [x] **Daily comfort**: clipboard history, snipping tool, touchpad gestures, mouse and
   touchpad settings.
 - [x] **Reliability**: compositor crash recovery, package and `vela-update`, CI.
+- [x] **Languages**: English and Italian, switched live from Settings.
 
 **Next**
 - [ ] Input methods (`text-input`, `input-method`) and an emoji panel (Super+.).
 - [ ] An Updates page in Settings, with a notification when a new version is out.
 - [ ] Start menu: Recommended files, and search across files and settings.
 - [ ] Screen recording in the snipping tool.
-- [ ] Translations (English first).
+- [ ] More languages.
 - [ ] Vela's own login screen.
 - [ ] HDR and color management.
 
 ## Contributing
 
 Vela is a young project and moves fast. Issues and ideas are welcome. Before larger
-changes, open an issue to talk about it. Code, comments and commit messages are in
-Italian for now. Please sign off your commits (`git commit -s`, the
+changes, open an issue to talk about it. Code, messages and interface text are in English;
+code comments are still in Italian. Please sign off your commits (`git commit -s`, the
 [Developer Certificate of Origin](https://developercertificate.org/)): contributions
 are accepted under the project's license, GPL-3.0-or-later.
 

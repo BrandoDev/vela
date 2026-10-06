@@ -9,8 +9,8 @@ Page {
     CardGroup {
         Card {
             icon: "edit-paste"
-            title: "Cronologia degli Appunti"
-            description: "Salva più elementi negli Appunti da usare in seguito. Premi Win+V per vederli e incollarli"
+            title: qsTr("Clipboard history")
+            description: qsTr("Save multiple items to the clipboard to use later. Press Win+V to see and paste them")
             trailing: Toggle {
                 checked: Prefs.clipboardHistory
                 onToggled: on => Prefs.clipboardHistory = on
@@ -18,20 +18,20 @@ Page {
         }
         Card {
             icon: "edit-clear-history"
-            title: "Cancella dati degli Appunti"
-            description: "Tutto tranne gli elementi fissati"
+            title: qsTr("Clear clipboard data")
+            description: qsTr("Everything except pinned items")
             trailing: Button {
-                text: "Cancella"
+                text: qsTr("Clear")
                 onClicked: Prefs.clearClipboard()
             }
         }
     }
     CardGroup {
-        title: "Impostazioni correlate"
+        title: qsTr("Related settings")
         Card {
             icon: "accessories-screenshot"
-            title: "Strumento di cattura"
-            description: "Win+Maiusc+S o Stamp: un rettangolo, una finestra o lo schermo intero, copiati negli Appunti e salvati in Immagini > Screenshot"
+            title: qsTr("Snipping Tool")
+            description: qsTr("Win+Shift+S or Print Screen: a rectangle, a window or the full screen, copied to the clipboard and saved in Pictures > Screenshot")
         }
     }
 }

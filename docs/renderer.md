@@ -288,9 +288,9 @@ With VRR there is no fixed vblank: the monitor refreshes when the frame arrives,
 within its limits. Animations stay correct thanks to §4.2 (predicted
 presentation time, not "a fixed period").
 
-- **When**: the choice is in vela.conf ("frequenza-variabile"): `giochi`
+- **When**: the choice is in vela.conf ("variable-refresh"): `games`
   (default: only with a fullscreen app on that output, like KWin's "Automatic",
-  because with some monitors the desktop flickers), `sempre` (always) or `no`;
+  because with some monitors the desktop flickers), `always` or `no`;
   `VELA_VRR=1/0` wins. Each output's frame cycle checks on every frame whether it
   should be on or off and puts it in that frame's commit (tested first: if the
   monitor doesn't accept it, this is remembered and not retried).

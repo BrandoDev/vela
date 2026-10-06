@@ -23,42 +23,43 @@ The format is intentionally simple:
 key=value
 ```
 
-Vela Settings preserves unrelated lines when it updates a key and asks the compositor to reload the file. Boolean values accept forms such as `sì`, `si`, `1`, `true` and `yes`.
+Vela Settings preserves unrelated lines when it updates a key and asks the compositor to reload the file. Boolean values are `yes` or `no` (`1` and `true` work too).
 
 ### `vela.conf` keys
 
 | Key | Default | Meaning |
 |---|---|---|
-| `spegni-schermo` | `10` | Minutes of inactivity before the idle action. `0` disables it. |
-| `blocca` | `sì` | Lock before turning displays off. |
-| `tastiera-layout` | system/default | Comma-separated XKB layouts, for example `it,us`. |
-| `tastiera-variante` | empty | Comma-separated XKB variants matching `tastiera-layout`. |
-| `tastiera-opzioni` | empty | XKB options. |
-| `tastiera-ritardo` | `400` | Key-repeat delay in milliseconds. |
-| `tastiera-velocita` | `30` | Key repeats per second. |
-| `luce-notturna` | `no` | Enable Night light. |
-| `luce-notturna-intensita` | `48` | Night-light strength, 0–100. |
-| `luce-notturna-pianifica` | `no` | Night-light schedule: `no`, `tramonto` or `ore`. |
-| `luce-notturna-dalle` | `21:00` | Manual Night-light start time. |
-| `luce-notturna-alle` | `07:00` | Manual Night-light end time. |
-| `filtri-colore` | `no` | Enable the color filter. |
-| `filtro-colore` | `grigi` | `grigi`, `deuteranopia`, `protanopia` or `tritanopia`. |
-| `filtri-colore-scorciatoia` | `no` | Allow Super+Ctrl+C to toggle color filters. |
-| `lente-incremento` | `100` | Magnifier step in percent. |
-| `tasti-permanenti` | `no` | Sticky modifier keys. |
-| `tearing` | `sì` | Allow fullscreen apps that explicitly request tearing. |
-| `frequenza-variabile` | `giochi` | VRR policy: `no`, `giochi` or `sempre`. |
-| `mouse-velocita` | `10` | Pointer speed, 1–20. |
-| `mouse-precisione` | `sì` | Pointer acceleration / enhanced precision. |
-| `mouse-pulsante-principale` | `sinistro` | Primary mouse button: `sinistro` or `destro`. |
-| `mouse-righe` | `3` | Scroll lines per wheel notch. |
-| `touchpad` | `sì` | Enable touchpad input. |
-| `touchpad-con-mouse` | `sì` | Keep the touchpad enabled when a mouse is connected. |
-| `touchpad-velocita` | `10` | Touchpad pointer speed, 1–20. |
-| `touchpad-tocco` | `sì` | Tap to click. |
-| `touchpad-scorrimento-naturale` | `sì` | Natural scrolling. |
-| `touchpad-tre-dita` | `app` | Three-finger gesture mode: `app`, `desktop` or `no`. |
-| `touchpad-quattro-dita` | `desktop` | Four-finger gesture mode. |
+| `language` | system | Interface language: `it`, `en`, or empty to follow the system (Italian if the system is Italian, English otherwise). |
+| `screen-off` | `10` | Minutes of inactivity before the idle action. `0` disables it. |
+| `lock-on-idle` | `yes` | Lock before turning displays off. |
+| `keyboard-layout` | system/default | Comma-separated XKB layouts, for example `it,us`. |
+| `keyboard-variant` | empty | Comma-separated XKB variants matching `keyboard-layout`. |
+| `keyboard-options` | empty | XKB options. |
+| `keyboard-repeat-delay` | `400` | Key-repeat delay in milliseconds. |
+| `keyboard-repeat-rate` | `30` | Key repeats per second. |
+| `night-light` | `no` | Enable Night light. |
+| `night-light-strength` | `48` | Night-light strength, 0–100. |
+| `night-light-schedule` | `no` | Night-light schedule: `no`, `sunset` or `hours`. |
+| `night-light-from` | `21:00` | Manual Night-light start time. |
+| `night-light-to` | `07:00` | Manual Night-light end time. |
+| `color-filters` | `no` | Enable the color filter. |
+| `color-filter` | `grayscale` | `grayscale`, `deuteranopia`, `protanopia` or `tritanopia`. |
+| `color-filters-shortcut` | `no` | Allow Super+Ctrl+C to toggle color filters. |
+| `magnifier-step` | `100` | Magnifier step in percent. |
+| `sticky-keys` | `no` | Sticky modifier keys. |
+| `tearing` | `yes` | Allow fullscreen apps that explicitly request tearing. |
+| `variable-refresh` | `games` | VRR policy: `no`, `games` or `always`. |
+| `mouse-speed` | `10` | Pointer speed, 1–20. |
+| `mouse-precision` | `yes` | Pointer acceleration / enhanced precision. |
+| `mouse-primary-button` | `left` | Primary mouse button: `left` or `right`. |
+| `mouse-scroll-lines` | `3` | Scroll lines per wheel notch. |
+| `touchpad` | `yes` | Enable touchpad input. |
+| `touchpad-with-mouse` | `yes` | Keep the touchpad enabled when a mouse is connected. |
+| `touchpad-speed` | `10` | Touchpad pointer speed, 1–20. |
+| `touchpad-tap` | `yes` | Tap to click. |
+| `touchpad-natural-scroll` | `yes` | Natural scrolling. |
+| `touchpad-three-fingers` | `app` | Three-finger gesture mode: `app`, `desktop` or `no`. |
+| `touchpad-four-fingers` | `desktop` | Four-finger gesture mode. |
 
 The Settings app is the preferred way to edit these values because it applies validation and reloads the compositor at the correct time.
 
@@ -67,21 +68,23 @@ The Settings app is the preferred way to edit these values because it applies va
 Persistent display layout is stored separately in:
 
 ```text
-~/.config/vela/schermi.conf
+~/.config/vela/outputs.conf
 ```
 
 Each physical display gets its own section identified from make, model and serial when available:
 
 ```ini
 [Vendor Model Serial]
-attivo=si
-modo=2560x1440@180.000
-scala=1.25
-rotazione=normale
-posizione=0,0
+enabled=yes
+mode=2560x1440@180.000
+scale=1.25
+rotation=normal
+position=0,0
 ```
 
-Supported rotation names are `normale`, `90`, `180`, `270`, `specchio`, `specchio-90`, `specchio-180` and `specchio-270`.
+Supported rotation names are `normal`, `90`, `180`, `270`, `flipped`, `flipped-90`, `flipped-180` and `flipped-270`.
+
+Files written before October 2026 used Italian names (`schermi.conf`, and Italian keys and values in `vela.conf`). Vela still reads them and rewrites them with the English names.
 
 Normally this file should be managed through **Settings → Displays** rather than edited by hand.
 

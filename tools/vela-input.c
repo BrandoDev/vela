@@ -167,7 +167,7 @@ static int setupKeyboard(void)
     struct xkb_rule_names names = { .rules = "evdev", .model = "pc105", .layout = "us" };
     keymap = xkb_keymap_new_from_names(context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
     if (!keymap) {
-        fprintf(stderr, "vela-input: impossibile creare il layout di tastiera\n");
+        fprintf(stderr, "vela-input: can't create the keyboard layout\n");
         return 0;
     }
     xkbState = xkb_state_new(keymap);
@@ -249,7 +249,7 @@ static int pressKey(const char* name, int pressed)
     int shift = 0;
     const int code = sym == XKB_KEY_NoSymbol ? -1 : keycodeFor(sym, &shift);
     if (code < 0) {
-        fprintf(stderr, "vela-input: tasto sconosciuto '%s'\n", name);
+        fprintf(stderr, "vela-input: unknown key '%s'\n", name);
         return 0;
     }
     sendKey(code, pressed);
@@ -268,7 +268,7 @@ static int pressCombo(const char* combo)
         int shift = 0;
         const int code = sym == XKB_KEY_NoSymbol ? -1 : keycodeFor(sym, &shift);
         if (code < 0) {
-            fprintf(stderr, "vela-input: tasto sconosciuto '%s'\n", part);
+            fprintf(stderr, "vela-input: unknown key '%s'\n", part);
             return 0;
         }
         codes[count++] = code;
@@ -292,7 +292,7 @@ static int typeText(const char* text)
         int shift = 0;
         const int code = keycodeFor(sym, &shift);
         if (code < 0) {
-            fprintf(stderr, "vela-input: non so scrivere '%c'\n", *c);
+            fprintf(stderr, "vela-input: can't type '%c'\n", *c);
             return 0;
         }
         if (shift) {
@@ -321,9 +321,9 @@ static void pointerScroll(int steps)
 static void usage(const char* program)
 {
     fprintf(stderr,
-        "Uso: %s AZIONE [AZIONE...]\n"
+        "Usage: %s ACTION [ACTION...]\n"
         "  move X Y | down [left|right|middle|back|forward] | up [...] | click [...]\n"
-        "  key COMBINAZIONE (es. super+Left) | keydown|keyup TASTO | type TESTO | scroll N | sleep MS\n",
+        "  key COMBO (e.g. super+Left) | keydown|keyup KEY | type TEXT | scroll N | sleep MS\n",
         program);
 }
 
@@ -335,18 +335,18 @@ int main(int argc, char** argv)
     }
     display = wl_display_connect(NULL);
     if (!display) {
-        fprintf(stderr, "vela-input: nessuna sessione Wayland (WAYLAND_DISPLAY)\n");
+        fprintf(stderr, "vela-input: no Wayland session (WAYLAND_DISPLAY)\n");
         return 1;
     }
     wl_registry_add_listener(wl_display_get_registry(display), &registryListener, NULL);
     wl_display_roundtrip(display);
     if (!pointerManager || !keyboardManager || !seat) {
-        fprintf(stderr, "vela-input: mouse e tastiera virtuali non disponibili "
-                        "(avvia Vela con VELA_DEBUG_INPUT=1)\n");
+        fprintf(stderr, "vela-input: virtual pointer and keyboard not available "
+                        "(start Vela with VELA_DEBUG_INPUT=1)\n");
         return 1;
     }
     if (!outputManager || outputCount == 0) {
-        fprintf(stderr, "vela-input: nessuno schermo\n");
+        fprintf(stderr, "vela-input: no outputs\n");
         return 1;
     }
     for (int i = 0; i < outputCount; ++i) {
@@ -410,7 +410,7 @@ int main(int argc, char** argv)
             usleep((useconds_t)atoi(arg1) * 1000);
             ++i;
         } else {
-            fprintf(stderr, "vela-input: azione non valida '%s'\n", action);
+            fprintf(stderr, "vela-input: invalid action '%s'\n", action);
             usage(argv[0]);
             ok = 0;
         }

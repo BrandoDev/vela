@@ -4,6 +4,7 @@
 #include "fileproperties.h"
 #include "mimeapps.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDirIterator>
 #include <QFile>
@@ -76,7 +77,7 @@ QString FileProperties::formatSize(double bytes) const
 {
     const QLocale locale;
     const QString shortForm = locale.formattedDataSize(qint64(bytes), 2, QLocale::DataSizeTraditionalFormat);
-    return QStringLiteral("%1 (%2 byte)").arg(shortForm, locale.toString(qint64(bytes)));
+    return QCoreApplication::translate("Properties", "%1 (%2 bytes)").arg(shortForm, locale.toString(qint64(bytes)));
 }
 
 QVariantMap FileProperties::describe(const QStringList& paths)
@@ -95,12 +96,12 @@ QVariantMap FileProperties::describe(const QStringList& paths)
     for (const QString& path : paths) {
         const QFileInfo info(path);
         anyDir = anyDir || info.isDir();
-        const QString type = info.isDir() ? QStringLiteral("Cartella di file") : mimes.mimeTypeForFile(info).comment();
+        const QString type = info.isDir() ? QCoreApplication::translate("Properties", "File folder") : mimes.mimeTypeForFile(info).comment();
         if (!types.contains(type)) {
             types.append(type);
         }
     }
-    out.insert(QStringLiteral("type"), types.size() == 1 ? types.first() : QStringLiteral("Più tipi"));
+    out.insert(QStringLiteral("type"), types.size() == 1 ? types.first() : QCoreApplication::translate("Properties", "Multiple types"));
     out.insert(QStringLiteral("hasFolders"), anyDir);
 
     const QFileInfo first(paths.first());
@@ -143,7 +144,7 @@ QVariantMap FileProperties::describe(const QStringList& paths)
         }
         out.insert(QStringLiteral("mimeName"), mime.name());
     } else {
-        out.insert(QStringLiteral("name"), QStringLiteral("%1 elementi").arg(paths.size()));
+        out.insert(QStringLiteral("name"), QCoreApplication::translate("Properties", "%1 items").arg(paths.size()));
         out.insert(QStringLiteral("icon"), QStringLiteral("document-multiple"));
     }
 

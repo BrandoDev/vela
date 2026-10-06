@@ -26,7 +26,7 @@ start)
     # riavviato dopo un crash (stesso display): allora si aggiornano solo le
     # variabili (DISPLAY può cambiare).
     if [ ! -e "$STATE" ] && systemctl --user -q is-active graphical-session.target; then
-        echo "vela-session-env: c'è già un'altra sessione grafica, non la tocco" >&2
+        echo "vela-session-env: another graphical session is already running, leaving it alone" >&2
         exit 0
     fi
     # Solo le variabili che hanno un valore.
@@ -58,7 +58,7 @@ stop)
     systemctl --user unset-environment $VARS
     ;;
 *)
-    echo "Uso: vela-session-env start|stop" >&2
+    echo "Usage: vela-session-env start|stop" >&2
     exit 1
     ;;
 esac

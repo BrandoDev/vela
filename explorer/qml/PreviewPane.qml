@@ -36,9 +36,9 @@ Item {
             anchors.centerIn: parent
             width: parent.width
             visible: !pane.file
-            text: pane.count > 1 ? pane.count + " elementi selezionati"
-                : pane.info && pane.info.isDir ? "Seleziona un file da visualizzare in anteprima."
-                : "Seleziona un file da visualizzare in anteprima."
+            text: pane.count > 1 ? pane.count + qsTr(" items selected")
+                : pane.info && pane.info.isDir ? qsTr("Select a file to preview.")
+                : qsTr("Select a file to preview.")
             color: Theme.textDim
             font.pixelSize: Theme.fontNormal
             horizontalAlignment: Text.AlignHCenter
@@ -104,7 +104,7 @@ Item {
             }
             Text {
                 width: parent.width
-                text: pane.file ? "Nessuna anteprima disponibile." : ""
+                text: pane.file ? qsTr("No preview available.") : ""
                 visible: thumb.status !== Image.Ready
                 color: Theme.textDim
                 font.pixelSize: Theme.fontNormal
@@ -130,7 +130,7 @@ Item {
             Text {
                 visible: pane.count > 1
                 width: parent.width
-                text: pane.count + " elementi selezionati"
+                text: pane.count + qsTr(" items selected")
                 color: Theme.text
                 font.pixelSize: Theme.fontNormal + 2
                 font.weight: Font.DemiBold
@@ -138,7 +138,7 @@ Item {
             }
             Text {
                 visible: pane.count > 1
-                text: "Dimensione totale: " + (pane.model ? Ops.formatSize(pane.model.selectionSize) : "")
+                text: qsTr("Total size: ") + (pane.model ? Ops.formatSize(pane.model.selectionSize) : "")
                 color: Theme.textDim
                 font.pixelSize: Theme.fontNormal
             }
@@ -187,7 +187,7 @@ Item {
             Rectangle { visible: !!pane.info && pane.count <= 1; width: parent.width; height: 1; color: Theme.divider }
             Text {
                 visible: !!pane.info && pane.count <= 1
-                text: "Proprietà"
+                text: qsTr("Properties")
                 color: Theme.text
                 font.pixelSize: Theme.fontNormal
                 font.weight: Font.DemiBold
@@ -197,13 +197,13 @@ Item {
                     const i = pane.info
                     if (!i || pane.count > 1) return []
                     const rows = []
-                    if (i.sizeText) rows.push(["Dimensione", i.sizeText])
-                    if (i.width) rows.push(["Dimensioni", i.width + " x " + i.height])
-                    if (i.items !== undefined) rows.push(["Elementi", String(i.items)])
-                    rows.push(["Ultima modifica", pane.dateText(i.modified)])
-                    rows.push(["Data creazione", pane.dateText(i.created)])
-                    if (i.target) rows.push(["Destinazione", i.target])
-                    rows.push(["Percorso", i.location])
+                    if (i.sizeText) rows.push([qsTr("Size"), i.sizeText])
+                    if (i.width) rows.push([qsTr("Dimensions"), i.width + qsTr(" x ") + i.height])
+                    if (i.items !== undefined) rows.push([qsTr("Items"), String(i.items)])
+                    rows.push([qsTr("Date modified"), pane.dateText(i.modified)])
+                    rows.push([qsTr("Date created"), pane.dateText(i.created)])
+                    if (i.target) rows.push([qsTr("Target"), i.target])
+                    rows.push([qsTr("Location"), i.location])
                     return rows
                 }
                 delegate: Column {

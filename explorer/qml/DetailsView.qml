@@ -20,12 +20,12 @@ Item {
     property real sizeWidth: 100
     property real pathWidth: 260
     readonly property var columns: {
-        const c = [{ key: 0, title: "Nome", width: nameWidth }]
-        if (searching) c.push({ key: -1, title: "Percorso", width: pathWidth })
-        if (tab.isTrash) c.push({ key: -1, title: "Percorso originale", width: pathWidth })
-        c.push({ key: 1, title: "Data ultima modifica", width: dateWidth })
-        c.push({ key: 2, title: "Tipo", width: typeWidth })
-        c.push({ key: 3, title: "Dimensione", width: sizeWidth })
+        const c = [{ key: 0, title: qsTr("Name"), width: nameWidth }]
+        if (searching) c.push({ key: -1, title: qsTr("Location"), width: pathWidth })
+        if (tab.isTrash) c.push({ key: -1, title: qsTr("Original location"), width: pathWidth })
+        c.push({ key: 1, title: qsTr("Date modified"), width: dateWidth })
+        c.push({ key: 2, title: qsTr("Type"), width: typeWidth })
+        c.push({ key: 3, title: qsTr("Size"), width: sizeWidth })
         return c
     }
     function columnX(index) {
@@ -320,7 +320,7 @@ Item {
             visible: view.model.count === 0 && !view.model.loading
             anchors.horizontalCenter: parent.horizontalCenter
             y: 24
-            text: view.searching ? "Nessun elemento corrisponde alla ricerca." : view.model.exists ? "Questa cartella è vuota." : "Impossibile trovare questa cartella."
+            text: view.searching ? qsTr("No items match your search.") : view.model.exists ? qsTr("This folder is empty.") : qsTr("Can't find this folder.")
             color: Theme.textDim
             font.pixelSize: Theme.fontNormal
         }

@@ -302,7 +302,7 @@ const IconLoader::Image& IconLoader::appIcon(const std::string& appId, int size)
         image = render(path, size);
     }
     if (image.pixels.empty()) {
-        wlr_log(WLR_DEBUG, "Icone: niente icona per %s", appId.c_str());
+        wlr_log(WLR_DEBUG, "Icons: no icon for %s", appId.c_str());
     }
     return m_cache.emplace(key, std::move(image)).first->second;
 }

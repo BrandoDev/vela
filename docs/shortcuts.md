@@ -48,7 +48,7 @@ Those nested alternatives are active only in nested mode; in a normal Vela sessi
 | Magnifier off | <kbd>Super</kbd>+<kbd>Esc</kbd> |
 | Toggle color filters | <kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>C</kbd> |
 
-The color-filter shortcut must be enabled in Accessibility settings (`filtri-colore-scorciatoia=sì`).
+The color-filter shortcut must be enabled in Accessibility settings (`color-filters-shortcut=yes`).
 
 ## Session and system
 

@@ -5,6 +5,7 @@
 
 #include "mica.h"
 
+#include <QCoreApplication>
 #include <QImage>
 #include <QImageReader>
 #include <LayerShellQt/Window>
@@ -150,7 +151,7 @@ bool ShellController::sendToCompositor(const QByteArray& command)
     QLocalSocket socket;
     socket.connectToServer(runtimeDir + QStringLiteral("/vela-") + display + QStringLiteral(".sock"));
     if (!socket.waitForConnected(300)) {
-        qWarning("vela-shell: il compositor non risponde (%s)", command.constData());
+        qWarning("vela-shell: the compositor isn't responding (%s)", command.constData());
         return false;
     }
     socket.write(command + '\n');
@@ -218,7 +219,7 @@ void ShellController::takeSleepDelay()
     }
     QDBusInterface manager = login1();
     const QDBusReply<QDBusUnixFileDescriptor> reply = manager.call(QStringLiteral("Inhibit"), QStringLiteral("sleep"),
-        QStringLiteral("Vela"), QStringLiteral("Blocca lo schermo prima di sospendere"), QStringLiteral("delay"));
+        QStringLiteral("Vela"), QCoreApplication::translate("Session", "Lock the screen before suspending"), QStringLiteral("delay"));
     if (reply.isValid()) {
         m_sleepDelay = reply.value();
     }
@@ -249,7 +250,7 @@ bool ShellController::listen()
     QLocalServer::removeServer(path); // socket rimasto da un'esecuzione precedente
     m_server.setSocketOptions(QLocalServer::UserAccessOption);
     if (!m_server.listen(path)) {
-        qWarning("vela-shell: impossibile ascoltare su %s: %s", qPrintable(path),
+        qWarning("vela-shell: can't listen on %s: %s", qPrintable(path),
             qPrintable(m_server.errorString()));
         return false;
     }

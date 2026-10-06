@@ -48,16 +48,16 @@ protected:
 TEST_F(Settings, MissingFileIsEmpty)
 {
     EXPECT_TRUE(vela::readSettings().empty());
-    EXPECT_EQ(vela::setting(vela::readSettings(), "tearing", "sì"), "sì");
+    EXPECT_EQ(vela::setting(vela::readSettings(), "tearing", "yes"), "yes");
 }
 
 TEST_F(Settings, ReadIgnoresCommentsAndJunk)
 {
-    write("# commento\nluce-notturna=sì\nriga senza uguale\nintensità=40\n=vuota\n");
+    write("# comment\nnight-light=yes\nline without equals\nstrength=40\n=empty\n");
     const vela::Settings settings = vela::readSettings();
-    EXPECT_EQ(vela::setting(settings, "luce-notturna"), "sì");
-    EXPECT_EQ(vela::setting(settings, "intensità"), "40");
-    EXPECT_EQ(settings.count("riga senza uguale"), 0u);
+    EXPECT_EQ(vela::setting(settings, "night-light"), "yes");
+    EXPECT_EQ(vela::setting(settings, "strength"), "40");
+    EXPECT_EQ(settings.count("line without equals"), 0u);
 }
 
 TEST_F(Settings, WriteCreatesUpdatesAndKeepsTheRest)
@@ -66,22 +66,42 @@ TEST_F(Settings, WriteCreatesUpdatesAndKeepsTheRest)
     EXPECT_EQ(vela::setting(vela::readSettings(), "tearing"), "no");
     EXPECT_EQ(contents().rfind('#', 0), 0u); // un file nuovo ha la riga di intestazione
 
-    write("# mio commento\nspegni-schermo=10\ntearing=sì\ntearing=doppione\n");
+    write("# my comment\nscreen-off=10\ntearing=yes\ntearing=duplicate\n");
     vela::writeSetting("tearing", "no");
-    vela::writeSetting("frequenza-variabile", "sempre");
-    EXPECT_EQ(contents(), "# mio commento\nspegni-schermo=10\ntearing=no\nfrequenza-variabile=sempre\n");
+    vela::writeSetting("variable-refresh", "always");
+    EXPECT_EQ(contents(), "# my comment\nscreen-off=10\ntearing=no\nvariable-refresh=always\n");
     EXPECT_FALSE(std::filesystem::exists(file() + ".tmp")); // scritto con una rename
 }
 
 TEST_F(Settings, Flags)
 {
-    write("a=sì\nb=si\nc=1\nd=true\ne=yes\nf=no\ng=0\nh=\n");
+    write("c=1\nd=true\ne=yes\nf=no\ng=0\nh=\n");
     const vela::Settings s = vela::readSettings();
-    for (const char* key : { "a", "b", "c", "d", "e" }) {
+    for (const char* key : { "c", "d", "e" }) {
         EXPECT_TRUE(vela::settingFlag(s, key, false)) << key;
     }
     EXPECT_FALSE(vela::settingFlag(s, "f", true));
     EXPECT_FALSE(vela::settingFlag(s, "g", true));
     EXPECT_TRUE(vela::settingFlag(s, "h", true)); // vuota: il predefinito
-    EXPECT_TRUE(vela::settingFlag(s, "assente", true));
+    EXPECT_TRUE(vela::settingFlag(s, "missing", true));
+}
+
+// I file scritti prima di ottobre 2026 hanno chiavi e valori in italiano.
+TEST_F(Settings, LegacyItalianNames)
+{
+    write("# commento\nluce-notturna=sì\nluce-notturna-pianifica=tramonto\nfrequenza-variabile=giochi\n"
+          "mouse-pulsante-principale=destro\nfiltro-colore=grigi\ntouchpad-tocco=si\nlingua=it\n");
+    const vela::Settings s = vela::readSettings();
+    EXPECT_TRUE(vela::settingFlag(s, "night-light", false));
+    EXPECT_EQ(vela::setting(s, "night-light-schedule"), "sunset");
+    EXPECT_EQ(vela::setting(s, "variable-refresh"), "games");
+    EXPECT_EQ(vela::setting(s, "mouse-primary-button"), "right");
+    EXPECT_EQ(vela::setting(s, "color-filter"), "grayscale");
+    EXPECT_TRUE(vela::settingFlag(s, "touchpad-tap", false));
+    EXPECT_EQ(vela::setting(s, "language"), "it");
+
+    // All'avvio il file si riscrive con i nomi nuovi; i commenti restano.
+    vela::migrateSettings();
+    EXPECT_EQ(contents(), "# commento\nnight-light=yes\nnight-light-schedule=sunset\nvariable-refresh=games\n"
+                          "mouse-primary-button=right\ncolor-filter=grayscale\ntouchpad-tap=yes\nlanguage=it\n");
 }

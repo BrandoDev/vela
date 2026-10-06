@@ -15,7 +15,7 @@ Window {
     minimumHeight: 420
     visible: true
     color: Theme.background
-    title: current ? current.title + " - Esplora file" : "Esplora file"
+    title: current ? current.title + qsTr(" - File Explorer") : qsTr("File Explorer")
 
     onActiveChanged: Theme.windowActive = active
 
@@ -162,11 +162,11 @@ Window {
                             } else if (mouse.button === Qt.RightButton) {
                                 const p = mapToItem(null, mouse.x, mouse.y)
                                 menuLayer.open([
-                                    { text: "&Duplica scheda", icon: "tab-duplicate", action: () => root.newTab(tabButton.modelData.location, "") },
-                                    { text: "Sposta in una nuova &finestra", icon: "window-new", action: () => { Ops.newWindow(tabButton.modelData.location); root.closeTab(tabButton.index) } },
+                                    { text: qsTr("&Duplicate tab"), icon: "tab-duplicate", action: () => root.newTab(tabButton.modelData.location, "") },
+                                    { text: qsTr("Move to new &window"), icon: "window-new", action: () => { Ops.newWindow(tabButton.modelData.location); root.closeTab(tabButton.index) } },
                                     { separator: true },
-                                    { text: "&Chiudi scheda", icon: "tab-close", shortcut: "Ctrl+W", action: () => root.closeTab(tabButton.index) },
-                                    { text: "Chiudi le &altre schede", enabled: root.tabs.length > 1, action: () => {
+                                    { text: qsTr("&Close tab"), icon: "tab-close", shortcut: "Ctrl+W", action: () => root.closeTab(tabButton.index) },
+                                    { text: qsTr("Close &other tabs"), enabled: root.tabs.length > 1, action: () => {
                                         const keep = tabButton.modelData
                                         for (let i = root.tabs.length - 1; i >= 0; --i) if (root.tabs[i] !== keep) root.closeTab(i)
                                     } }
@@ -234,7 +234,7 @@ Window {
     function confirm(title, text, yes, action) {
         confirmDialog.title = title
         confirmDialog.text = text
-        confirmDialog.buttons = [{ text: yes, accent: true, value: "yes" }, { text: "Annulla", value: "cancel" }]
+        confirmDialog.buttons = [{ text: yes, accent: true, value: "yes" }, { text: qsTr("Cancel"), value: "cancel" }]
         confirmAction = action
         confirmDialog.open()
     }
@@ -243,16 +243,16 @@ Window {
         function onFailed(message) { root.showError(message) }
         // Nella destinazione ci sono già file con lo stesso nome: come Windows.
         function onConflict(count, firstName, directory) {
-            conflictDialog.title = "Sostituisci o ignora file"
+            conflictDialog.title = qsTr("Replace or skip files")
             conflictDialog.text = count === 1
-                ? "Nella destinazione c'è già un file chiamato \"" + firstName + "\"."
-                : "Nella destinazione ci sono già " + count + " file con lo stesso nome (\"" + firstName + "\" e altri)."
+                ? qsTr("The destination already has a file named \"") + firstName + "\"."
+                : qsTr("The destination already has ") + count + qsTr(" files with the same name (\"") + firstName + qsTr("\" and others).")
             conflictDialog.open()
         }
     }
     Dialog {
         id: errorDialog
-        title: "Esplora file"
+        title: qsTr("File Explorer")
         onChosen: if (root.current) root.current.focusView()
     }
     Dialog {
@@ -267,10 +267,10 @@ Window {
         id: conflictDialog
         dialogWidth: 600
         buttons: [
-            { text: "Sostituisci", accent: true, value: "replace" },
-            { text: "Ignora", value: "skip" },
-            { text: "Mantieni entrambi", value: "keep" },
-            { text: "Annulla", value: "cancel" }
+            { text: qsTr("Replace"), accent: true, value: "replace" },
+            { text: qsTr("Skip"), value: "skip" },
+            { text: qsTr("Keep both"), value: "keep" },
+            { text: qsTr("Cancel"), value: "cancel" }
         ]
         onChosen: value => Ops.resolveConflict(value)
     }

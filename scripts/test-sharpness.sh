@@ -20,7 +20,7 @@ FAILED=0
 export XDG_CONFIG_HOME="$TMP/config" XDG_DATA_HOME="$TMP/data" XDG_CACHE_HOME="$TMP/cache"
 
 for scale in $SCALES; do
-    echo "== scala $scale"
+    echo "== scale $scale"
     # Gli angoli arrotondati (raggio 8 logici) toccano solo quei quadrati.
     CORNER=$(python3 -c "import math; print(math.ceil(8 * $scale) + 1)")
     WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 VELA_DEBUG_INPUT=1 VELA_SCALE=$scale \
@@ -38,19 +38,19 @@ for scale in $SCALES; do
 
     check() {
         sleep 0.8
-        $BUILD/tools/vela-shot "$TMP/shot.png" || { echo "cattura fallita"; FAILED=1; return; }
+        $BUILD/tools/vela-shot "$TMP/shot.png" || { echo "capture failed"; FAILED=1; return; }
         python3 scripts/sharpness-check.py "$TMP/shot.png" "$1" "$CORNER" || FAILED=1
     }
-    check aperta
-    $BUILD/tools/vela-input key super+Left; check "agganciata a sinistra"
-    $BUILD/tools/vela-input key super+Right key super+Right; check "agganciata a destra"
-    $BUILD/tools/vela-input key super+Up; check massimizzata
-    $BUILD/tools/vela-input key super+Down; check ripristinata
+    check opened
+    $BUILD/tools/vela-input key super+Left; check "snapped left"
+    $BUILD/tools/vela-input key super+Right key super+Right; check "snapped right"
+    $BUILD/tools/vela-input key super+Up; check maximized
+    $BUILD/tools/vela-input key super+Down; check restored
 
     kill $CLIENT 2> /dev/null
     kill $PID
     wait $PID 2> /dev/null
 done
 rm -rf "$TMP"
-[ $FAILED -eq 0 ] && echo "Tutto bit per bit." || echo "Ci sono pixel diversi."
+[ $FAILED -eq 0 ] && echo "Everything bit for bit." || echo "Some pixels differ."
 exit $FAILED

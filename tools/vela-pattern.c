@@ -15,9 +15,9 @@
 // la ritrova e confronta tutto bit per bit. Righe e colonne alternate e
 // valori vicini tra loro sono il caso peggiore per qualunque filtro.
 //
-// Uso: vela-pattern [--scala1] [--app-id ID] [LARGHEZZA ALTEZZA]   (logiche; predefinito 401x301)
+// Uso: vela-pattern [--scale1] [--app-id ID] [LARGHEZZA ALTEZZA]   (logiche; predefinito 401x301)
 //
-// --scala1: come un'app vecchia, disegna sempre a scala 1 (il compositor
+// --scale1: come un'app vecchia, disegna sempre a scala 1 (il compositor
 // deve ingrandire): righe di un pixel e scacchiera, per giudicare il filtro.
 
 #define _GNU_SOURCE
@@ -131,7 +131,7 @@ static void draw(void)
     wl_surface_attach(surface, buffer, 0, 0);
     wl_surface_damage_buffer(surface, 0, 0, width, height);
     wl_surface_commit(surface);
-    fprintf(stderr, "vela-pattern: %dx%d logici, scala %u/120, buffer %dx%d\n", logicalWidth, logicalHeight,
+    fprintf(stderr, "vela-pattern: %dx%d logical, scale %u/120, buffer %dx%d\n", logicalWidth, logicalHeight,
         scale120, width, height);
 }
 
@@ -190,7 +190,7 @@ int main(int argc, char** argv)
 {
     int arg = 1;
     const char* appId = "vela.pattern";
-    if (arg < argc && !strcmp(argv[arg], "--scala1")) {
+    if (arg < argc && !strcmp(argv[arg], "--scale1")) {
         legacy = 1;
         ++arg;
     }
@@ -205,13 +205,13 @@ int main(int argc, char** argv)
     }
     struct wl_display* display = wl_display_connect(NULL);
     if (!display) {
-        fprintf(stderr, "vela-pattern: nessuna sessione Wayland (WAYLAND_DISPLAY)\n");
+        fprintf(stderr, "vela-pattern: no Wayland session (WAYLAND_DISPLAY)\n");
         return 1;
     }
     wl_registry_add_listener(wl_display_get_registry(display), &registryListener, NULL);
     wl_display_roundtrip(display);
     if (!compositor || !shm || !wmBase || !viewporter || !fractionalManager) {
-        fprintf(stderr, "vela-pattern: mancano protocolli (viewporter, fractional-scale-v1)\n");
+        fprintf(stderr, "vela-pattern: missing protocols (viewporter, fractional-scale-v1)\n");
         return 1;
     }
     xdg_wm_base_add_listener(wmBase, &wmBaseListener, NULL);

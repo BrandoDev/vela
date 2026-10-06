@@ -3,6 +3,8 @@
 
 #include "settings.hpp"
 
+#include "legacysettings.hpp"
+
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -31,6 +33,7 @@ Settings readSettings()
     std::ifstream in(path);
     std::string line;
     while (std::getline(in, line)) {
+        legacy::modernizeLine(line); // i nomi italiani di prima
         const size_t eq = line.find('=');
         if (!line.empty() && line.front() != '#' && eq != std::string::npos) {
             settings[line.substr(0, eq)] = line.substr(eq + 1);
@@ -52,7 +55,7 @@ bool settingFlag(const Settings& settings, const std::string& key, bool fallback
         return fallback;
     }
     const std::string& v = it->second;
-    return v == "sì" || v == "si" || v == "1" || v == "true" || v == "yes";
+    return v == "yes" || v == "1" || v == "true";
 }
 
 void writeSetting(const std::string& key, const std::string& value)
@@ -69,6 +72,7 @@ void writeSetting(const std::string& key, const std::string& value)
         std::ifstream in(path);
         std::string line;
         while (std::getline(in, line)) {
+            legacy::modernizeLine(line);
             if (line.rfind(key + "=", 0) == 0) {
                 if (found) {
                     continue; // doppioni: ne resta uno
@@ -80,12 +84,45 @@ void writeSetting(const std::string& key, const std::string& value)
         }
     }
     if (lines.empty()) {
-        lines.push_back("# Impostazioni di Vela (le scrive l'app Impostazioni)");
+        lines.push_back("# Vela settings (written by the Settings app)");
     }
     if (!found) {
         lines.push_back(key + "=" + value);
     }
     // Un file nuovo al posto del vecchio: chi legge non vede mai metà file.
+    const std::string temporary = path + ".tmp";
+    {
+        std::ofstream out(temporary, std::ios::trunc);
+        for (const std::string& line : lines) {
+            out << line << '\n';
+        }
+        if (!out) {
+            return;
+        }
+    }
+    std::rename(temporary.c_str(), path.c_str());
+}
+
+void migrateSettings()
+{
+    const std::string dir = configDir();
+    if (dir.empty()) {
+        return;
+    }
+    const std::string path = dir + "/vela.conf";
+    std::vector<std::string> lines;
+    bool changed = false;
+    {
+        std::ifstream in(path);
+        std::string line;
+        while (std::getline(in, line)) {
+            changed = legacy::modernizeLine(line) || changed;
+            lines.push_back(line);
+        }
+    }
+    if (!changed) {
+        return;
+    }
     const std::string temporary = path + ".tmp";
     {
         std::ofstream out(temporary, std::ios::trunc);

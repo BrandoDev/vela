@@ -122,7 +122,7 @@ TextRenderer* TextRenderer::instance()
     static std::unique_ptr<TextRenderer> renderer = [] {
         std::unique_ptr<TextRenderer> r(new TextRenderer);
         if (!r->load()) {
-            wlr_log(WLR_ERROR, "Testo: nessun font utilizzabile, i titoli non avranno testo");
+            wlr_log(WLR_ERROR, "Text: no usable font, titles will have no text");
             r.reset();
         }
         return r;
@@ -163,7 +163,7 @@ bool TextRenderer::load()
         return false;
     }
     m_impl->font = hb_ft_font_create_referenced(m_impl->face);
-    wlr_log(WLR_INFO, "Testo: %s %.1f pt (%s)", family.c_str(), points, file.c_str());
+    wlr_log(WLR_INFO, "Text: %s %.1f pt (%s)", family.c_str(), points, file.c_str());
     return true;
 }
 

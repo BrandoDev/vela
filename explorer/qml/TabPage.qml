@@ -17,7 +17,7 @@ Item {
     readonly property bool isFolder: location.startsWith("/")
     readonly property bool isTrash: location === Places.trash
     readonly property bool writable: isFolder && !isTrash
-    readonly property string title: location === "home:" ? "Home" : location === "thispc:" ? "Questo PC" : Places.displayName(location)
+    readonly property string title: location === "home:" ? qsTr("Home") : location === "thispc:" ? qsTr("This PC") : Places.displayName(location)
     readonly property string icon: location === "home:" ? "go-home" : location === "thispc:" ? "computer" : Places.iconFor(location)
     readonly property var model: isFolder ? folder : null
     readonly property bool showHidden: win.showHidden
@@ -179,14 +179,14 @@ Item {
         const paths = folder.selectedPaths()
         if (paths.length === 0 || (!writable && !isTrash)) return
         if (permanent || isTrash) {
-            const what = paths.length === 1 ? "\"" + Places.displayName(paths[0]) + "\"" : "questi " + paths.length + " elementi"
-            win.confirm("Eliminare definitivamente " + what + "?", "Non si potrà annullare.", "Elimina", () => Ops.deletePermanently(paths))
+            const what = paths.length === 1 ? "\"" + Places.displayName(paths[0]) + "\"" : qsTr("these ") + paths.length + qsTr(" items")
+            win.confirm(qsTr("Permanently delete ") + what + "?", qsTr("This can't be undone."), qsTr("Delete"), () => Ops.deletePermanently(paths))
         } else {
             Ops.trash(paths)
         }
     }
     function askEmptyTrash() {
-        win.confirm("Svuotare il Cestino?", "Tutti gli elementi nel Cestino verranno eliminati definitivamente.", "Svuota", () => Ops.emptyTrash())
+        win.confirm(qsTr("Empty the Recycle Bin?"), qsTr("All the items in the Recycle Bin will be permanently deleted."), qsTr("Empty"), () => Ops.emptyTrash())
     }
     function zoom(delta) {
         const modes = ["details", "small", "medium", "large"]
@@ -226,10 +226,10 @@ Item {
 
     function newEntries() {
         const entries = [
-            { text: "&Cartella", icon: "folder-new", shortcut: "Ctrl+Maiusc+N", action: () => Ops.createFolder(page.location) },
-            { text: "C&ollegamento", icon: "insert-link", action: () => Ops.newShortcut(page.location) },
+            { text: qsTr("&Folder"), icon: "folder-new", shortcut: qsTr("Ctrl+Shift+N"), action: () => Ops.createFolder(page.location) },
+            { text: qsTr("&Shortcut"), icon: "insert-link", action: () => Ops.newShortcut(page.location) },
             { separator: true },
-            { text: "Documento di &testo", icon: "text-plain", action: () => Ops.createFile(page.location, "") }
+            { text: qsTr("&Text Document"), icon: "text-plain", action: () => Ops.createFile(page.location, "") }
         ]
         Ops.templates().forEach(t => entries.push({ text: t.name.replace(/&/g, "&&"), icon: t.icon, action: () => Ops.createFile(page.location, t.path) }))
         return entries
@@ -237,36 +237,36 @@ Item {
     function sortEntries() {
         const sort = (text, column) => ({ text: text, radio: true, checked: folder.sortColumn === column, action: () => folder.sortBy(column, folder.sortDescending) })
         return [
-            sort("&Nome", 0), sort("&Data ultima modifica", 1), sort("&Tipo", 2), sort("Di&mensione", 3),
+            sort(qsTr("&Name"), 0), sort(qsTr("&Date modified"), 1), sort(qsTr("&Type"), 2), sort(qsTr("Si&ze"), 3),
             { separator: true },
-            { text: "&Crescente", radio: true, checked: !folder.sortDescending, action: () => folder.sortBy(folder.sortColumn, false) },
-            { text: "D&ecrescente", radio: true, checked: folder.sortDescending, action: () => folder.sortBy(folder.sortColumn, true) }
+            { text: qsTr("&Ascending"), radio: true, checked: !folder.sortDescending, action: () => folder.sortBy(folder.sortColumn, false) },
+            { text: qsTr("D&escending"), radio: true, checked: folder.sortDescending, action: () => folder.sortBy(folder.sortColumn, true) }
         ]
     }
     function viewEntries() {
         const mode = (text, value, shortcut, icon) => ({ text: text, icon: icon, radio: true, checked: viewMode === value, shortcut: shortcut, action: () => win.setViewMode(page.location, value) })
         return [
-            mode("Icone &grandi", "large", "Ctrl+Maiusc+2", "view-list-icons"),
-            mode("Icone &medie", "medium", "Ctrl+Maiusc+3", "view-list-icons"),
-            mode("Icone &piccole", "small", "Ctrl+Maiusc+4", "view-list-text"),
-            mode("&Dettagli", "details", "Ctrl+Maiusc+6", "view-list-details"),
+            mode(qsTr("&Large icons"), "large", qsTr("Ctrl+Shift+2"), "view-list-icons"),
+            mode(qsTr("&Medium icons"), "medium", qsTr("Ctrl+Shift+3"), "view-list-icons"),
+            mode(qsTr("&Small icons"), "small", qsTr("Ctrl+Shift+4"), "view-list-text"),
+            mode(qsTr("&Details"), "details", qsTr("Ctrl+Shift+6"), "view-list-details"),
             { separator: true },
-            { text: "Mos&tra", icon: "view-visible", children: [
-                { text: "Riquadro di &anteprima", checked: win.pane === "preview", shortcut: "Alt+P", action: () => win.togglePane("preview") },
-                { text: "Riquadro &dettagli", checked: win.pane === "details", shortcut: "Alt+Maiusc+P", action: () => win.togglePane("details") },
+            { text: qsTr("S&how"), icon: "view-visible", children: [
+                { text: qsTr("&Preview pane"), checked: win.pane === "preview", shortcut: "Alt+P", action: () => win.togglePane("preview") },
+                { text: qsTr("&Details pane"), checked: win.pane === "details", shortcut: qsTr("Alt+Shift+P"), action: () => win.togglePane("details") },
                 { separator: true },
-                { text: "&Elementi nascosti", checked: page.showHidden, shortcut: "Ctrl+H", action: () => win.showHidden = !win.showHidden }
+                { text: qsTr("&Hidden items"), checked: page.showHidden, shortcut: "Ctrl+H", action: () => win.showHidden = !win.showHidden }
             ] }
         ]
     }
     function moreEntries() {
         return [
-            { text: "&Seleziona tutto", icon: "edit-select-all", shortcut: "Ctrl+A", action: () => folder.selectAll() },
-            { text: "&Deseleziona tutto", icon: "edit-select-none", action: () => folder.clearSelection() },
-            { text: "&Inverti selezione", icon: "edit-select-invert", action: () => folder.invertSelection() },
+            { text: qsTr("Select &all"), icon: "edit-select-all", shortcut: "Ctrl+A", action: () => folder.selectAll() },
+            { text: qsTr("Select &none"), icon: "edit-select-none", action: () => folder.clearSelection() },
+            { text: qsTr("&Invert selection"), icon: "edit-select-invert", action: () => folder.invertSelection() },
             { separator: true },
-            { text: "Apri in &Terminale", icon: "utilities-terminal", enabled: page.isFolder, action: () => System.openTerminal(page.location) },
-            { text: "P&roprietà", icon: "document-properties", shortcut: "Alt+Invio",
+            { text: qsTr("Open in &Terminal"), icon: "utilities-terminal", enabled: page.isFolder, action: () => System.openTerminal(page.location) },
+            { text: qsTr("P&roperties"), icon: "document-properties", shortcut: qsTr("Alt+Enter"),
               action: () => Ops.showProperties(folder.selectionCount > 0 ? folder.selectedPaths() : [page.location]) }
         ]
     }
@@ -279,87 +279,87 @@ Item {
     function itemEntries(paths) {
         if (isTrash) {
             return [
-                { text: "&Ripristina", icon: "edit-undo", action: () => Ops.restoreFromTrash(paths) },
+                { text: qsTr("&Restore"), icon: "edit-undo", action: () => Ops.restoreFromTrash(paths) },
                 { separator: true },
-                { text: "&Taglia", icon: "edit-cut", enabled: false },
-                { text: "&Elimina definitivamente", icon: "edit-delete", shortcut: "Canc", action: () => page.deleteSelection(true) },
+                { text: qsTr("Cu&t"), icon: "edit-cut", enabled: false },
+                { text: qsTr("&Delete permanently"), icon: "edit-delete", shortcut: qsTr("Del"), action: () => page.deleteSelection(true) },
                 { separator: true },
-                { text: "P&roprietà", icon: "document-properties", action: () => Ops.showProperties(paths) }
+                { text: qsTr("P&roperties"), icon: "document-properties", action: () => Ops.showProperties(paths) }
             ]
         }
         const single = paths.length === 1 ? paths[0] : ""
         const singleDir = single !== "" && folder.isDirAt(folder.indexOf(single))
         const files = paths.filter(p => !folder.isDirAt(folder.indexOf(p)))
         const entries = [{ iconRow: [
-            { icon: "edit-cut", text: "Taglia", action: () => Ops.cut(paths) },
-            { icon: "edit-copy", text: "Copia", action: () => Ops.copy(paths) },
-            { icon: "edit-rename", text: "Rinomina", enabled: single !== "", action: () => page.renamingPath = single },
-            { icon: "document-share", text: "Condividi", enabled: files.length > 0, action: () => Ops.share(files) },
-            { icon: "edit-delete", text: "Elimina", action: () => Ops.trash(paths) }
+            { icon: "edit-cut", text: qsTr("Cut"), action: () => Ops.cut(paths) },
+            { icon: "edit-copy", text: qsTr("Copy"), action: () => Ops.copy(paths) },
+            { icon: "edit-rename", text: qsTr("Rename"), enabled: single !== "", action: () => page.renamingPath = single },
+            { icon: "document-share", text: qsTr("Share"), enabled: files.length > 0, action: () => Ops.share(files) },
+            { icon: "edit-delete", text: qsTr("Delete"), action: () => Ops.trash(paths) }
         ] }]
-        entries.push({ text: "&Apri", icon: "document-open", shortcut: "Invio", action: () => page.openSelection() })
+        entries.push({ text: qsTr("&Open"), icon: "document-open", shortcut: qsTr("Enter"), action: () => page.openSelection() })
         if (singleDir) {
-            entries.push({ text: "Apri in una nuova &scheda", icon: "page-new", action: () => page.openInNewTab(single) })
-            entries.push({ text: "Apri in una nuova &finestra", icon: "window-new", action: () => Ops.newWindow(single) })
+            entries.push({ text: qsTr("Open in new &tab"), icon: "page-new", action: () => page.openInNewTab(single) })
+            entries.push({ text: qsTr("Open in new &window"), icon: "window-new", action: () => Ops.newWindow(single) })
         }
         if (single !== "" && !singleDir) {
             const apps = Ops.appsFor(single)
             const openWith = apps.map(a => ({ text: a.name.replace(/&/g, "&&"), icon: a.icon, action: () => Ops.openWith(a.id, single) }))
             if (openWith.length > 0) openWith.push({ separator: true })
-            openWith.push({ text: "Scegli un'altra app", action: () => Ops.chooseApp(single) })
-            entries.push({ text: "Apri &con", icon: "document-open", children: openWith })
+            openWith.push({ text: qsTr("Choose another app"), action: () => Ops.chooseApp(single) })
+            entries.push({ text: qsTr("Open &with"), icon: "document-open", children: openWith })
         }
         // Un collegamento: dove sta l'originale.
         if (single !== "" && Ops.isLink(single)) {
             const target = Ops.linkTarget(single)
-            entries.push({ text: "Apri &percorso file", icon: "folder-open",
+            entries.push({ text: qsTr("Open file &location"), icon: "folder-open",
                 action: () => page.navigate(target.substring(0, target.lastIndexOf("/")) || "/", target) })
         }
         if (files.length > 0 && files.length === paths.length) {
             const favorite = files.every(p => Places.isFavorite(p))
             entries.push(favorite
-                ? { text: "Rimuovi da &Preferiti", icon: "starred-symbolic", action: () => files.forEach(p => Places.setFavorite(p, false)) }
-                : { text: "Aggiungi a &Preferiti", icon: "starred-symbolic", action: () => files.forEach(p => Places.setFavorite(p, true)) })
+                ? { text: qsTr("Remove from &Favorites"), icon: "starred-symbolic", action: () => files.forEach(p => Places.setFavorite(p, false)) }
+                : { text: qsTr("Add to &Favorites"), icon: "starred-symbolic", action: () => files.forEach(p => Places.setFavorite(p, true)) })
         }
         if (singleDir) {
             entries.push(Places.isPinned(single)
-                ? { text: "Rimuovi da &Accesso rapido", icon: "window-unpin", action: () => Places.unpin(single) }
-                : { text: "Aggiungi ad &Accesso rapido", icon: "window-pin", action: () => Places.pin(single) })
-            entries.push({ text: "Apri in &Terminale", icon: "utilities-terminal", action: () => System.openTerminal(single) })
+                ? { text: qsTr("Unpin from &Quick access"), icon: "window-unpin", action: () => Places.unpin(single) }
+                : { text: qsTr("Pin to &Quick access"), icon: "window-pin", action: () => Places.pin(single) })
+            entries.push({ text: qsTr("Open in &Terminal"), icon: "utilities-terminal", action: () => System.openTerminal(single) })
         }
         if (single !== "" && Ops.isArchive(single)) {
-            entries.push({ text: "Estrai &tutto...", icon: "archive-extract", action: () => Ops.extractAll(single) })
+            entries.push({ text: qsTr("Extract &all..."), icon: "archive-extract", action: () => Ops.extractAll(single) })
         }
         entries.push(
-            { text: "Compri&mi in", icon: "archive-insert", children: [
-                { text: "File &ZIP", icon: "application-zip", action: () => Ops.compress(paths, "zip") },
-                { text: "File &7z", icon: "application-x-7z-compressed", action: () => Ops.compress(paths, "7z") },
-                { text: "File &TAR", icon: "application-x-tar", action: () => Ops.compress(paths, "tar") }
+            { text: qsTr("Co&mpress to"), icon: "archive-insert", children: [
+                { text: qsTr("&ZIP file"), icon: "application-zip", action: () => Ops.compress(paths, "zip") },
+                { text: qsTr("&7z file"), icon: "application-x-7z-compressed", action: () => Ops.compress(paths, "7z") },
+                { text: qsTr("&TAR file"), icon: "application-x-tar", action: () => Ops.compress(paths, "tar") }
             ] },
-            { text: "Copia come &percorso", icon: "edit-copy-path", shortcut: "Ctrl+Maiusc+C", action: () => Ops.copyAsPath(paths) },
-            { text: "P&roprietà", icon: "document-properties", shortcut: "Alt+Invio", action: () => Ops.showProperties(paths) },
+            { text: qsTr("Copy as &path"), icon: "edit-copy-path", shortcut: qsTr("Ctrl+Shift+C"), action: () => Ops.copyAsPath(paths) },
+            { text: qsTr("P&roperties"), icon: "document-properties", shortcut: qsTr("Alt+Enter"), action: () => Ops.showProperties(paths) },
             { separator: true },
-            { text: "Mostra altre opzioni", icon: "view-more-symbolic", shortcut: "Maiusc+F10", action: () => page.showMoreOptions(paths) }
+            { text: qsTr("Show more options"), icon: "view-more-symbolic", shortcut: qsTr("Shift+F10"), action: () => page.showMoreOptions(paths) }
         )
         return entries
     }
     function classicItemEntries(paths) {
         const modern = itemEntries(paths)
-        const entries = [{ text: "&Apri", action: () => page.openSelection() }]
-        const openWith = modern.find(e => e.text === "Apri &con")
+        const entries = [{ text: qsTr("&Open"), action: () => page.openSelection() }]
+        const openWith = modern.find(e => e.text === qsTr("Open &with"))
         if (openWith) entries.push(openWith)
         const services = serviceEntries(paths)
         if (services.length > 0) entries.push({ separator: true }, ...services)
         entries.push(
             { separator: true },
-            { text: "&Taglia", action: () => Ops.cut(paths) },
-            { text: "&Copia", action: () => Ops.copy(paths) },
+            { text: qsTr("Cu&t"), action: () => Ops.cut(paths) },
+            { text: qsTr("&Copy"), action: () => Ops.copy(paths) },
             { separator: true },
-            { text: "Crea c&ollegamento", action: () => Ops.createLinks(paths) },
-            { text: "&Elimina", action: () => Ops.trash(paths) },
-            { text: "Ri&nomina", enabled: paths.length === 1, action: () => page.renamingPath = paths[0] },
+            { text: qsTr("Create &shortcut"), action: () => Ops.createLinks(paths) },
+            { text: qsTr("&Delete"), action: () => Ops.trash(paths) },
+            { text: qsTr("Re&name"), enabled: paths.length === 1, action: () => page.renamingPath = paths[0] },
             { separator: true },
-            { text: "P&roprietà", action: () => Ops.showProperties(paths) })
+            { text: qsTr("P&roperties"), action: () => Ops.showProperties(paths) })
         return entries
     }
 
@@ -371,46 +371,46 @@ Item {
     function backgroundEntries() {
         if (isTrash) {
             return [
-                { text: "&Visualizza", icon: "view-list-icons", children: viewEntries() },
-                { text: "&Ordina per", icon: "view-sort", children: sortEntries() },
-                { text: "A&ggiorna", icon: "view-refresh", action: () => page.refresh() },
+                { text: qsTr("&View"), icon: "view-list-icons", children: viewEntries() },
+                { text: qsTr("S&ort by"), icon: "view-sort", children: sortEntries() },
+                { text: qsTr("R&efresh"), icon: "view-refresh", action: () => page.refresh() },
                 { separator: true },
-                { text: "&Svuota Cestino", icon: "trash-empty", enabled: folder.count > 0, action: () => page.askEmptyTrash() }
+                { text: qsTr("&Empty Recycle Bin"), icon: "trash-empty", enabled: folder.count > 0, action: () => page.askEmptyTrash() }
             ]
         }
         const entries = [
-            { text: "&Visualizza", icon: "view-list-icons", children: viewEntries() },
-            { text: "&Ordina per", icon: "view-sort", children: sortEntries() },
-            { text: "A&ggiorna", icon: "view-refresh", action: () => page.refresh() },
+            { text: qsTr("&View"), icon: "view-list-icons", children: viewEntries() },
+            { text: qsTr("S&ort by"), icon: "view-sort", children: sortEntries() },
+            { text: qsTr("R&efresh"), icon: "view-refresh", action: () => page.refresh() },
             { separator: true }
         ]
         if (Ops.undoText !== "") {
-            entries.push({ text: "&Annulla " + Ops.undoText, icon: "edit-undo", shortcut: "Ctrl+Z", action: () => Ops.undo() })
+            entries.push({ text: qsTr("&Undo ") + Ops.undoText, icon: "edit-undo", shortcut: "Ctrl+Z", action: () => Ops.undo() })
         }
         entries.push(
-            { text: "&Incolla", icon: "edit-paste", shortcut: "Ctrl+V", enabled: Ops.canPaste, action: () => page.paste() },
+            { text: qsTr("&Paste"), icon: "edit-paste", shortcut: "Ctrl+V", enabled: Ops.canPaste, action: () => page.paste() },
             { separator: true },
-            { text: "&Nuovo", icon: "list-add", children: newEntries() },
+            { text: qsTr("&New"), icon: "list-add", children: newEntries() },
             { separator: true },
-            { text: "P&roprietà", icon: "document-properties", action: () => Ops.showProperties([page.location]) },
-            { text: "Apri in &Terminale", icon: "utilities-terminal", action: () => System.openTerminal(page.location) },
+            { text: qsTr("P&roperties"), icon: "document-properties", action: () => Ops.showProperties([page.location]) },
+            { text: qsTr("Open in &Terminal"), icon: "utilities-terminal", action: () => System.openTerminal(page.location) },
             { separator: true },
-            { text: "Mostra altre opzioni", icon: "view-more-symbolic", shortcut: "Maiusc+F10", action: () => page.showMoreOptions([]) })
+            { text: qsTr("Show more options"), icon: "view-more-symbolic", shortcut: qsTr("Shift+F10"), action: () => page.showMoreOptions([]) })
         return entries
     }
     function classicBackgroundEntries() {
         const entries = [
-            { text: "&Visualizza", children: viewEntries() },
-            { text: "&Ordina per", children: sortEntries() },
-            { text: "A&ggiorna", action: () => page.refresh() },
+            { text: qsTr("&View"), children: viewEntries() },
+            { text: qsTr("S&ort by"), children: sortEntries() },
+            { text: qsTr("R&efresh"), action: () => page.refresh() },
             { separator: true },
-            { text: "&Incolla", enabled: Ops.canPaste, action: () => page.paste() },
-            { text: "Incolla c&ollegamento", enabled: Ops.canPaste, action: () => Ops.pasteLinks(page.location) }
+            { text: qsTr("&Paste"), enabled: Ops.canPaste, action: () => page.paste() },
+            { text: qsTr("Paste &shortcut"), enabled: Ops.canPaste, action: () => Ops.pasteLinks(page.location) }
         ]
         const services = serviceEntries([page.location])
         if (services.length > 0) entries.push({ separator: true }, ...services)
-        entries.push({ separator: true }, { text: "&Nuovo", children: newEntries() }, { separator: true },
-            { text: "P&roprietà", action: () => Ops.showProperties([page.location]) })
+        entries.push({ separator: true }, { text: qsTr("&New"), children: newEntries() }, { separator: true },
+            { text: qsTr("P&roperties"), action: () => Ops.showProperties([page.location]) })
         return entries
     }
 
@@ -575,7 +575,7 @@ Item {
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
             model: page.model
             viewMode: page.viewMode
-            message: page.location === "thispc:" ? Places.drives.length + " unità" : ""
+            message: page.location === "thispc:" ? Places.drives.length + qsTr(" drives") : ""
             onViewRequested: mode => page.win.setViewMode(page.location, mode)
         }
     }

@@ -7,14 +7,14 @@ Page {
     CardGroup {
         LinkCard {
             icon: "view-list-details"
-            title: "App installate"
-            description: "Disinstalla e cerca le app"
+            title: qsTr("Installed apps")
+            description: qsTr("Uninstall and search apps")
             onClicked: root.navigate("installed-apps")
         }
         LinkCard {
             icon: "preferences-desktop-default-applications"
-            title: "App predefinite"
-            description: "Le app che aprono pagine web, posta, musica, foto e altri file"
+            title: qsTr("Default apps")
+            description: qsTr("The apps that open web pages, mail, music, photos and other files")
             onClicked: root.navigate("default-apps")
         }
     }

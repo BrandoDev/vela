@@ -173,3 +173,15 @@ if(VELA_BUILD_TOOLS)
     target_link_libraries(vela-mimeapps-test PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME shell-mimeapps COMMAND vela-mimeapps-test)
 endif()
+
+# Traduzione italiana: le stringhe del codice sono in inglese, l'italiano sta
+# in i18n/vela-shell_it.ts e finisce nell'eseguibile (:/i18n/vela-shell_it.qm, vedi
+# shell/src/language.h). Dopo aver cambiato testi:
+#   cmake --build build --target update_translations
+find_package(Qt6 6.7 REQUIRED COMPONENTS LinguistTools)
+qt_add_translations(TARGETS vela-shell SOURCE_TARGETS vela-shell
+    TS_FILES i18n/vela-shell_it.ts
+    RESOURCE_PREFIX /i18n
+    LUPDATE_TARGET vela-shell_lupdate
+    LRELEASE_TARGET vela-shell_lrelease
+    LUPDATE_OPTIONS -source-language en -target-language it -no-obsolete -locations none)

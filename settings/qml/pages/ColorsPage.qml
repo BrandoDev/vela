@@ -23,10 +23,10 @@ Page {
     CardGroup {
         Card {
             icon: "preferences-desktop-theme"
-            title: "Scegli la modalità"
-            description: "Cambia i colori di Vela e delle app (chiaro o scuro)"
+            title: qsTr("Choose your mode")
+            description: qsTr("Change the colors of Vela and your apps (light or dark)")
             trailing: Choice {
-                model: ["Chiaro", "Scuro", "Personalizzato"]
+                model: [qsTr("Light"), qsTr("Dark"), qsTr("Custom")]
                 currentIndex: page.custom || Prefs.shellTheme !== Prefs.appTheme ? 2 : Prefs.appTheme === "light" ? 0 : 1
                 onChosen: index => {
                     page.custom = index === 2
@@ -41,10 +41,10 @@ Page {
         Card {
             visible: page.custom || Prefs.shellTheme !== Prefs.appTheme
             icon: "preferences-system-windows"
-            title: "Scegli la modalità predefinita di Vela"
-            description: "Barra delle applicazioni, menu Start, menu e pannelli"
+            title: qsTr("Choose your default Vela mode")
+            description: qsTr("Taskbar, Start menu, menus and panels")
             trailing: Choice {
-                model: ["Chiaro", "Scuro"]
+                model: [qsTr("Light"), qsTr("Dark")]
                 currentIndex: Prefs.shellTheme === "light" ? 0 : 1
                 onChosen: index => Prefs.shellTheme = index === 0 ? "light" : "dark"
             }
@@ -52,18 +52,18 @@ Page {
         Card {
             visible: page.custom || Prefs.shellTheme !== Prefs.appTheme
             icon: "preferences-desktop-default-applications"
-            title: "Scegli la modalità predefinita delle app"
-            description: "Le finestre delle app, Esplora e le Impostazioni"
+            title: qsTr("Choose your default app mode")
+            description: qsTr("App windows, File Explorer and Settings")
             trailing: Choice {
-                model: ["Chiaro", "Scuro"]
+                model: [qsTr("Light"), qsTr("Dark")]
                 currentIndex: Prefs.appTheme === "light" ? 0 : 1
                 onChosen: index => Prefs.appTheme = index === 0 ? "light" : "dark"
             }
         }
         Card {
             icon: "preferences-desktop-color"
-            title: "Colore principale"
-            description: "Pulsanti, selezioni, elementi attivi della barra delle applicazioni e dei menu"
+            title: qsTr("Accent color")
+            description: qsTr("Buttons, selections, active items in the taskbar and menus")
             trailing: Rectangle {
                 width: 32
                 height: 32
@@ -76,7 +76,7 @@ Page {
                 width: parent.width
                 spacing: 8
                 Text {
-                    text: "Colori"
+                    text: qsTr("Colors")
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontCaption
                     leftPadding: 36

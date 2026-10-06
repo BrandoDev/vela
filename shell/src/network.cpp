@@ -3,6 +3,7 @@
 
 #include "network.h"
 
+#include <QCoreApplication>
 #include <QStandardPaths>
 #include <QVariantMap>
 
@@ -211,7 +212,7 @@ void Network::connectWifi(const QString& ssid, const QString& password)
         m_connectResult = code == 0 ? QStringLiteral("ok")
                                     : QString::fromUtf8(error).trimmed().section(u'\n', 0, 0).remove(QStringLiteral("Error: "));
         if (m_connectResult.isEmpty()) {
-            m_connectResult = QStringLiteral("Impossibile connettersi a questa rete");
+            m_connectResult = QCoreApplication::translate("Network", "Couldn't connect to this network");
         }
         emit connectResultChanged();
         // La shell non ha bisogno dei dettagli dei collegamenti (e non deve fermarsi).

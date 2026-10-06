@@ -157,7 +157,7 @@ bool Renderer::init()
     }
     m_shim.base.features.timeline = m_syncTimeline != nullptr;
     if (!m_syncTimeline) {
-        wlr_log(WLR_INFO, "Renderer: niente timeline syncobj, niente sincronizzazione esplicita con le app");
+        wlr_log(WLR_INFO, "Renderer: no syncobj timeline, no explicit sync with apps");
     }
 
     // Timestamp della GPU: due per disegno misurato (inizio e fine).
@@ -454,13 +454,13 @@ RenderTarget* Renderer::targetFor(wlr_buffer* buffer)
 
     wlr_dmabuf_attributes dmabuf {};
     if (!wlr_buffer_get_dmabuf(buffer, &dmabuf)) {
-        wlr_log(WLR_ERROR, "Renderer: si può disegnare solo su buffer dmabuf");
+        wlr_log(WLR_ERROR, "Renderer: can only render to dmabuf buffers");
         return nullptr;
     }
     const PixelFormat* format = pixelFormat(dmabuf.format);
     if (!format || format->srgb == VK_FORMAT_UNDEFINED
         || !wlr_drm_format_set_has(&m_vk.renderFormats, dmabuf.format, dmabuf.modifier)) {
-        wlr_log(WLR_ERROR, "Renderer: formato 0x%08x (modifier 0x%" PRIx64 ") non disegnabile", dmabuf.format,
+        wlr_log(WLR_ERROR, "Renderer: format 0x%08x (modifier 0x%" PRIx64 ") not renderable", dmabuf.format,
             dmabuf.modifier);
         return nullptr;
     }
@@ -479,7 +479,7 @@ RenderTarget* Renderer::targetFor(wlr_buffer* buffer)
         target->sampleable = true;
     }
     if (!m_vk.importDmabuf(dmabuf, format->srgb, usage, target->image, target->memory)) {
-        wlr_log(WLR_ERROR, "Renderer: impossibile importare il buffer di destinazione");
+        wlr_log(WLR_ERROR, "Renderer: can't import the target buffer");
         delete target;
         return nullptr;
     }
@@ -726,7 +726,7 @@ uint64_t Renderer::submit(VkCommandBuffer cmd, std::vector<int>& waitSyncFiles, 
     }
 
     if (!ok) {
-        wlr_log(WLR_ERROR, "Renderer: invio alla GPU fallito");
+        wlr_log(WLR_ERROR, "Renderer: GPU submission failed");
         // Semafori in uno stato incerto: meglio buttarli.
         for (VkSemaphore semaphore : waits) {
             vkDestroySemaphore(m_vk.device, semaphore, nullptr);
@@ -929,7 +929,7 @@ VkPipeline Renderer::pipeline(VkFormat target, PipelineKind kind, bool blend)
     };
     VkPipeline pipeline = VK_NULL_HANDLE;
     if (vkCreateGraphicsPipelines(m_vk.device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
-        wlr_log(WLR_ERROR, "Renderer: impossibile creare una pipeline");
+        wlr_log(WLR_ERROR, "Renderer: can't create a pipeline");
         return VK_NULL_HANDLE;
     }
     m_pipelines[key] = pipeline;
@@ -1011,7 +1011,7 @@ bool Renderer::prepareBlur(uint32_t width, uint32_t height)
             ok = vkCreateImageView(m_vk.device, &viewInfo, nullptr, &image.view) == VK_SUCCESS;
         }
         if (!ok) {
-            wlr_log(WLR_ERROR, "Renderer: niente memoria per la sfocatura (%ux%u)", allocWidth, allocHeight);
+            wlr_log(WLR_ERROR, "Renderer: no memory for the blur (%ux%u)", allocWidth, allocHeight);
             destroyBlurImage(image);
             return false;
         }

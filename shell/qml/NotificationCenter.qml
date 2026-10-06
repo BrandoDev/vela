@@ -127,7 +127,7 @@ Window {
                 height: 36
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Notifiche"
+                    text: qsTr("Notifications")
                     color: Theme.text
                     font.pixelSize: Theme.fontNormal
                     font.weight: Font.DemiBold
@@ -142,7 +142,7 @@ Window {
                     }
                     SmallButton {
                         visible: root.history.count > 0
-                        label: "Cancella tutto"
+                        label: qsTr("Clear all")
                         onClicked: Notifications.clearHistory()
                     }
                 }
@@ -268,7 +268,7 @@ Window {
                 Text {
                     anchors.centerIn: parent
                     visible: list.count === 0
-                    text: "Nessuna nuova notifica"
+                    text: qsTr("No new notifications")
                     color: Theme.textDim
                     font.pixelSize: Theme.fontNormal
                 }

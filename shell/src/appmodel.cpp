@@ -513,7 +513,7 @@ bool AppModel::launchEntry(const Entry& entry, const QList<QUrl>& files) const
 {
     const DesktopExec::Parsed parsed = DesktopExec::split(entry.rawExec);
     if (!parsed.ok) {
-        qWarning("vela-shell: Exec non valido in %s: %s", qPrintable(entry.path), qPrintable(entry.rawExec));
+        qWarning("vela-shell: invalid Exec in %s: %s", qPrintable(entry.path), qPrintable(entry.rawExec));
         return false;
     }
     const DesktopExec::Context context { entry.icon, entry.name, entry.path };
@@ -543,7 +543,7 @@ bool AppModel::launchEntry(const Entry& entry, const QList<QUrl>& files) const
         if (arguments.isEmpty()) {
             return false;
         }
-        qInfo("vela-shell: avvio %s", qPrintable(arguments.join(u' ')));
+        qInfo("vela-shell: starting %s", qPrintable(arguments.join(u' ')));
         ok = QProcess::startDetached(arguments.first(), arguments.mid(1), directory) && ok;
     }
     return ok;

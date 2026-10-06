@@ -10,13 +10,13 @@ Page {
     readonly property var layouts: Prefs.keyboardLayouts
 
     CardGroup {
-        title: "Layout di tastiera"
+        title: qsTr("Keyboard layout")
         Card {
             icon: "input-keyboard"
-            title: page.layouts.length === 0 ? "Quello del sistema" : "Layout installati"
-            description: page.layouts.length > 1 ? "Win+Spazio per passare da un layout all'altro" : page.layouts.length === 0 ? "Scelto da localectl o da KDE" : ""
+            title: page.layouts.length === 0 ? qsTr("The system's") : qsTr("Installed layouts")
+            description: page.layouts.length > 1 ? qsTr("Win+Space to switch between layouts") : page.layouts.length === 0 ? qsTr("Chosen by localectl or KDE") : ""
             trailing: Button {
-                text: "Aggiungi una tastiera"
+                text: qsTr("Add a keyboard")
                 onClicked: {
                     layoutSearch.text = ""
                     addDialog.open()
@@ -32,18 +32,18 @@ Page {
                 required property int index
                 icon: "input-keyboard"
                 title: Layouts.name(modelData.layout, modelData.variant)
-                description: index === 0 ? "Predefinito" : ""
+                description: index === 0 ? qsTr("Default") : ""
                 trailing: Row {
                     spacing: 4
                     Button {
                         visible: layoutCard.index > 0
                         subtle: true
-                        text: "Sposta su"
+                        text: qsTr("Move up")
                         onClicked: Prefs.moveKeyboardLayoutUp(layoutCard.index)
                     }
                     Button {
                         subtle: true
-                        text: "Rimuovi"
+                        text: qsTr("Remove")
                         onClicked: Prefs.removeKeyboardLayout(layoutCard.index)
                     }
                 }
@@ -52,11 +52,11 @@ Page {
     }
 
     CardGroup {
-        title: "Ripetizione dei tasti"
+        title: qsTr("Key repeat")
         Card {
             icon: "chronometer"
-            title: "Ritardo di ripetizione"
-            description: "Quanto tenere premuto un tasto prima che si ripeta: " + Prefs.repeatDelay + " ms"
+            title: qsTr("Repeat delay")
+            description: qsTr("How long to hold a key before it repeats: ") + Prefs.repeatDelay + " ms"
             trailing: Slider {
                 width: 220
                 from: 150
@@ -69,8 +69,8 @@ Page {
         }
         Card {
             icon: "chronometer"
-            title: "Velocità di ripetizione"
-            description: Prefs.repeatRate + " caratteri al secondo"
+            title: qsTr("Repeat rate")
+            description: Prefs.repeatRate + qsTr(" characters per second")
             trailing: Slider {
                 width: 220
                 from: 5
@@ -83,10 +83,10 @@ Page {
         }
         Card {
             icon: "edit-entry"
-            title: "Prova"
+            title: qsTr("Test")
             trailing: TextBox {
                 width: 260
-                placeholderText: "Tieni premuto un tasto qui"
+                placeholderText: qsTr("Hold a key down here")
             }
         }
     }
@@ -94,9 +94,9 @@ Page {
     Dialog {
         id: addDialog
         parent: root.contentItem
-        title: "Aggiungi una tastiera"
+        title: qsTr("Add a keyboard")
         primaryText: ""
-        secondaryText: "Annulla"
+        secondaryText: qsTr("Cancel")
         dialogWidth: 520
         readonly property var all: visible ? Layouts.all() : []
         readonly property var matches: {
@@ -110,7 +110,7 @@ Page {
             TextBox {
                 id: layoutSearch
                 width: parent.width
-                placeholderText: "Cerca (es. Italian, English)"
+                placeholderText: qsTr("Search (e.g. Italian, English)")
             }
             ListView {
                 id: layoutList

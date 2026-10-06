@@ -9,19 +9,19 @@ import QtQuick
 Page {
     id: page
     readonly property var actions: ["app", "desktop", "no"]
-    readonly property var actionNames: ["Cambia app e mostra il desktop", "Cambia desktop e mostra il desktop", "Niente"]
+    readonly property var actionNames: [qsTr("Switch apps and show the desktop"), qsTr("Switch desktops and show the desktop"), qsTr("Nothing")]
 
     Card {
         visible: !Prefs.hasTouchpad
         icon: "input-touchpad"
-        title: "Nessun touchpad"
-        description: "Queste impostazioni valgono quando c'è un touchpad, per esempio su un portatile."
+        title: qsTr("No touchpad")
+        description: qsTr("These settings apply when there's a touchpad, for example on a laptop.")
     }
 
     CardGroup {
         Card {
             icon: "input-touchpad"
-            title: "Touchpad"
+            title: qsTr("Touchpad")
             trailing: Toggle {
                 checked: Prefs.touchpad
                 onToggled: on => Prefs.touchpad = on
@@ -29,7 +29,7 @@ Page {
         }
         Card {
             icon: "input-mouse"
-            title: "Lascia attivo il touchpad quando è collegato un mouse"
+            title: qsTr("Leave the touchpad on when a mouse is connected")
             trailing: Toggle {
                 checked: Prefs.touchpadWithMouse
                 onToggled: on => Prefs.touchpadWithMouse = on
@@ -37,7 +37,7 @@ Page {
         }
         Card {
             icon: "transform-move"
-            title: "Velocità del cursore"
+            title: qsTr("Cursor speed")
             trailing: Slider {
                 width: 220
                 from: 1
@@ -51,11 +51,11 @@ Page {
     }
 
     CardGroup {
-        title: "Tocchi e scorrimento"
+        title: qsTr("Taps and scrolling")
         Card {
             icon: "input-touchpad"
-            title: "Tocca con un dito per fare un solo clic"
-            description: "Con due dita il clic destro, con un tocco e trascinando si sposta"
+            title: qsTr("Tap with a single finger to single-click")
+            description: qsTr("Two fingers for a right-click, tap and drag to move things")
             trailing: Toggle {
                 checked: Prefs.touchpadTap
                 onToggled: on => Prefs.touchpadTap = on
@@ -63,10 +63,10 @@ Page {
         }
         Card {
             icon: "transform-move-vertical"
-            title: "Direzione di scorrimento"
-            description: "Con due dita: muovendole verso il basso"
+            title: qsTr("Scrolling direction")
+            description: qsTr("With two fingers: moving them down")
             trailing: Choice {
-                model: ["Il contenuto sale", "Il contenuto scende"]
+                model: [qsTr("Content goes up"), qsTr("Content goes down")]
                 currentIndex: Prefs.touchpadNatural ? 0 : 1
                 onChosen: index => Prefs.touchpadNatural = index === 0
             }
@@ -74,11 +74,11 @@ Page {
     }
 
     CardGroup {
-        title: "Gesti"
+        title: qsTr("Gestures")
         Card {
             icon: "gesture"
-            title: "Gesti con tre dita"
-            description: "Verso l'alto: Visualizzazione attività; verso il basso: il desktop; di lato:"
+            title: qsTr("Three-finger gestures")
+            description: qsTr("Up: Task view; down: the desktop; sideways:")
             trailing: Choice {
                 model: page.actionNames
                 currentIndex: Math.max(0, page.actions.indexOf(Prefs.threeFingers))
@@ -87,8 +87,8 @@ Page {
         }
         Card {
             icon: "gesture"
-            title: "Gesti con quattro dita"
-            description: "Verso l'alto: Visualizzazione attività; verso il basso: il desktop; di lato:"
+            title: qsTr("Four-finger gestures")
+            description: qsTr("Up: Task view; down: the desktop; sideways:")
             trailing: Choice {
                 model: page.actionNames
                 currentIndex: Math.max(0, page.actions.indexOf(Prefs.fourFingers))

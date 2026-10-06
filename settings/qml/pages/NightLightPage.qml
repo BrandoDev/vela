@@ -63,16 +63,16 @@ Page {
     CardGroup {
         Card {
             icon: "redshift-status-on"
-            title: "Luce notturna"
-            description: "Colori più caldi la sera, per affaticare meno la vista e aiutare il sonno"
+            title: qsTr("Night light")
+            description: qsTr("Warmer colors in the evening, to ease eye strain and help you sleep")
             trailing: Button {
-                text: Prefs.nightLight ? "Disattiva ora" : "Attiva ora"
+                text: Prefs.nightLight ? qsTr("Turn off now") : qsTr("Turn on now")
                 onClicked: Prefs.nightLight = !Prefs.nightLight
             }
         }
         Card {
             icon: "color-management"
-            title: "Intensità"
+            title: qsTr("Strength")
             trailing: Slider {
                 width: 220
                 from: 0
@@ -85,10 +85,10 @@ Page {
         }
         Card {
             icon: "chronometer"
-            title: "Pianifica luce notturna"
+            title: qsTr("Schedule night light")
             trailing: Toggle {
                 checked: Prefs.nightSchedule !== "no"
-                onToggled: on => Prefs.nightSchedule = on ? (Prefs.sunset !== "" ? "tramonto" : "ore") : "no"
+                onToggled: on => Prefs.nightSchedule = on ? (Prefs.sunset !== "" ? "sunset" : "hours") : "no"
             }
             contentItem: Column {
                 visible: Prefs.nightSchedule !== "no"
@@ -96,23 +96,23 @@ Page {
                 width: parent.width - 36
                 spacing: 4
                 Radio {
-                    text: "Dal tramonto all'alba" + (Prefs.sunset !== "" ? " (" + Prefs.sunset + " - " + Prefs.sunrise + ")" : "")
+                    text: qsTr("Sunset to sunrise") + (Prefs.sunset !== "" ? " (" + Prefs.sunset + " - " + Prefs.sunrise + ")" : "")
                     usable: Prefs.sunset !== ""
-                    checked: Prefs.nightSchedule === "tramonto"
-                    onClicked: Prefs.nightSchedule = "tramonto"
+                    checked: Prefs.nightSchedule === "sunset"
+                    onClicked: Prefs.nightSchedule = "sunset"
                 }
                 Radio {
-                    text: "Imposta ore"
-                    checked: Prefs.nightSchedule === "ore"
-                    onClicked: Prefs.nightSchedule = "ore"
+                    text: qsTr("Set hours")
+                    checked: Prefs.nightSchedule === "hours"
+                    onClicked: Prefs.nightSchedule = "hours"
                 }
                 Row {
-                    visible: Prefs.nightSchedule === "ore"
+                    visible: Prefs.nightSchedule === "hours"
                     x: 32
                     spacing: 12
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Attiva"
+                        text: qsTr("Turn on")
                         color: Theme.text
                         font.pixelSize: Theme.fontBody
                     }
@@ -123,7 +123,7 @@ Page {
                     }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Disattiva"
+                        text: qsTr("Turn off")
                         color: Theme.text
                         font.pixelSize: Theme.fontBody
                     }

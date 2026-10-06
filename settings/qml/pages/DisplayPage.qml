@@ -74,10 +74,10 @@ Page {
         return preferred.height >= 2160 ? 1.5 : preferred.height >= 1600 ? 1.25 : 1
     }
     readonly property var transforms: [
-        { value: "normal", text: "Orizzontale" },
-        { value: "90", text: "Verticale" },
-        { value: "180", text: "Orizzontale (capovolto)" },
-        { value: "270", text: "Verticale (capovolto)" }
+        { value: "normal", text: qsTr("Landscape") },
+        { value: "90", text: qsTr("Portrait") },
+        { value: "180", text: qsTr("Landscape (flipped)") },
+        { value: "270", text: qsTr("Portrait (flipped)") }
     ]
 
     // --- la disposizione ---
@@ -210,17 +210,17 @@ Page {
     Card {
         visible: !Displays.available
         icon: "dialog-warning"
-        title: "Per cambiare gli schermi serve wlr-randr"
-        description: "Installa il pacchetto wlr-randr e riapri questa pagina."
+        title: qsTr("Changing displays needs wlr-randr")
+        description: qsTr("Install the wlr-randr package and open this page again.")
     }
 
     CardGroup {
-        title: "Luminosità e colore"
+        title: qsTr("Brightness & color")
         Card {
             visible: Status.brightnessAvailable
             icon: "brightness-high"
-            title: "Luminosità"
-            description: "Regola la luminosità dello schermo integrato"
+            title: qsTr("Brightness")
+            description: qsTr("Adjust the brightness of the built-in display")
             trailing: Slider {
                 width: 200
                 value: Status.brightness
@@ -229,8 +229,8 @@ Page {
         }
         Card {
             icon: "redshift-status-on"
-            title: "Luce notturna"
-            description: "Usa colori più caldi per aiutarti a dormire"
+            title: qsTr("Night light")
+            description: qsTr("Use warmer colors to help you sleep")
             clickable: true
             chevron: true
             onClicked: root.navigate("night-light")
@@ -243,14 +243,14 @@ Page {
 
     CardGroup {
         visible: page.output !== null
-        title: "Scala e layout"
+        title: qsTr("Scale & layout")
         Card {
             icon: "zoom-in"
-            title: "Scala"
-            description: "Modifica le dimensioni di testo, app e altri elementi"
+            title: qsTr("Scale")
+            description: qsTr("Change the size of text, apps and other items")
             trailing: Choice {
-                model: page.scales.map(s => ({ text: Math.round(s * 100) + "%" + (page.output && Math.abs(s - page.recommendedScale(page.output)) < 0.01 ? " (consigliato)" : "") }))
-                    .concat(page.output && page.scales.every(s => Math.abs(s - page.output.scale) > 0.001) ? [{ text: Math.round(page.output.scale * 100) + "% (personalizzata)" }] : [])
+                model: page.scales.map(s => ({ text: Math.round(s * 100) + "%" + (page.output && Math.abs(s - page.recommendedScale(page.output)) < 0.01 ? qsTr(" (recommended)", "scale") : "") }))
+                    .concat(page.output && page.scales.every(s => Math.abs(s - page.output.scale) > 0.001) ? [{ text: Math.round(page.output.scale * 100) + qsTr("% (custom)") }] : [])
                 currentIndex: {
                     if (!page.output) return -1
                     const i = page.scales.findIndex(s => Math.abs(s - page.output.scale) < 0.001)
@@ -261,10 +261,10 @@ Page {
         }
         Card {
             icon: "view-fullscreen"
-            title: "Risoluzione dello schermo"
-            description: "Modifica la risoluzione per adattarla allo schermo collegato"
+            title: qsTr("Display resolution")
+            description: qsTr("Adjust the resolution to fit your connected display")
             trailing: Choice {
-                model: page.resolutions.map(r => ({ text: r.width + " × " + r.height + (r.preferred ? " (consigliata)" : "") }))
+                model: page.resolutions.map(r => ({ text: r.width + qsTr(" × ") + r.height + (r.preferred ? qsTr(" (recommended)", "resolution") : "") }))
                 currentIndex: page.output && page.output.current
                     ? page.resolutions.findIndex(r => r.width === page.output.current.width && r.height === page.output.current.height) : -1
                 onChosen: index => {
@@ -278,7 +278,7 @@ Page {
         }
         Card {
             icon: "object-rotate-right"
-            title: "Orientamento dello schermo"
+            title: qsTr("Display orientation")
             trailing: Choice {
                 model: page.transforms
                 currentIndex: page.output ? Math.max(0, page.transforms.findIndex(t => t.value === page.output.transform)) : -1
@@ -289,12 +289,12 @@ Page {
 
     CardGroup {
         visible: page.output !== null && (page.refreshRates.some(r => r > 0) || page.outputs.length > 1)
-        title: "Avanzate"
+        title: qsTr("Advanced")
         Card {
             visible: page.refreshRates.some(r => r > 0)
             icon: "chronometer"
-            title: "Frequenza di aggiornamento"
-            description: "Una frequenza più alta rende il movimento più fluido, ma consuma più energia"
+            title: qsTr("Refresh rate")
+            description: qsTr("A higher refresh rate makes motion smoother, but uses more power")
             trailing: Choice {
                 model: page.refreshRates.map(r => ({ text: (Math.round(r * 100) / 100).toLocaleString(Qt.locale(), "f", r % 1 < 0.005 || r % 1 > 0.995 ? 0 : 2) + " Hz" }))
                 currentIndex: page.output && page.output.current
@@ -305,10 +305,10 @@ Page {
         Card {
             visible: page.outputs.length > 1
             icon: "video-display"
-            title: page.output && page.output.enabled ? "Disconnetti questo schermo" : "Usa questo schermo"
+            title: page.output && page.output.enabled ? qsTr("Disconnect this display") : qsTr("Use this display")
             description: page.output ? (page.output.description || page.output.name) + " (" + page.output.name + ")" : ""
             trailing: Button {
-                text: page.output && page.output.enabled ? "Disconnetti" : "Attiva"
+                text: page.output && page.output.enabled ? qsTr("Disconnect") : qsTr("Turn on")
                 usable: !(page.output && page.output.enabled && page.enabledOutputs.length <= 1)
                 onClicked: page.change({ enabled: !page.output.enabled })
             }
@@ -316,22 +316,22 @@ Page {
     }
 
     CardGroup {
-        title: "Giochi"
+        title: qsTr("Gaming")
         Card {
             icon: "chronometer"
-            title: "Frequenza di aggiornamento variabile"
-            description: "Il monitor si adegua ai fotogrammi del gioco (VRR, FreeSync, G-Sync): niente scatti né strappi. Con alcuni monitor il desktop può sfarfallare: per questo di solito solo a schermo intero"
+            title: qsTr("Variable refresh rate")
+            description: qsTr("The monitor follows the game's frames (VRR, FreeSync, G-Sync): no stutter or tearing. With some monitors the desktop can flicker, which is why it's usually for full screen only")
             trailing: Choice {
-                readonly property var modes: ["no", "giochi", "sempre"]
-                model: ["Disattivata", "Giochi a schermo intero", "Sempre"]
+                readonly property var modes: ["no", "games", "always"]
+                model: [qsTr("Off"), qsTr("Full-screen games"), qsTr("Always")]
                 currentIndex: Math.max(0, modes.indexOf(Prefs.vrr))
                 onChosen: index => Prefs.vrr = modes[index]
             }
         }
         Card {
             icon: "input-gaming"
-            title: "Mostra subito ogni fotogramma nei giochi a schermo intero"
-            description: "I giochi che lo chiedono vanno sullo schermo senza aspettare il monitor: meno latenza, con qualche strappo nell'immagine (tearing)"
+            title: qsTr("Show every frame right away in full-screen games")
+            description: qsTr("Games that ask for it reach the screen without waiting for the monitor: less latency, with some tearing in the picture")
             trailing: Toggle {
                 checked: Prefs.tearing
                 onToggled: on => Prefs.tearing = on
@@ -340,10 +340,10 @@ Page {
     }
 
     CardGroup {
-        title: "Impostazioni correlate"
+        title: qsTr("Related settings")
         Card {
             icon: "preferences-desktop-wallpaper"
-            title: "Sfondo"
+            title: qsTr("Background")
             clickable: true
             chevron: true
             onClicked: root.navigate("background")
@@ -354,9 +354,9 @@ Page {
         id: confirm
         parent: root.contentItem
         property int seconds: 15
-        title: "Mantenere queste impostazioni dello schermo?"
-        primaryText: "Mantieni le modifiche"
-        secondaryText: "Ripristina"
+        title: qsTr("Keep these display settings?")
+        primaryText: qsTr("Keep changes")
+        secondaryText: qsTr("Revert")
         onAccepted: countdown.stop()
         onRejected: {
             countdown.stop()
@@ -364,7 +364,7 @@ Page {
         }
         Text {
             width: parent.width
-            text: "Ripristino delle impostazioni precedenti dello schermo tra " + confirm.seconds + " secondi."
+            text: qsTr("Reverting to the previous display settings in ") + confirm.seconds + qsTr(" seconds.")
             color: Theme.text
             font.pixelSize: Theme.fontBody
             wrapMode: Text.Wrap

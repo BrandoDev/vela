@@ -19,12 +19,12 @@ Item {
         id: label
         visible: toggle.showLabel
         anchors.verticalCenter: parent.verticalCenter
-        text: toggle.checked ? "Attivato" : "Disattivato"
+        text: toggle.checked ? qsTr("On") : qsTr("Off")
         color: Theme.text
         font.pixelSize: Theme.fontBody
         width: Math.max(implicitWidth, metrics.width)
         horizontalAlignment: Text.AlignRight
-        TextMetrics { id: metrics; text: "Disattivato"; font.pixelSize: Theme.fontBody }
+        TextMetrics { id: metrics; text: qsTr("Off"); font.pixelSize: Theme.fontBody }
     }
     Rectangle {
         id: track

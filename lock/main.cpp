@@ -18,6 +18,9 @@
 #include "fractional-scale-v1-client-protocol.h"
 #include "viewporter-client-protocol.h"
 
+#include "language.h"
+
+#include <QCoreApplication>
 #include <QAbstractEventDispatcher>
 #include <QDateTime>
 #include <QFont>
@@ -247,10 +250,10 @@ void draw(Screen& screen)
             const QRectF textBox = field.adjusted(14, 0, -14, 0);
             if (mode == Mode::Checking) {
                 p.setPen(QColor(255, 255, 255, 170));
-                p.drawText(textBox, Qt::AlignVCenter | Qt::AlignLeft, QStringLiteral("Accesso in corso…"));
+                p.drawText(textBox, Qt::AlignVCenter | Qt::AlignLeft, QCoreApplication::translate("Lock", "Signing in…"));
             } else if (password.empty()) {
                 p.setPen(QColor(255, 255, 255, 140));
-                p.drawText(textBox, Qt::AlignVCenter | Qt::AlignLeft, QStringLiteral("Password"));
+                p.drawText(textBox, Qt::AlignVCenter | Qt::AlignLeft, QCoreApplication::translate("Lock", "Password"));
             } else {
                 // Un pallino per carattere (i caratteri UTF-8 multibyte contano uno).
                 const auto chars = std::count_if(password.begin(), password.end(),
@@ -337,7 +340,7 @@ void authenticate(std::string secret)
                 return;
             }
             mode = Mode::Login;
-            message = QStringLiteral("La password non è corretta. Riprova.");
+            message = QCoreApplication::translate("Lock", "The password is incorrect. Try again.");
             redrawAll();
         },
         Qt::QueuedConnection);
@@ -548,7 +551,7 @@ void onFinished(void*, ext_session_lock_v1*)
 {
     // Il compositor non ci ha dato il blocco (c'è già un altro programma).
     if (!unlocked) {
-        fprintf(stderr, "vela-lock: il compositor ha rifiutato il blocco\n");
+        fprintf(stderr, "vela-lock: the compositor refused the lock\n");
         QGuiApplication::exit(1);
     }
 }
@@ -601,6 +604,7 @@ int main(int argc, char* argv[])
     // Qt solo per font e immagini: nessuna finestra Qt.
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
+    vela::language::install(QStringLiteral("vela-lock")); // disegna a ogni frame: niente da ritradurre
 
     if (const passwd* pw = getpwuid(getuid())) {
         userName = QString::fromLocal8Bit(pw->pw_name);
@@ -612,7 +616,7 @@ int main(int argc, char* argv[])
 
     display = wl_display_connect(nullptr);
     if (!display) {
-        fprintf(stderr, "vela-lock: nessun compositor Wayland\n");
+        fprintf(stderr, "vela-lock: no Wayland compositor\n");
         return 1;
     }
     xkb = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
@@ -620,7 +624,7 @@ int main(int argc, char* argv[])
     wl_registry_add_listener(registry, &registryListener, nullptr);
     wl_display_roundtrip(display);
     if (!compositor || !shm || !lockManager) {
-        fprintf(stderr, "vela-lock: il compositor non offre ext-session-lock-v1\n");
+        fprintf(stderr, "vela-lock: the compositor doesn't offer ext-session-lock-v1\n");
         return 1;
     }
 

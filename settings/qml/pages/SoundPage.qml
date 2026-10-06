@@ -18,7 +18,7 @@ Page {
         required property string kind
         icon: kind === "output" ? (modelData.description.toLowerCase().indexOf("hdmi") >= 0 || modelData.description.toLowerCase().indexOf("displayport") >= 0 ? "video-display" : "audio-speakers") : "audio-input-microphone"
         title: modelData.description
-        description: modelData.isDefault ? "Dispositivo predefinito" : ""
+        description: modelData.isDefault ? qsTr("Default device") : ""
         clickable: !modelData.isDefault
         onClicked: Audio.setDefault(kind, modelData.name)
         trailing: Rectangle {
@@ -45,7 +45,7 @@ Page {
         required property var device
         required property string kind
         icon: device && device.muted ? "audio-volume-muted" : kind === "output" ? "audio-volume-high" : "audio-input-microphone"
-        title: "Volume"
+        title: qsTr("Volume")
         trailing: Row {
             spacing: 8
             Button {
@@ -74,15 +74,15 @@ Page {
     Card {
         visible: !Audio.available
         icon: "dialog-warning"
-        title: "Audio non disponibile"
-        description: "Serve pactl (PipeWire o PulseAudio)."
+        title: qsTr("Sound isn't available")
+        description: qsTr("pactl is needed (PipeWire or PulseAudio).")
     }
 
     CardGroup {
         visible: Audio.available
-        title: "Output"
+        title: qsTr("Output")
         Text {
-            text: "Scegli dove riprodurre l'audio"
+            text: qsTr("Choose where to play sound")
             color: Theme.textSecondary
             font.pixelSize: Theme.fontCaption
             bottomPadding: 4
@@ -100,9 +100,9 @@ Page {
 
     CardGroup {
         visible: Audio.available && Audio.inputs.length > 0
-        title: "Input"
+        title: qsTr("Input")
         Text {
-            text: "Scegli un dispositivo per parlare o registrare"
+            text: qsTr("Choose a device for speaking or recording")
             color: Theme.textSecondary
             font.pixelSize: Theme.fontCaption
             bottomPadding: 4
@@ -119,12 +119,12 @@ Page {
     }
 
     CardGroup {
-        title: "Avanzate"
+        title: qsTr("Advanced")
         LinkCard {
             visible: System.available("volume-mixer")
             icon: "view-media-equalizer"
-            title: "Mixer volume"
-            description: "Il volume di ogni app, e l'uscita che usa"
+            title: qsTr("Volume mixer")
+            description: qsTr("Each app's volume, and the output it uses")
             onClicked: System.trigger("volume-mixer")
         }
     }

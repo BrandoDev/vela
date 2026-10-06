@@ -88,7 +88,7 @@ void ScreenWindows::sync()
                 continue;
             }
             static_cast<QObject*>(window)->setParent(this); // proprietà, non finestra madre
-            qInfo("vela-shell: %s su %s%s", qPrintable(m_name), qPrintable(screen->name()),
+            qInfo("vela-shell: %s on %s%s", qPrintable(m_name), qPrintable(screen->name()),
                 screen == primary ? " (principale)" : "");
             window->setScreen(screen);
             m_setup(window, screen);

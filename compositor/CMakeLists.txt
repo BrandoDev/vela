@@ -6,7 +6,7 @@ find_package(PkgConfig REQUIRED)
 # wlroots cambia API a ogni versione minore e installa un pkg-config con la
 # versione nel nome. Vela è scritto per la 0.20 (quella di sway 1.12); con
 # -DVELA_WLROOTS=wlroots-0.19 dovrebbe compilare anche con la 0.19.
-set(VELA_WLROOTS "wlroots-0.20" CACHE STRING "Nome pkg-config di wlroots")
+set(VELA_WLROOTS "wlroots-0.20" CACHE STRING "pkg-config name of wlroots")
 
 pkg_check_modules(WLROOTS REQUIRED IMPORTED_TARGET ${VELA_WLROOTS})
 pkg_check_modules(WAYLAND_SERVER REQUIRED IMPORTED_TARGET wayland-server)
@@ -168,7 +168,7 @@ if(RSVG_FOUND)
     target_link_libraries(vela-compositor PRIVATE PkgConfig::RSVG)
     target_compile_definitions(vela-compositor PRIVATE VELA_HAVE_RSVG=1)
 else()
-    message(STATUS "librsvg non trovata: la barra del titolo sarà senza icone")
+    message(STATUS "librsvg not found: the title bar will have no icons")
 endif()
 
 install(TARGETS vela-compositor RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
@@ -192,6 +192,6 @@ if(VELA_BUILD_TOOLS)
         include(GoogleTest)
         gtest_discover_tests(vela-compositor-tests TEST_PREFIX "compositor.")
     else()
-        message(STATUS "GoogleTest non trovato: niente prove del compositor (pacchetto gtest)")
+        message(STATUS "GoogleTest not found: no compositor tests (package gtest)")
     endif()
 endif()

@@ -20,7 +20,7 @@ Page {
 
     Text {
         width: parent.width
-        text: "Scegli le app che aprono le pagine web, la posta, la musica, i video, le foto, i PDF e gli altri file. Le scelte valgono per tutte le app."
+        text: qsTr("Choose the apps that open web pages, mail, music, videos, photos, PDFs and other files. Your choices apply to every app.")
         color: Theme.textSecondary
         font.pixelSize: Theme.fontBody
         wrapMode: Text.Wrap
@@ -29,15 +29,15 @@ Page {
 
     // --- un tipo preciso: ".mkv", "mp3", "mailto" ---
     CardGroup {
-        title: "Imposta un valore predefinito per un tipo di file o di collegamento"
+        title: qsTr("Set a default for a file type or link type")
         Card {
             icon: "search"
-            title: "Tipo di file o di collegamento"
-            description: "Per esempio .pdf, mp3, .mkv o mailto"
+            title: qsTr("File type or link type")
+            description: qsTr("For example .pdf, mp3, .mkv or mailto")
             trailing: TextBox {
                 id: typeField
                 width: 220
-                placeholderText: "Scrivi un tipo"
+                placeholderText: qsTr("Type a file type")
             }
         }
         Card {
@@ -50,21 +50,21 @@ Page {
                 model: (page.result.candidates || []).map(a => ({ text: a.name }))
                 currentIndex: (page.result.candidates || []).findIndex(a => a.id === (page.result.current || {}).id)
                 displayText: currentIndex >= 0 ? page.result.candidates[currentIndex].name
-                    : usable ? "Scegli un'app" : "Nessuna app lo apre"
+                    : usable ? qsTr("Choose an app") : qsTr("No app opens it")
                 onChosen: index => DefaultApps.setDefaultForType(page.result.mime, page.result.candidates[index].id)
             }
         }
         Card {
             visible: typeField.text.trim() !== "" && !page.result.found
             icon: "dialog-information"
-            title: "Nessun tipo trovato per «" + typeField.text.trim() + "»"
-            description: "Prova con l'estensione del file (.pdf) o con il nome di un collegamento (mailto, https)."
+            title: qsTr("No type found for «") + typeField.text.trim() + "»"
+            description: qsTr("Try the file extension (.pdf) or the name of a link type (mailto, https).")
         }
     }
 
     // --- gli usi comuni ---
     CardGroup {
-        title: "Usi comuni"
+        title: qsTr("Common uses")
         Repeater {
             model: DefaultApps.categories
             delegate: Card {
@@ -72,12 +72,12 @@ Page {
                 required property var modelData
                 icon: modelData.current.icon || modelData.icon
                 title: modelData.label
-                description: modelData.current.name || (modelData.candidates.length > 0 ? "Nessuna app scelta" : "Nessuna app installata lo apre")
+                description: modelData.current.name || (modelData.candidates.length > 0 ? qsTr("No app chosen") : qsTr("No installed app opens it"))
                 trailing: Choice {
                     usable: category.modelData.candidates.length > 0
                     model: category.modelData.candidates.map(a => ({ text: a.name }))
                     currentIndex: category.modelData.candidates.findIndex(a => a.id === category.modelData.current.id)
-                    displayText: currentIndex >= 0 ? category.modelData.candidates[currentIndex].name : "Scegli un'app"
+                    displayText: currentIndex >= 0 ? category.modelData.candidates[currentIndex].name : qsTr("Choose an app")
                     onChosen: index => DefaultApps.setDefault(category.modelData.key, category.modelData.candidates[index].id)
                 }
             }
@@ -86,7 +86,7 @@ Page {
 
     // --- per app ---
     CardGroup {
-        title: "App"
+        title: qsTr("Apps")
         Item {
             width: parent.width
             height: 44
@@ -94,7 +94,7 @@ Page {
                 id: appFilter
                 anchors.verticalCenter: parent.verticalCenter
                 width: Math.min(360, parent.width)
-                placeholderText: "Cerca app"
+                placeholderText: qsTr("Search apps")
             }
         }
         Repeater {
@@ -103,8 +103,8 @@ Page {
                 required property var modelData
                 icon: modelData.icon
                 title: modelData.name
-                description: modelData.count === 1 ? "Apre 1 tipo di file o di collegamento"
-                    : "Apre " + modelData.count + " tipi di file e collegamenti"
+                description: modelData.count === 1 ? qsTr("Opens 1 file or link type")
+                    : qsTr("Opens ") + modelData.count + qsTr(" file and link types")
                 clickable: true
                 chevron: true
                 onClicked: {

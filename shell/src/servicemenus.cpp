@@ -144,7 +144,7 @@ void ServiceMenus::load()
             }
         }
     }
-    qInfo("vela-shell: %lld voci dei service menu di KDE", static_cast<long long>(m_actions.size()));
+    qInfo("vela-shell: %lld KDE service menu entries", static_cast<long long>(m_actions.size()));
 }
 
 QVariantList ServiceMenus::actionsFor(const QStringList& paths)
@@ -191,7 +191,7 @@ void ServiceMenus::run(int id, const QStringList& paths) const
     const QString directory = QFileInfo(paths.first()).absolutePath();
     const DesktopExec::Parsed parsed = DesktopExec::split(a.exec);
     if (!parsed.ok) {
-        qWarning("vela-shell: service menu con Exec non valido: %s", qPrintable(a.exec));
+        qWarning("vela-shell: service menu with invalid Exec: %s", qPrintable(a.exec));
         return;
     }
     QList<QUrl> files;

@@ -35,10 +35,22 @@ qt_add_resources(vela-lock "images"
     PREFIX "/vela"
     BASE ${PROJECT_SOURCE_DIR}
     FILES ${PROJECT_SOURCE_DIR}/images/vela_splash_169.svg)
-target_include_directories(vela-lock PRIVATE ${LOCK_GENERATED_DIR})
+target_include_directories(vela-lock PRIVATE ${LOCK_GENERATED_DIR} ${PROJECT_SOURCE_DIR}/shell/src)
 target_compile_options(vela-lock PRIVATE -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
 target_link_libraries(vela-lock PRIVATE Qt6::Gui Qt6::Svg PkgConfig::LOCK_DEPS ${PAM_LIBRARY})
 
 install(TARGETS vela-lock RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 # Il servizio PAM: la stessa verifica dell'accesso da console.
 install(FILES vela-lock.pam DESTINATION /etc/pam.d RENAME vela-lock)
+
+# Traduzione italiana: le stringhe del codice sono in inglese, l'italiano sta
+# in i18n/vela-lock_it.ts e finisce nell'eseguibile (:/i18n/vela-lock_it.qm, vedi
+# shell/src/language.h). Dopo aver cambiato testi:
+#   cmake --build build --target update_translations
+find_package(Qt6 6.7 REQUIRED COMPONENTS LinguistTools)
+qt_add_translations(TARGETS vela-lock SOURCE_TARGETS vela-lock
+    TS_FILES i18n/vela-lock_it.ts
+    RESOURCE_PREFIX /i18n
+    LUPDATE_TARGET vela-lock_lupdate
+    LRELEASE_TARGET vela-lock_lrelease
+    LUPDATE_OPTIONS -source-language en -target-language it -no-obsolete -locations none)

@@ -95,14 +95,14 @@ QtObject {
         const selected = input.selectedText.length > 0
         const editable = !input.readOnly
         return [
-            { text: "&Annulla", icon: "edit-undo", shortcut: "Ctrl+Z", enabled: editable && input.canUndo, action: () => input.undo() },
+            { text: qsTr("&Undo"), icon: "edit-undo", shortcut: "Ctrl+Z", enabled: editable && input.canUndo, action: () => input.undo() },
             { separator: true },
-            { text: "&Taglia", icon: "edit-cut", shortcut: "Ctrl+X", enabled: editable && selected, action: () => input.cut() },
-            { text: "&Copia", icon: "edit-copy", shortcut: "Ctrl+C", enabled: selected, action: () => input.copy() },
-            { text: "&Incolla", icon: "edit-paste", shortcut: "Ctrl+V", enabled: editable && input.canPaste, action: () => input.paste() },
-            { text: "&Elimina", icon: "edit-delete", shortcut: "Canc", enabled: editable && selected, action: () => input.remove(input.selectionStart, input.selectionEnd) },
+            { text: qsTr("Cu&t"), icon: "edit-cut", shortcut: "Ctrl+X", enabled: editable && selected, action: () => input.cut() },
+            { text: qsTr("&Copy"), icon: "edit-copy", shortcut: "Ctrl+C", enabled: selected, action: () => input.copy() },
+            { text: qsTr("&Paste"), icon: "edit-paste", shortcut: "Ctrl+V", enabled: editable && input.canPaste, action: () => input.paste() },
+            { text: qsTr("&Delete"), icon: "edit-delete", shortcut: qsTr("Del"), enabled: editable && selected, action: () => input.remove(input.selectionStart, input.selectionEnd) },
             { separator: true },
-            { text: "&Seleziona tutto", icon: "edit-select-all", shortcut: "Ctrl+A", enabled: input.text.length > 0, action: () => input.selectAll() }
+            { text: qsTr("Select &all"), icon: "edit-select-all", shortcut: "Ctrl+A", enabled: input.text.length > 0, action: () => input.selectAll() }
         ]
     }
 
@@ -110,13 +110,13 @@ QtObject {
     // destro sul pulsante della taskbar). act(azione) la esegue.
     function windowEntries(maximized, minimized, resizable, act) {
         return [
-            { text: "&Ripristina", icon: "window-restore", enabled: maximized || minimized, action: () => act("restore") },
-            { text: "&Sposta", enabled: !maximized && !minimized, action: () => act("move") },
-            { text: "Ri&dimensiona", enabled: !maximized && !minimized && resizable, action: () => act("resize") },
-            { text: "Riduci a ic&ona", icon: "window-minimize", enabled: !minimized, action: () => act("minimize") },
-            { text: "&Ingrandisci", icon: "window-maximize", enabled: !maximized && resizable, action: () => act("maximize") },
+            { text: qsTr("&Restore"), icon: "window-restore", enabled: maximized || minimized, action: () => act("restore") },
+            { text: qsTr("&Move"), enabled: !maximized && !minimized, action: () => act("move") },
+            { text: qsTr("&Size"), enabled: !maximized && !minimized && resizable, action: () => act("resize") },
+            { text: qsTr("Mi&nimize"), icon: "window-minimize", enabled: !minimized, action: () => act("minimize") },
+            { text: qsTr("Ma&ximize"), icon: "window-maximize", enabled: !maximized && resizable, action: () => act("maximize") },
             { separator: true },
-            { text: "&Chiudi", icon: "window-close", shortcut: "Alt+F4", action: () => act("close") }
+            { text: qsTr("&Close"), icon: "window-close", shortcut: "Alt+F4", action: () => act("close") }
         ]
     }
 }

@@ -6,7 +6,7 @@
 // Ogni fotogramma ha un colore pieno, scritto dalla CPU in un dmabuf (GBM,
 // lineare); poi un lavoro su una coda compute che dura circa MS millisecondi
 // fa da "rendering": la sua fence diventa il punto di acquisizione del buffer
-// (linux-drm-syncobj-v1) o, con --implicita, la fence di scrittura del
+// (linux-drm-syncobj-v1) o, con --implicit, la fence di scrittura del
 // dmabuf. Il commit parte subito, con la GPU ancora al lavoro, come fa
 // un'app vera che disegna più lentamente dello schermo.
 //
@@ -15,7 +15,7 @@
 // compositor aspettasse la fence nel suo frame, perderebbe i vblank (lo
 // "state" di Vela li conta per schermo).
 //
-// Uso: vela-slowgpu [MS] [--implicita]    (predefinito 150 ms)
+// Uso: vela-slowgpu [MS] [--implicit]    (predefinito 150 ms)
 
 #define _GNU_SOURCE
 #include <errno.h>
@@ -220,7 +220,7 @@ static void setupVulkan(void)
     vkEnumeratePhysicalDevices(instance, &count, devices);
     struct stat node;
     if (fstat(drmFd, &node) != 0) {
-        die("fstat del nodo DRM");
+        die("fstat of the DRM node");
     }
     for (uint32_t i = 0; i < count && !physical; ++i) {
         VkPhysicalDeviceDrmPropertiesEXT drm = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRM_PROPERTIES_EXT };
@@ -231,7 +231,7 @@ static void setupVulkan(void)
         }
     }
     if (!physical) {
-        die("nessun device Vulkan per il nodo DRM del compositor");
+        die("no Vulkan device for the compositor's DRM node");
     }
 
     // Una coda di solo calcolo, se c'è: non occupa quella grafica.
@@ -254,7 +254,7 @@ static void setupVulkan(void)
         }
     }
     if (chosen < 0) {
-        die("nessuna coda compute");
+        die("no compute queue");
     }
 
     const float priority = 0.0f;
@@ -455,7 +455,7 @@ static void calibrate(double targetMs)
         runJob(0);
         elapsed = nowMs() - start;
     }
-    printf("lavoro GPU: %u iterazioni, %.0f ms\n", iterations, elapsed);
+    printf("GPU job: %u iterations, %.0f ms\n", iterations, elapsed);
     fflush(stdout);
 }
 
@@ -513,7 +513,7 @@ static struct Buffer* freeBuffer(unsigned frame)
                 }
             }
             if (wl_display_dispatch(wl_proxy_get_display((struct wl_proxy*)surface)) < 0) {
-                die("connessione persa");
+                die("connection lost");
             }
         }
     }
@@ -525,7 +525,7 @@ static struct Buffer* freeBuffer(unsigned frame)
         const int64_t deadline = (int64_t)(nowMs() * 1e6) + 5 * 1000000000LL;
         if (drmSyncobjTimelineWait(drmFd, &releaseHandle, &point, 1, deadline, DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT,
                                    NULL)) {
-            die("il compositor non rilascia il buffer");
+            die("the compositor doesn't release the buffer");
         }
     }
     return b;
@@ -550,7 +550,7 @@ static void draw(void)
         uint32_t temporary = 0;
         if (drmSyncobjCreate(drmFd, 0, &temporary) || drmSyncobjImportSyncFile(drmFd, temporary, syncFile)
             || drmSyncobjTransfer(drmFd, acquireHandle, acquire, temporary, 0, 0)) {
-            die("fence nella timeline");
+            die("fence into the timeline");
         }
         drmSyncobjDestroy(drmFd, temporary);
         b->releasePoint = nextPoint++;
@@ -583,19 +583,19 @@ int main(int argc, char* argv[])
 {
     double targetMs = 150.0;
     for (int i = 1; i < argc; ++i) {
-        if (!strcmp(argv[i], "--implicita")) {
+        if (!strcmp(argv[i], "--implicit")) {
             implicitSync = 1;
         } else if (atof(argv[i]) > 0) {
             targetMs = atof(argv[i]);
         } else {
-            fprintf(stderr, "uso: vela-slowgpu [MS] [--implicita]\n");
+            fprintf(stderr, "usage: vela-slowgpu [MS] [--implicit]\n");
             return 2;
         }
     }
 
     struct wl_display* display = wl_display_connect(NULL);
     if (!display) {
-        die("nessun compositor Wayland");
+        die("no Wayland compositor");
     }
     wl_registry_add_listener(wl_display_get_registry(display), &registryListener, NULL);
     wl_display_roundtrip(display);
@@ -603,23 +603,23 @@ int main(int argc, char* argv[])
         die("mancano wl_compositor, xdg_wm_base o linux-dmabuf v4");
     }
     if (!implicitSync && !syncobjManager) {
-        die("il compositor non offre linux-drm-syncobj-v1");
+        die("the compositor doesn't offer linux-drm-syncobj-v1");
     }
     struct zwp_linux_dmabuf_feedback_v1* feedback = zwp_linux_dmabuf_v1_get_default_feedback(dmabufManager);
     zwp_linux_dmabuf_feedback_v1_add_listener(feedback, &feedbackListener, NULL);
     wl_display_roundtrip(display);
     zwp_linux_dmabuf_feedback_v1_destroy(feedback);
     if (!haveMainDevice) {
-        die("il feedback dmabuf non dice il device");
+        die("the dmabuf feedback doesn't name the device");
     }
     drmDevice* drm = NULL;
     if (drmGetDeviceFromDevId(mainDevice, 0, &drm) || !(drm->available_nodes & (1 << DRM_NODE_RENDER))) {
-        die("nodo render del compositor non trovato");
+        die("the compositor's render node wasn't found");
     }
     drmFd = open(drm->nodes[DRM_NODE_RENDER], O_RDWR | O_CLOEXEC);
     drmFreeDevice(&drm);
     if (drmFd < 0) {
-        die("apertura del nodo render");
+        die("opening the render node");
     }
     gbm = gbm_create_device(drmFd);
     if (!gbm) {

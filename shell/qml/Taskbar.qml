@@ -93,26 +93,26 @@ Window {
                 action: () => Apps.launchWithFile(id, file.url),
                 pin: { pinned: pinned, toggle: () => Jumps.setPinned(id, file.url, !pinned) },
                 context: [
-                    { text: "&Apri", icon: task.iconName, action: () => Apps.launchWithFile(id, file.url) },
+                    { text: qsTr("&Open"), icon: task.iconName, action: () => Apps.launchWithFile(id, file.url) },
                     pinned
-                        ? { text: "&Rimuovi da questo elenco", icon: "window-unpin", action: () => Jumps.setPinned(id, file.url, false) }
-                        : { text: "A&ggiungi a questo elenco", icon: "window-pin", action: () => Jumps.setPinned(id, file.url, true) },
-                    { text: "Rimuovi dall'&elenco", icon: "list-remove", action: () => Jumps.forget(id, file.url) }
+                        ? { text: qsTr("&Remove from this list"), icon: "window-unpin", action: () => Jumps.setPinned(id, file.url, false) }
+                        : { text: qsTr("&Pin to this list"), icon: "window-pin", action: () => Jumps.setPinned(id, file.url, true) },
+                    { text: qsTr("Remove from &list"), icon: "list-remove", action: () => Jumps.forget(id, file.url) }
                 ]
             })
             const pinned = Jumps.pinned(id)
             if (pinned.length > 0) {
-                entries.push({ header: "Aggiunti" })
+                entries.push({ header: qsTr("Pinned") })
                 pinned.forEach(f => entries.push(fileEntry(f, true)))
             }
             const recent = Jumps.recent(id, 10)
             if (recent.length > 0) {
-                entries.push({ header: "Recenti" })
+                entries.push({ header: qsTr("Recent") })
                 recent.forEach(f => entries.push(fileEntry(f, false)))
             }
             const actions = Apps.actions(id)
             if (actions.length > 0) {
-                entries.push({ header: "Attività" })
+                entries.push({ header: qsTr("Tasks") })
                 actions.forEach(a => entries.push({ text: a.name.replace(/&/g, "&&"), icon: a.icon, action: () => Apps.launchAction(id, a.id) }))
             }
             if (entries.length > 0) {
@@ -120,15 +120,15 @@ Window {
             }
             entries.push({ text: task.name.replace(/&/g, "&&"), icon: task.iconName, action: () => Apps.launchId(id) })
             entries.push(Tasks.isPinned(id)
-                ? { text: "Rimuovi dalla barra delle applicazioni", icon: "window-unpin", action: () => Tasks.unpin(id) }
-                : { text: "Aggiungi alla barra delle applicazioni", icon: "window-pin", action: () => Tasks.pin(id) })
+                ? { text: qsTr("Unpin from taskbar"), icon: "window-unpin", action: () => Tasks.unpin(id) }
+                : { text: qsTr("Pin to taskbar"), icon: "window-pin", action: () => Tasks.pin(id) })
         }
         if (task.windowCount > 0 && Config.endTask) {
-            entries.push({ text: "Termina attività", icon: "process-stop", action: () => Tasks.endTask(task.index) })
+            entries.push({ text: qsTr("End task"), icon: "process-stop", action: () => Tasks.endTask(task.index) })
         }
         if (task.windowCount > 0) {
             entries.push({
-                text: task.windowCount > 1 ? "Chiudi tutte le finestre" : "Chiudi finestra",
+                text: task.windowCount > 1 ? qsTr("Close all windows") : qsTr("Close window"),
                 icon: "window-close",
                 action: () => Tasks.closeWindows(task.index)
             })
@@ -139,35 +139,35 @@ Window {
     // Win+X: il menu del pulsante Start.
     function winXEntries() {
         const item = (text, icon, name) => ({ text: text, icon: icon, enabled: System.available(name), action: () => System.trigger(name) })
-        const entries = [item("App insta&llate", "system-software-install", "installed-apps")]
+        const entries = [item(qsTr("Insta&lled apps"), "system-software-install", "installed-apps")]
         if (System.isLaptop()) {
-            entries.push(item("Centro PC &portatile", "computer-laptop", "mobility"))
+            entries.push(item(qsTr("Mobility &Center"), "computer-laptop", "mobility"))
         }
         entries.push(
-            item("&Opzioni risparmio energia", "preferences-system-power-management", "power"),
-            item("Visuali&zzatore eventi", "text-x-log", "events"),
-            item("Siste&ma", "computer", "system"),
-            item("Gestione dispositi&vi", "preferences-devices-tree", "devices"),
-            item("Conn&essioni di rete", "preferences-system-network", "network"),
-            item("Gestio&ne disco", "drive-harddisk", "disks"),
-            item("&Gestione computer", "computer", "computer"),
+            item(qsTr("P&ower options"), "preferences-system-power-management", "power"),
+            item(qsTr("E&vent viewer"), "text-x-log", "events"),
+            item(qsTr("S&ystem"), "computer", "system"),
+            item(qsTr("Device &manager"), "preferences-devices-tree", "devices"),
+            item(qsTr("Net&work connections"), "preferences-system-network", "network"),
+            item(qsTr("Dis&k management"), "drive-harddisk", "disks"),
+            item(qsTr("Computer mana&gement"), "computer", "computer"),
             { separator: true },
-            item("Te&rminale", "utilities-terminal", "terminal"),
-            item("Terminale (A&dmin)", "utilities-terminal", "terminal-admin"),
+            item(qsTr("&Terminal"), "utilities-terminal", "terminal"),
+            item(qsTr("Terminal (&Admin)"), "utilities-terminal", "terminal-admin"),
             { separator: true },
-            item("Gestione attivi&tà", "utilities-system-monitor", "task-manager"),
-            item("&Impostazioni", "preferences-system", "settings"),
-            item("&Esplora file", "system-file-manager", "files"),
-            { text: "&Cerca", icon: "search", action: () => { root.fromHere(); if (!Shell.startMenuOpen) Shell.toggleStartMenu() } },
-            { text: "E&segui", icon: "system-run", action: () => { root.fromHere(); Shell.runRequested() } },
+            item(qsTr("Task manage&r"), "utilities-system-monitor", "task-manager"),
+            item(qsTr("Setti&ngs"), "preferences-system", "settings"),
+            item(qsTr("File &Explorer"), "system-file-manager", "files"),
+            { text: qsTr("&Search"), icon: "search", action: () => { root.fromHere(); if (!Shell.startMenuOpen) Shell.toggleStartMenu() } },
+            { text: qsTr("&Run"), icon: "system-run", action: () => { root.fromHere(); Shell.runRequested() } },
             { separator: true },
-            { text: "&Arresta il sistema o disconnetti", icon: "system-shutdown", children: [
-                { text: "&Disconnetti", icon: "system-log-out", action: () => Shell.logout() },
-                { text: "&Sospendi", icon: "system-suspend", enabled: Shell.canSuspend(), action: () => Shell.suspend() },
-                { text: "&Arresta il sistema", icon: "system-shutdown", action: () => Shell.powerOff() },
-                { text: "&Riavvia il sistema", icon: "system-reboot", action: () => Shell.reboot() }
+            { text: qsTr("Sh&ut down or sign out"), icon: "system-shutdown", children: [
+                { text: qsTr("Sign &out"), icon: "system-log-out", action: () => Shell.logout() },
+                { text: qsTr("S&leep"), icon: "system-suspend", enabled: Shell.canSuspend(), action: () => Shell.suspend() },
+                { text: qsTr("Sh&ut down"), icon: "system-shutdown", action: () => Shell.powerOff() },
+                { text: qsTr("&Restart"), icon: "system-reboot", action: () => Shell.reboot() }
             ] },
-            { text: "Des&ktop", icon: "user-desktop", action: () => Tasks.toggleDesktop() }
+            { text: qsTr("&Desktop"), icon: "user-desktop", action: () => Tasks.toggleDesktop() }
         )
         return entries
     }
@@ -217,8 +217,8 @@ Window {
             onClicked: mouse => {
                 const p = root.screenPoint(emptyArea, mouse.x, 0)
                 root.openMenu([
-                    { text: "Gestione &attività", icon: "utilities-system-monitor", enabled: System.available("task-manager"), action: () => System.trigger("task-manager") },
-                    { text: "&Impostazioni della barra delle applicazioni", icon: "configure", enabled: System.available("taskbar-settings"), action: () => System.trigger("taskbar-settings") }
+                    { text: qsTr("Task &manager"), icon: "utilities-system-monitor", enabled: System.available("task-manager"), action: () => System.trigger("task-manager") },
+                    { text: qsTr("Taskbar &settings"), icon: "configure", enabled: System.available("taskbar-settings"), action: () => System.trigger("taskbar-settings") }
                 ], p.x, root.menuBottom, { above: true })
             }
         }
@@ -269,7 +269,7 @@ Window {
         // Visualizzazione attività: due finestre sovrapposte, come l'icona di Windows 11.
         TaskbarButton {
             visible: Config.taskView
-            tooltip: "Visualizzazione attività"
+            tooltip: qsTr("Task view")
             onClicked: { root.fromHere(); Shell.taskViewRequested() }
             Item {
                 anchors.centerIn: parent
@@ -503,11 +503,11 @@ Window {
                 const overVolume = volumeIcon.visible && mouse.x >= volumeIcon.x + iconsRow.x - 5
                     && mouse.x < volumeIcon.x + iconsRow.x + volumeIcon.width + 5
                 root.openMenu(overVolume ? [
-                    { text: "Apri &mixer volume", icon: "audio-volume-high", enabled: System.available("volume-mixer"), action: () => System.trigger("volume-mixer") },
-                    { text: "&Impostazioni audio", icon: "preferences-desktop-sound", enabled: System.available("sound-settings"), action: () => System.trigger("sound-settings") }
+                    { text: qsTr("Open volume &mixer"), icon: "audio-volume-high", enabled: System.available("volume-mixer"), action: () => System.trigger("volume-mixer") },
+                    { text: qsTr("&Sound settings"), icon: "preferences-desktop-sound", enabled: System.available("sound-settings"), action: () => System.trigger("sound-settings") }
                 ] : [
-                    { text: "&Diagnostica problemi di rete", icon: "network-workgroup", enabled: false },
-                    { text: "&Impostazioni di rete e Internet", icon: "preferences-system-network", enabled: System.available("network"), action: () => System.trigger("network") }
+                    { text: qsTr("&Troubleshoot network problems"), icon: "network-workgroup", enabled: false },
+                    { text: qsTr("&Network and Internet settings"), icon: "preferences-system-network", enabled: System.available("network"), action: () => System.trigger("network") }
                 ], p.x, root.menuBottom, { above: true })
             }
             onWheel: wheel => {
@@ -599,8 +599,8 @@ Window {
                 }
                 const p = root.screenPoint(clock, mouse.x, 0)
                 root.openMenu([
-                    { text: "&Regola data e ora", icon: "preferences-system-time", enabled: System.available("datetime"), action: () => System.trigger("datetime") },
-                    { text: "Impostazioni di &notifica", icon: "preferences-desktop-notification", enabled: System.available("notification-settings"), action: () => System.trigger("notification-settings") }
+                    { text: qsTr("&Adjust date and time"), icon: "preferences-system-time", enabled: System.available("datetime"), action: () => System.trigger("datetime") },
+                    { text: qsTr("&Notification settings"), icon: "preferences-desktop-notification", enabled: System.available("notification-settings"), action: () => System.trigger("notification-settings") }
                 ], p.x, root.menuBottom, { above: true })
             }
         }

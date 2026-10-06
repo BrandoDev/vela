@@ -22,7 +22,7 @@ class Outputs(unittest.TestCase):
 
     def add_second(self):
         self.vela.command("test-output add 1920x1080")
-        return self.vela.wait_for(lambda s: len(s["outputs"]) == 2, what="due schermi")
+        return self.vela.wait_for(lambda s: len(s["outputs"]) == 2, what="two outputs")
 
     def test_hotplug_with_its_own_scale(self):
         state = self.add_second()
@@ -31,7 +31,7 @@ class Outputs(unittest.TestCase):
         second = next(o for o in state["outputs"] if o["name"] == "HEADLESS-2")
         self.assertEqual((second["w"], second["h"]), (1280, 720))  # 1920x1080 a 150%
         self.vela.command("test-output remove HEADLESS-2")
-        self.vela.wait_for(lambda s: len(s["outputs"]) == 1, what="di nuovo uno schermo")
+        self.vela.wait_for(lambda s: len(s["outputs"]) == 1, what="one output again")
 
     def test_windows_are_rescued_and_come_back(self):
         state = self.add_second()
@@ -44,22 +44,22 @@ class Outputs(unittest.TestCase):
         self.vela.input("move", grab_x, grab_y, "keydown", "super", "down", "sleep", "50",
                         "move", (grab_x + target_x) // 2, (grab_y + target_y) // 2, "sleep", "50",
                         "move", target_x, target_y, "sleep", "100", "up", "keyup", "super")
-        state = self.vela.wait_for(lambda s: s.window(window)["output"] == "HEADLESS-2", what="sul secondo schermo")
+        state = self.vela.wait_for(lambda s: s.window(window)["output"] == "HEADLESS-2", what="on the second output")
         placed = state.window(window)
         # Lo schermo si spegne (Impostazioni > Schermo, wlr-output-management):
         # la finestra passa sul primo, tutta dentro.
         if not shutil.which("wlr-randr"):
-            self.skipTest("serve wlr-randr")
+            self.skipTest("needs wlr-randr")
         randr = lambda *args: subprocess.run(["wlr-randr", *args], env=self.vela.client_env, check=True,
                                              stdout=subprocess.DEVNULL)
         randr("--output", "HEADLESS-2", "--off")
-        state = self.vela.wait_for(lambda s: s.window(window)["output"] == "HEADLESS-1", what="salvata sul primo schermo")
+        state = self.vela.wait_for(lambda s: s.window(window)["output"] == "HEADLESS-1", what="rescued to the first output")
         rescued, first = state.window(window), state.output
         self.assertGreaterEqual(rescued["x"], first["x"])
         self.assertLessEqual(rescued["x"] + rescued["w"], first["x"] + first["w"])
         # Lo schermo torna: la finestra torna dov'era.
         randr("--output", "HEADLESS-2", "--on")
-        state = self.vela.wait_for(lambda s: s.window(window)["output"] == "HEADLESS-2", what="tornata al suo schermo")
+        state = self.vela.wait_for(lambda s: s.window(window)["output"] == "HEADLESS-2", what="back on its output")
         back = state.window(window)
         self.assertEqual((back["x"], back["y"]), (placed["x"], placed["y"]))
 
@@ -74,7 +74,7 @@ class Outputs(unittest.TestCase):
         # Scollegato del tutto: la finestra resta raggiungibile sul primo.
         self.vela.command("test-output remove HEADLESS-2")
         state = self.vela.wait_for(lambda s: len(s["outputs"]) == 1 and s.window(window)["output"] == "HEADLESS-1",
-                                   what="salvata sul primo schermo")
+                                   what="rescued to the first output")
         rescued, first = state.window(window), state.output
         self.assertGreaterEqual(rescued["y"], first["y"])
         self.assertLessEqual(rescued["y"] + rescued["h"], first["y"] + first["h"])

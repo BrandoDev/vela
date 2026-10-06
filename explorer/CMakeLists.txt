@@ -88,9 +88,21 @@ if(VELA_BUILD_TOOLS)
     qt_add_executable(vela-files-test tests/transfers.cpp)
     target_compile_options(vela-files-test PRIVATE -Wall -Wextra)
     target_link_libraries(vela-files-test PRIVATE vela-files-core Qt6::Test)
-    add_test(NAME esplora-copie COMMAND vela-files-test)
-    set_tests_properties(esplora-copie PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    add_test(NAME files-copies COMMAND vela-files-test)
+    set_tests_properties(files-copies PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()
 
 install(TARGETS vela-files RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES vela-files.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+
+# Traduzione italiana: le stringhe del codice sono in inglese, l'italiano sta
+# in i18n/vela-files_it.ts e finisce nell'eseguibile (:/i18n/vela-files_it.qm, vedi
+# shell/src/language.h). Dopo aver cambiato testi:
+#   cmake --build build --target update_translations
+find_package(Qt6 6.7 REQUIRED COMPONENTS LinguistTools)
+qt_add_translations(TARGETS vela-files SOURCE_TARGETS vela-files vela-files-core
+    TS_FILES i18n/vela-files_it.ts
+    RESOURCE_PREFIX /i18n
+    LUPDATE_TARGET vela-files_lupdate
+    LRELEASE_TARGET vela-files_lrelease
+    LUPDATE_OPTIONS -source-language en -target-language it -no-obsolete -locations none)

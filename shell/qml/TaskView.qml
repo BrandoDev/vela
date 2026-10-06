@@ -123,29 +123,29 @@ Window {
             }
         }
         moveTo.push({ separator: true })
-        moveTo.push({ text: "&Nuovo desktop", icon: "list-add", action: () => Desktops.moveWindowToNew(w.id) })
+        moveTo.push({ text: qsTr("&New desktop"), icon: "list-add", action: () => Desktops.moveWindowToNew(w.id) })
         const appSticky = Desktops.stickyApps.indexOf(w.appId) >= 0
         return [
-            { text: "Aggancia a &sinistra", icon: "window-snap-left", action: () => { Shell.windowAction(w.id, "snap-left"); root.close() } },
-            { text: "Aggancia a &destra", icon: "window-snap-right", action: () => { Shell.windowAction(w.id, "snap-right"); root.close() } },
+            { text: qsTr("Snap &left"), icon: "window-snap-left", action: () => { Shell.windowAction(w.id, "snap-left"); root.close() } },
+            { text: qsTr("Snap &right"), icon: "window-snap-right", action: () => { Shell.windowAction(w.id, "snap-right"); root.close() } },
             { separator: true },
-            { text: "S&posta in", enabled: w.workspace !== -1, children: moveTo },
-            { text: "&Mostra questa finestra su tutti i desktop", checked: w.workspace === -1, action: () => Desktops.setWindowSticky(w.id, w.workspace !== -1) },
-            { text: "Mostra &le finestre di questa app su tutti i desktop", checked: appSticky, enabled: w.appId !== "", action: () => Desktops.setAppSticky(w.id, !appSticky) },
+            { text: qsTr("&Move to"), enabled: w.workspace !== -1, children: moveTo },
+            { text: qsTr("&Show this window on all desktops"), checked: w.workspace === -1, action: () => Desktops.setWindowSticky(w.id, w.workspace !== -1) },
+            { text: qsTr("Show windows from this &app on all desktops"), checked: appSticky, enabled: w.appId !== "", action: () => Desktops.setAppSticky(w.id, !appSticky) },
             { separator: true },
-            { text: "&Chiudi", icon: "window-close", action: () => Shell.windowAction(w.id, "close") }
+            { text: qsTr("&Close"), icon: "window-close", action: () => Shell.windowAction(w.id, "close") }
         ]
     }
     property int renaming: -1
     function desktopMenu(index) {
         return [
-            { text: "&Rinomina", icon: "edit-rename", action: () => root.renaming = index },
-            { text: "Scegli &sfondo", icon: "preferences-desktop-wallpaper", action: () => { System.trigger("personalize"); root.close() } },
+            { text: qsTr("&Rename"), icon: "edit-rename", action: () => root.renaming = index },
+            { text: qsTr("Choose &background"), icon: "preferences-desktop-wallpaper", action: () => { System.trigger("personalize"); root.close() } },
             { separator: true },
-            { text: "Sposta a s&inistra", icon: "go-previous", enabled: index > 0, action: () => Desktops.move(index, index - 1) },
-            { text: "Sposta a d&estra", icon: "go-next", enabled: index < Desktops.count - 1, action: () => Desktops.move(index, index + 1) },
+            { text: qsTr("Move &left"), icon: "go-previous", enabled: index > 0, action: () => Desktops.move(index, index - 1) },
+            { text: qsTr("Move r&ight"), icon: "go-next", enabled: index < Desktops.count - 1, action: () => Desktops.move(index, index + 1) },
             { separator: true },
-            { text: "&Chiudi", icon: "window-close", enabled: Desktops.count > 1, action: () => Desktops.remove(index) }
+            { text: qsTr("&Close"), icon: "window-close", enabled: Desktops.count > 1, action: () => Desktops.remove(index) }
         ]
     }
 
@@ -210,7 +210,7 @@ Window {
             Text {
                 visible: root.shownWindows.length === 0
                 anchors.centerIn: parent
-                text: "Nessuna finestra aperta su questo desktop"
+                text: qsTr("No open windows on this desktop")
                 color: Theme.textDim
                 font.pixelSize: Theme.fontNormal
             }
@@ -530,7 +530,7 @@ Window {
                     Text {
                         width: desktops.cardWidth
                         height: 24
-                        text: "Nuovo desktop"
+                        text: qsTr("New desktop")
                         color: Theme.text
                         font.pixelSize: Theme.fontNormal
                         horizontalAlignment: Text.AlignHCenter

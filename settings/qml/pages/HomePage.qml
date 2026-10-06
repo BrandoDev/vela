@@ -41,7 +41,7 @@ Page {
                 font.pixelSize: Theme.fontBody
             }
             Text {
-                text: "Rinomina"
+                text: qsTr("Rename")
                 color: Theme.accentFill
                 font.pixelSize: Theme.fontBody
                 topPadding: 4
@@ -55,34 +55,34 @@ Page {
     }
 
     CardGroup {
-        title: "Impostazioni consigliate"
+        title: qsTr("Recommended settings")
         LinkCard {
             icon: "preferences-desktop-wallpaper"
-            title: "Sfondo"
-            description: "Immagini, colori e foto per il desktop"
+            title: qsTr("Background")
+            description: qsTr("Pictures, colors and photos for your desktop")
             onClicked: root.navigate("background")
         }
         LinkCard {
             icon: "preferences-desktop-color"
-            title: "Colori"
-            description: "Colore principale, modalità chiara o scura per le app"
+            title: qsTr("Colors")
+            description: qsTr("Accent color, light or dark mode for apps")
             onClicked: root.navigate("colors")
         }
         LinkCard {
             icon: "video-display"
-            title: "Schermo"
-            description: "Risoluzione, scala, frequenza di aggiornamento"
+            title: qsTr("Display")
+            description: qsTr("Resolution, scale, refresh rate")
             onClicked: root.navigate("display")
         }
     }
 
     CardGroup {
-        title: "Dispositivi Bluetooth"
+        title: qsTr("Bluetooth devices")
         visible: Status.bluetoothAvailable
         Card {
             icon: "preferences-system-bluetooth"
-            title: "Bluetooth"
-            description: Status.bluetoothEnabled ? "Individuabile come \"" + About.hostname + "\"" : "Disattivato"
+            title: qsTr("Bluetooth")
+            description: Status.bluetoothEnabled ? qsTr("Discoverable as \"") + About.hostname + "\"" : qsTr("Off")
             trailing: Toggle {
                 checked: Status.bluetoothEnabled
                 onToggled: on => Status.setBluetoothEnabled(on)
@@ -90,17 +90,17 @@ Page {
         }
         LinkCard {
             icon: "list-add"
-            title: "Visualizza tutti i dispositivi"
+            title: qsTr("View all devices")
             onClicked: root.navigate("bluetooth")
         }
     }
 
     CardGroup {
-        title: "Connessione"
+        title: qsTr("Connection")
         LinkCard {
             icon: Status.networkIconName
-            title: Status.networkConnected ? (Status.networkName !== "" ? Status.networkName : "Connesso") : "Non connesso"
-            description: Status.networkConnected ? (Status.networkWireless ? "Wi-Fi · Connesso, protetto" : "Ethernet · Connesso") : "Nessuna connessione a Internet"
+            title: Status.networkConnected ? (Status.networkName !== "" ? Status.networkName : qsTr("Connected")) : qsTr("Not connected")
+            description: Status.networkConnected ? (Status.networkWireless ? qsTr("Wi-Fi · Connected, secured") : qsTr("Ethernet · Connected")) : qsTr("No Internet connection")
             onClicked: root.navigate("network")
         }
     }

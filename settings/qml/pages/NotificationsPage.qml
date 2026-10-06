@@ -8,13 +8,13 @@ Page {
     CardGroup {
         Card {
             icon: "preferences-desktop-notification"
-            title: "Notifiche"
-            description: "Avvisi dalle app e dal sistema, nell'angolo in basso a destra e nel centro notifiche (Win+N)"
+            title: qsTr("Notifications")
+            description: qsTr("Alerts from apps and the system, in the bottom-right corner and in the notification center (Win+N)")
         }
         Card {
             icon: "notifications-disabled"
-            title: "Non disturbare"
-            description: "Le notifiche vanno direttamente nel centro notifiche, senza comparire"
+            title: qsTr("Do not disturb")
+            description: qsTr("Notifications go straight to the notification center, without popping up")
             trailing: Toggle {
                 checked: Prefs.doNotDisturb
                 onToggled: on => Prefs.doNotDisturb = on

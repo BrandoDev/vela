@@ -37,7 +37,7 @@ Column {
                         id: titleText
                         width: parent.width - 32
                         text: card.modelData.error !== "" ? card.modelData.error
-                            : card.modelData.finished ? card.modelData.title.replace(/^(Copia|Spostamento) di/, "Completato:")
+                            : card.modelData.finished ? card.modelData.doneTitle
                             : card.modelData.title
                         color: card.modelData.error !== "" ? Theme.critical : Theme.text
                         font.pixelSize: Theme.fontNormal
@@ -52,7 +52,7 @@ Column {
                     }
                 }
                 Text {
-                    text: Math.round(card.fraction * 100) + "% completato" + (card.modelData.current !== "" ? " · " + card.modelData.current : "")
+                    text: Math.round(card.fraction * 100) + qsTr("% complete") + (card.modelData.current !== "" ? " · " + card.modelData.current : "")
                     visible: !card.modelData.finished
                     width: parent.width
                     color: Theme.textDim

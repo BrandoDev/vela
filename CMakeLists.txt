@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.22)
 
 project(vela
     VERSION 0.1.0
-    DESCRIPTION "Desktop environment moderno e leggero per Linux"
+    DESCRIPTION "A modern, fluid and sharp desktop environment for Linux"
     LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -14,14 +14,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Tipo di build" FORCE)
+    set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
 endif()
 
 include(GNUInstallDirs)
 
-option(VELA_BUILD_COMPOSITOR "Compila il compositor (richiede wlroots)" ON)
-option(VELA_BUILD_SHELL "Compila la shell e le Impostazioni (richiede Qt 6 e LayerShellQt)" ON)
-option(VELA_BUILD_TOOLS "Compila gli strumenti di prova (vela-shot, vela-windows, vela-input) e le prove (ctest)" ON)
+option(VELA_BUILD_COMPOSITOR "Build the compositor (needs wlroots)" ON)
+option(VELA_BUILD_SHELL "Build the shell, Files and Settings (needs Qt 6 and LayerShellQt)" ON)
+option(VELA_BUILD_TOOLS "Build the test tools (vela-shot, vela-windows, vela-input...) and the tests (ctest)" ON)
 if(VELA_BUILD_TOOLS)
     enable_testing()
 endif()
@@ -44,9 +44,9 @@ if(VELA_BUILD_TOOLS)
     if(VELA_BUILD_COMPOSITOR)
         find_package(Python3 COMPONENTS Interpreter)
         if(Python3_FOUND)
-            add_test(NAME funzionali COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/functional/run.py)
-            add_test(NAME nitidezza COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/functional/run.py --nitidezza)
-            set_tests_properties(funzionali nitidezza PROPERTIES
+            add_test(NAME functional COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/functional/run.py)
+            add_test(NAME sharpness COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/functional/run.py --sharpness)
+            set_tests_properties(functional sharpness PROPERTIES
                 ENVIRONMENT "VELA_BUILD=${CMAKE_BINARY_DIR}"
                 SKIP_RETURN_CODE 77
                 TIMEOUT 600

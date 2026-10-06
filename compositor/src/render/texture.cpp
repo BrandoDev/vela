@@ -139,7 +139,7 @@ wlr_texture* importDmabuf(Renderer& renderer, wlr_buffer* buffer, const wlr_dmab
     VulkanDevice& vk = renderer.vk();
     const PixelFormat* format = pixelFormat(dmabuf.format);
     if (!format || !wlr_drm_format_set_has(&vk.textureFormats, dmabuf.format, dmabuf.modifier)) {
-        wlr_log(WLR_DEBUG, "Texture: dmabuf 0x%08x (modifier 0x%" PRIx64 ") non supportato", dmabuf.format,
+        wlr_log(WLR_DEBUG, "Texture: dmabuf 0x%08x (modifier 0x%" PRIx64 ") not supported", dmabuf.format,
             dmabuf.modifier);
         return nullptr;
     }
@@ -147,7 +147,7 @@ wlr_texture* importDmabuf(Renderer& renderer, wlr_buffer* buffer, const wlr_dmab
     if (!vk.importDmabuf(dmabuf, format->unorm, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
             texture->image, texture->memory)
         || !createView(texture)) {
-        wlr_log(WLR_ERROR, "Texture: impossibile importare il dmabuf");
+        wlr_log(WLR_ERROR, "Texture: can't import the dmabuf");
         retire(texture);
         return nullptr;
     }
@@ -249,7 +249,7 @@ wlr_texture* uploadBuffer(Renderer& renderer, wlr_buffer* buffer)
     const auto& shm = renderer.vk().shmFormats;
     if (!format || std::find(shm.begin(), shm.end(), drmFormat) == shm.end()) {
         wlr_buffer_end_data_ptr_access(buffer);
-        wlr_log(WLR_DEBUG, "Texture: formato 0x%08x non supportato", drmFormat);
+        wlr_log(WLR_DEBUG, "Texture: format 0x%08x not supported", drmFormat);
         return nullptr;
     }
 
@@ -287,7 +287,7 @@ wlr_texture* uploadBuffer(Renderer& renderer, wlr_buffer* buffer)
     }
     wlr_buffer_end_data_ptr_access(buffer);
     if (!ok) {
-        wlr_log(WLR_ERROR, "Texture: impossibile caricare un buffer %dx%d", buffer->width, buffer->height);
+        wlr_log(WLR_ERROR, "Texture: can't upload a %dx%d buffer", buffer->width, buffer->height);
         if (!texture->memory && texture->image) {
             vkDestroyImage(vk.device, texture->image, nullptr);
             texture->image = VK_NULL_HANDLE;
@@ -343,7 +343,7 @@ bool readPixels(wlr_texture* wlr, const wlr_texture_read_pixels_options* options
 
     const PixelFormat* wanted = pixelFormat(options->format);
     if (!wanted || wanted->unorm != texture->format->unorm) {
-        wlr_log(WLR_ERROR, "Texture: lettura nel formato 0x%08x non supportata", options->format);
+        wlr_log(WLR_ERROR, "Texture: reading in format 0x%08x not supported", options->format);
         return false;
     }
     // Da X... ad A...: il quarto canale va messo a "opaco".

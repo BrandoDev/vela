@@ -8,8 +8,8 @@
 //
 //   VELA_LOCK="vela-testlock 1500" vela-compositor ...   poi il comando "lock"
 //
-// Uso: vela-testlock [millisecondi] [--senza-distruggere]
-//   --senza-distruggere  dopo lo sblocco esce senza distruggere le superfici
+// Uso: vela-testlock [millisecondi] [--keep-surfaces]
+//   --keep-surfaces  dopo lo sblocco esce senza distruggere le superfici
 //                        (le distrugge la disconnessione, come in un crash)
 
 #define _GNU_SOURCE
@@ -137,17 +137,17 @@ static int64_t now_ms(void)
 int main(int argc, char* argv[])
 {
     const int hold = argc > 1 ? atoi(argv[1]) : 1500;
-    const bool keep_surfaces = argc > 2 && !strcmp(argv[2], "--senza-distruggere");
+    const bool keep_surfaces = argc > 2 && !strcmp(argv[2], "--keep-surfaces");
     struct wl_display* display = wl_display_connect(NULL);
     if (!display) {
-        fprintf(stderr, "vela-testlock: nessun display Wayland\n");
+        fprintf(stderr, "vela-testlock: no Wayland display\n");
         return 1;
     }
     struct wl_registry* registry = wl_display_get_registry(display);
     wl_registry_add_listener(registry, &registry_listener, NULL);
     wl_display_roundtrip(display);
     if (!compositor || !shm || !manager) {
-        fprintf(stderr, "vela-testlock: manca ext-session-lock-v1\n");
+        fprintf(stderr, "vela-testlock: ext-session-lock-v1 is missing\n");
         return 1;
     }
 
@@ -165,14 +165,14 @@ int main(int argc, char* argv[])
     while (!finished && wl_display_dispatch(display) != -1) {
         if (locked && until < 0) {
             until = now_ms() + hold;
-            fprintf(stderr, "vela-testlock: bloccato\n");
+            fprintf(stderr, "vela-testlock: locked\n");
         }
         if (until >= 0 && now_ms() >= until) {
             break;
         }
     }
     if (finished) {
-        fprintf(stderr, "vela-testlock: il compositor ha rifiutato il blocco\n");
+        fprintf(stderr, "vela-testlock: the compositor refused the lock\n");
         return 1;
     }
     unsigned frames = 0;
@@ -187,7 +187,7 @@ int main(int argc, char* argv[])
         }
     }
     wl_display_roundtrip(display);
-    fprintf(stderr, "vela-testlock: sbloccato dopo %u frame\n", frames);
+    fprintf(stderr, "vela-testlock: unlocked after %u frames\n", frames);
     wl_display_disconnect(display);
     return 0;
 }

@@ -19,10 +19,10 @@ CTest includes both CPU-only and GPU-dependent suites.
 | Suite | What it covers | GPU required |
 |---|---|---:|
 | **Compositor / GoogleTest** | FrameClock, vblank grid, late latching, adaptive margin, learned host latency, animation curves, output scale selection, pixel geometry, night light, color filters, sunrise/sunset and `vela.conf` parsing. | No |
-| **Files** (`esplora-copie`) | Copy/move behavior, staged replacement and failure handling including a simulated full disk with `RLIMIT_FSIZE`. | No |
+| **Files** (`files-copies`) | Copy/move behavior, staged replacement and failure handling including a simulated full disk with `RLIMIT_FSIZE`. | No |
 | **Shell** (`shell-*`) | `.desktop` `Exec=` parsing and default-app resolution through `mimeapps.list`. | No |
-| **Functional** (`funzionali`) | Opening and manipulating windows, snap, maximize/restore, minimize/Alt+Tab, virtual desktops, output hotplug, per-output scale, lock/unlock, screen power, compositor crash recovery, and an app whose GPU finishes 150 ms late (explicit and implicit sync) without a missed vblank. | Yes |
-| **Sharpness** (`nitidezza`) | Pixel-level checks that windows reach the expected physical pixels across fractional scales and common window states. | Yes |
+| **Functional** (`functional`) | Opening and manipulating windows, snap, maximize/restore, minimize/Alt+Tab, virtual desktops, output hotplug, per-output scale, lock/unlock, screen power, compositor crash recovery, and an app whose GPU finishes 150 ms late (explicit and implicit sync) without a missed vblank. | Yes |
+| **Sharpness** (`sharpness`) | Pixel-level checks that windows reach the expected physical pixels across fractional scales and common window states. | Yes |
 
 The compositor currently contains 43 GoogleTest cases; the functional harness contains 26 end-to-end scenarios.
 
@@ -37,26 +37,26 @@ ctest --test-dir build -R '^compositor\.' --output-on-failure
 Files and shell tests:
 
 ```sh
-ctest --test-dir build -R 'esplora-copie|shell-' --output-on-failure
+ctest --test-dir build -R 'files-copies|shell-' --output-on-failure
 ```
 
 Functional session tests:
 
 ```sh
-ctest --test-dir build -R '^funzionali$' --output-on-failure
+ctest --test-dir build -R '^functional$' --output-on-failure
 ```
 
 Sharpness only:
 
 ```sh
-ctest --test-dir build -R '^nitidezza$' --output-on-failure
+ctest --test-dir build -R '^sharpness$' --output-on-failure
 ```
 
 For direct invocation, the functional entry point is:
 
 ```sh
 python3 tests/functional/run.py
-python3 tests/functional/run.py --nitidezza
+python3 tests/functional/run.py --sharpness
 ```
 
 The sharpness check additionally needs NumPy and Pillow available to `python3`.
@@ -156,7 +156,7 @@ The test exercises normal, snapped, maximized and restored window states so frac
 screen wait (see [renderer.md](renderer.md) §7.3). `tools/vela-slowgpu` commits each frame
 while a Vulkan compute job, on a queue separate from the graphics one, still runs for about
 150 ms; its fence becomes the buffer's acquire point (`linux-drm-syncobj-v1`) or, with
-`--implicita`, the dmabuf's write fence. While the cursor moves for a second, the test reads
+`--implicit`, the dmabuf's write fence. While the cursor moves for a second, the test reads
 from `state` the missed vblanks, the frames shown and the commits held back:
 
 | Scenario | Expectation |
@@ -170,7 +170,7 @@ from `state` the missed vblanks, the frames shown and the commits held back:
 For renderer work, run relevant scenarios with Vulkan validation enabled:
 
 ```sh
-VELA_VULKAN_VALIDATION=1 ctest --test-dir build -R 'funzionali|nitidezza' --output-on-failure
+VELA_VULKAN_VALIDATION=1 ctest --test-dir build -R 'functional|sharpness' --output-on-failure
 ```
 
 Additional rendering switches such as `VELA_DEBUG_DAMAGE`, `VELA_DEBUG_SYNC`, `VELA_DEBUG_LINEAR` and `VELA_DEBUG_SCANOUT` are documented in [configuration.md](configuration.md).

@@ -6,7 +6,7 @@ For renderer design and frame scheduling, see [renderer.md](renderer.md). For th
 
 ## Build
 
-Vela requires CMake 3.22 or newer, Ninja, a C++20 compiler, wlroots 0.20, Qt 6.5 or newer, LayerShellQt, Vulkan headers and loader, `glslc`, GBM, libdrm, FreeType, HarfBuzz, Fontconfig and PAM. librsvg is optional (app icons in the title bar). The development tools and tests also need zlib, GoogleTest and Python 3. Distribution package lists are in the [README](../README.md#build-from-source).
+Vela requires CMake 3.22 or newer, Ninja, a C++20 compiler, wlroots 0.20, Qt 6.7 or newer with its Linguist tools, LayerShellQt, Vulkan headers and loader, `glslc`, GBM, libdrm, FreeType, HarfBuzz, Fontconfig and PAM. librsvg is optional (app icons in the title bar). The development tools and tests also need zlib, GoogleTest and Python 3. Distribution package lists are in the [README](../README.md#build-from-source).
 
 The normal development build is:
 
@@ -85,7 +85,7 @@ The tools under `build/tools/` are small clients intended for development and fu
 | `vela-shot` | Capture an output or region to PNG. |
 | `vela-pattern` | Produce deterministic visual test content. |
 | `vela-testlock` | Test the lock path without requiring a password; it unlocks itself. |
-| `vela-slowgpu` | An app whose GPU finishes each frame late (Vulkan compute job, explicit or `--implicita` sync), to check that the screen never waits for it. |
+| `vela-slowgpu` | An app whose GPU finishes each frame late (Vulkan compute job, explicit or `--implicit` sync), to check that the screen never waits for it. |
 
 The compositor also exposes a command socket at:
 
@@ -135,6 +135,31 @@ scripts/            nested/headless launchers, sharpness and measurements
 docs/               design and developer documentation
 ```
 
+## Translations
+
+The interface is in English and Italian. Strings in the code are written in English and wrapped for translation: `qsTr()` in QML, `QCoreApplication::translate()` (or `QT_TRANSLATE_NOOP` for tables) in C++. Italian lives in one Qt Linguist file per app:
+
+| App | Translation |
+|---|---|
+| Shell | `shell/i18n/vela-shell_it.ts` |
+| Files | `explorer/i18n/vela-files_it.ts` |
+| Settings | `settings/i18n/vela-settings_it.ts` |
+| Lock screen | `lock/i18n/vela-lock_it.ts` |
+
+The build compiles them and embeds them in each executable. After adding or changing text, refresh the files and translate the new entries (they are marked unfinished), for example with Qt Linguist:
+
+```sh
+cmake --build build --target update_translations
+linguist settings/i18n/vela-settings_it.ts
+```
+
+The language is chosen in Settings → Time & language (`language=` in `vela.conf`, see [configuration.md](configuration.md)). Every app watches that file and retranslates itself without restarting (`shell/src/language.h`). Dates, months and weekdays follow the chosen language; number formats follow the system's region.
+
+Two habits keep translation working:
+
+- never compare a label to find a menu entry or a state: compare an identifier, or compare against the same `qsTr()` string;
+- when one English string needs two different Italian translations in the same file (Italian genders: "consigliato" for a scale, "consigliata" for a resolution), give each a disambiguation (`qsTr(" (recommended)", "scale")`).
+
 ## Architecture boundaries
 
 Vela deliberately uses wlroots for low-level Wayland, DRM/KMS, libinput and backend plumbing while keeping the parts that define the desktop's rendering behavior in Vela itself.
@@ -176,7 +201,7 @@ See [testing.md](testing.md) for individual suites, GPU requirements and the hea
 
 Vela is still moving quickly. Before a large architectural change, opening an issue first is preferred so the direction can be discussed before substantial code is written.
 
-Code, comments and commit messages are currently in Italian. Commits should be signed off with:
+Code, logs, messages and interface text are in English; code comments are still in Italian. Commits should be signed off with:
 
 ```sh
 git commit -s

@@ -119,7 +119,7 @@ Window {
         Text {
             x: 24
             y: 20
-            text: "Scegli cosa condividere"
+            text: qsTr("Choose what to share")
             color: Theme.text
             font.pixelSize: Theme.fontNormal + 4
             font.weight: Font.DemiBold
@@ -127,7 +127,7 @@ Window {
         Text {
             x: 24
             y: 50
-            text: "Un'app chiede di vedere il tuo schermo. Vedrà solo ciò che scegli qui."
+            text: qsTr("An app wants to see your screen. It will only see what you choose here.")
             color: Theme.textDim
             font.pixelSize: Theme.fontNormal
         }
@@ -138,7 +138,7 @@ Window {
             y: 84
             spacing: 4
             Repeater {
-                model: ["Schermo intero", "Finestra"]
+                model: [qsTr("Full screen"), qsTr("Window")]
                 delegate: Item {
                     required property string modelData
                     required property int index
@@ -265,7 +265,7 @@ Window {
             Text {
                 anchors.centerIn: parent
                 visible: grid.count === 0
-                text: root.tab === 0 ? "Nessuno schermo" : "Nessuna finestra aperta"
+                text: root.tab === 0 ? qsTr("No screens") : qsTr("No open windows")
                 color: Theme.textDim
                 font.pixelSize: Theme.fontNormal
             }
@@ -305,13 +305,13 @@ Window {
             }
 
             DialogButton {
-                label: "Condividi"
+                label: qsTr("Share")
                 primary: true
                 usable: root.selected !== ""
                 onClicked: root.answer(root.selected)
             }
             DialogButton {
-                label: "Annulla"
+                label: qsTr("Cancel")
                 onClicked: root.answer("")
             }
         }

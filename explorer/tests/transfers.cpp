@@ -76,7 +76,7 @@ class Transfers : public QObject {
         }
         const int before = int(m_ops->jobs().size());
         m_ops->drop(urls, directory, action);
-        QString error = QStringLiteral("<nessun lavoro>");
+        QString error = QStringLiteral("<no job>");
         const bool finished = QTest::qWaitFor(
             [&] {
                 const QVariantList jobs = m_ops->jobs();
@@ -112,18 +112,18 @@ private slots:
 
     void copyNewFile()
     {
-        write(path("a/foto.jpg"), "contenuto");
+        write(path("a/photo.jpg"), "content");
         QDir().mkpath(path("b"));
-        QCOMPARE(transfer({ path("a/foto.jpg") }, path("b"), 1), QString());
-        QCOMPARE(read(path("b/foto.jpg")), QByteArray("contenuto"));
-        QCOMPARE(read(path("a/foto.jpg")), QByteArray("contenuto"));
+        QCOMPARE(transfer({ path("a/photo.jpg") }, path("b"), 1), QString());
+        QCOMPARE(read(path("b/photo.jpg")), QByteArray("content"));
+        QCOMPARE(read(path("a/photo.jpg")), QByteArray("content"));
         QVERIFY(leftovers(m_dir->path()).isEmpty());
     }
 
     void replaceKeepsMetadata()
     {
-        write(path("a/doc.txt"), "nuovo");
-        write(path("b/doc.txt"), "vecchio");
+        write(path("a/doc.txt"), "new");
+        write(path("b/doc.txt"), "old");
         const QDateTime when = QDateTime::fromSecsSinceEpoch(1700000000);
         QFile source(path("a/doc.txt"));
         QVERIFY(source.open(QIODevice::ReadWrite));
@@ -132,7 +132,7 @@ private slots:
         QFile::setPermissions(path("a/doc.txt"), QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
 
         QCOMPARE(transfer({ path("a/doc.txt") }, path("b"), 1), QString());
-        QCOMPARE(read(path("b/doc.txt")), QByteArray("nuovo"));
+        QCOMPARE(read(path("b/doc.txt")), QByteArray("new"));
         QCOMPARE(QFileInfo(path("b/doc.txt")).lastModified(), when);
         QVERIFY(QFileInfo(path("b/doc.txt")).permissions() & QFile::ExeOwner);
         QVERIFY(leftovers(m_dir->path()).isEmpty());
@@ -142,8 +142,8 @@ private slots:
     // copia. Il vecchio file deve restare intatto e il temporaneo sparire.
     void diskFullKeepsOldFile()
     {
-        write(path("a/grande.bin"), QByteArray(3 << 20, 'n'));
-        write(path("b/grande.bin"), "vecchio");
+        write(path("a/big.bin"), QByteArray(3 << 20, 'n'));
+        write(path("b/big.bin"), "old");
         // Oltre 1 MB le scritture falliscono (EFBIG), come con il disco pieno.
         rlimit old {};
         getrlimit(RLIMIT_FSIZE, &old);
@@ -151,11 +151,11 @@ private slots:
         small.rlim_cur = 1 << 20;
         signal(SIGXFSZ, SIG_IGN);
         QCOMPARE(setrlimit(RLIMIT_FSIZE, &small), 0);
-        const QString error = transfer({ path("a/grande.bin") }, path("b"), 1);
+        const QString error = transfer({ path("a/big.bin") }, path("b"), 1);
         setrlimit(RLIMIT_FSIZE, &old);
 
-        QVERIFY2(!error.isEmpty(), "la copia doveva fallire");
-        QCOMPARE(read(path("b/grande.bin")), QByteArray("vecchio"));
+        QVERIFY2(!error.isEmpty(), "the copy should have failed");
+        QCOMPARE(read(path("b/big.bin")), QByteArray("old"));
         QVERIFY(leftovers(m_dir->path()).isEmpty());
     }
 
@@ -163,8 +163,8 @@ private slots:
     // metà nella destinazione.
     void failedFolderLeavesNothing()
     {
-        write(path("a/cartella/piccolo.txt"), "ok");
-        write(path("a/cartella/sotto/grande.bin"), QByteArray(3 << 20, 'g'));
+        write(path("a/folder/small.txt"), "ok");
+        write(path("a/folder/sub/big.bin"), QByteArray(3 << 20, 'g'));
         QDir().mkpath(path("b"));
         rlimit old {};
         getrlimit(RLIMIT_FSIZE, &old);
@@ -172,93 +172,93 @@ private slots:
         small.rlim_cur = 1 << 20;
         signal(SIGXFSZ, SIG_IGN);
         QCOMPARE(setrlimit(RLIMIT_FSIZE, &small), 0);
-        const QString error = transfer({ path("a/cartella") }, path("b"), 1);
+        const QString error = transfer({ path("a/folder") }, path("b"), 1);
         setrlimit(RLIMIT_FSIZE, &old);
 
         QVERIFY(!error.isEmpty());
-        QVERIFY(!QFileInfo::exists(path("b/cartella")));
+        QVERIFY(!QFileInfo::exists(path("b/folder")));
         QVERIFY(leftovers(m_dir->path()).isEmpty());
     }
 
     void copyFolderTree()
     {
-        write(path("a/progetto/uno.txt"), "1");
-        write(path("a/progetto/sotto/due.txt"), "2");
-        QVERIFY(QFile::link(QStringLiteral("uno.txt"), path("a/progetto/collegamento")));
+        write(path("a/project/one.txt"), "1");
+        write(path("a/project/sub/two.txt"), "2");
+        QVERIFY(QFile::link(QStringLiteral("one.txt"), path("a/project/link")));
         QDir().mkpath(path("b"));
-        QCOMPARE(transfer({ path("a/progetto") }, path("b"), 1), QString());
-        QCOMPARE(read(path("b/progetto/uno.txt")), QByteArray("1"));
-        QCOMPARE(read(path("b/progetto/sotto/due.txt")), QByteArray("2"));
-        QCOMPARE(QFileInfo(path("b/progetto/collegamento")).symLinkTarget(), path("b/progetto/uno.txt"));
+        QCOMPARE(transfer({ path("a/project") }, path("b"), 1), QString());
+        QCOMPARE(read(path("b/project/one.txt")), QByteArray("1"));
+        QCOMPARE(read(path("b/project/sub/two.txt")), QByteArray("2"));
+        QCOMPARE(QFileInfo(path("b/project/link")).symLinkTarget(), path("b/project/one.txt"));
         QVERIFY(leftovers(m_dir->path()).isEmpty());
     }
 
     void mergeFolders()
     {
-        write(path("a/foto/nuova.jpg"), "nuova");
-        write(path("a/foto/comune.jpg"), "aggiornata");
-        write(path("b/foto/vecchia.jpg"), "vecchia");
-        write(path("b/foto/comune.jpg"), "originale");
-        QCOMPARE(transfer({ path("a/foto") }, path("b"), 1), QString());
-        QCOMPARE(read(path("b/foto/nuova.jpg")), QByteArray("nuova"));
-        QCOMPARE(read(path("b/foto/vecchia.jpg")), QByteArray("vecchia"));
-        QCOMPARE(read(path("b/foto/comune.jpg")), QByteArray("aggiornata"));
+        write(path("a/photo/new.jpg"), "new");
+        write(path("a/photo/common.jpg"), "updated");
+        write(path("b/photo/old.jpg"), "old");
+        write(path("b/photo/common.jpg"), "original");
+        QCOMPARE(transfer({ path("a/photo") }, path("b"), 1), QString());
+        QCOMPARE(read(path("b/photo/new.jpg")), QByteArray("new"));
+        QCOMPARE(read(path("b/photo/old.jpg")), QByteArray("old"));
+        QCOMPARE(read(path("b/photo/common.jpg")), QByteArray("updated"));
         QVERIFY(leftovers(m_dir->path()).isEmpty());
     }
 
     void fileReplacesFolder()
     {
-        write(path("a/elemento"), "file");
-        write(path("b/elemento/dentro.txt"), "cartella");
-        QCOMPARE(transfer({ path("a/elemento") }, path("b"), 1), QString());
-        QVERIFY(QFileInfo(path("b/elemento")).isFile());
-        QCOMPARE(read(path("b/elemento")), QByteArray("file"));
+        write(path("a/item"), "file");
+        write(path("b/item/inside.txt"), "folder");
+        QCOMPARE(transfer({ path("a/item") }, path("b"), 1), QString());
+        QVERIFY(QFileInfo(path("b/item")).isFile());
+        QCOMPARE(read(path("b/item")), QByteArray("file"));
         QVERIFY(leftovers(m_dir->path()).isEmpty());
     }
 
     void folderReplacesFile()
     {
-        write(path("a/elemento/dentro.txt"), "cartella");
-        write(path("b/elemento"), "file");
-        QCOMPARE(transfer({ path("a/elemento") }, path("b"), 1), QString());
-        QVERIFY(QFileInfo(path("b/elemento")).isDir());
-        QCOMPARE(read(path("b/elemento/dentro.txt")), QByteArray("cartella"));
+        write(path("a/item/inside.txt"), "folder");
+        write(path("b/item"), "file");
+        QCOMPARE(transfer({ path("a/item") }, path("b"), 1), QString());
+        QVERIFY(QFileInfo(path("b/item")).isDir());
+        QCOMPARE(read(path("b/item/inside.txt")), QByteArray("folder"));
         QVERIFY(leftovers(m_dir->path()).isEmpty());
     }
 
     void keepBoth()
     {
         m_policy = QStringLiteral("keep");
-        write(path("a/nota.txt"), "nuova");
-        write(path("b/nota.txt"), "vecchia");
-        QCOMPARE(transfer({ path("a/nota.txt") }, path("b"), 1), QString());
-        QCOMPARE(read(path("b/nota.txt")), QByteArray("vecchia"));
-        QCOMPARE(read(path("b/nota (2).txt")), QByteArray("nuova"));
+        write(path("a/note.txt"), "new");
+        write(path("b/note.txt"), "old");
+        QCOMPARE(transfer({ path("a/note.txt") }, path("b"), 1), QString());
+        QCOMPARE(read(path("b/note.txt")), QByteArray("old"));
+        QCOMPARE(read(path("b/note (2).txt")), QByteArray("new"));
     }
 
     void skipExisting()
     {
         m_policy = QStringLiteral("skip");
-        write(path("a/nota.txt"), "nuova");
-        write(path("b/nota.txt"), "vecchia");
-        QCOMPARE(transfer({ path("a/nota.txt") }, path("b"), 1), QString());
-        QCOMPARE(read(path("b/nota.txt")), QByteArray("vecchia"));
+        write(path("a/note.txt"), "new");
+        write(path("b/note.txt"), "old");
+        QCOMPARE(transfer({ path("a/note.txt") }, path("b"), 1), QString());
+        QCOMPARE(read(path("b/note.txt")), QByteArray("old"));
     }
 
     void moveReplacesFile()
     {
-        write(path("a/nota.txt"), "nuova");
-        write(path("b/nota.txt"), "vecchia");
-        QCOMPARE(transfer({ path("a/nota.txt") }, path("b"), 2), QString());
-        QCOMPARE(read(path("b/nota.txt")), QByteArray("nuova"));
-        QVERIFY(!QFileInfo::exists(path("a/nota.txt")));
+        write(path("a/note.txt"), "new");
+        write(path("b/note.txt"), "old");
+        QCOMPARE(transfer({ path("a/note.txt") }, path("b"), 2), QString());
+        QCOMPARE(read(path("b/note.txt")), QByteArray("new"));
+        QVERIFY(!QFileInfo::exists(path("a/note.txt")));
     }
 
     void copyIntoSameFolder()
     {
-        write(path("a/foto.jpg"), "x");
-        QCOMPARE(transfer({ path("a/foto.jpg") }, path("a"), 1), QString());
-        QCOMPARE(read(path("a/foto - Copia.jpg")), QByteArray("x"));
+        write(path("a/photo.jpg"), "x");
+        QCOMPARE(transfer({ path("a/photo.jpg") }, path("a"), 1), QString());
+        QCOMPARE(read(path("a/photo - Copy.jpg")), QByteArray("x"));
     }
 };
 

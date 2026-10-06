@@ -159,7 +159,7 @@ void closeChildren()
     if (left.empty()) {
         return;
     }
-    say("chiudo le app rimaste (%s)", std::to_string(left.size()).c_str());
+    say("closing the remaining apps (%s)", std::to_string(left.size()).c_str());
     for (pid_t pid : left) {
         kill(pid, SIGTERM);
     }
@@ -190,7 +190,7 @@ std::string lockFlagPath(const char* waylandDisplay)
     if (!runtimeDir || !waylandDisplay) {
         return {};
     }
-    return std::string(runtimeDir) + "/vela-bloccato-" + waylandDisplay;
+    return std::string(runtimeDir) + "/vela-locked-" + waylandDisplay;
 }
 
 std::string sessionHookPath()
@@ -212,22 +212,22 @@ int runSupervisor(int argc, char* argv[])
 {
     const char* runtimeDir = std::getenv("XDG_RUNTIME_DIR");
     if (!runtimeDir) {
-        say("XDG_RUNTIME_DIR non è impostata");
+        say("XDG_RUNTIME_DIR is not set");
         return 1;
     }
     Socket socket;
     if (!createSocket(runtimeDir, socket)) {
-        say("impossibile creare il socket Wayland");
+        say("can't create the Wayland socket");
         return 1;
     }
-    say("socket %s; avvio il compositor", socket.name.c_str());
+    say("socket %s; starting the compositor", socket.name.c_str());
 
     // Il compositor: lo stesso programma, con gli stessi argomenti tranne
     // --supervise.
     char self[PATH_MAX] {};
     const ssize_t length = readlink("/proc/self/exe", self, sizeof(self) - 1);
     if (length <= 0) {
-        say("non trovo il mio eseguibile");
+        say("can't find my own executable");
         return 1;
     }
     std::vector<char*> arguments { self };
@@ -294,19 +294,19 @@ int runSupervisor(int argc, char* argv[])
             break; // uscito da sé: "Esci" dal menu
         }
         if (WIFSIGNALED(status)) {
-            say("il compositor è andato in crash (%s)", strsignal(WTERMSIG(status)));
+            say("the compositor crashed (%s)", strsignal(WTERMSIG(status)));
         } else {
-            say("il compositor si è chiuso per errore (codice %s)", std::to_string(WEXITSTATUS(status)).c_str());
+            say("the compositor exited with an error (code %s)", std::to_string(WEXITSTATUS(status)).c_str());
         }
         const double t = now();
         std::erase_if(crashes, [t](double at) { return t - at > crashWindowSeconds; });
         crashes.push_back(t);
         if (crashes.size() >= size_t(maxCrashes)) {
-            say("il compositor continua a chiudersi: mi arrendo, la sessione finisce");
+            say("the compositor keeps exiting: giving up, the session ends");
             exitCode = 1;
             break;
         }
-        say("lo riavvio");
+        say("restarting it");
     }
 
     closeChildren();

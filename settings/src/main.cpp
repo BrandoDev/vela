@@ -18,6 +18,7 @@
 #include "displays.h"
 #include "iconprovider.h"
 #include "keyboardlayouts.h"
+#include "language.h"
 #include "network.h"
 #include "preferences.h"
 #include "systemactions.h"
@@ -113,19 +114,26 @@ int main(int argc, char* argv[])
     }
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("vela-settings"));
-    QGuiApplication::setApplicationDisplayName(QStringLiteral("Impostazioni"));
+    QQmlApplicationEngine* qmlEngine = nullptr;
+    vela::language::install(QStringLiteral("vela-settings"), [&qmlEngine] {
+        QGuiApplication::setApplicationDisplayName(QCoreApplication::translate("Settings", "Settings"));
+        if (qmlEngine) {
+            qmlEngine->retranslate();
+        }
+    });
+    QGuiApplication::setApplicationDisplayName(QCoreApplication::translate("Settings", "Settings"));
     QGuiApplication::setOrganizationName(QStringLiteral("Vela"));
     QGuiApplication::setDesktopFileName(QStringLiteral("vela-settings"));
     QGuiApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("preferences-system")));
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Le Impostazioni di Vela"));
+    parser.setApplicationDescription(QStringLiteral("Vela Settings"));
     parser.addHelpOption();
     const QCommandLineOption pageOption(QStringLiteral("page"),
-        QStringLiteral("La pagina da aprire: system, display, sound, notifications, power, about, bluetooth, "
+        QStringLiteral("The page to open: system, display, sound, notifications, power, about, bluetooth, "
                        "network, personalization, background, colors, taskbar, apps, installed-apps, "
                        "default-apps, time-language, datetime, keyboard, night-light, accessibility."),
-        QStringLiteral("nome"));
+        QStringLiteral("name"));
     parser.addOption(pageOption);
     parser.process(app);
     const QString page = parser.value(pageOption);
@@ -164,6 +172,7 @@ int main(int argc, char* argv[])
     SystemStatus status;
 
     QQmlApplicationEngine engine;
+    qmlEngine = &engine;
     engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
     engine.addImageProvider(QStringLiteral("fileicon"), new IconProvider(32));
     QQmlContext* context = engine.rootContext();

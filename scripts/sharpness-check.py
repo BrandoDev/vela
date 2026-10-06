@@ -48,10 +48,10 @@ if corner > 0:
     region[-corner:, :corner] = True
     region[-corner:, -corner:] = True
 bad = int(region.size - region.sum())
-status = "OK" if bad == 0 else "DIVERSI"
-print(f"{name:<22} finestra {x1 - x0}x{y1 - y0} in ({x0},{y0}), origine buffer ({origin_x},{origin_y}): "
-      f"{bad} pixel diversi su {region.size}  {status}")
+status = "OK" if bad == 0 else "DIFFERENT"
+print(f"{name:<22} window {x1 - x0}x{y1 - y0} at ({x0},{y0}), buffer origin ({origin_x},{origin_y}): "
+      f"{bad} of {region.size} pixels differ  {status}")
 if bad:
     by, bx = np.nonzero(~region)
-    print(f"{'':<22} primi errori: {list(zip((bx[:5] + x0).tolist(), (by[:5] + y0).tolist()))}")
+    print(f"{'':<22} first errors: {list(zip((bx[:5] + x0).tolist(), (by[:5] + y0).tolist()))}")
 sys.exit(1 if bad else 0)

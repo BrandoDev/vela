@@ -14,7 +14,7 @@ COMPOSITOR="$BUILD_DIR/compositor/vela-compositor"
 SHELL_BIN="$BUILD_DIR/shell/vela-shell"
 
 if [ ! -x "$COMPOSITOR" ]; then
-    echo "Non trovo $COMPOSITOR: compila prima (vedi README)." >&2
+    echo "$COMPOSITOR not found: build first (see README)." >&2
     exit 1
 fi
 
@@ -25,6 +25,6 @@ if [ -x "$SHELL_BIN" ]; then
     SHELL_PATH="$(cd "$(dirname "$SHELL_BIN")" && pwd)/$(basename "$SHELL_BIN")"
     exec "$COMPOSITOR" -s "$SHELL_PATH"
 else
-    echo "Shell non compilata: avvio solo il compositor." >&2
+    echo "Shell not built: starting only the compositor." >&2
     exec "$COMPOSITOR"
 fi

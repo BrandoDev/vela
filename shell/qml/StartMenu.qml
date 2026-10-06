@@ -50,12 +50,12 @@ Window {
         const entries = []
         const recent = Jumps.recent(id, 5)
         if (recent.length > 0) {
-            entries.push({ header: "Recenti" })
+            entries.push({ header: qsTr("Recent") })
             recent.forEach(f => entries.push({ text: f.name.replace(/&/g, "&&"), icon: f.icon, action: () => { Apps.launchWithFile(id, f.url); root.close() } }))
         }
         const actions = Apps.actions(id)
         if (actions.length > 0) {
-            entries.push({ header: "Attività" })
+            entries.push({ header: qsTr("Tasks") })
             actions.forEach(a => entries.push({ text: a.name.replace(/&/g, "&&"), icon: a.icon, action: () => { Apps.launchAction(id, a.id); root.close() } }))
         }
         if (entries.length > 0) {
@@ -63,21 +63,21 @@ Window {
         }
         const inStart = Shell.startPins.indexOf(id) >= 0
         const taskbar = Tasks.isPinned(id)
-            ? { text: "Rimuovi dalla &barra delle applicazioni", icon: "window-unpin", action: () => Tasks.unpin(id) }
-            : { text: "Aggiungi alla &barra delle applicazioni", icon: "window-pin", action: () => Tasks.pin(id) }
-        const folder = { text: "Apri &percorso file", icon: "document-open-folder", action: () => { System.showInFolder(Apps.desktopFile(id)); root.close() } }
-        const uninstall = { text: "&Disinstalla", icon: "edit-delete", enabled: System.canUninstall(Apps.desktopFile(id)), action: () => { System.uninstall(Apps.desktopFile(id)); root.close() } }
+            ? { text: qsTr("Unpin from &taskbar"), icon: "window-unpin", action: () => Tasks.unpin(id) }
+            : { text: qsTr("Pin to &taskbar"), icon: "window-pin", action: () => Tasks.pin(id) }
+        const folder = { text: qsTr("Open file &location"), icon: "document-open-folder", action: () => { System.showInFolder(Apps.desktopFile(id)); root.close() } }
+        const uninstall = { text: qsTr("&Uninstall"), icon: "edit-delete", enabled: System.canUninstall(Apps.desktopFile(id)), action: () => { System.uninstall(Apps.desktopFile(id)); root.close() } }
         if (pinnedTile) {
             entries.push(
-                { text: "&Rimuovi da Start", icon: "window-unpin", action: () => Shell.unpinFromStart(id) },
-                { text: "&Sposta all'inizio", icon: "go-top", enabled: Shell.startPins.indexOf(id) > 0, action: () => Shell.moveStartPinToFront(id) },
+                { text: qsTr("&Unpin from Start"), icon: "window-unpin", action: () => Shell.unpinFromStart(id) },
+                { text: qsTr("Move to &front"), icon: "go-top", enabled: Shell.startPins.indexOf(id) > 0, action: () => Shell.moveStartPinToFront(id) },
                 taskbar, folder, uninstall)
         } else {
             entries.push(
                 inStart
-                    ? { text: "&Rimuovi da Start", icon: "window-unpin", action: () => Shell.unpinFromStart(id) }
-                    : { text: "&Aggiungi a Start", icon: "window-pin", action: () => Shell.pinToStart(id) },
-                { text: "A&ltro", children: [taskbar, folder] },
+                    ? { text: qsTr("&Unpin from Start"), icon: "window-unpin", action: () => Shell.unpinFromStart(id) }
+                    : { text: qsTr("&Pin to Start"), icon: "window-pin", action: () => Shell.pinToStart(id) },
+                { text: qsTr("&More"), children: [taskbar, folder] },
                 uninstall)
         }
         return entries
@@ -293,7 +293,7 @@ Window {
             Text {
                 anchors { left: parent.left; leftMargin: 18; verticalCenter: parent.verticalCenter }
                 visible: search.text.length === 0
-                text: qsTr("Cerca app")
+                text: qsTr("Search apps")
                 color: Theme.textDim
                 font.pixelSize: Theme.fontNormal
             }
@@ -323,7 +323,7 @@ Window {
         Text {
             id: sectionTitle
             anchors { top: searchBox.bottom; left: parent.left; topMargin: 20; leftMargin: 32 }
-            text: search.text.length > 0 ? qsTr("Risultati") : root.showPinned ? qsTr("Aggiunte") : qsTr("Tutte le app")
+            text: search.text.length > 0 ? qsTr("Results") : root.showPinned ? qsTr("Pinned") : qsTr("All apps")
             color: Theme.text
             font.pixelSize: Theme.fontNormal
             font.weight: Font.DemiBold
@@ -391,7 +391,7 @@ Window {
                 Text {
                     id: allTitle
                     anchors { top: pinnedGrid.bottom; topMargin: 16; left: parent.left; leftMargin: 12 }
-                    text: qsTr("Tutte le app")
+                    text: qsTr("All apps")
                     color: Theme.text
                     font.pixelSize: Theme.fontNormal
                     font.weight: Font.DemiBold
@@ -401,7 +401,7 @@ Window {
             Text {
                 anchors.centerIn: parent
                 visible: grid.count === 0
-                text: qsTr("Nessuna app trovata")
+                text: qsTr("No apps found")
                 color: Theme.textDim
                 font.pixelSize: Theme.fontNormal
             }
@@ -522,12 +522,12 @@ Window {
 
                         PowerEntry {
                             icon: "system-suspend"
-                            label: "Sospendi"
+                            label: qsTr("Sleep")
                             visible: root.canSuspend
                             onActivated: { root.close(); Shell.suspend() }
                         }
                         PowerEntry {
-                            label: "Esci"
+                            label: qsTr("Sign out")
                             onActivated: Shell.logout()
 
                             // Una porta aperta e una freccia che esce.
@@ -561,12 +561,12 @@ Window {
                         }
                         PowerEntry {
                             icon: "system-reboot"
-                            label: "Riavvia"
+                            label: qsTr("Restart")
                             onActivated: Shell.reboot()
                         }
                         PowerEntry {
                             icon: "system-shutdown"
-                            label: "Arresta"
+                            label: qsTr("Shut down")
                             onActivated: Shell.powerOff()
                         }
                     }

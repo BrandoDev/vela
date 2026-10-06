@@ -3,6 +3,7 @@
 
 #include "about.h"
 
+#include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusMessage>
@@ -56,7 +57,7 @@ QString memory()
         return {};
     }
     const double gib = m.captured(1).toDouble() / 1024.0 / 1024.0;
-    return QLocale().toString(gib, 'f', 1) + QStringLiteral(" GB (utilizzabile)");
+    return QLocale().toString(gib, 'f', 1) + QCoreApplication::translate("About", " GB (usable)");
 }
 
 QStringList graphics()
@@ -112,35 +113,35 @@ About::About(QObject* parent)
         ? QStringLiteral("computer-laptop")
         : QStringLiteral("computer");
 
-    m_device << row(QStringLiteral("Nome dispositivo"), m_hostname);
-    m_device << row(QStringLiteral("Processore"), cpuName());
-    m_device << row(QStringLiteral("RAM installata"), memory());
+    m_device << row(QCoreApplication::translate("About", "Device name"), m_hostname);
+    m_device << row(QCoreApplication::translate("About", "Processor"), cpuName());
+    m_device << row(QCoreApplication::translate("About", "Installed RAM"), memory());
     const QStringList gpus = graphics();
     for (const QString& gpu : gpus) {
-        m_device << row(QStringLiteral("Scheda video"), gpu);
+        m_device << row(QCoreApplication::translate("About", "Graphics card"), gpu);
     }
     if (!m_model.isEmpty()) {
-        m_device << row(QStringLiteral("Modello"), m_model);
+        m_device << row(QCoreApplication::translate("About", "Model"), m_model);
     }
     const QString machineId = readFile(QStringLiteral("/etc/machine-id")).trimmed();
     if (!machineId.isEmpty()) {
-        m_device << row(QStringLiteral("ID dispositivo"), machineId);
+        m_device << row(QCoreApplication::translate("About", "Device ID"), machineId);
     }
-    m_device << row(QStringLiteral("Tipo sistema"),
-        QStringLiteral("Sistema operativo a %1 bit, processore %2").arg(QSysInfo::WordSize).arg(QSysInfo::currentCpuArchitecture()));
+    m_device << row(QCoreApplication::translate("About", "System type"),
+        QCoreApplication::translate("About", "%1-bit operating system, %2 processor").arg(QSysInfo::WordSize).arg(QSysInfo::currentCpuArchitecture()));
 
     QString os = osRelease(QStringLiteral("PRETTY_NAME"));
     if (os.isEmpty()) {
         os = QSysInfo::prettyProductName();
     }
-    m_system << row(QStringLiteral("Sistema operativo"), os);
+    m_system << row(QCoreApplication::translate("About", "Operating system"), os);
     m_system << row(QStringLiteral("Desktop"), QStringLiteral("Vela ") + QStringLiteral(VELA_VERSION));
     m_system << row(QStringLiteral("Kernel"), QStringLiteral("Linux ") + QSysInfo::kernelVersion());
     // "Data installazione": quando è nata la radice del file system.
     struct statx info {};
     if (statx(AT_FDCWD, "/", 0, STATX_BTIME, &info) == 0 && (info.stx_mask & STATX_BTIME)) {
         const QDateTime born = QDateTime::fromSecsSinceEpoch(info.stx_btime.tv_sec);
-        m_system << row(QStringLiteral("Data installazione"), QLocale().toString(born.date(), QStringLiteral("d MMMM yyyy")));
+        m_system << row(QCoreApplication::translate("About", "Installed on"), QLocale().toString(born.date(), QStringLiteral("d MMMM yyyy")));
     }
     m_system << row(QStringLiteral("Qt"), QString::fromLatin1(qVersion()));
 }
@@ -169,13 +170,13 @@ void About::rename(const QString& name)
         w->deleteLater();
         if (reply.isError()) {
             emit renameFailed(reply.error().name().contains(QLatin1String("InvalidArgs"))
-                    ? QStringLiteral("Il nome può contenere solo lettere, numeri e trattini.")
-                    : QStringLiteral("Non è stato possibile rinominare il PC: ") + reply.error().message());
+                    ? QCoreApplication::translate("About", "The name can only contain letters, numbers and hyphens.")
+                    : QCoreApplication::translate("About", "Couldn't rename the PC: ") + reply.error().message());
             return;
         }
         m_hostname = clean;
         if (!m_device.isEmpty()) {
-            m_device[0] = row(QStringLiteral("Nome dispositivo"), clean);
+            m_device[0] = row(QCoreApplication::translate("About", "Device name"), clean);
         }
         emit hostnameChanged();
     });
@@ -183,11 +184,11 @@ void About::rename(const QString& name)
 
 QString About::asText() const
 {
-    QString text = QStringLiteral("Specifiche dispositivo\n");
+    QString text = QCoreApplication::translate("About", "Device specifications\n");
     for (const QVariant& r : m_device) {
         text += r.toMap()[QStringLiteral("label")].toString() + u'\t' + r.toMap()[QStringLiteral("value")].toString() + u'\n';
     }
-    text += QStringLiteral("\nSpecifiche sistema\n");
+    text += QCoreApplication::translate("About", "\nSystem specifications\n");
     for (const QVariant& r : m_system) {
         text += r.toMap()[QStringLiteral("label")].toString() + u'\t' + r.toMap()[QStringLiteral("value")].toString() + u'\n';
     }

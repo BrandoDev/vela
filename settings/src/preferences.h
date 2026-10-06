@@ -43,6 +43,9 @@ class Preferences : public QObject {
     // --- Alimentazione ---
     Q_PROPERTY(int screenOffMinutes READ screenOffMinutes WRITE setScreenOffMinutes NOTIFY idleChanged)
     Q_PROPERTY(bool lockOnIdle READ lockOnIdle WRITE setLockOnIdle NOTIFY idleChanged)
+    // Lingua di Vela (lingua= in vela.conf): "", "it" o "en". Vuota: come
+    // il sistema. Le app la applicano da sole (shell/src/language.h).
+    Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
     // --- Tastiera ---
     // [{layout, variant}] nell'ordine scelto; il primo è quello di partenza.
     Q_PROPERTY(QVariantList keyboardLayouts READ keyboardLayouts NOTIFY keyboardChanged)
@@ -51,7 +54,7 @@ class Preferences : public QObject {
     // --- Schermo: Luce notturna e giochi ---
     Q_PROPERTY(bool nightLight READ nightLight WRITE setNightLight NOTIFY nightLightChanged)
     Q_PROPERTY(int nightStrength READ nightStrength WRITE setNightStrength NOTIFY nightLightChanged)
-    // "no", "tramonto" (dal tramonto all'alba) o "ore"
+    // "no", "sunset" (dal tramonto all'alba) o "hours"
     Q_PROPERTY(QString nightSchedule READ nightSchedule WRITE setNightSchedule NOTIFY nightLightChanged)
     Q_PROPERTY(QString nightFrom READ nightFrom WRITE setNightFrom NOTIFY nightLightChanged) // "21:00"
     Q_PROPERTY(QString nightTo READ nightTo WRITE setNightTo NOTIFY nightLightChanged)
@@ -59,7 +62,7 @@ class Preferences : public QObject {
     Q_PROPERTY(QString sunset READ sunset NOTIFY nightLightChanged)
     Q_PROPERTY(QString sunrise READ sunrise NOTIFY nightLightChanged)
     Q_PROPERTY(bool tearing READ tearing WRITE setTearing NOTIFY accessibilityChanged)
-    // Frequenza di aggiornamento variabile: "no", "giochi" (app a schermo intero), "sempre".
+    // Frequenza di aggiornamento variabile: "no", "games" (app a schermo intero), "always".
     Q_PROPERTY(QString vrr READ vrr WRITE setVrr NOTIFY accessibilityChanged)
     // --- Mouse e touchpad (vela.conf) ---
     Q_PROPERTY(int mouseSpeed READ mouseSpeed WRITE setMouseSpeed NOTIFY inputChanged) // 1-20
@@ -132,6 +135,8 @@ public:
     void setScreenOffMinutes(int minutes);
     bool lockOnIdle() const { return m_lockOnIdle; }
     void setLockOnIdle(bool on);
+    QString language() const { return m_language; }
+    void setLanguage(const QString& language);
 
     QVariantList keyboardLayouts() const { return m_layouts; }
     Q_INVOKABLE void addKeyboardLayout(const QString& layout, const QString& variant);
@@ -214,6 +219,7 @@ signals:
     void taskbarChanged();
     void doNotDisturbChanged();
     void idleChanged();
+    void languageChanged();
     void keyboardChanged();
     void nightLightChanged();
     void inputChanged();
@@ -246,6 +252,7 @@ private:
     bool m_doNotDisturb = false;
     int m_screenOffMinutes = 10;
     bool m_lockOnIdle = true;
+    QString m_language;
     QVariantList m_layouts;
     int m_repeatDelay = 400;
     int m_repeatRate = 30;
@@ -260,11 +267,11 @@ private:
     QString m_sunset;
     QString m_sunrise;
     bool m_tearing = true;
-    QString m_vrr = QStringLiteral("giochi");
+    QString m_vrr = QStringLiteral("games");
     bool m_magnifier = false;
     int m_magnifierStep = 100;
     bool m_colorFilter = false;
-    QString m_colorFilterKind = QStringLiteral("grigi");
+    QString m_colorFilterKind = QStringLiteral("grayscale");
     bool m_colorFilterShortcut = false;
     bool m_stickyKeys = false;
     int m_mouseSpeed = 10;

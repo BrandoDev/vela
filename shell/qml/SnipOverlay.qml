@@ -136,9 +136,9 @@ Window {
             spacing: 4
             Repeater {
                 model: [
-                    { mode: "rect", icon: "select-rectangular", tip: "Rettangolo" },
-                    { mode: "window", icon: "window", tip: "Finestra" },
-                    { mode: "screen", icon: "view-fullscreen", tip: "Schermo intero" }
+                    { mode: "rect", icon: "select-rectangular", tip: qsTr("Rectangle") },
+                    { mode: "window", icon: "window", tip: qsTr("Window") },
+                    { mode: "screen", icon: "view-fullscreen", tip: qsTr("Full screen") }
                 ]
                 delegate: Rectangle {
                     id: tool

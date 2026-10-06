@@ -106,7 +106,7 @@ void Server::initLock()
     on(&lockManager->events.new_lock, [this](void* data) {
         auto* lock = static_cast<wlr_session_lock_v1*>(data);
         if (lockState.lock) {
-            wlr_log(WLR_INFO, "Blocco: c'è già un programma di blocco, rifiuto il secondo");
+            wlr_log(WLR_INFO, "Lock: a locker is already running, rejecting the second one");
             wlr_session_lock_v1_destroy(lock);
             return;
         }
@@ -144,14 +144,14 @@ void Server::initLock()
             wlr_seat_keyboard_clear_focus(seat);
             refocus();
             scene::Scene::changed();
-            wlr_log(WLR_INFO, "Schermo sbloccato");
+            wlr_log(WLR_INFO, "Screen unlocked");
         });
         lockState.destroy = std::make_unique<Listener>();
         lockState.destroy->connect(&lock->events.destroy, [this](void*) {
             // Se non ha sbloccato (crash), resta tutto bloccato e nero: un
             // nuovo vela-lock può prendere il suo posto.
             if (locked) {
-                wlr_log(WLR_ERROR, "Il programma di blocco è sparito senza sbloccare: resto bloccato");
+                wlr_log(WLR_ERROR, "The locker went away without unlocking: staying locked");
                 // Lo si rilancia tra un secondo (al massimo 5 volte al minuto):
                 // senza, resterebbe solo lo schermo nero.
                 const int64_t now = int64_t(render::nowNs() / 1'000'000);
@@ -249,7 +249,7 @@ void Server::engageLock()
     wlr_cursor_set_xcursor(cursor, cursorManager, "default");
     updateLockLayout();
     scene::Scene::changed();
-    wlr_log(WLR_INFO, "Schermo bloccato");
+    wlr_log(WLR_INFO, "Screen locked");
 }
 
 void Server::loadIdleSettings()
@@ -264,12 +264,12 @@ void Server::loadIdleSettings()
         }
         return setting(settings, key);
     };
-    const std::string minutes = value("spegni-schermo", "VELA_SCREEN_OFF");
+    const std::string minutes = value("screen-off", "VELA_SCREEN_OFF");
     idle.screenOffMs = std::max(0, minutes.empty() ? 10 : std::atoi(minutes.c_str())) * 60 * 1000;
-    const std::string lockOnIdle = value("blocca", "VELA_LOCK_ON_IDLE");
+    const std::string lockOnIdle = value("lock-on-idle", "VELA_LOCK_ON_IDLE");
     idle.lockOnIdle = lockOnIdle != "0" && lockOnIdle != "no";
-    wlr_log(WLR_INFO, "Inattività: schermo spento dopo %d minuti%s", idle.screenOffMs / 60000,
-        idle.lockOnIdle ? ", con blocco" : "");
+    wlr_log(WLR_INFO, "Idle: screen off after %d minutes%s", idle.screenOffMs / 60000,
+        idle.lockOnIdle ? ", with lock" : "");
     // L'attesa riparte da adesso, con i minuti nuovi.
     idle.locking = false;
     wl_event_source_timer_update(idle.timer, idle.screenOffMs);
@@ -299,10 +299,10 @@ void Server::lockScreen()
         }
     }
     if (command.empty()) {
-        wlr_log(WLR_ERROR, "Blocco: non trovo vela-lock (VELA_LOCK per sceglierne un altro)");
+        wlr_log(WLR_ERROR, "Lock: vela-lock not found (VELA_LOCK picks another locker)");
         return;
     }
-    wlr_log(WLR_INFO, "Blocco lo schermo: %s", command.c_str());
+    wlr_log(WLR_INFO, "Locking the screen: %s", command.c_str());
     spawn(command);
 }
 

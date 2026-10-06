@@ -9,27 +9,27 @@ Page {
     id: page
     readonly property var minutes: [1, 2, 3, 5, 10, 15, 20, 25, 30, 45, 60, 120, 180, 240, 300, 0]
     function label(m) {
-        if (m === 0) return "Mai"
-        if (m < 60) return m + (m === 1 ? " minuto" : " minuti")
-        return (m / 60) + (m === 60 ? " ora" : " ore")
+        if (m === 0) return qsTr("Never")
+        if (m < 60) return m + (m === 1 ? qsTr(" minute") : qsTr(" minutes"))
+        return (m / 60) + (m === 60 ? qsTr(" hour") : qsTr(" hours"))
     }
-    readonly property var profileNames: ({ "power-saver": "Risparmio energia", "balanced": "Bilanciata", "performance": "Prestazioni migliori" })
+    readonly property var profileNames: ({ "power-saver": qsTr("Energy saver"), "balanced": qsTr("Balanced"), "performance": qsTr("Best performance") })
     readonly property var profiles: ["power-saver", "balanced", "performance"].filter(p => Status.powerProfiles.indexOf(p) >= 0)
 
     Card {
         visible: Status.batteryPresent
         icon: Status.batteryCharging ? "battery-good-charging" : "battery-good"
         title: Status.batteryPercent + "%"
-        description: Status.batteryCharging ? "In carica" : "A batteria"
+        description: Status.batteryCharging ? qsTr("Charging") : qsTr("On battery")
         minimumHeight: 80
     }
 
     CardGroup {
-        title: "Alimentazione"
+        title: qsTr("Power")
         Card {
             icon: "video-display"
-            title: "Schermo e sospensione"
-            description: "Dopo questo tempo senza usare mouse e tastiera lo schermo si spegne"
+            title: qsTr("Screen and sleep")
+            description: qsTr("After this long without using the mouse or keyboard, the screen turns off")
             trailing: Choice {
                 model: page.minutes.map(m => page.label(m))
                 currentIndex: Math.max(0, page.minutes.indexOf(Prefs.screenOffMinutes))
@@ -38,8 +38,8 @@ Page {
         }
         Card {
             icon: "system-lock-screen"
-            title: "Blocca lo schermo quando si spegne"
-            description: "Per tornare serve la password"
+            title: qsTr("Lock the screen when it turns off")
+            description: qsTr("You'll need your password to get back in")
             trailing: Toggle {
                 checked: Prefs.lockOnIdle
                 onToggled: on => Prefs.lockOnIdle = on
@@ -48,8 +48,8 @@ Page {
         Card {
             visible: page.profiles.length > 1
             icon: "battery-profile-performance"
-            title: "Modalità di alimentazione"
-            description: "Ottimizza il dispositivo in base al consumo di energia e alle prestazioni"
+            title: qsTr("Power mode")
+            description: qsTr("Optimize your device based on power use and performance")
             trailing: Choice {
                 model: page.profiles.map(p => page.profileNames[p])
                 currentIndex: page.profiles.indexOf(Status.powerProfile)

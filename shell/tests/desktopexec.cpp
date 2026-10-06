@@ -18,7 +18,7 @@ class DesktopExecTest : public QObject {
         const DesktopExec::Context& context = {})
     {
         const DesktopExec::Parsed parsed = DesktopExec::split(exec);
-        return parsed.ok ? DesktopExec::expand(parsed.arguments, files, context) : QStringList { QStringLiteral("<non valido>") };
+        return parsed.ok ? DesktopExec::expand(parsed.arguments, files, context) : QStringList { QStringLiteral("<invalid>") };
     }
 
 private slots:
@@ -29,8 +29,8 @@ private slots:
 
     void quotedArguments()
     {
-        QCOMPARE(run(QStringLiteral("\"/opt/My App/app\" \"un argomento\"")),
-            (QStringList { "/opt/My App/app", "un argomento" }));
+        QCOMPARE(run(QStringLiteral("\"/opt/My App/app\" \"one argument\"")),
+            (QStringList { "/opt/My App/app", "one argument" }));
         // Dentro le virgolette \" \` \$ \\ valgono il carattere.
         QCOMPARE(run(QStringLiteral("echo \"a \\\"b\\\" \\$HOME \\`x\\` c\\\\d\"")),
             (QStringList { "echo", "a \"b\" $HOME `x` c\\d" }));
@@ -49,19 +49,19 @@ private slots:
 
     void invalid()
     {
-        QVERIFY(!DesktopExec::split(QStringLiteral("app \"non chiuso")).ok);
+        QVERIFY(!DesktopExec::split(QStringLiteral("app \"unclosed")).ok);
         QVERIFY(!DesktopExec::split(QStringLiteral("   ")).ok);
     }
 
     void singleFile()
     {
-        const QUrl file = QUrl::fromLocalFile(QStringLiteral("/home/alex/Le mie foto/mare.jpg"));
+        const QUrl file = QUrl::fromLocalFile(QStringLiteral("/home/alex/My Pictures/beach.jpg"));
         QCOMPARE(run(QStringLiteral("gwenview %f"), { file }),
-            (QStringList { "gwenview", "/home/alex/Le mie foto/mare.jpg" }));
+            (QStringList { "gwenview", "/home/alex/My Pictures/beach.jpg" }));
         QCOMPARE(run(QStringLiteral("firefox %u"), { file }),
-            (QStringList { "firefox", "file:///home/alex/Le%20mie%20foto/mare.jpg" }));
+            (QStringList { "firefox", "file:///home/alex/My%20Pictures/beach.jpg" }));
         QCOMPARE(run(QStringLiteral("app --file=%f"), { file }),
-            (QStringList { "app", "--file=/home/alex/Le mie foto/mare.jpg" }));
+            (QStringList { "app", "--file=/home/alex/My Pictures/beach.jpg" }));
         // Senza file il field code sparisce.
         QCOMPARE(run(QStringLiteral("gwenview %f")), (QStringList { "gwenview" }));
     }
@@ -83,7 +83,7 @@ private slots:
         QCOMPARE(run(QStringLiteral("kate %i --title=%c %k 100%%"), {}, context),
             (QStringList { "kate", "--icon", "kate", "--title=Kate", "/usr/share/applications/org.kde.kate.desktop",
                 "100%" }));
-        // %i senza icona: nessun argomento. Deprecati: spariscono.
+        // %i senza icona: nessone argument. Deprecati: spariscono.
         QCOMPARE(run(QStringLiteral("app %i %d %m")), (QStringList { "app" }));
     }
 };

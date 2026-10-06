@@ -5,6 +5,7 @@
 
 #include "appmodel.h"
 
+#include <QCoreApplication>
 #include <QClipboard>
 #include <QCryptographicHash>
 #include <QImageReader>
@@ -296,11 +297,11 @@ void DesktopModel::reload()
 
     // Il Cestino, sempre per primo, come in Windows.
     Item trash;
-    trash.name = QStringLiteral("Cestino");
+    trash.name = QCoreApplication::translate("Desktop", "Recycle Bin");
     trash.path = trashPath;
     trash.isTrash = true;
     trash.icon = trashEmpty() ? QStringLiteral("user-trash") : QStringLiteral("user-trash-full");
-    trash.type = QStringLiteral("Cestino");
+    trash.type = QCoreApplication::translate("Desktop", "Recycle Bin");
 
     QList<Item> files;
     const QFileInfoList entries = QDir(m_dir).entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::System);
@@ -551,7 +552,7 @@ bool DesktopModel::rename(const QString& path, const QString& newName)
         settings.setValue(positionKey(name), position);
     }
     UndoStep step;
-    step.label = QStringLiteral("Rinomina");
+    step.label = QCoreApplication::translate("Desktop", "Rename");
     step.moves.append({ target, path });
     pushUndo(step);
     reload();
@@ -561,7 +562,7 @@ bool DesktopModel::rename(const QString& path, const QString& newName)
 void DesktopModel::trash(const QStringList& paths)
 {
     UndoStep step;
-    step.label = QStringLiteral("Elimina");
+    step.label = QCoreApplication::translate("Desktop", "Delete");
     for (const QString& path : paths) {
         if (path == trashPath) {
             continue;
@@ -571,7 +572,7 @@ void DesktopModel::trash(const QStringList& paths)
             step.trashed.append(inTrash);
             step.originals.append(path);
         } else {
-            qWarning("vela-shell: non riesco a spostare nel Cestino %s", qPrintable(path));
+            qWarning("vela-shell: can't move %s to the Recycle Bin", qPrintable(path));
         }
     }
     if (!step.trashed.isEmpty()) {
@@ -637,13 +638,13 @@ void DesktopModel::undo()
 
 QString DesktopModel::createFolder()
 {
-    const QString name = uniqueName(QStringLiteral("Nuova cartella"));
+    const QString name = uniqueName(QCoreApplication::translate("Desktop", "New folder"));
     const QString path = QDir(m_dir).filePath(name);
     if (!QDir(m_dir).mkdir(name)) {
         return {};
     }
     UndoStep step;
-    step.label = QStringLiteral("Nuovo");
+    step.label = QCoreApplication::translate("Desktop", "New");
     step.created.append(path);
     pushUndo(step);
     m_pendingSelect = path;
@@ -656,7 +657,7 @@ QString DesktopModel::createFile(const QString& templatePath)
 {
     QString name;
     if (templatePath.isEmpty()) {
-        name = uniqueName(QStringLiteral("Nuovo documento di testo.txt"));
+        name = uniqueName(QCoreApplication::translate("Desktop", "New Text Document.txt"));
     } else {
         name = uniqueName(QFileInfo(templatePath).fileName());
     }
@@ -672,7 +673,7 @@ QString DesktopModel::createFile(const QString& templatePath)
         return {};
     }
     UndoStep step;
-    step.label = QStringLiteral("Nuovo");
+    step.label = QCoreApplication::translate("Desktop", "New");
     step.created.append(path);
     pushUndo(step);
     m_pendingSelect = path;
@@ -755,7 +756,7 @@ void DesktopModel::paste()
     const bool cut = mime->data(QStringLiteral("application/x-kde-cutselection")) == "1"
         || mime->data(QStringLiteral("x-special/gnome-copied-files")).startsWith("cut");
     UndoStep step;
-    step.label = cut ? QStringLiteral("Sposta") : QStringLiteral("Copia");
+    step.label = cut ? QCoreApplication::translate("Desktop", "Move") : QCoreApplication::translate("Desktop", "Copy");
     QString first;
     for (const QUrl& url : mime->urls()) {
         if (!url.isLocalFile()) {
@@ -770,8 +771,8 @@ void DesktopModel::paste()
         if (sameDir) {
             // Copia qui stesso: "foto - Copia.jpg", come in Windows.
             const bool hasSuffix = !source.suffix().isEmpty() && !source.completeBaseName().isEmpty() && !source.isDir();
-            name = hasSuffix ? source.completeBaseName() + QStringLiteral(" - Copia.") + source.suffix()
-                             : name + QStringLiteral(" - Copia");
+            name = hasSuffix ? source.completeBaseName() + QCoreApplication::translate("Desktop", " - Copy.") + source.suffix()
+                             : name + QCoreApplication::translate("Desktop", " - Copy");
         }
         const QString target = QDir(m_dir).filePath(uniqueName(name));
         // cp e mv in un processo a parte: una cartella grande non ferma la shell.
@@ -828,7 +829,7 @@ void DesktopModel::compress(const QStringList& paths, const QString& format)
     arguments.append(names);
     if (runDetached(QStringLiteral("bsdtar"), arguments, m_dir)) {
         UndoStep step;
-        step.label = QStringLiteral("Comprimi");
+        step.label = QCoreApplication::translate("Desktop", "Compress");
         step.created.append(QDir(m_dir).filePath(archive));
         pushUndo(step);
         m_pendingSelect = QDir(m_dir).filePath(archive);
@@ -886,7 +887,7 @@ void DesktopModel::drop(const QStringList& urls, const QString& target, qreal x,
             runDetached(QStringLiteral("cp"), { QStringLiteral("-a"), QStringLiteral("--"), source, destination }, dir);
             step.created.append(destination);
         }
-        step.label = move ? QStringLiteral("Sposta") : QStringLiteral("Copia");
+        step.label = move ? QCoreApplication::translate("Desktop", "Move") : QCoreApplication::translate("Desktop", "Copy");
         // Sul desktop: dove sono stati lasciati, uno sotto l'altro.
         if (target.isEmpty() && !m_autoArrange) {
             savePosition(name, QPointF(std::max(0.0, x), std::max(0.0, y + placed * cellHeight())));

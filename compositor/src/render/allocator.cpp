@@ -60,7 +60,7 @@ wlr_buffer* createBuffer(wlr_allocator* wlrAlloc, int width, int height, const w
         }
     }
     if (modifiers.empty()) {
-        wlr_log(WLR_ERROR, "Allocatore: nessun modifier esplicito per il formato 0x%08x", format->format);
+        wlr_log(WLR_ERROR, "Allocator: no explicit modifier for format 0x%08x", format->format);
         return nullptr;
     }
     // Diagnosi: VELA_DEBUG_LINEAR=1 usa buffer lineari, senza tiling né
@@ -78,7 +78,7 @@ wlr_buffer* createBuffer(wlr_allocator* wlrAlloc, int width, int height, const w
             modifiers.data(), unsigned(modifiers.size()), GBM_BO_USE_RENDERING);
     }
     if (!bo) {
-        wlr_log_errno(WLR_ERROR, "Allocatore: gbm_bo_create_with_modifiers2 %dx%d", width, height);
+        wlr_log_errno(WLR_ERROR, "Allocator: gbm_bo_create_with_modifiers2 %dx%d", width, height);
         return nullptr;
     }
 
@@ -95,7 +95,7 @@ wlr_buffer* createBuffer(wlr_allocator* wlrAlloc, int width, int height, const w
         d.offset[i] = gbm_bo_get_offset(bo, i);
         d.stride[i] = gbm_bo_get_stride_for_plane(bo, i);
         if (d.fd[i] < 0) {
-            wlr_log_errno(WLR_ERROR, "Allocatore: esportazione del piano %d", i);
+            wlr_log_errno(WLR_ERROR, "Allocator: exporting plane %d", i);
             for (int j = 0; j < i; ++j) {
                 close(d.fd[j]);
             }
@@ -126,7 +126,7 @@ wlr_allocator* createGbmAllocator(int renderFd)
 {
     gbm_device* gbm = gbm_create_device(renderFd);
     if (!gbm) {
-        wlr_log(WLR_ERROR, "Allocatore: impossibile creare il device GBM");
+        wlr_log(WLR_ERROR, "Allocator: can't create the GBM device");
         return nullptr;
     }
     auto* alloc = new GbmAllocator {};

@@ -106,7 +106,7 @@ Output::Output(Server& s, wlr_output* output)
         const float scale = defaultScale(wlr, width, height, dpi);
         wlr_output_state_set_scale(&state, scale);
         if (dpi > 0.0) {
-            wlr_log(WLR_INFO, "%s: %.0f DPI (%d×%d mm), scala predefinita %.0f%%", wlr->name, dpi, wlr->phys_width,
+            wlr_log(WLR_INFO, "%s: %.0f DPI (%d×%d mm), default scale %.0f%%", wlr->name, dpi, wlr->phys_width,
                 wlr->phys_height, scale * 100.0);
         }
     }
@@ -115,10 +115,10 @@ Output::Output(Server& s, wlr_output* output)
     wlr_output_state_finish(&state);
 
     if (enabled) {
-        wlr_log(WLR_INFO, "Schermo %s: %dx%d @ %.2f Hz, scala %.2f%s", wlr->name, wlr->width, wlr->height,
-            wlr->refresh / 1000.0, wlr->scale, saved ? " (come salvato)" : "");
+        wlr_log(WLR_INFO, "Output %s: %dx%d @ %.2f Hz, scale %.2f%s", wlr->name, wlr->width, wlr->height,
+            wlr->refresh / 1000.0, wlr->scale, saved ? " (as saved)" : "");
     } else {
-        wlr_log(WLR_INFO, "Schermo %s: spento, come salvato", wlr->name);
+        wlr_log(WLR_INFO, "Output %s: off, as saved", wlr->name);
     }
 
     sceneFrame = std::make_unique<scene::OutputFrame>(*server.sceneGraph, *server.velaRenderer, wlr);
@@ -280,7 +280,7 @@ void Output::setPowered(bool on)
     }
     wlr_output_state_finish(&state);
     powered = on;
-    wlr_log(WLR_INFO, "%s: schermo %s", wlr->name, on ? "riacceso" : "spento per inattività");
+    wlr_log(WLR_INFO, "%s: screen %s", wlr->name, on ? "back on" : "off because idle");
 }
 
 void Output::scheduleFrame()
@@ -389,16 +389,16 @@ void Output::onFrame()
     render::FrameClock::Stats stats {};
     if (clock.takeStats(now, stats) && stats.fps > 0.0) {
         wlr_log(statsRequested ? WLR_INFO : WLR_DEBUG,
-            "%s: %.2f fps (periodo %.3f ms, latenza %d vblank); costo %.3f ms + margine %.3f ms; "
-            "dal disegno alla luce %.3f ms; errore di previsione medio %.3f ms, massimo %.3f ms; vblank persi %d",
+            "%s: %.2f fps (period %.3f ms, latency %d vblank); cost %.3f ms + margin %.3f ms; "
+            "draw to light %.3f ms; prediction error mean %.3f ms, max %.3f ms; missed vblanks %d",
             wlr->name, stats.fps, clock.periodNs() / 1e6, clock.latencyFrames(), stats.costMs, stats.marginMs,
             stats.latencyMs, stats.errorMeanMs, stats.errorMaxMs, stats.missed);
         if (statsRequested && m_breakdown.count > 0) {
             const Breakdown& b = m_breakdown;
             const double n = b.count;
             wlr_log(WLR_INFO,
-                "%s: in media (massimo) risveglio in ritardo %.3f (%.3f) ms, CPU %.3f (%.3f) ms, "
-                "attesa della GPU %.3f (%.3f) ms, lavoro della GPU %.3f (%.3f) ms",
+                "%s: mean (max) late wakeup %.3f (%.3f) ms, CPU %.3f (%.3f) ms, "
+                "GPU wait %.3f (%.3f) ms, GPU work %.3f (%.3f) ms",
                 wlr->name, b.sum[0] / n, b.max[0], b.sum[1] / n, b.max[1], b.sum[2] / n, b.max[2], b.sum[3] / n,
                 b.max[3]);
         }
@@ -408,9 +408,9 @@ void Output::onFrame()
 
 bool Output::vrrState(wlr_output_state& state)
 {
-    // "giochi": solo con un'app a schermo intero su questo schermo (come
+    // "games": solo con un'app a schermo intero su questo schermo (come
     // l'"Automatico" di KWin: il desktop non sfarfalla sui monitor che lo
-    // fanno); "sempre"; "no".
+    // fanno); "always"; "no".
     bool wanted = server.vrrMode == 2;
     if (server.vrrMode == 1) {
         for (Toplevel* toplevel : server.toplevels) {
@@ -428,13 +428,13 @@ bool Output::vrrState(wlr_output_state& state)
     wlr_output_state_set_adaptive_sync_enabled(&state, wanted);
     if (!wlr_output_test_state(wlr, &state)) {
         if (wanted) {
-            wlr_log(WLR_INFO, "%s: VRR non supportato", wlr->name);
+            wlr_log(WLR_INFO, "%s: VRR not supported", wlr->name);
             m_vrrUnsupported = true;
         }
         state.committed &= ~WLR_OUTPUT_STATE_ADAPTIVE_SYNC_ENABLED;
         return false;
     }
-    wlr_log(WLR_INFO, "%s: VRR %s", wlr->name, wanted ? "acceso" : "spento");
+    wlr_log(WLR_INFO, "%s: VRR %s", wlr->name, wanted ? "on" : "off");
     return true;
 }
 
@@ -487,7 +487,7 @@ void Output::startVirtualVblank()
 {
     m_vblankFd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
     if (m_vblankFd < 0) {
-        wlr_log_errno(WLR_ERROR, "%s: timerfd per il vblank virtuale", wlr->name);
+        wlr_log_errno(WLR_ERROR, "%s: timerfd for the virtual vblank", wlr->name);
         return;
     }
     m_vblankSource = wl_event_loop_add_fd(server.loop, m_vblankFd, WL_EVENT_READABLE,
@@ -497,7 +497,7 @@ void Output::startVirtualVblank()
         },
         this);
     m_lastVblankNs = render::nowNs();
-    wlr_log(WLR_INFO, "%s: vblank virtuale ogni %.3f ms", wlr->name, clock.periodNs() / 1e6);
+    wlr_log(WLR_INFO, "%s: virtual vblank every %.3f ms", wlr->name, clock.periodNs() / 1e6);
 }
 
 // Il prossimo vblank sulla griglia esatta (ultimo vblank + multipli del
@@ -737,7 +737,7 @@ void Server::checkWindowsOnOutputs()
         if (!t->homeOutput.empty() && boxes.contains(t->homeOutput)) {
             const wlr_box home = boxes[t->homeOutput];
             if (Output* out = outputNamed(t->homeOutput.c_str())) {
-                wlr_log(WLR_INFO, "%s di nuovo collegato: \"%s\" torna lì", t->homeOutput.c_str(), t->title());
+                wlr_log(WLR_INFO, "%s connected again: \"%s\" goes back there", t->homeOutput.c_str(), t->title());
                 t->homeOutput.clear();
                 t->moveToOutput(out, home.x + t->homeX, home.y + t->homeY);
             }
@@ -770,7 +770,7 @@ void Server::checkWindowsOnOutputs()
             t->homeOutput = from;
         }
         const wlr_box to = target->box();
-        wlr_log(WLR_INFO, "%s scollegato: \"%s\" va su %s", from.empty() ? "Uno schermo" : from.c_str(), t->title(),
+        wlr_log(WLR_INFO, "%s disconnected: \"%s\" moves to %s", from.empty() ? "An output" : from.c_str(), t->title(),
             target->wlr->name);
         // Nello stesso punto relativo, se ci sta.
         t->moveToOutput(target, to.x + (from.empty() ? 0 : t->homeX), to.y + (from.empty() ? 0 : t->homeY));
@@ -791,7 +791,7 @@ void Server::testOutputCommand(const std::string& arguments)
         },
         &headless);
     if (!headless) {
-        wlr_log(WLR_ERROR, "test-output: solo col backend headless");
+        wlr_log(WLR_ERROR, "test-output: only with the headless backend");
         return;
     }
     int width = 0;
@@ -807,10 +807,10 @@ void Server::testOutputCommand(const std::string& arguments)
             out->commitMode(state);
             wlr_output_state_finish(&state);
         }
-        wlr_log(WLR_INFO, "test-output: collegato %s (%dx%d)", output ? output->name : "(niente)", width, height);
+        wlr_log(WLR_INFO, "test-output: connected %s (%dx%d)", output ? output->name : "(none)", width, height);
     } else if (std::sscanf(arguments.c_str(), "remove %63s", name) == 1) {
         if (Output* out = outputNamed(name)) {
-            wlr_log(WLR_INFO, "test-output: scollego %s", name);
+            wlr_log(WLR_INFO, "test-output: disconnecting %s", name);
             wlr_output_destroy(out->wlr);
         }
     }

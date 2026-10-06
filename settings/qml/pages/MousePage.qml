@@ -10,16 +10,16 @@ Page {
     CardGroup {
         Card {
             icon: "input-mouse"
-            title: "Pulsante del mouse principale"
+            title: qsTr("Primary mouse button")
             trailing: Choice {
-                model: ["Sinistro", "Destro"]
+                model: [qsTr("Left"), qsTr("Right")]
                 currentIndex: Prefs.mouseLeftHanded ? 1 : 0
                 onChosen: index => Prefs.mouseLeftHanded = index === 1
             }
         }
         Card {
             icon: "transform-move"
-            title: "Velocità del puntatore del mouse"
+            title: qsTr("Mouse pointer speed")
             trailing: Slider {
                 width: 220
                 from: 1
@@ -32,8 +32,8 @@ Page {
         }
         Card {
             icon: "edit-select"
-            title: "Migliora precisione puntatore"
-            description: "Il puntatore va più lontano quando muovi il mouse più in fretta (accelerazione)"
+            title: qsTr("Enhance pointer precision")
+            description: qsTr("The pointer goes further when you move the mouse faster (acceleration)")
             trailing: Toggle {
                 checked: Prefs.mousePrecision
                 onToggled: on => Prefs.mousePrecision = on
@@ -42,11 +42,11 @@ Page {
     }
 
     CardGroup {
-        title: "Scorrimento"
+        title: qsTr("Scrolling")
         Card {
             icon: "input-mouse"
-            title: "Righe da scorrere ogni volta"
-            description: "Per ogni scatto della rotellina"
+            title: qsTr("Lines to scroll at a time")
+            description: qsTr("For each notch of the wheel")
             trailing: Slider {
                 width: 220
                 from: 1
@@ -60,18 +60,18 @@ Page {
     }
 
     CardGroup {
-        title: "Impostazioni correlate"
+        title: qsTr("Related settings")
         LinkCard {
             visible: Prefs.hasTouchpad
             icon: "input-touchpad"
-            title: "Touchpad"
-            description: "Tocchi, gesti, scorrimento"
+            title: qsTr("Touchpad")
+            description: qsTr("Taps, gestures, scrolling")
             onClicked: root.navigate("touchpad")
         }
         LinkCard {
             icon: "preferences-desktop-accessibility"
-            title: "Accessibilità"
-            description: "Lente di ingrandimento, filtri colore, tasti permanenti"
+            title: qsTr("Accessibility")
+            description: qsTr("Magnifier, color filters, sticky keys")
             onClicked: root.navigate("accessibility")
         }
     }

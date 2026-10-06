@@ -63,7 +63,7 @@ private:
     {
         QSvgRenderer renderer(path);
         if (!renderer.isValid()) {
-            qWarning("vela-shell: sfondo non valido: %s", qPrintable(path));
+            qWarning("vela-shell: invalid background: %s", qPrintable(path));
             return {};
         }
         renderer.setViewBox(cropToFill(renderer.viewBoxF(), target));
@@ -92,7 +92,7 @@ private:
         }
         QImage image = reader.read();
         if (image.isNull()) {
-            qWarning("vela-shell: sfondo non leggibile: %s (%s)", qPrintable(path),
+            qWarning("vela-shell: unreadable background: %s (%s)", qPrintable(path),
                 qPrintable(reader.errorString()));
         }
         return image;

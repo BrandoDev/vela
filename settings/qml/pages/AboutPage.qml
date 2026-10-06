@@ -35,7 +35,7 @@ Page {
         }
         Button {
             anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-            text: "Rinomina questo PC"
+            text: qsTr("Rename this PC")
             onClicked: {
                 nameField.text = About.hostname
                 renameDialog.open()
@@ -52,7 +52,7 @@ Page {
         icon: "help-about"
         title: header
         trailing: Button {
-            text: "Copia"
+            text: qsTr("Copy")
             onClicked: {
                 copyHelper.text = About.asText()
                 copyHelper.selectAll()
@@ -90,29 +90,29 @@ Page {
     TextEdit { id: copyHelper; visible: false }
 
     SpecGroup {
-        header: "Specifiche dispositivo"
+        header: qsTr("Device specifications")
         rows: About.device
     }
     SpecGroup {
         icon: "start-here"
-        header: "Specifiche sistema"
+        header: qsTr("System specifications")
         rows: About.system
     }
 
     CardGroup {
-        title: "Impostazioni correlate"
+        title: qsTr("Related settings")
         LinkCard {
             visible: System.available("system")
             icon: "hwinfo"
-            title: "Informazioni dettagliate sul sistema"
-            description: "Hardware, driver, firmware"
+            title: qsTr("Detailed system information")
+            description: qsTr("Hardware, drivers, firmware")
             onClicked: System.trigger("system")
         }
         LinkCard {
             visible: System.available("task-manager")
             icon: "utilities-system-monitor"
-            title: "Gestione attività"
-            description: "Processi, prestazioni, uso di CPU e memoria"
+            title: qsTr("Task manager")
+            description: qsTr("Processes, performance, CPU and memory usage")
             onClicked: System.trigger("task-manager")
         }
     }
@@ -120,8 +120,8 @@ Page {
     Dialog {
         id: renameDialog
         parent: root.contentItem
-        title: "Rinomina il PC"
-        primaryText: "Avanti"
+        title: qsTr("Rename your PC")
+        primaryText: qsTr("Next")
         primaryEnabled: /^[A-Za-z0-9][A-Za-z0-9-]{0,62}$/.test(nameField.text)
         onAccepted: About.rename(nameField.text)
         Column {
@@ -129,7 +129,7 @@ Page {
             spacing: 12
             Text {
                 width: parent.width
-                text: "Il nome attuale del PC è " + About.hostname + ". Puoi usare lettere, numeri e trattini."
+                text: qsTr("Your PC's current name is ") + About.hostname + qsTr(". You can use letters, numbers and hyphens.")
                 color: Theme.text
                 font.pixelSize: Theme.fontBody
                 wrapMode: Text.Wrap
@@ -152,9 +152,9 @@ Page {
     Dialog {
         id: errorDialog
         parent: root.contentItem
-        title: "Impossibile rinominare il PC"
+        title: qsTr("Couldn't rename the PC")
         primaryText: ""
-        secondaryText: "Chiudi"
+        secondaryText: qsTr("Close")
         Text {
             id: errorText
             width: parent.width

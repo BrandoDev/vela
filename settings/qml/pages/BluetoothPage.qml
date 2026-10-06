@@ -15,24 +15,24 @@ Page {
         return icon !== "" ? icon : "preferences-system-bluetooth"
     }
     function status(d) {
-        if (d.busy) return "Connessione in corso..."
-        let s = d.connected ? "Connesso" : "Associato"
-        if (d.battery >= 0) s += " · Batteria " + d.battery + "%"
+        if (d.busy) return qsTr("Connecting...")
+        let s = d.connected ? qsTr("Connected") : qsTr("Paired")
+        if (d.battery >= 0) s += qsTr(" · Battery ") + d.battery + "%"
         return s
     }
 
     Card {
         visible: !Bluetooth.available
         icon: "preferences-system-bluetooth-inactive"
-        title: "Bluetooth non disponibile"
-        description: "Non c'è un adattatore Bluetooth, o il servizio bluetooth non è attivo."
+        title: qsTr("Bluetooth isn't available")
+        description: qsTr("There's no Bluetooth adapter, or the bluetooth service isn't running.")
     }
 
     Card {
         visible: Bluetooth.available
         icon: Bluetooth.powered ? "preferences-system-bluetooth" : "preferences-system-bluetooth-inactive"
-        title: "Bluetooth"
-        description: Bluetooth.powered ? "Individuabile come \"" + Bluetooth.adapterName + "\"" : "Disattivato"
+        title: qsTr("Bluetooth")
+        description: Bluetooth.powered ? qsTr("Discoverable as \"") + Bluetooth.adapterName + "\"" : qsTr("Off")
         minimumHeight: 80
         trailing: Toggle {
             checked: Bluetooth.powered
@@ -43,10 +43,10 @@ Page {
     Card {
         visible: Bluetooth.available
         icon: "list-add"
-        title: "Dispositivi"
-        description: "Mouse, tastiera, penna, audio, schermi e dock, altri dispositivi"
+        title: qsTr("Devices")
+        description: qsTr("Mouse, keyboard, pen, audio, displays and docks, other devices")
         trailing: Button {
-            text: "Aggiungi dispositivo"
+            text: qsTr("Add device")
             usable: Bluetooth.powered
             onClicked: {
                 addDialog.open()
@@ -77,14 +77,14 @@ Page {
             trailing: Row {
                 spacing: 8
                 Button {
-                    text: deviceCard.modelData.connected ? "Disconnetti" : "Connetti"
+                    text: deviceCard.modelData.connected ? qsTr("Disconnect") : qsTr("Connect")
                     usable: !deviceCard.modelData.busy && Bluetooth.powered
                     onClicked: deviceCard.modelData.connected ? Bluetooth.disconnectDevice(deviceCard.modelData.path)
                                                               : Bluetooth.connectDevice(deviceCard.modelData.path)
                 }
                 Button {
                     subtle: true
-                    text: "Rimuovi"
+                    text: qsTr("Remove")
                     onClicked: {
                         removeDialog.device = deviceCard.modelData
                         removeDialog.open()
@@ -95,24 +95,24 @@ Page {
     }
 
     CardGroup {
-        title: "Impostazioni correlate"
+        title: qsTr("Related settings")
         LinkCard {
             icon: "input-mouse"
-            title: "Mouse"
-            description: "Pulsanti, velocità del puntatore, scorrimento"
+            title: qsTr("Mouse")
+            description: qsTr("Buttons, pointer speed, scrolling")
             onClicked: root.navigate("mouse")
         }
         LinkCard {
             visible: Prefs.hasTouchpad
             icon: "input-touchpad"
-            title: "Touchpad"
-            description: "Tocchi, gesti, scorrimento"
+            title: qsTr("Touchpad")
+            description: qsTr("Taps, gestures, scrolling")
             onClicked: root.navigate("touchpad")
         }
         LinkCard {
             icon: "audio-speakers"
-            title: "Audio"
-            description: "Dove va il suono dei dispositivi collegati"
+            title: qsTr("Sound")
+            description: qsTr("Where sound from connected devices goes")
             onClicked: root.navigate("sound")
         }
     }
@@ -121,13 +121,13 @@ Page {
         id: removeDialog
         parent: root.contentItem
         property var device: null
-        title: "Rimuovere il dispositivo?"
-        primaryText: "Sì"
-        secondaryText: "No"
+        title: qsTr("Remove this device?")
+        primaryText: qsTr("Yes")
+        secondaryText: qsTr("No")
         onAccepted: Bluetooth.removeDevice(device.path)
         Text {
             width: parent.width
-            text: removeDialog.device ? "Per usare di nuovo " + removeDialog.device.name + " dovrai associarlo un'altra volta." : ""
+            text: removeDialog.device ? qsTr("To use ") + removeDialog.device.name + qsTr(" again, you'll need to pair it once more.") : ""
             color: Theme.text
             font.pixelSize: Theme.fontBody
             wrapMode: Text.Wrap
@@ -138,9 +138,9 @@ Page {
     Dialog {
         id: addDialog
         parent: root.contentItem
-        title: "Aggiungi un dispositivo"
+        title: qsTr("Add a device")
         primaryText: ""
-        secondaryText: "Annulla"
+        secondaryText: qsTr("Cancel")
         dialogWidth: 520
         onRejected: Bluetooth.stopDiscovery()
         Column {
@@ -148,7 +148,7 @@ Page {
             spacing: 8
             Text {
                 width: parent.width
-                text: "Assicurati che il dispositivo sia acceso e individuabile. Selezionalo qui sotto per connetterlo."
+                text: qsTr("Make sure your device is turned on and discoverable. Select it below to connect.")
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontBody
                 wrapMode: Text.Wrap
@@ -188,7 +188,7 @@ Page {
                             }
                             Text {
                                 visible: candidate.modelData.busy
-                                text: "Associazione in corso..."
+                                text: qsTr("Pairing...")
                                 color: Theme.textSecondary
                                 font.pixelSize: Theme.fontCaption
                             }
@@ -205,7 +205,7 @@ Page {
                 Text {
                     visible: found.count === 0
                     anchors.centerIn: parent
-                    text: Bluetooth.discovering ? "Ricerca dei dispositivi..." : "Nessun dispositivo trovato"
+                    text: Bluetooth.discovering ? qsTr("Looking for devices...") : qsTr("No devices found")
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontBody
                 }

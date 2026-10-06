@@ -74,7 +74,7 @@ Window {
 
     FileDialog {
         id: browse
-        title: "Sfoglia"
+        title: qsTr("Browse")
         onAccepted: {
             root.browsing = false
             field.text = selectedFile.toString().replace(/^file:\/\//, "")
@@ -102,7 +102,7 @@ Window {
             x: 64
             y: 18
             width: parent.width - x - 20
-            text: "Digita il nome di un programma, cartella, documento o risorsa Internet e Vela lo aprirà."
+            text: qsTr("Type the name of a program, folder, document or Internet resource, and Vela will open it for you.")
             color: Theme.text
             font.pixelSize: Theme.fontSmall
             wrapMode: Text.Wrap
@@ -111,7 +111,7 @@ Window {
         Text {
             x: 20
             y: 84
-            text: "Apri:"
+            text: qsTr("Open:")
             color: Theme.text
             font.pixelSize: Theme.fontNormal
         }
@@ -198,7 +198,7 @@ Window {
                 onClicked: root.accept()
             }
             DialogButton {
-                label: "Annulla"
+                label: qsTr("Cancel")
                 onClicked: root.close()
             }
             DialogButton {

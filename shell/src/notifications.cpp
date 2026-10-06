@@ -77,7 +77,7 @@ bool NotificationServer::registerService()
         return false;
     }
     if (!bus.registerService(QStringLiteral("org.freedesktop.Notifications"))) {
-        qInfo("vela-shell: c'è già un server delle notifiche (%s), le notifiche vanno a lui",
+        qInfo("vela-shell: another notification server is running (%s), notifications go to it",
             qPrintable(bus.interface()->serviceOwner(QStringLiteral("org.freedesktop.Notifications")).value()));
         bus.unregisterObject(QStringLiteral("/org/freedesktop/Notifications"));
         return false;

@@ -51,13 +51,13 @@ private slots:
     void writePreservesTheRest()
     {
         write(config() + QStringLiteral("/mimeapps.list"),
-            "# un commento\n[Added Associations]\ntext/plain=okular.desktop;\n\n"
-            "[Default Applications]\nimage/png=gwenview.desktop;\n\n[Altro]\nchiave=valore\n");
+            "# a comment\n[Added Associations]\ntext/plain=okular.desktop;\n\n"
+            "[Default Applications]\nimage/png=gwenview.desktop;\n\n[Other]\nkey=value\n");
         QVERIFY(MimeApps::setDefault({ QStringLiteral("text/plain") }, QStringLiteral("kate.desktop")));
         const QString text = read(config() + QStringLiteral("/mimeapps.list"));
-        QVERIFY(text.contains(QLatin1String("# un commento")));
+        QVERIFY(text.contains(QLatin1String("# a comment")));
         QVERIFY(text.contains(QLatin1String("image/png=gwenview.desktop;")));
-        QVERIFY(text.contains(QLatin1String("[Altro]\nchiave=valore")));
+        QVERIFY(text.contains(QLatin1String("[Other]\nkey=value")));
         // L'app scelta in testa alle associazioni, le altre restano.
         QVERIFY(text.contains(QLatin1String("text/plain=kate.desktop;okular.desktop;")));
         QCOMPARE(MimeApps::defaultFor(QStringLiteral("text/plain")), QStringLiteral("kate.desktop"));

@@ -26,7 +26,7 @@ Snapshot::Snapshot(scene::Tree* parent, scene::Node* source, wlr_box frame)
     if (source->parent() == parent) {
         m_tree->placeAbove(source);
     }
-    wlr_log(WLR_DEBUG, "Istantanea: %zu buffer", m_pieces.size());
+    wlr_log(WLR_DEBUG, "Snapshot: %zu buffers", m_pieces.size());
 }
 
 Snapshot::~Snapshot() = default;

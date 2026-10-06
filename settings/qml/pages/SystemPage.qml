@@ -7,38 +7,38 @@ Page {
     CardGroup {
         LinkCard {
             icon: "video-display"
-            title: "Schermo"
-            description: "Monitor, luminosità, risoluzione, scala"
+            title: qsTr("Display")
+            description: qsTr("Monitors, brightness, resolution, scale")
             onClicked: root.navigate("display")
         }
         LinkCard {
             icon: "audio-speakers"
-            title: "Audio"
-            description: "Livelli del volume, output, input, dispositivi audio"
+            title: qsTr("Sound")
+            description: qsTr("Volume levels, output, input, sound devices")
             onClicked: root.navigate("sound")
         }
         LinkCard {
             icon: "preferences-desktop-notification"
-            title: "Notifiche"
-            description: "Avvisi da app e sistema, Non disturbare"
+            title: qsTr("Notifications")
+            description: qsTr("Alerts from apps and the system, do not disturb")
             onClicked: root.navigate("notifications")
         }
         LinkCard {
             icon: "preferences-system-power-management"
-            title: "Alimentazione"
-            description: Status.batteryPresent ? "Sospensione, utilizzo della batteria, risparmio energia" : "Schermo e sospensione, modalità di risparmio energia"
+            title: qsTr("Power")
+            description: Status.batteryPresent ? qsTr("Sleep, battery usage, energy saver") : qsTr("Screen and sleep, power mode")
             onClicked: root.navigate("power")
         }
         LinkCard {
             icon: "edit-paste"
-            title: "Appunti"
-            description: "Cronologia degli Appunti (Win+V), cancella"
+            title: qsTr("Clipboard")
+            description: qsTr("Clipboard history (Win+V), clear")
             onClicked: root.navigate("clipboard")
         }
         LinkCard {
             icon: "help-about"
-            title: "Informazioni"
-            description: "Specifiche del dispositivo, rinomina il PC, specifiche del sistema operativo"
+            title: qsTr("About")
+            description: qsTr("Device specifications, rename your PC, operating system specifications")
             onClicked: root.navigate("about")
         }
     }

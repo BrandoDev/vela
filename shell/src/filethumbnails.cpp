@@ -144,7 +144,7 @@ public:
 
     QString errorString() const override
     {
-        return m_image.isNull() ? QStringLiteral("nessuna miniatura") : QString();
+        return m_image.isNull() ? QStringLiteral("no thumbnail") : QString();
     }
 
 private:

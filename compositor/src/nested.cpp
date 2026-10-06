@@ -87,7 +87,7 @@ void NestedWindow::onPreferredScale(void* data, wp_fractional_scale_v1*, uint32_
         return;
     }
     self->m_hostScale = scale;
-    wlr_log(WLR_INFO, "%s: la finestra ospite è a scala %.3f", self->m_output.wlr->name, scale);
+    wlr_log(WLR_INFO, "%s: the host window has scale %.3f", self->m_output.wlr->name, scale);
     self->apply();
 }
 
@@ -104,7 +104,7 @@ void NestedWindow::setup()
     }
     if (m_inhibitManager && m_seat && !m_inhibitor) {
         m_inhibitor = zwp_keyboard_shortcuts_inhibit_manager_v1_inhibit_shortcuts(m_inhibitManager, m_surface, m_seat);
-        wlr_log(WLR_INFO, "%s: chieste all'ospite le scorciatoie da tastiera", m_output.wlr->name);
+        wlr_log(WLR_INFO, "%s: asked the host for the keyboard shortcuts", m_output.wlr->name);
     }
     wl_display_flush(m_remote);
 }

@@ -66,9 +66,9 @@ bool Server::hasTouchpad() const
 void Server::loadInputSettings()
 {
     const Settings settings = readSettings();
-    input.wheelFactor = std::clamp(std::atoi(setting(settings, "mouse-righe", "3").c_str()), 1, 20) / 3.0;
-    input.threeFingers = setting(settings, "touchpad-tre-dita", "app");
-    input.fourFingers = setting(settings, "touchpad-quattro-dita", "desktop");
+    input.wheelFactor = std::clamp(std::atoi(setting(settings, "mouse-scroll-lines", "3").c_str()), 1, 20) / 3.0;
+    input.threeFingers = setting(settings, "touchpad-three-fingers", "app");
+    input.fourFingers = setting(settings, "touchpad-four-fingers", "desktop");
     for (auto& pointer : input.pointers) {
         configurePointer(*pointer);
     }
@@ -85,13 +85,13 @@ void Server::configurePointer(PointerDevice& pointer)
 
     // Il pulsante principale (anche per il touchpad, come Windows).
     if (libinput_device_config_left_handed_is_available(handle)) {
-        libinput_device_config_left_handed_set(handle, setting(settings, "mouse-pulsante-principale") == "destro");
+        libinput_device_config_left_handed_set(handle, setting(settings, "mouse-primary-button") == "right");
     }
 
     if (!pointer.touchpad) {
         if (libinput_device_config_accel_is_available(handle)) {
-            libinput_device_config_accel_set_speed(handle, speedSetting(settings, "mouse-velocita"));
-            libinput_device_config_accel_set_profile(handle, settingFlag(settings, "mouse-precisione", true)
+            libinput_device_config_accel_set_speed(handle, speedSetting(settings, "mouse-speed"));
+            libinput_device_config_accel_set_profile(handle, settingFlag(settings, "mouse-precision", true)
                     ? LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE
                     : LIBINPUT_CONFIG_ACCEL_PROFILE_FLAT);
         }
@@ -100,16 +100,16 @@ void Server::configurePointer(PointerDevice& pointer)
 
     // Touchpad: spento, o spento solo se c'è anche un mouse.
     const bool enabled = settingFlag(settings, "touchpad", true);
-    const bool withMouse = settingFlag(settings, "touchpad-con-mouse", true);
+    const bool withMouse = settingFlag(settings, "touchpad-with-mouse", true);
     const bool mousePresent = std::any_of(input.pointers.begin(), input.pointers.end(),
         [](const std::unique_ptr<PointerDevice>& p) { return !p->touchpad && wlr_input_device_is_libinput(p->device); });
     libinput_device_config_send_events_set_mode(handle,
         !enabled || (!withMouse && mousePresent) ? LIBINPUT_CONFIG_SEND_EVENTS_DISABLED
                                                  : LIBINPUT_CONFIG_SEND_EVENTS_ENABLED);
     if (libinput_device_config_accel_is_available(handle)) {
-        libinput_device_config_accel_set_speed(handle, speedSetting(settings, "touchpad-velocita"));
+        libinput_device_config_accel_set_speed(handle, speedSetting(settings, "touchpad-speed"));
     }
-    const bool tap = settingFlag(settings, "touchpad-tocco", true);
+    const bool tap = settingFlag(settings, "touchpad-tap", true);
     libinput_device_config_tap_set_enabled(handle, tap ? LIBINPUT_CONFIG_TAP_ENABLED : LIBINPUT_CONFIG_TAP_DISABLED);
     libinput_device_config_tap_set_drag_enabled(handle, tap ? LIBINPUT_CONFIG_DRAG_ENABLED : LIBINPUT_CONFIG_DRAG_DISABLED);
     // Due dita: tasto destro, tre: centrale (come Windows).
@@ -119,7 +119,7 @@ void Server::configurePointer(PointerDevice& pointer)
     }
     if (libinput_device_config_scroll_has_natural_scroll(handle)) {
         // "Movimento verso il basso: scorre verso l'alto", come Windows.
-        bool natural = settingFlag(settings, "touchpad-scorrimento-naturale", true);
+        bool natural = settingFlag(settings, "touchpad-natural-scroll", true);
         if (const char* env = std::getenv("VELA_NATURAL_SCROLL"); env && *env) {
             natural = std::strcmp(env, "0") != 0;
         }
@@ -130,8 +130,8 @@ void Server::configurePointer(PointerDevice& pointer)
     if (libinput_device_config_click_get_methods(handle) & LIBINPUT_CONFIG_CLICK_METHOD_CLICKFINGER) {
         libinput_device_config_click_set_method(handle, LIBINPUT_CONFIG_CLICK_METHOD_CLICKFINGER);
     }
-    wlr_log(WLR_INFO, "Touchpad configurato: %s%s", libinput_device_get_name(handle),
-        libinput_device_config_send_events_get_mode(handle) == LIBINPUT_CONFIG_SEND_EVENTS_DISABLED ? " (spento)" : "");
+    wlr_log(WLR_INFO, "Touchpad configured: %s%s", libinput_device_get_name(handle),
+        libinput_device_config_send_events_get_mode(handle) == LIBINPUT_CONFIG_SEND_EVENTS_DISABLED ? " (off)" : "");
 #else
     (void)pointer;
 #endif

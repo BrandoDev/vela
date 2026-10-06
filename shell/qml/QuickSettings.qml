@@ -433,7 +433,7 @@ Window {
                     Tile {
                         visible: Status.wifiAvailable
                         icon: Status.wifiEnabled ? "network-wireless" : "network-wireless-disconnected"
-                        label: Status.networkWireless && Status.networkName !== "" ? Status.networkName : "Wi-Fi"
+                        label: Status.networkWireless && Status.networkName !== "" ? Status.networkName : qsTr("Wi-Fi")
                         checked: Status.wifiEnabled
                         split: Network.available
                         onToggled: Status.setWifiEnabled(!Status.wifiEnabled)
@@ -444,7 +444,7 @@ Window {
                     Tile {
                         visible: !Status.wifiAvailable
                         icon: Status.networkIconName
-                        label: Status.networkConnected ? (Status.networkName !== "" ? Status.networkName : "Rete") : "Non connesso"
+                        label: Status.networkConnected ? (Status.networkName !== "" ? Status.networkName : qsTr("Network")) : qsTr("Not connected")
                         checked: Status.networkConnected
                         onToggled: root.openSettings("network")
                         onContextMenu: root.openSettings("network")
@@ -452,7 +452,7 @@ Window {
                     Tile {
                         visible: Status.bluetoothAvailable
                         icon: Status.bluetoothEnabled ? "network-bluetooth" : "network-bluetooth-inactive"
-                        label: "Bluetooth"
+                        label: qsTr("Bluetooth")
                         checked: Status.bluetoothEnabled
                         split: true
                         onToggled: Status.setBluetoothEnabled(!Status.bluetoothEnabled)
@@ -462,28 +462,28 @@ Window {
                     Tile {
                         visible: Status.wifiAvailable || Status.bluetoothAvailable
                         icon: "network-flightmode-on"
-                        label: "Modalità aereo"
+                        label: qsTr("Airplane mode")
                         checked: Status.airplane
                         onToggled: Status.setAirplaneMode(!Status.airplane)
                     }
                     Tile {
                         visible: Status.powerSaverAvailable
                         icon: "battery-profile-powersave"
-                        label: "Risparmio energia"
+                        label: qsTr("Energy saver")
                         checked: Status.powerSaver
                         onToggled: Status.setPowerSaver(!Status.powerSaver)
                         onContextMenu: root.openSettings("power")
                     }
                     Tile {
                         icon: "redshift-status-on"
-                        label: "Luce notturna"
+                        label: qsTr("Night light")
                         checked: Access.nightLight
                         onToggled: Access.nightLight = !Access.nightLight
                         onContextMenu: root.openSettings("night-light-settings")
                     }
                     Tile {
                         icon: "preferences-desktop-accessibility"
-                        label: "Accessibilità"
+                        label: qsTr("Accessibility")
                         checked: Access.magnifier || Access.colorFilter || Access.stickyKeys
                         menu: true
                         onDetails: root.showPage("accessibility")
@@ -519,7 +519,7 @@ Window {
                 property string password: ""
 
                 PageHeader {
-                    title: "Wi-Fi"
+                    title: qsTr("Wi-Fi")
                     Switch {
                         checked: Status.wifiEnabled
                         onToggled: Status.setWifiEnabled(!Status.wifiEnabled)
@@ -530,8 +530,8 @@ Window {
                     width: parent.width
                     topPadding: 8
                     bottomPadding: 8
-                    text: !Status.wifiEnabled ? "Il Wi-Fi è spento."
-                        : Network.scanning ? "Ricerca delle reti in corso..." : "Nessuna rete trovata."
+                    text: !Status.wifiEnabled ? qsTr("Wi-Fi is turned off.")
+                        : Network.scanning ? qsTr("Looking for networks...") : qsTr("No networks found.")
                     color: Theme.textDim
                     font.pixelSize: Theme.fontNormal
                     wrapMode: Text.WordWrap
@@ -588,9 +588,9 @@ Window {
                                             elide: Text.ElideRight
                                         }
                                         Text {
-                                            text: net.busy ? "Connessione in corso..."
-                                                : net.modelData.active ? (net.modelData.secure ? "Connesso, protetta" : "Connesso")
-                                                : net.modelData.secure ? "Protetta" : "Aperta"
+                                            text: net.busy ? qsTr("Connecting...")
+                                                : net.modelData.active ? (net.modelData.secure ? qsTr("Connected, secured") : qsTr("Connected"))
+                                                : net.modelData.secure ? qsTr("Secured") : qsTr("Open")
                                             color: Theme.textDim
                                             font.pixelSize: Theme.fontSmall
                                         }
@@ -636,7 +636,7 @@ Window {
                                         Text {
                                             anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
                                             visible: passwordField.text === ""
-                                            text: "Immetti la chiave di sicurezza della rete"
+                                            text: qsTr("Enter the network security key")
                                             color: Theme.textDim
                                             font.pixelSize: Theme.fontSmall
                                         }
@@ -673,7 +673,7 @@ Window {
                                         }
                                         Text {
                                             anchors.centerIn: parent
-                                            text: net.modelData.active ? "Disconnetti" : net.needsPassword ? "Avanti" : "Connetti"
+                                            text: net.modelData.active ? qsTr("Disconnect") : net.needsPassword ? qsTr("Next") : qsTr("Connect")
                                             color: connectButton.primary ? "white" : Theme.text
                                             font.pixelSize: Theme.fontNormal
                                         }
@@ -691,7 +691,7 @@ Window {
                 }
                 Item { width: 1; height: 4 }
                 Link {
-                    text: "Altre impostazioni Wi-Fi"
+                    text: qsTr("More Wi-Fi settings")
                     target: "network"
                 }
             }
@@ -705,13 +705,13 @@ Window {
                 width: parent.width - 32
                 spacing: 4
 
-                PageHeader { title: "Accessibilità" }
+                PageHeader { title: qsTr("Accessibility") }
                 Item { width: 1; height: 4 }
                 Repeater {
                     model: [
-                        { icon: "zoom-in", text: "Lente di ingrandimento", key: "magnifier" },
-                        { icon: "preferences-desktop-color", text: "Filtri colore", key: "colorFilter" },
-                        { icon: "input-keyboard", text: "Tasti permanenti", key: "stickyKeys" }
+                        { icon: "zoom-in", text: qsTr("Magnifier"), key: "magnifier" },
+                        { icon: "preferences-desktop-color", text: qsTr("Color filters"), key: "colorFilter" },
+                        { icon: "input-keyboard", text: qsTr("Sticky keys"), key: "stickyKeys" }
                     ]
                     delegate: Rectangle {
                         id: option
@@ -750,7 +750,7 @@ Window {
                 }
                 Item { width: 1; height: 8 }
                 Link {
-                    text: "Altre impostazioni di accessibilità"
+                    text: qsTr("More accessibility settings")
                     target: "accessibility-settings"
                 }
             }

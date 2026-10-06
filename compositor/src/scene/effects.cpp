@@ -59,7 +59,7 @@ void handleSetBlurRegion(wl_client*, wl_resource* resource, wl_resource* region)
     Effect* effect = fromResource(resource);
     if (!effect->surface) {
         wl_resource_post_error(resource, EXT_BACKGROUND_EFFECT_SURFACE_V1_ERROR_SURFACE_DESTROYED,
-            "la superficie non c'è più");
+            "the surface is gone");
         return;
     }
     if (region) {
@@ -98,7 +98,7 @@ void handleGetEffect(wl_client* client, wl_resource* manager, uint32_t id, wl_re
     wlr_surface* surface = wlr_surface_from_resource(surfaceResource);
     if (wlr_addon_find(&surface->addons, nullptr, &effectAddon)) {
         wl_resource_post_error(manager, EXT_BACKGROUND_EFFECT_MANAGER_V1_ERROR_BACKGROUND_EFFECT_EXISTS,
-            "la superficie ha già un effetto");
+            "the surface already has an effect");
         return;
     }
     wl_resource* resource = wl_resource_create(client, &ext_background_effect_surface_v1_interface,

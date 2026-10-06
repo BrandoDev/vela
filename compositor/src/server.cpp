@@ -82,6 +82,8 @@ Listener& Server::on(wl_signal* signal, Listener::Callback callback)
 
 bool Server::init()
 {
+    // vela.conf con i nomi inglesi, se ha ancora quelli italiani di prima.
+    migrateSettings();
     display = wl_display_create();
     loop = wl_display_get_event_loop(display);
 
@@ -89,7 +91,7 @@ bool Server::init()
     // Wayland se lanciato dentro un'altra sessione (es. KDE) per i test.
     backend = wlr_backend_autocreate(loop, &session);
     if (!backend) {
-        wlr_log(WLR_ERROR, "Impossibile creare il backend");
+        wlr_log(WLR_ERROR, "Can't create the backend");
         return false;
     }
     wlr_multi_for_each_backend(backend,
@@ -112,14 +114,14 @@ bool Server::init()
         velaRenderer = render::Renderer::create(*vulkan);
     }
     if (!velaRenderer) {
-        wlr_log(WLR_ERROR, "Vela ha bisogno di una GPU con Vulkan 1.4 e il supporto ai dmabuf: "
-                           "non posso disegnare");
+        wlr_log(WLR_ERROR, "Vela needs a GPU with Vulkan 1.4 and dmabuf support: "
+                           "can't draw");
         return false;
     }
     renderer = velaRenderer->wlr();
     allocator = render::createGbmAllocator(vulkan->renderFd);
     if (!allocator) {
-        wlr_log(WLR_ERROR, "Impossibile creare l'allocatore dei buffer (GBM)");
+        wlr_log(WLR_ERROR, "Can't create the buffer allocator (GBM)");
         return false;
     }
     wlr_renderer_init_wl_shm(renderer, display);
@@ -134,7 +136,7 @@ bool Server::init()
     const char* noExplicit = std::getenv("WLR_RENDER_NO_EXPLICIT_SYNC");
     if (renderer->features.timeline && !(noExplicit && std::strcmp(noExplicit, "0") != 0)) {
         if (wlr_linux_drm_syncobj_manager_v1_create(display, 1, vulkan->renderFd)) {
-            wlr_log(WLR_INFO, "Sincronizzazione esplicita con le app (linux-drm-syncobj-v1) attiva");
+            wlr_log(WLR_INFO, "Explicit sync with apps (linux-drm-syncobj-v1) enabled");
         }
     }
 
@@ -383,7 +385,7 @@ bool Server::init()
     // Mouse e tastiera virtuali, per i test automatici (tools/vela-input).
     // Spenti di default: permettono a qualunque programma di simulare input.
     if (envInt("VELA_DEBUG_INPUT", 0) != 0) {
-        wlr_log(WLR_INFO, "VELA_DEBUG_INPUT: mouse e tastiera virtuali attivi");
+        wlr_log(WLR_INFO, "VELA_DEBUG_INPUT: virtual pointer and keyboard enabled");
         auto* pointers = wlr_virtual_pointer_manager_v1_create(display);
         on(&pointers->events.new_virtual_pointer, [this](void* data) {
             auto* event = static_cast<wlr_virtual_pointer_v1_new_pointer_event*>(data);
@@ -422,9 +424,9 @@ bool Server::init()
         sched_param param {};
         param.sched_priority = std::min(10, sched_get_priority_max(SCHED_RR));
         if (sched_setscheduler(0, SCHED_RR | SCHED_RESET_ON_FORK, &param) == 0) {
-            wlr_log(WLR_INFO, "Thread principale in tempo reale (SCHED_RR, priorità %d)", param.sched_priority);
+            wlr_log(WLR_INFO, "Main thread is realtime (SCHED_RR, priority %d)", param.sched_priority);
         } else {
-            wlr_log(WLR_INFO, "Niente scheduling realtime (%s): sotto carico i frame possono tardare",
+            wlr_log(WLR_INFO, "No realtime scheduling (%s): frames may be late under load",
                 std::strerror(errno));
         }
     }
@@ -450,13 +452,13 @@ bool Server::start(const std::string& startupCommand)
         socket = wl_display_add_socket_auto(display);
     }
     if (!socket) {
-        wlr_log(WLR_ERROR, "Impossibile creare il socket Wayland");
+        wlr_log(WLR_ERROR, "Can't create the Wayland socket");
         return false;
     }
     socketName = socket;
 
     if (!wlr_backend_start(backend)) {
-        wlr_log(WLR_ERROR, "Impossibile avviare il backend");
+        wlr_log(WLR_ERROR, "Can't start the backend");
         return false;
     }
 
@@ -488,19 +490,19 @@ bool Server::start(const std::string& startupCommand)
         runSessionHook("start");
     }
 
-    wlr_log(WLR_INFO, "Vela in esecuzione su WAYLAND_DISPLAY=%s%s", socket,
-        std::getenv("VELA_RESTARTED") ? " (riavviato dopo un crash)" : "");
+    wlr_log(WLR_INFO, "Vela running on WAYLAND_DISPLAY=%s%s", socket,
+        std::getenv("VELA_RESTARTED") ? " (restarted after a crash)" : "");
     unsetenv("VELA_RESTARTED");
     // Era bloccato quando il compositor di prima è caduto: si riparte
     // bloccati, schermo nero finché vela-lock non si presenta.
     if (std::getenv("VELA_START_LOCKED")) {
         unsetenv("VELA_START_LOCKED");
-        wlr_log(WLR_INFO, "Lo schermo era bloccato: riparto bloccato");
+        wlr_log(WLR_INFO, "The screen was locked: restarting locked");
         engageLock();
         lockScreen();
     }
     if (nested) {
-        wlr_log(WLR_INFO, "Modalità annidata: scorciatoie Alt attive");
+        wlr_log(WLR_INFO, "Nested mode: Alt shortcuts enabled");
     }
     if (!startupCommand.empty()) {
         supervise(startupCommand);
@@ -1570,7 +1572,7 @@ void Server::supervise(const std::string& command)
     m_supervised.command = command;
     const pid_t pid = fork();
     if (pid < 0) {
-        wlr_log_errno(WLR_ERROR, "Impossibile avviare \"%s\"", command.c_str());
+        wlr_log_errno(WLR_ERROR, "Can't start \"%s\"", command.c_str());
         return;
     }
     if (pid == 0) {
@@ -1583,7 +1585,7 @@ void Server::supervise(const std::string& command)
 
     const int pidfd = pidfd_open(pid, 0);
     if (pidfd < 0) {
-        wlr_log_errno(WLR_ERROR, "pidfd_open: \"%s\" non verrà riavviato", command.c_str());
+        wlr_log_errno(WLR_ERROR, "pidfd_open: \"%s\" won't be restarted", command.c_str());
         return;
     }
     m_supervised.pid = pid;
@@ -1607,21 +1609,21 @@ void Server::onSupervisedExit()
 
     // Uscita pulita (es. "già in esecuzione"): era voluta.
     if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-        wlr_log(WLR_INFO, "\"%s\" è terminato", command.c_str());
+        wlr_log(WLR_INFO, "\"%s\" exited", command.c_str());
         return;
     }
     const std::string reason = WIFSIGNALED(status)
-        ? std::string("segnale ") + strsignal(WTERMSIG(status))
-        : "codice " + std::to_string(WEXITSTATUS(status));
+        ? std::string("signal ") + strsignal(WTERMSIG(status))
+        : "code " + std::to_string(WEXITSTATUS(status));
 
     // Se si chiude di continuo appena partito, riavviarlo non serve a nulla.
     m_supervised.quickCrashes = uptime < 5.0 ? m_supervised.quickCrashes + 1 : 0;
     if (m_supervised.quickCrashes >= 3) {
-        wlr_log(WLR_ERROR, "\"%s\" continua a chiudersi (%s): non lo riavvio",
+        wlr_log(WLR_ERROR, "\"%s\" keeps exiting (%s): not restarting it",
             command.c_str(), reason.c_str());
         return;
     }
-    wlr_log(WLR_ERROR, "\"%s\" si è chiuso (%s): lo riavvio", command.c_str(), reason.c_str());
+    wlr_log(WLR_ERROR, "\"%s\" exited (%s): restarting it", command.c_str(), reason.c_str());
     supervise(command);
 }
 
@@ -1718,7 +1720,7 @@ void Server::applyOutputConfiguration(wlr_output_configuration_v1* config, bool 
     if (session && ok) {
         saveOutputs(applied);
     }
-    wlr_log(WLR_INFO, "Configurazione degli schermi %s", ok ? "applicata" : "applicata solo in parte");
+    wlr_log(WLR_INFO, "Output configuration %s", ok ? "applicata" : "only partly applied");
 }
 
 // ----------------------------------------------------------- sessione --
@@ -1777,7 +1779,7 @@ void Server::runSessionHook(const char* action)
 {
     const std::string hook = sessionHookPath();
     if (hook.empty()) {
-        wlr_log(WLR_INFO, "Sessione: non trovo vela-session-env, niente collegamento a systemd");
+        wlr_log(WLR_INFO, "Session: vela-session-env not found, no systemd integration");
         return;
     }
     const pid_t pid = fork();
@@ -1791,8 +1793,8 @@ void Server::runSessionHook(const char* action)
     if (pid > 0) {
         int status = 0;
         waitpid(pid, &status, 0);
-        wlr_log(WLR_INFO, "Sessione: %s %s (%s)", hook.c_str(), action,
-            WIFEXITED(status) && WEXITSTATUS(status) == 0 ? "fatto" : "fallito");
+        wlr_log(WLR_INFO, "Session: %s %s (%s)", hook.c_str(), action,
+            WIFEXITED(status) && WEXITSTATUS(status) == 0 ? "done" : "failed");
     }
 }
 
@@ -1816,7 +1818,7 @@ void Server::listenForCommands()
     m_commands.fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
     if (m_commands.fd < 0 || bind(m_commands.fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0
         || listen(m_commands.fd, 4) != 0) {
-        wlr_log_errno(WLR_ERROR, "Impossibile ascoltare i comandi su %s", m_commands.path.c_str());
+        wlr_log_errno(WLR_ERROR, "Can't listen for commands on %s", m_commands.path.c_str());
         stopListening();
         return;
     }
@@ -1919,7 +1921,7 @@ void Server::stopListening()
 void Server::handleCommand(const std::string& command)
 {
     if (command == "logout") {
-        wlr_log(WLR_INFO, "Uscita chiesta dalla shell");
+        wlr_log(WLR_INFO, "Exit requested by the shell");
         wl_display_terminate(display);
     } else if (command.rfind("wallpaper-tint ", 0) == 0) {
         // wallpaper-tint R G B (0-255): il colore medio dello sfondo, per le barre.
@@ -1993,7 +1995,7 @@ void Server::handleCommand(const std::string& command)
         }
     } else if (command == "reload-config") {
         // Le Impostazioni hanno cambiato vela.conf.
-        wlr_log(WLR_INFO, "Impostazioni: rileggo vela.conf");
+        wlr_log(WLR_INFO, "Settings: reloading vela.conf");
         loadIdleSettings();
         const Settings settings = readSettings();
         for (Keyboard* keyboard : keyboards) {
@@ -2071,11 +2073,11 @@ void Server::handleCommand(const std::string& command)
             }
         }
         for (pid_t pid : pids) {
-            wlr_log(WLR_INFO, "Termina attività: %s (processo %d)", appId.c_str(), int(pid));
+            wlr_log(WLR_INFO, "End task: %s (process %d)", appId.c_str(), int(pid));
             kill(pid, SIGKILL);
         }
     } else if (!command.empty()) {
-        wlr_log(WLR_DEBUG, "Comando sconosciuto: %s", command.c_str());
+        wlr_log(WLR_DEBUG, "Unknown command: %s", command.c_str());
     }
 }
 
@@ -2274,7 +2276,7 @@ void Server::sendShellCommand(const std::string& command)
         const std::string line = command + "\n";
         send(fd, line.data(), line.size(), MSG_NOSIGNAL);
     } else {
-        wlr_log(WLR_DEBUG, "Shell non raggiungibile su %s", path.c_str());
+        wlr_log(WLR_DEBUG, "Shell not reachable on %s", path.c_str());
     }
     close(fd);
 }

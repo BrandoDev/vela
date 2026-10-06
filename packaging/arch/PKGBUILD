@@ -19,7 +19,7 @@ pkgname=vela-git
 _name=vela
 pkgver=0.1.0.r0.g0000000
 pkgrel=1
-pkgdesc="Desktop environment moderno, fluido e leggero, con l'aspetto e la comodità di Windows 11"
+pkgdesc="A modern, fluid and sharp desktop environment for Wayland"
 arch=('x86_64')
 url="https://github.com/BrandoDev/vela"
 license=('GPL-3.0-or-later')
@@ -29,24 +29,24 @@ depends=(
     'qt6-base' 'qt6-declarative' 'qt6-svg' 'qt6-wayland' 'layer-shell-qt'
     'pam' 'hicolor-icon-theme'
 )
-makedepends=('git' 'cmake' 'shaderc' 'vulkan-headers' 'wayland-protocols')
+makedepends=('git' 'cmake' 'shaderc' 'vulkan-headers' 'wayland-protocols' 'qt6-tools')
 optdepends=(
-    'xorg-xwayland: app X11 (Steam, molti giochi)'
-    'xdg-desktop-portal-wlr: condivisione dello schermo'
-    'xdg-desktop-portal-kde: scelta dei file e altri portali per le app'
-    'polkit-kde-agent: la password per le azioni di sistema'
-    'breeze-icons: le icone di Vela (breeze e breeze-dark)'
-    'plasma-workspace: colori delle app KDE chiari o scuri'
-    'networkmanager: rete e Wi-Fi (impostazioni rapide e Impostazioni)'
+    'xorg-xwayland: X11 apps (Steam, many games)'
+    'xdg-desktop-portal-wlr: screen sharing'
+    'xdg-desktop-portal-kde: file chooser and other portals for apps'
+    'polkit-kde-agent: the password prompt for system actions'
+    'breeze-icons: Vela icons (breeze and breeze-dark)'
+    'plasma-workspace: light or dark colors for KDE apps'
+    'networkmanager: network and Wi-Fi (quick settings and Settings)'
     'bluez: Bluetooth'
     'wireplumber: volume'
     'libpulse: volume (pactl)'
-    'power-profiles-daemon: Risparmio energia'
-    'udisks2: unità non montate in Esplora'
-    'wlr-randr: Impostazioni > Schermo'
-    'xdg-utils: Condividi per posta, app predefinite'
-    'kdeconnect: Condividi con il telefono'
-    'bluedevil: Condividi via Bluetooth'
+    'power-profiles-daemon: energy saver'
+    'udisks2: unmounted drives in File Explorer'
+    'wlr-randr: Settings > Display'
+    'xdg-utils: share by email, default apps'
+    'kdeconnect: share with your phone'
+    'bluedevil: share via Bluetooth'
     'konsole: il terminale (Win+Invio)'
 )
 provides=('vela')

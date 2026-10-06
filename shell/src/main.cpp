@@ -19,6 +19,7 @@
 #include "foreigntoplevels.h"
 #include "iconprovider.h"
 #include "jumplists.h"
+#include "language.h"
 #include "network.h"
 #include "notifications.h"
 #include "servicemenus.h"
@@ -290,6 +291,21 @@ int main(int argc, char* argv[])
     QGuiApplication::setApplicationName(QStringLiteral("vela-shell"));
     QGuiApplication::setOrganizationName(QStringLiteral("Vela"));
     QGuiApplication::setQuitOnLastWindowClosed(false);
+    // Prima di tutto il resto: anche i modelli in C++ nascono già tradotti.
+    QQmlApplicationEngine* qmlEngine = nullptr;
+    AppModel* appModel = nullptr;
+    DesktopModel* desktopModel = nullptr;
+    vela::language::install(QStringLiteral("vela-shell"), [&qmlEngine, &appModel, &desktopModel] {
+        if (appModel) {
+            appModel->reload(); // i nomi delle app nella lingua nuova (Name[en], Name[it])
+        }
+        if (desktopModel) {
+            desktopModel->refresh(); // il Cestino
+        }
+        if (qmlEngine) {
+            qmlEngine->retranslate();
+        }
+    });
 
     // "vela-shell --toggle-start": comodo per scorciatoie e script.
     const QStringList args = QGuiApplication::arguments();
@@ -297,12 +313,12 @@ int main(int argc, char* argv[])
         return ShellController::sendToRunningInstance("toggle-start") ? 0 : 1;
     }
     if (ShellController::sendToRunningInstance("ping")) {
-        qWarning("vela-shell: già in esecuzione in questa sessione");
+        qWarning("vela-shell: already running in this session");
         return 0;
     }
 
     if (!QGuiApplication::platformName().startsWith(QLatin1String("wayland"))) {
-        qWarning("vela-shell: serve una sessione Wayland (piattaforma attuale: %s)",
+        qWarning("vela-shell: needs a Wayland session (current platform: %s)",
             qPrintable(QGuiApplication::platformName()));
         return 1;
     }
@@ -316,6 +332,7 @@ int main(int argc, char* argv[])
     config.setIconMode(config.shellTheme() == QLatin1String("light") ? QStringLiteral("l/") : QStringLiteral("d/"));
 
     AppModel apps;
+    appModel = &apps;
     apps.reload();
 
     ShellController shell;
@@ -361,6 +378,7 @@ int main(int argc, char* argv[])
     QObject::connect(&shell, &ShellController::filesRequested, &system, [&system] { system.trigger(QStringLiteral("files")); });
     JumpLists jumps(&apps);
     DesktopModel desktop(&apps);
+    desktopModel = &desktop;
     ServiceMenus serviceMenus;
     FileProperties properties;
     FileActions fileActions;
@@ -373,6 +391,7 @@ int main(int argc, char* argv[])
     SystemStatus status;
 
     QQmlApplicationEngine engine;
+    qmlEngine = &engine;
     engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
     engine.addImageProvider(QStringLiteral("fileicon"), new IconProvider(32));
     engine.addImageProvider(QStringLiteral("wallpaper"), new WallpaperProvider);
@@ -444,7 +463,7 @@ int main(int argc, char* argv[])
     QQuickWindow* clipboardPanel = findWindow(engine, "clipboardPanel");
     if (!startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog || !confirmDialog || !sourceChooser || !propertiesDialog || !quickSettings
         || !notificationCenter || !taskView || !desktopOsd || !snapLayouts || !snapAssist || !taskbarPreview || !fileDialogs || !clipboardPanel) {
-        qCritical("vela-shell: impossibile caricare l'interfaccia QML");
+        qCritical("vela-shell: can't load the QML interface");
         return 1;
     }
 

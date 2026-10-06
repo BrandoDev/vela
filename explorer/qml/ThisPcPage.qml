@@ -22,7 +22,7 @@ Flickable {
         spacing: 8
 
         Text {
-            text: "Cartelle"
+            text: qsTr("Folders")
             color: Theme.text
             font.pixelSize: Theme.fontNormal
             font.weight: Font.DemiBold
@@ -68,7 +68,7 @@ Flickable {
         }
 
         Text {
-            text: "Dispositivi e unità"
+            text: qsTr("Devices and drives")
             color: Theme.text
             font.pixelSize: Theme.fontNormal
             font.weight: Font.DemiBold
@@ -131,9 +131,9 @@ Flickable {
                             }
                         }
                         Text {
-                            text: drive.mounting ? "Apertura in corso..."
-                                : !drive.mounted ? Ops.formatSize(drive.modelData.total) + ", non ancora aperta"
-                                : Ops.formatSize(drive.modelData.free) + " disponibili di " + Ops.formatSize(drive.modelData.total)
+                            text: drive.mounting ? qsTr("Opening...")
+                                : !drive.mounted ? Ops.formatSize(drive.modelData.total) + qsTr(", not opened yet")
+                                : Ops.formatSize(drive.modelData.free) + qsTr(" free of ") + Ops.formatSize(drive.modelData.total)
                             color: Theme.textDim
                             font.pixelSize: Theme.fontSmall
                         }
@@ -148,15 +148,15 @@ Flickable {
                             if (mouse.button === Qt.RightButton) {
                                 const p = mapToItem(null, mouse.x, mouse.y)
                                 const d = drive.modelData
-                                const entries = [{ text: "&Apri", icon: "document-open", action: () => drive.open() }]
+                                const entries = [{ text: qsTr("&Open"), icon: "document-open", action: () => drive.open() }]
                                 if (drive.mounted) {
                                     entries.push(
-                                        { text: "Apri in una nuova &scheda", icon: "tab-new", action: () => page.tab.openInNewTab(d.path) },
+                                        { text: qsTr("Open in new &tab"), icon: "tab-new", action: () => page.tab.openInNewTab(d.path) },
                                         { separator: true },
-                                        { text: "Apri in &Terminale", icon: "utilities-terminal", action: () => System.openTerminal(d.path) })
-                                    if (d.removable) entries.push({ text: "&Espelli", icon: "media-eject", action: () => Places.eject(d.device) })
+                                        { text: qsTr("Open in &Terminal"), icon: "utilities-terminal", action: () => System.openTerminal(d.path) })
+                                    if (d.removable) entries.push({ text: qsTr("E&ject"), icon: "media-eject", action: () => Places.eject(d.device) })
                                     entries.push({ separator: true },
-                                        { text: "P&roprietà", icon: "document-properties", action: () => Ops.showProperties([d.path]) })
+                                        { text: qsTr("P&roperties"), icon: "document-properties", action: () => Ops.showProperties([d.path]) })
                                 }
                                 page.tab.menus.open(entries, p.x, p.y)
                             }

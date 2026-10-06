@@ -17,7 +17,7 @@ COMPOSITOR="$BUILD_DIR/compositor/vela-compositor"
 SHELL_BIN="$BUILD_DIR/shell/vela-shell"
 
 if [ ! -x "$COMPOSITOR" ]; then
-    echo "Non trovo $COMPOSITOR: compila prima (vedi README)." >&2
+    echo "$COMPOSITOR not found: build first (see README)." >&2
     exit 1
 fi
 

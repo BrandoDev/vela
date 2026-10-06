@@ -62,8 +62,8 @@ bool runDetached(const QString& program, const QStringList& arguments, const QSt
 QString copyName(const QFileInfo& source)
 {
     const bool hasSuffix = !source.isDir() && !source.suffix().isEmpty() && !source.completeBaseName().isEmpty();
-    return hasSuffix ? source.completeBaseName() + QStringLiteral(" - Copia.") + source.suffix()
-                     : source.fileName() + QStringLiteral(" - Copia");
+    return hasSuffix ? source.completeBaseName() + QCoreApplication::translate("Files", " - Copy.") + source.suffix()
+                     : source.fileName() + QCoreApplication::translate("Files", " - Copy");
 }
 
 // Un nome nascosto e libero accanto a `destination`, sullo stesso disco:
@@ -146,6 +146,7 @@ QString uniqueNameIn(const QString& directory, const QString& name)
 struct FileOps::Job {
     int id = 0;
     QString title;
+    QString doneTitle; // a trasferimento finito
     qint64 done = 0;
     qint64 total = 0;
     QString current;
@@ -175,6 +176,7 @@ QVariantList FileOps::jobs() const
         out.append(QVariantMap {
             { QStringLiteral("id"), job->id },
             { QStringLiteral("title"), job->title },
+            { QStringLiteral("doneTitle"), job->doneTitle },
             { QStringLiteral("done"), double(job->done) },
             { QStringLiteral("total"), double(job->total) },
             { QStringLiteral("current"), job->current },
@@ -253,9 +255,13 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
     const int count = int(transfer.sources.size());
     const QString where = QFileInfo(transfer.directory).fileName().isEmpty() ? transfer.directory
                                                                               : QFileInfo(transfer.directory).fileName();
-    job->title = (transfer.move ? QStringLiteral("Spostamento di ") : QStringLiteral("Copia di "))
-        + (count == 1 ? QStringLiteral("1 elemento") : QStringLiteral("%1 elementi").arg(count)) + QStringLiteral(" in ")
-        + where;
+    // Il titolo frase per frase, così ogni lingua mette le parti in ordine.
+    const QString items = count == 1 ? QCoreApplication::translate("Files", "1 item")
+                                     : QCoreApplication::translate("Files", "%1 items").arg(count);
+    job->title = (transfer.move ? QCoreApplication::translate("Files", "Moving %1 to %2")
+                                : QCoreApplication::translate("Files", "Copying %1 to %2"))
+                     .arg(items, where);
+    job->doneTitle = QCoreApplication::translate("Files", "Done: %1 to %2").arg(items, where);
     m_jobs.append(job);
     emit jobsChanged();
 
@@ -294,7 +300,7 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
         lastPost.start();
         QString error;
         UndoStep step;
-        step.label = transfer.move ? QStringLiteral("Sposta") : QStringLiteral("Copia");
+        step.label = transfer.move ? QCoreApplication::translate("Files", "Move") : QCoreApplication::translate("Files", "Copy");
         QString firstArrived;
 
         // Copia `from` in `to` senza mai lasciare `to` a metà. Un file si
@@ -315,7 +321,7 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                 // resta relativo e punta al file accanto, nella copia.
                 if (temporary.isEmpty() || !QFile::link(info.readSymLink(), temporary) || !renameOver(temporary, to)) {
                     QFile::remove(temporary);
-                    error = QStringLiteral("Impossibile creare il collegamento %1").arg(to);
+                    error = QCoreApplication::translate("Files", "Couldn't create the link %1").arg(to);
                     return false;
                 }
                 done += 1;
@@ -323,7 +329,7 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
             }
             if (info.isDir()) {
                 if (!QDir().mkpath(to)) {
-                    error = QStringLiteral("Impossibile creare la cartella %1").arg(to);
+                    error = QCoreApplication::translate("Files", "Couldn't create the folder %1").arg(to);
                     return false;
                 }
                 const QFileInfoList children = QDir(from).entryInfoList(
@@ -339,14 +345,14 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
             }
             QFile in(from);
             if (!in.open(QIODevice::ReadOnly)) {
-                error = QStringLiteral("Impossibile leggere %1").arg(info.fileName());
+                error = QCoreApplication::translate("Files", "Couldn't read %1").arg(info.fileName());
                 return false;
             }
             const QString temporary = makeTemporary(to, false);
             QFile out(temporary);
             if (temporary.isEmpty() || !out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
                 QFile::remove(temporary);
-                error = QStringLiteral("Impossibile scrivere in %1").arg(QFileInfo(to).absolutePath());
+                error = QCoreApplication::translate("Files", "Couldn't write to %1").arg(QFileInfo(to).absolutePath());
                 return false;
             }
             const auto fail = [&](const QString& message) {
@@ -363,10 +369,10 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                 }
                 const QByteArray buffer = in.read(4 << 20);
                 if (buffer.isEmpty() && in.error() != QFile::NoError) {
-                    return fail(QStringLiteral("Errore leggendo %1").arg(info.fileName()));
+                    return fail(QCoreApplication::translate("Files", "Error reading %1").arg(info.fileName()));
                 }
                 if (out.write(buffer) != buffer.size()) {
-                    return fail(QStringLiteral("Spazio esaurito o errore scrivendo %1").arg(info.fileName()));
+                    return fail(QCoreApplication::translate("Files", "Out of space or error writing %1").arg(info.fileName()));
                 }
                 done += buffer.size();
                 if (lastPost.elapsed() > 100) {
@@ -375,7 +381,7 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                 }
             }
             if (!out.flush()) {
-                return fail(QStringLiteral("Spazio esaurito o errore scrivendo %1").arg(info.fileName()));
+                return fail(QCoreApplication::translate("Files", "Out of space or error writing %1").arg(info.fileName()));
             }
             // Gli attributi dopo l'ultima scrittura (che cambierebbe la data) e
             // prima della rename: chi vede `to` lo vede già completo.
@@ -384,12 +390,12 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
             // Si sostituisce un file che c'era: i dati nuovi su disco prima
             // che il vecchio sparisca (gli altri li scrive syncfs alla fine).
             if (QFileInfo::exists(to) && ::fdatasync(out.handle()) != 0) {
-                return fail(QStringLiteral("Spazio esaurito o errore scrivendo %1").arg(info.fileName()));
+                return fail(QCoreApplication::translate("Files", "Out of space or error writing %1").arg(info.fileName()));
             }
             out.close();
             if (!renameOver(temporary, to)) {
                 QFile::remove(temporary);
-                error = QStringLiteral("Impossibile scrivere %1").arg(to);
+                error = QCoreApplication::translate("Files", "Couldn't write %1").arg(to);
                 return false;
             }
             if (info.size() == 0) {
@@ -409,7 +415,7 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                 continue;
             }
             if (transfer.directory == source || transfer.directory.startsWith(source + u'/')) {
-                error = QStringLiteral("La cartella di destinazione è dentro quella di origine.");
+                error = QCoreApplication::translate("Files", "The destination folder is inside the source folder.");
                 break;
             }
             QString name = info.fileName();
@@ -459,7 +465,7 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                 // non lascia mai un albero a metà.
                 const QString temporary = makeTemporary(destination, sourceIsDir);
                 if (temporary.isEmpty()) {
-                    error = QStringLiteral("Impossibile scrivere in %1").arg(transfer.directory);
+                    error = QCoreApplication::translate("Files", "Couldn't write to %1").arg(transfer.directory);
                 } else if (!sourceIsDir) {
                     copied = copyOne(source, temporary);
                     if (copied) {
@@ -482,7 +488,7 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                     }
                 }
                 if (!copied && error.isEmpty() && !job->cancelled) {
-                    error = QStringLiteral("Impossibile scrivere %1").arg(destination);
+                    error = QCoreApplication::translate("Files", "Couldn't write %1").arg(destination);
                 }
             }
             if (!copied) {
@@ -507,7 +513,7 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
             syncDirectory(transfer.directory);
         }
         const bool cancelled = job->cancelled;
-        post(total, total, QString(), true, cancelled ? QStringLiteral("Annullato") : error);
+        post(total, total, QString(), true, cancelled ? QCoreApplication::translate("Files", "Canceled") : error);
         QMetaObject::invokeMethod(
             qApp,
             [self, step, firstArrived, id = job->id, ok = error.isEmpty() && !cancelled] {
@@ -561,11 +567,10 @@ void FileOps::open(const QStringList& paths)
         }
         if (isProgram(info)) {
             if (!info.isExecutable()) {
-                emit failed(QStringLiteral("«%1» è un programma, ma non può essere eseguito. In Proprietà, "
-                                           "attiva «Consenti l'esecuzione come programma».")
+                emit failed(QCoreApplication::translate("Files", "“%1” is a program, but it can't be run. In Properties, turn on “Allow executing as a program”.")
                                 .arg(info.fileName()));
             } else if (!runDetached(info.absoluteFilePath(), {}, info.absolutePath())) {
-                emit failed(QStringLiteral("Impossibile avviare «%1».").arg(info.fileName()));
+                emit failed(QCoreApplication::translate("Files", "Couldn't start “%1”.").arg(info.fileName()));
             }
             continue;
         }
@@ -718,14 +723,14 @@ void FileOps::drop(const QStringList& urls, const QString& directory, int action
 
 QString FileOps::createFolder(const QString& directory)
 {
-    const QString name = uniqueNameIn(directory, QStringLiteral("Nuova cartella"));
+    const QString name = uniqueNameIn(directory, QCoreApplication::translate("Files", "New folder"));
     if (!QDir(directory).mkdir(name)) {
-        emit failed(QStringLiteral("Impossibile creare la cartella qui."));
+        emit failed(QCoreApplication::translate("Files", "Couldn't create a folder here."));
         return {};
     }
     const QString path = QDir(directory).filePath(name);
     UndoStep step;
-    step.label = QStringLiteral("Nuovo");
+    step.label = QCoreApplication::translate("Files", "New");
     step.created.append(path);
     pushUndo(step);
     emit created(path, true);
@@ -735,7 +740,7 @@ QString FileOps::createFolder(const QString& directory)
 QString FileOps::createFile(const QString& directory, const QString& templatePath)
 {
     const QString name = uniqueNameIn(directory,
-        templatePath.isEmpty() ? QStringLiteral("Nuovo documento di testo.txt") : QFileInfo(templatePath).fileName());
+        templatePath.isEmpty() ? QCoreApplication::translate("Files", "New Text Document.txt") : QFileInfo(templatePath).fileName());
     const QString path = QDir(directory).filePath(name);
     bool ok = false;
     if (templatePath.isEmpty()) {
@@ -745,11 +750,11 @@ QString FileOps::createFile(const QString& directory, const QString& templatePat
         ok = QFile::copy(templatePath, path);
     }
     if (!ok) {
-        emit failed(QStringLiteral("Impossibile creare il file qui."));
+        emit failed(QCoreApplication::translate("Files", "Couldn't create a file here."));
         return {};
     }
     UndoStep step;
-    step.label = QStringLiteral("Nuovo");
+    step.label = QCoreApplication::translate("Files", "New");
     step.created.append(path);
     pushUndo(step);
     emit created(path, true);
@@ -780,17 +785,17 @@ QString FileOps::rename(const QString& path, const QString& newName)
         return info.fileName();
     }
     if (clean.contains(u'/') || clean == QLatin1String(".") || clean == QLatin1String("..")) {
-        return QStringLiteral("!Il nome non può contenere il carattere /");
+        return QCoreApplication::translate("Files", "!A name can't contain the / character");
     }
     const QString target = info.absoluteDir().filePath(clean);
     if (QFileInfo::exists(target)) {
-        return QStringLiteral("!In questa cartella c'è già un elemento chiamato \"%1\".").arg(clean);
+        return QCoreApplication::translate("Files", "!This folder already contains an item named \"%1\".").arg(clean);
     }
     if (!QFile::rename(path, target)) {
-        return QStringLiteral("!Impossibile rinominare \"%1\".").arg(info.fileName());
+        return QCoreApplication::translate("Files", "!Couldn't rename \"%1\".").arg(info.fileName());
     }
     UndoStep step;
-    step.label = QStringLiteral("Rinomina");
+    step.label = QCoreApplication::translate("Files", "Rename");
     step.moves.append({ target, path });
     pushUndo(step);
     return clean;
@@ -801,14 +806,14 @@ QString FileOps::rename(const QString& path, const QString& newName)
 void FileOps::trash(const QStringList& paths)
 {
     UndoStep step;
-    step.label = QStringLiteral("Elimina");
+    step.label = QCoreApplication::translate("Files", "Delete");
     for (const QString& path : paths) {
         QString inTrash;
         if (QFile::moveToTrash(path, &inTrash)) {
             step.trashed.append(inTrash);
             step.originals.append(path);
         } else {
-            emit failed(QStringLiteral("Impossibile spostare \"%1\" nel Cestino.").arg(QFileInfo(path).fileName()));
+            emit failed(QCoreApplication::translate("Files", "Couldn't move \"%1\" to the Recycle Bin.").arg(QFileInfo(path).fileName()));
         }
     }
     if (!step.trashed.isEmpty()) {
@@ -822,7 +827,7 @@ void FileOps::deletePermanently(const QStringList& paths)
         const QFileInfo info(path);
         const bool ok = info.isDir() && !info.isSymLink() ? QDir(path).removeRecursively() : QFile::remove(path);
         if (!ok) {
-            emit failed(QStringLiteral("Impossibile eliminare \"%1\".").arg(info.fileName()));
+            emit failed(QCoreApplication::translate("Files", "Couldn't delete \"%1\".").arg(info.fileName()));
         }
         // Dal Cestino: via anche la sua scheda.
         if (path.startsWith(trashDir() + QStringLiteral("/files/"))) {
@@ -890,7 +895,7 @@ void FileOps::compress(const QStringList& paths, const QString& format)
     arguments.append(names);
     if (runDetached(QStringLiteral("bsdtar"), arguments, directory)) {
         UndoStep step;
-        step.label = QStringLiteral("Comprimi");
+        step.label = QCoreApplication::translate("Files", "Compress");
         step.created.append(QDir(directory).filePath(archive));
         pushUndo(step);
         emit created(QDir(directory).filePath(archive), false);
@@ -925,7 +930,7 @@ void FileOps::extractAll(const QString& path)
     QDir().mkpath(target);
     runDetached(QStringLiteral("bsdtar"), { QStringLiteral("-xf"), path, QStringLiteral("-C"), target }, info.absolutePath());
     UndoStep step;
-    step.label = QStringLiteral("Estrai");
+    step.label = QCoreApplication::translate("Files", "Extract");
     step.created.append(target);
     pushUndo(step);
     emit created(target, false);
@@ -1002,7 +1007,7 @@ void FileOps::newShortcut(const QString& directory)
 void FileOps::createLinks(const QStringList& paths)
 {
     UndoStep step;
-    step.label = QStringLiteral("Nuovo");
+    step.label = QCoreApplication::translate("Files", "New");
     QString last;
     for (const QString& path : paths) {
         QString directory = QFileInfo(path).absolutePath();
@@ -1012,7 +1017,7 @@ void FileOps::createLinks(const QStringList& paths)
         }
         const QString link = createLink(path, directory);
         if (link.isEmpty()) {
-            emit failed(QStringLiteral("Impossibile creare il collegamento a \"%1\".").arg(QFileInfo(path).fileName()));
+            emit failed(QCoreApplication::translate("Files", "Couldn't create a shortcut to \"%1\".").arg(QFileInfo(path).fileName()));
             continue;
         }
         step.created.append(link);
@@ -1031,7 +1036,7 @@ void FileOps::pasteLinks(const QString& directory)
         return;
     }
     UndoStep step;
-    step.label = QStringLiteral("Nuovo");
+    step.label = QCoreApplication::translate("Files", "New");
     QString last;
     for (const QUrl& url : mime->urls()) {
         if (!url.isLocalFile() || !QFileInfo::exists(url.toLocalFile())) {
@@ -1047,7 +1052,7 @@ void FileOps::pasteLinks(const QString& directory)
         }
     }
     if (step.created.isEmpty()) {
-        emit failed(QStringLiteral("Impossibile creare i collegamenti qui."));
+        emit failed(QCoreApplication::translate("Files", "Couldn't create shortcuts here."));
         return;
     }
     pushUndo(step);
@@ -1080,7 +1085,7 @@ QVariantMap FileOps::details(const QString& path) const
     const QMimeType mime = mimes.mimeTypeForFile(info);
     out[QStringLiteral("mime")] = mime.name();
     out[QStringLiteral("icon")] = info.isDir() ? QStringLiteral("folder") : mime.iconName();
-    out[QStringLiteral("type")] = info.isDir() ? QStringLiteral("Cartella di file") : mime.comment();
+    out[QStringLiteral("type")] = info.isDir() ? QCoreApplication::translate("Files", "File folder") : mime.comment();
     if (info.isDir()) {
         out[QStringLiteral("items")] = int(QDir(path).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).size());
     } else {

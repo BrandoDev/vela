@@ -11,6 +11,7 @@
 // tipo Link, come fanno KDE e GNOME. I Preferiti (la sezione della Home di
 // Esplora) stanno nelle impostazioni di Esplora.
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -24,8 +25,8 @@
 inline QString linkNameFor(const QFileInfo& target)
 {
     const bool hasSuffix = !target.isDir() && !target.suffix().isEmpty() && !target.completeBaseName().isEmpty();
-    return hasSuffix ? target.completeBaseName() + QStringLiteral(" - Collegamento.") + target.suffix()
-                     : target.fileName() + QStringLiteral(" - Collegamento");
+    return hasSuffix ? target.completeBaseName() + QCoreApplication::translate("Desktop", " - Shortcut.") + target.suffix()
+                     : target.fileName() + QCoreApplication::translate("Desktop", " - Shortcut");
 }
 
 // Un nome libero nella cartella: "nome (2).ext", come Windows.
@@ -76,7 +77,7 @@ inline QString createShortcut(const QString& directory, const QString& target, Q
         const QString local = url.isLocalFile() ? url.toLocalFile() : text;
         if (!QFileInfo::exists(local)) {
             if (error) {
-                *error = QStringLiteral("Impossibile trovare il file \"%1\".").arg(local);
+                *error = QCoreApplication::translate("Desktop", "Can't find the file \"%1\".").arg(local);
             }
             return {};
         }
@@ -86,7 +87,7 @@ inline QString createShortcut(const QString& directory, const QString& target, Q
         }
         const QString path = createLink(local, directory, name.isEmpty() ? info.fileName() : name);
         if (path.isEmpty() && error) {
-            *error = QStringLiteral("Impossibile creare il collegamento qui.");
+            *error = QCoreApplication::translate("Desktop", "Couldn't create the shortcut here.");
         }
         return path;
     }
@@ -98,7 +99,7 @@ inline QString createShortcut(const QString& directory, const QString& target, Q
     QFile out(path);
     if (!out.open(QIODevice::WriteOnly | QIODevice::Text)) {
         if (error) {
-            *error = QStringLiteral("Impossibile creare il collegamento qui.");
+            *error = QCoreApplication::translate("Desktop", "Couldn't create the shortcut here.");
         }
         return {};
     }

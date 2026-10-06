@@ -93,10 +93,10 @@ class Session:
         self.display = self.wait_for_log(r"WAYLAND_DISPLAY=", lambda line: line.split("WAYLAND_DISPLAY=")[1].split()[0])
         runtime = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
         self.socket_path = os.path.join(runtime, f"vela-{self.display}.sock")
-        self.wait_for(lambda _: os.path.exists(self.socket_path), what="il socket dei comandi", read_state=False)
+        self.wait_for(lambda _: os.path.exists(self.socket_path), what="the command socket", read_state=False)
         self.client_env = dict(env, WAYLAND_DISPLAY=self.display)
         # Il primo frame: lo schermo c'è.
-        self.wait_for(lambda s: s["outputs"], what="uno schermo")
+        self.wait_for(lambda s: s["outputs"], what="an output")
 
     def stop(self, keep_log=False):
         for client in self.clients:
@@ -116,7 +116,7 @@ class Session:
         if self.directory:
             self.log.close()
             if keep_log:
-                print(f"\n--- log di Vela ({self.log_path}) ---")
+                print(f"\n--- Vela log ({self.log_path}) ---")
                 with open(self.log_path, errors="replace") as log:
                     print("".join(log.readlines()[-40:]))
             shutil.rmtree(self.directory, ignore_errors=True)
@@ -133,9 +133,9 @@ class Session:
                 if needle in line:
                     return extract(line)
             if self.process.poll() is not None:
-                raise AssertionError(f"il compositor si è chiuso (codice {self.process.returncode}):\n{self.log_text()[-3000:]}")
+                raise AssertionError(f"the compositor exited (code {self.process.returncode}):\n{self.log_text()[-3000:]}")
             time.sleep(0.05)
-        raise TimeoutError(f"nel log manca «{needle}»")
+        raise TimeoutError(f"the log is missing «{needle}»")
 
     # -------------------------------------------------------- comandi --
 
@@ -159,7 +159,7 @@ class Session:
     def state(self):
         return State(self.query("state"))
 
-    def wait_for(self, condition, timeout=5.0, what="la condizione", read_state=True):
+    def wait_for(self, condition, timeout=5.0, what="the condition", read_state=True):
         """Aspetta che condition(stato) sia vera; restituisce lo stato."""
         deadline = time.monotonic() + timeout
         last = None
@@ -171,8 +171,8 @@ class Session:
             except (KeyError, IndexError, TypeError):
                 pass
             time.sleep(0.05)
-        raise TimeoutError(f"dopo {timeout} s non è vera: {what}\nultimo stato: {last}\n"
-                           f"--- fine del log di Vela ---\n{self.log_text()[-2500:]}")
+        raise TimeoutError(f"after {timeout} s this still isn't true: {what}\nlast state: {last}\n"
+                           f"--- end of the Vela log ---\n{self.log_text()[-2500:]}")
 
     # -------------------------------------------------- tastiera e mouse --
 
@@ -196,7 +196,7 @@ class Session:
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.clients.append(client)
         state = self.wait_for(lambda s: {w["id"] for w in s.windows} - before, timeout=timeout,
-                              what="una finestra nuova")
+                              what="a new window")
         identifier = next(iter({w["id"] for w in state.windows} - before))
         self.wait_still(identifier)  # finita l'animazione di apertura (sale di qualche pixel)
         return identifier
@@ -217,7 +217,7 @@ class Session:
                 still_since = time.monotonic()
             elif time.monotonic() - still_since >= 0.3:
                 return current
-        raise TimeoutError(f"la finestra {identifier} non si ferma")
+        raise TimeoutError(f"window {identifier} doesn't settle")
 
     def screenshot(self, path):
         subprocess.run([tool("vela-shot"), path], env=self.client_env, check=True)

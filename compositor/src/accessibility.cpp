@@ -105,7 +105,7 @@ constexpr uint32_t stickyMask = WLR_MODIFIER_SHIFT | WLR_MODIFIER_CTRL | WLR_MOD
 
 const char* yesNo(bool on)
 {
-    return on ? "sì" : "no";
+    return on ? "yes" : "no";
 }
 
 } // namespace
@@ -131,15 +131,15 @@ void Server::initAccessibility()
 void Server::loadAccessibilitySettings()
 {
     const Settings settings = readSettings();
-    a11y.nightStrength = std::clamp(std::atoi(setting(settings, "luce-notturna-intensita", "48").c_str()), 0, 100);
-    a11y.schedule = setting(settings, "luce-notturna-pianifica", "no");
-    a11y.nightFrom = parseClock(setting(settings, "luce-notturna-dalle"), 21 * 60);
-    a11y.nightTo = parseClock(setting(settings, "luce-notturna-alle"), 7 * 60);
-    a11y.colorFilterKind = setting(settings, "filtro-colore", "grigi");
-    a11y.colorFilterShortcut = settingFlag(settings, "filtri-colore-scorciatoia", false);
-    a11y.zoomStep = std::clamp(std::atoi(setting(settings, "lente-incremento", "100").c_str()), 25, 400);
-    const std::string vrr = setting(settings, "frequenza-variabile", "giochi");
-    vrrMode = vrr == "sempre" ? 2 : vrr == "no" ? 0 : 1;
+    a11y.nightStrength = std::clamp(std::atoi(setting(settings, "night-light-strength", "48").c_str()), 0, 100);
+    a11y.schedule = setting(settings, "night-light-schedule", "no");
+    a11y.nightFrom = parseClock(setting(settings, "night-light-from"), 21 * 60);
+    a11y.nightTo = parseClock(setting(settings, "night-light-to"), 7 * 60);
+    a11y.colorFilterKind = setting(settings, "color-filter", "grayscale");
+    a11y.colorFilterShortcut = settingFlag(settings, "color-filters-shortcut", false);
+    a11y.zoomStep = std::clamp(std::atoi(setting(settings, "magnifier-step", "100").c_str()), 25, 400);
+    const std::string vrr = setting(settings, "variable-refresh", "games");
+    vrrMode = vrr == "always" ? 2 : vrr == "no" ? 0 : 1;
     if (const char* env = std::getenv("VELA_VRR"); env && *env) {
         vrrMode = std::strcmp(env, "0") == 0 ? 0 : std::strcmp(env, "1") == 0 ? 2 : vrrMode;
     }
@@ -147,9 +147,9 @@ void Server::loadAccessibilitySettings()
     sceneGraph->allowTearing = settingFlag(settings, "tearing", true) && !(std::getenv("VELA_TEARING")
         && std::strcmp(std::getenv("VELA_TEARING"), "0") == 0);
 
-    const bool night = settingFlag(settings, "luce-notturna", false);
-    const bool filter = settingFlag(settings, "filtri-colore", false);
-    const bool sticky = settingFlag(settings, "tasti-permanenti", false);
+    const bool night = settingFlag(settings, "night-light", false);
+    const bool filter = settingFlag(settings, "color-filters", false);
+    const bool sticky = settingFlag(settings, "sticky-keys", false);
     // Una pianificazione nuova (o cambiata) decide subito; altrimenti vale
     // ciò che c'è nel file (anche se a mano l'utente ha scelto diversamente
     // dalla pianificazione, fino al suo prossimo passaggio).
@@ -183,7 +183,7 @@ void Server::loadAccessibilitySettings()
 
 void Server::checkNightSchedule()
 {
-    if (a11y.schedule != "tramonto" && a11y.schedule != "ore") {
+    if (a11y.schedule != "sunset" && a11y.schedule != "hours") {
         a11y.scheduled = -1;
         return;
     }
@@ -193,7 +193,7 @@ void Server::checkNightSchedule()
     const int minutes = local.tm_hour * 60 + local.tm_min;
     int from = a11y.nightFrom;
     int to = a11y.nightTo;
-    if (a11y.schedule == "tramonto") {
+    if (a11y.schedule == "sunset") {
         double latitude = 0.0;
         double longitude = 0.0;
         if (timezoneCoordinates(latitude, longitude)) {
@@ -211,7 +211,7 @@ void Server::checkNightSchedule()
     }
     a11y.scheduled = wanted;
     if (bool(wanted) != a11y.nightLight) {
-        wlr_log(WLR_INFO, "Luce notturna: %s dalla pianificazione (%02d:%02d-%02d:%02d)", wanted ? "accesa" : "spenta",
+        wlr_log(WLR_INFO, "Night light: %s by the schedule (%02d:%02d-%02d:%02d)", wanted ? "on" : "off",
             from / 60, from % 60, to / 60, to % 60);
         setNightLight(bool(wanted));
     }
@@ -220,7 +220,7 @@ void Server::checkNightSchedule()
 void Server::setNightLight(bool on, bool save)
 {
     if (save) {
-        writeSetting("luce-notturna", yesNo(on));
+        writeSetting("night-light", yesNo(on));
     }
     if (on == a11y.nightLight && !a11y.levelAnimating && a11y.nightLevel == (on ? 1.0 : 0.0)) {
         return;
@@ -237,7 +237,7 @@ void Server::setNightLight(bool on, bool save)
 void Server::setColorFilter(bool on, bool save)
 {
     if (save) {
-        writeSetting("filtri-colore", yesNo(on));
+        writeSetting("color-filters", yesNo(on));
     }
     if (on == a11y.colorFilter) {
         return;
@@ -250,7 +250,7 @@ void Server::setColorFilter(bool on, bool save)
 void Server::setStickyKeys(bool on, bool save)
 {
     if (save) {
-        writeSetting("tasti-permanenti", yesNo(on));
+        writeSetting("sticky-keys", yesNo(on));
     }
     if (on == a11y.stickyKeys) {
         return;
@@ -359,7 +359,7 @@ void Server::setMagnifier(bool on)
         a11y.viewX = a11y.zoomOutput ? a11y.zoomOutput->box().x : 0.0;
         a11y.viewY = a11y.zoomOutput ? a11y.zoomOutput->box().y : 0.0;
     }
-    wlr_log(WLR_INFO, "Lente di ingrandimento %s", on ? "aperta" : "chiusa");
+    wlr_log(WLR_INFO, "Magnifier %s", on ? "open" : "closed");
     scheduleFrames();
     announceAccessibility();
 }

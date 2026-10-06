@@ -624,7 +624,7 @@ void OutputFrame::prepareNightLight()
     const bool ok = wlr_output_test_state(m_output, &test);
     wlr_output_state_finish(&test);
     if (!ok) {
-        wlr_log(WLR_INFO, "%s: il monitor non accetta la Luce notturna nella gamma, la applica il disegno",
+        wlr_log(WLR_INFO, "%s: the monitor doesn't accept night light in the gamma LUT, rendering applies it",
             m_output->name);
         if (transform) {
             wlr_color_transform_unref(transform);
@@ -907,7 +907,7 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
         // nostri buffer invece sono rimasti indietro, vedi sotto).
         pixman_region32_clear(&m_ring.current);
         if (!m_scanout) {
-            wlr_log(WLR_INFO, "%s: scanout diretto attivo", m_output->name);
+            wlr_log(WLR_INFO, "%s: direct scanout on", m_output->name);
         }
         m_scanout = true;
         m_delivered.scanout = true;
@@ -916,10 +916,10 @@ bool OutputFrame::render(double lx, double ly, wlr_output_state* pending)
     if (m_scanout) {
         // Si torna a comporre: i nostri buffer non hanno visto i frame
         // dello scanout, si ridisegnano interi.
-        wlr_log(WLR_INFO, "%s: scanout diretto finito", m_output->name);
+        wlr_log(WLR_INFO, "%s: direct scanout off", m_output->name);
         m_scanout = false;
         if (m_tearing) {
-            wlr_log(WLR_INFO, "%s: tearing finito", m_output->name);
+            wlr_log(WLR_INFO, "%s: tearing off", m_output->name);
             m_tearing = false;
         }
         const wlr_box whole { 0, 0, width, height };
@@ -1012,7 +1012,7 @@ const Element* OutputFrame::scanoutCandidate(const std::vector<Element>& element
             continue;
         }
         if (found) {
-            reason = "si vede anche altro (pannelli, notifiche, il cursore disegnato da noi)";
+            reason = "something else is visible (panels, notifications, our own cursor)";
             found = nullptr;
             break;
         }
@@ -1022,17 +1022,17 @@ const Element* OutputFrame::scanoutCandidate(const std::vector<Element>& element
         const Element& e = *found;
         const wlr_box whole { 0, 0, m_width, m_height };
         if (!e.surface || !e.texture) {
-            reason = "non è una superficie di un'app";
+            reason = "not an app surface";
         } else if (e.shapeRadius > 0.0f) {
-            reason = "ha gli angoli arrotondati";
+            reason = "has rounded corners";
         } else if (e.opacity < 1.0f) {
-            reason = "è semitrasparente";
+            reason = "is translucent";
         } else if (!sameBox(e.box, whole)) {
-            reason = "non copre esattamente lo schermo";
+            reason = "doesn't cover the output exactly";
         } else if (e.transform != transform) {
-            reason = "è ruotata rispetto allo schermo";
+            reason = "is rotated relative to the output";
         } else if (e.linear) {
-            reason = "è scalata (buffer di dimensione diversa dallo schermo)";
+            reason = "is scaled (buffer size differs from the output)";
         } else {
             // Opaca: formato senza alfa, o regione opaca dichiarata su tutto.
             const render::Texture* texture = render::toTexture(e.texture);
@@ -1042,7 +1042,7 @@ const Element* OutputFrame::scanoutCandidate(const std::vector<Element>& element
                 opaque = pixman_region32_contains_rectangle(&e.surface->opaque_region, &all) == PIXMAN_REGION_IN;
             }
             if (!opaque) {
-                reason = "ha l'alfa e non dichiara di essere opaca";
+                reason = "has alpha and doesn't declare itself opaque";
             }
         }
         if (reason) {
@@ -1052,7 +1052,7 @@ const Element* OutputFrame::scanoutCandidate(const std::vector<Element>& element
     // VELA_DEBUG_SCANOUT=1: perché un'app a schermo intero non va in scanout.
     static const bool debug = std::getenv("VELA_DEBUG_SCANOUT") && *std::getenv("VELA_DEBUG_SCANOUT") == '1';
     if (debug && reason != m_scanoutReason) {
-        wlr_log(WLR_INFO, "%s: niente scanout diretto: %s", m_output->name, reason ? reason : "(candidata)");
+        wlr_log(WLR_INFO, "%s: no direct scanout: %s", m_output->name, reason ? reason : "(candidata)");
     }
     m_scanoutReason = reason;
     return found;
@@ -1063,18 +1063,18 @@ bool OutputFrame::tryScanout(const Element& e, wlr_output_state& state)
     static const bool debug = std::getenv("VELA_DEBUG_SCANOUT") && *std::getenv("VELA_DEBUG_SCANOUT") == '1';
     auto refuse = [&](const char* reason) {
         if (debug && reason != m_scanoutReason) {
-            wlr_log(WLR_INFO, "%s: niente scanout diretto: %s", m_output->name, reason);
+            wlr_log(WLR_INFO, "%s: no direct scanout: %s", m_output->name, reason);
         }
         m_scanoutReason = reason;
         return false;
     };
     if (!wlr_output_is_direct_scanout_allowed(m_output)) {
-        return refuse("cursore disegnato da noi o cattura dello schermo in corso");
+        return refuse("our own cursor, or a screen capture in progress");
     }
     wlr_surface* surface = e.surface;
     wlr_client_buffer* client = surface->buffer;
     if (!client) {
-        return refuse("nessun buffer");
+        return refuse("no buffer");
     }
     wlr_buffer* buffer = &client->base;
     if (client->source && client->source->n_locks > 0) {
@@ -1082,11 +1082,11 @@ bool OutputFrame::tryScanout(const Element& e, wlr_output_state& state)
     }
     wlr_dmabuf_attributes dmabuf {};
     if (!wlr_buffer_get_dmabuf(buffer, &dmabuf)) {
-        return refuse("il buffer non è un dmabuf (memoria condivisa)"); // il piano dello schermo legge solo dmabuf
+        return refuse("the buffer isn't a dmabuf (shared memory)"); // il piano dello schermo legge solo dmabuf
     }
     if (e.src.x != 0.0 || e.src.y != 0.0 || e.src.width != double(buffer->width)
         || e.src.height != double(buffer->height)) {
-        return refuse("l'app ne mostra solo una parte"); // viewporter
+        return refuse("the app shows only part of it"); // viewporter
     }
 
     wlr_output_state attempt;
@@ -1104,14 +1104,14 @@ bool OutputFrame::tryScanout(const Element& e, wlr_output_state& state)
     if (sync && sync->acquire_timeline) {
         if (!m_scanoutTimeline) {
             wlr_output_state_finish(&attempt);
-            return refuse("l'app usa la sincronizzazione esplicita, che questo schermo non sa gestire (headless)");
+            return refuse("the app uses explicit sync, which this output can't handle (headless)");
         }
         wlr_output_state_set_wait_timeline(&attempt, sync->acquire_timeline, sync->acquire_point);
         wlr_output_state_set_signal_timeline(&attempt, m_scanoutTimeline, m_scanoutPoint + 1);
     }
     bool ok = wlr_output_test_state(m_output, &attempt);
     if (!ok && !tearing) {
-        refuse("il monitor (o il driver) non accetta il buffer sul suo piano");
+        refuse("the monitor (or driver) doesn't accept the buffer on its plane");
     }
     if (!ok && tearing) {
         // Lo schermo (o il driver) non lo permette: col vblank, come sempre.
@@ -1127,7 +1127,7 @@ bool OutputFrame::tryScanout(const Element& e, wlr_output_state& state)
         ok = wlr_output_commit_state(m_output, &attempt);
     }
     if (ok && tearing != m_tearing) {
-        wlr_log(WLR_INFO, "%s: tearing %s", m_output->name, tearing ? "attivo (l'app lo chiede)" : "finito");
+        wlr_log(WLR_INFO, "%s: tearing %s", m_output->name, tearing ? "on (the app asks for it)" : "finito");
         m_tearing = tearing;
     }
     m_delivered.tearing = ok && tearing;
@@ -1187,7 +1187,7 @@ void OutputFrame::sendFeedback(wlr_surface* surface, bool scanout)
         if (info) {
             info->scanoutFeedback = nullptr;
         }
-        wlr_log(WLR_DEBUG, "%s: feedback dmabuf predefinito a una superficie", m_output->name);
+        wlr_log(WLR_DEBUG, "%s: default dmabuf feedback to a surface", m_output->name);
         return;
     }
     const wlr_linux_dmabuf_feedback_v1_init_options options {
@@ -1204,7 +1204,7 @@ void OutputFrame::sendFeedback(wlr_surface* surface, bool scanout)
     if (info) {
         info->scanoutFeedback = m_output;
     }
-    wlr_log(WLR_DEBUG, "%s: feedback dmabuf con la tranche di scanout a una superficie", m_output->name);
+    wlr_log(WLR_DEBUG, "%s: dmabuf feedback with the scanout tranche to a surface", m_output->name);
 }
 
 void OutputFrame::sendFrameDone(const timespec& when)

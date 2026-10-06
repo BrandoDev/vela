@@ -15,12 +15,12 @@ Page {
             id: filter
             anchors.verticalCenter: parent.verticalCenter
             width: Math.min(360, parent.width)
-            placeholderText: "Cerca app"
+            placeholderText: qsTr("Search apps")
             onTextChanged: Apps.query = text
         }
         Text {
             anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-            text: Apps.count + (Apps.count === 1 ? " app trovata" : " app trovate")
+            text: Apps.count + (Apps.count === 1 ? qsTr(" app found") : qsTr(" apps found"))
             color: Theme.textSecondary
             font.pixelSize: Theme.fontBody
         }
@@ -39,7 +39,7 @@ Page {
             description: comment
             trailing: Button {
                 subtle: true
-                text: "Disinstalla"
+                text: qsTr("Uninstall")
                 usable: System.canUninstall(Apps.desktopFile(app.appId))
                 onClicked: {
                     uninstallDialog.appId = app.appId
@@ -55,12 +55,12 @@ Page {
         parent: root.contentItem
         property string appId
         property string appName
-        title: "Disinstalla " + appName
-        primaryText: "Disinstalla"
+        title: qsTr("Uninstall ") + appName
+        primaryText: qsTr("Uninstall")
         onAccepted: System.uninstall(Apps.desktopFile(appId))
         Text {
             width: parent.width
-            text: "L'app e le sue informazioni correlate verranno disinstallate. Potrebbe essere chiesta la password."
+            text: qsTr("This app and its related info will be uninstalled. You may be asked for your password.")
             color: Theme.text
             font.pixelSize: Theme.fontBody
             wrapMode: Text.Wrap

@@ -41,8 +41,8 @@ Page {
     CardGroup {
         Card {
             icon: "chronometer"
-            title: "Imposta automaticamente l'ora"
-            description: DateTime.canNtp ? "Sincronizza l'orologio con un server dell'ora su Internet" : "Nessun servizio di sincronizzazione installato"
+            title: qsTr("Set time automatically")
+            description: DateTime.canNtp ? qsTr("Sync the clock with a time server on the Internet") : qsTr("No time sync service installed")
             trailing: Toggle {
                 usable: DateTime.canNtp
                 checked: DateTime.ntp
@@ -51,7 +51,7 @@ Page {
         }
         Card {
             icon: "preferences-system-time"
-            title: "Fuso orario"
+            title: qsTr("Time zone")
             trailing: Choice {
                 implicitWidth: 320
                 model: page.zones.map(z => ({ text: DateTime.describe(z) }))
@@ -62,12 +62,12 @@ Page {
     }
 
     CardGroup {
-        title: "Impostazioni correlate"
+        title: qsTr("Related settings")
         LinkCard {
             visible: System.available("datetime")
             icon: "preferences-system-time"
-            title: "Altre impostazioni dell'orologio"
-            description: "Impostare data e ora a mano, orologio hardware"
+            title: qsTr("Additional clock settings")
+            description: qsTr("Set the date and time manually, hardware clock")
             onClicked: System.trigger("datetime")
         }
     }

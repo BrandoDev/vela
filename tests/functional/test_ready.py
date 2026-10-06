@@ -30,7 +30,7 @@ class ReadyCommits(unittest.TestCase):
         """Vblank persi e commit trattenuti mentre il cursore si muove per 1 s."""
         with Session(env=env) as vela:
             vela.open_window(command=[tool("vela-slowgpu"), "150", *args], timeout=15)
-            before = vela.wait_for(lambda s: s["held"] >= 2 or env, timeout=5, what="commit trattenuti")
+            before = vela.wait_for(lambda s: s["held"] >= 2 or env, timeout=5, what="held commits")
             move_cursor(vela)
             after = vela.state()
             return (after.output["missed"] - before.output["missed"],
@@ -39,21 +39,21 @@ class ReadyCommits(unittest.TestCase):
 
     def test_explicit_sync(self):
         missed, frames, held = self.measure()
-        self.assertLessEqual(missed, 2, f"{frames} frame, {held} commit trattenuti")
+        self.assertLessEqual(missed, 2, f"{frames} frames, {held} held commits")
         self.assertGreaterEqual(held, 3)  # ~6 fotogrammi dell'app in 1 s, tutti in attesa
 
     def test_implicit_sync(self):
         # Anche i buffer ridisegnati ma non mostrati: restano importati solo
         # finché servono (render/texture.cpp), o il kernel farebbe aspettare
         # le loro fence a ogni nostro invio.
-        missed, frames, held = self.measure("--implicita")
-        self.assertLessEqual(missed, 2, f"{frames} frame, {held} commit trattenuti")
+        missed, frames, held = self.measure("--implicit")
+        self.assertLessEqual(missed, 2, f"{frames} frames, {held} held commits")
         self.assertGreaterEqual(held, 3)
 
     def test_without_waiting_the_output_stalls(self):
         missed, frames, held = self.measure(env={"VELA_READY_WAIT": "0"})
         self.assertEqual(held, 0)
-        self.assertGreaterEqual(missed, 20, f"l'app non è abbastanza lenta: {frames} frame")
+        self.assertGreaterEqual(missed, 20, f"the app isn't slow enough: {frames} frames")
 
 
 if __name__ == "__main__":

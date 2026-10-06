@@ -233,7 +233,7 @@ ReadyCommits::ReadyCommits(wlr_compositor* compositor)
     const char* wait = std::getenv("VELA_READY_WAIT");
     m_enabled = !(wait && std::strcmp(wait, "0") == 0);
     if (!m_enabled) {
-        wlr_log(WLR_INFO, "VELA_READY_WAIT=0: i frame aspettano la GPU delle app");
+        wlr_log(WLR_INFO, "VELA_READY_WAIT=0: frames wait for the apps' GPU");
         return;
     }
     m_newSurface.notify = [](wl_listener*, void* data) {

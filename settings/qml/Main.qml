@@ -13,7 +13,7 @@ Window {
     minimumWidth: 760
     minimumHeight: 500
     visible: true
-    title: "Impostazioni"
+    title: qsTr("Settings")
     color: Theme.background
 
     onActiveChanged: {
@@ -25,31 +25,31 @@ Window {
 
     // --- le pagine ---
     readonly property var pages: ({
-        "home": { title: "Home", parent: "", file: "HomePage.qml", icon: "go-home" },
-        "system": { title: "Sistema", parent: "", file: "SystemPage.qml", icon: "computer" },
-        "display": { title: "Schermo", parent: "system", file: "DisplayPage.qml", icon: "video-display" },
-        "sound": { title: "Audio", parent: "system", file: "SoundPage.qml", icon: "audio-speakers" },
-        "notifications": { title: "Notifiche", parent: "system", file: "NotificationsPage.qml", icon: "preferences-desktop-notification" },
-        "power": { title: "Alimentazione", parent: "system", file: "PowerPage.qml", icon: "preferences-system-power-management" },
-        "about": { title: "Informazioni", parent: "system", file: "AboutPage.qml", icon: "help-about" },
-        "bluetooth": { title: "Bluetooth e dispositivi", parent: "", file: "BluetoothPage.qml", icon: "preferences-system-bluetooth" },
-        "network": { title: "Rete e Internet", parent: "", file: "NetworkPage.qml", icon: "preferences-system-network" },
-        "personalization": { title: "Personalizzazione", parent: "", file: "PersonalizationPage.qml", icon: "preferences-desktop-theme" },
-        "background": { title: "Sfondo", parent: "personalization", file: "BackgroundPage.qml", icon: "preferences-desktop-wallpaper" },
-        "colors": { title: "Colori", parent: "personalization", file: "ColorsPage.qml", icon: "preferences-desktop-color" },
-        "taskbar": { title: "Barra delle applicazioni", parent: "personalization", file: "TaskbarPage.qml", icon: "preferences-system-windows" },
-        "apps": { title: "App", parent: "", file: "AppsPage.qml", icon: "preferences-desktop-default-applications" },
-        "installed-apps": { title: "App installate", parent: "apps", file: "InstalledAppsPage.qml", icon: "view-list-details" },
-        "default-apps": { title: "App predefinite", parent: "apps", file: "DefaultAppsPage.qml", icon: "preferences-desktop-default-applications" },
-        "default-app": { title: "App", parent: "default-apps", file: "DefaultAppPage.qml", icon: "preferences-desktop-default-applications" },
-        "time-language": { title: "Ora e lingua", parent: "", file: "TimeLanguagePage.qml", icon: "preferences-system-time" },
-        "datetime": { title: "Data e ora", parent: "time-language", file: "DateTimePage.qml", icon: "preferences-system-time" },
-        "keyboard": { title: "Tastiera", parent: "time-language", file: "KeyboardPage.qml", icon: "input-keyboard" },
-        "mouse": { title: "Mouse", parent: "bluetooth", file: "MousePage.qml", icon: "input-mouse" },
-        "touchpad": { title: "Touchpad", parent: "bluetooth", file: "TouchpadPage.qml", icon: "input-touchpad" },
-        "clipboard": { title: "Appunti", parent: "system", file: "ClipboardPage.qml", icon: "edit-paste" },
-        "night-light": { title: "Luce notturna", parent: "display", file: "NightLightPage.qml", icon: "redshift-status-on" },
-        "accessibility": { title: "Accessibilità", parent: "", file: "AccessibilityPage.qml", icon: "preferences-desktop-accessibility" }
+        "home": { title: qsTr("Home"), parent: "", file: "HomePage.qml", icon: "go-home" },
+        "system": { title: qsTr("System"), parent: "", file: "SystemPage.qml", icon: "computer" },
+        "display": { title: qsTr("Display"), parent: "system", file: "DisplayPage.qml", icon: "video-display" },
+        "sound": { title: qsTr("Sound"), parent: "system", file: "SoundPage.qml", icon: "audio-speakers" },
+        "notifications": { title: qsTr("Notifications"), parent: "system", file: "NotificationsPage.qml", icon: "preferences-desktop-notification" },
+        "power": { title: qsTr("Power"), parent: "system", file: "PowerPage.qml", icon: "preferences-system-power-management" },
+        "about": { title: qsTr("About"), parent: "system", file: "AboutPage.qml", icon: "help-about" },
+        "bluetooth": { title: qsTr("Bluetooth & devices"), parent: "", file: "BluetoothPage.qml", icon: "preferences-system-bluetooth" },
+        "network": { title: qsTr("Network & internet"), parent: "", file: "NetworkPage.qml", icon: "preferences-system-network" },
+        "personalization": { title: qsTr("Personalization"), parent: "", file: "PersonalizationPage.qml", icon: "preferences-desktop-theme" },
+        "background": { title: qsTr("Background"), parent: "personalization", file: "BackgroundPage.qml", icon: "preferences-desktop-wallpaper" },
+        "colors": { title: qsTr("Colors"), parent: "personalization", file: "ColorsPage.qml", icon: "preferences-desktop-color" },
+        "taskbar": { title: qsTr("Taskbar"), parent: "personalization", file: "TaskbarPage.qml", icon: "preferences-system-windows" },
+        "apps": { title: qsTr("Apps"), parent: "", file: "AppsPage.qml", icon: "preferences-desktop-default-applications" },
+        "installed-apps": { title: qsTr("Installed apps"), parent: "apps", file: "InstalledAppsPage.qml", icon: "view-list-details" },
+        "default-apps": { title: qsTr("Default apps"), parent: "apps", file: "DefaultAppsPage.qml", icon: "preferences-desktop-default-applications" },
+        "default-app": { title: qsTr("Apps"), parent: "default-apps", file: "DefaultAppPage.qml", icon: "preferences-desktop-default-applications" },
+        "time-language": { title: qsTr("Time & language"), parent: "", file: "TimeLanguagePage.qml", icon: "preferences-system-time" },
+        "datetime": { title: qsTr("Date & time"), parent: "time-language", file: "DateTimePage.qml", icon: "preferences-system-time" },
+        "keyboard": { title: qsTr("Keyboard"), parent: "time-language", file: "KeyboardPage.qml", icon: "input-keyboard" },
+        "mouse": { title: qsTr("Mouse"), parent: "bluetooth", file: "MousePage.qml", icon: "input-mouse" },
+        "touchpad": { title: qsTr("Touchpad"), parent: "bluetooth", file: "TouchpadPage.qml", icon: "input-touchpad" },
+        "clipboard": { title: qsTr("Clipboard"), parent: "system", file: "ClipboardPage.qml", icon: "edit-paste" },
+        "night-light": { title: qsTr("Night light"), parent: "display", file: "NightLightPage.qml", icon: "redshift-status-on" },
+        "accessibility": { title: qsTr("Accessibility"), parent: "", file: "AccessibilityPage.qml", icon: "preferences-desktop-accessibility" }
     })
     readonly property var sections: ["home", "system", "bluetooth", "network", "personalization", "apps", "time-language", "accessibility"]
     // I nomi che usa la shell (systemactions.cpp) per le voci dei menu.
@@ -108,47 +108,48 @@ Window {
 
     // --- la ricerca: "Trova un'impostazione" ---
     readonly property var searchIndex: [
-        { page: "display", text: "Schermo", keys: "risoluzione scala frequenza aggiornamento hz orientamento monitor più schermi disposizione" },
-        { page: "display", text: "Modifica la risoluzione dello schermo", keys: "risoluzione" },
-        { page: "display", text: "Modifica la scala", keys: "scala dimensione testo dpi zoom" },
-        { page: "display", text: "Frequenza di aggiornamento", keys: "hz refresh frequenza" },
-        { page: "sound", text: "Audio", keys: "volume altoparlanti cuffie microfono uscita ingresso suono" },
-        { page: "sound", text: "Scegli il dispositivo di output", keys: "uscita altoparlanti cuffie" },
-        { page: "sound", text: "Microfono", keys: "ingresso input registrazione" },
-        { page: "notifications", text: "Notifiche", keys: "non disturbare avvisi" },
-        { page: "notifications", text: "Non disturbare", keys: "silenzioso notifiche" },
-        { page: "power", text: "Alimentazione", keys: "schermo spento sospensione inattività batteria risparmio energia blocco" },
-        { page: "power", text: "Spegni lo schermo dopo", keys: "inattività timeout" },
-        { page: "power", text: "Modalità di risparmio energia", keys: "profilo prestazioni bilanciato" },
-        { page: "about", text: "Informazioni", keys: "specifiche processore ram memoria nome pc rinomina versione kernel scheda video" },
-        { page: "about", text: "Rinomina questo PC", keys: "nome dispositivo hostname" },
-        { page: "bluetooth", text: "Bluetooth", keys: "dispositivi cuffie mouse tastiera associa aggiungi" },
-        { page: "bluetooth", text: "Aggiungi dispositivo", keys: "associa bluetooth nuovo" },
-        { page: "network", text: "Rete e Internet", keys: "wifi wi-fi ethernet cavo ip dns connessione" },
-        { page: "network", text: "Wi-Fi", keys: "wireless rete senza fili password" },
-        { page: "personalization", text: "Personalizzazione", keys: "tema aspetto" },
-        { page: "background", text: "Sfondo", keys: "immagine desktop foto wallpaper" },
-        { page: "colors", text: "Colori", keys: "accento colore principale tema scuro chiaro modalità" },
-        { page: "colors", text: "Scegli la modalità", keys: "scuro chiaro dark light tema app" },
-        { page: "taskbar", text: "Barra delle applicazioni", keys: "taskbar allineamento sinistra centro termina attività" },
-        { page: "apps", text: "App", keys: "programmi applicazioni" },
-        { page: "installed-apps", text: "App installate", keys: "disinstalla rimuovi programmi" },
-        { page: "default-apps", text: "App predefinite", keys: "browser posta lettore apri con predefinito" },
-        { page: "default-apps", text: "Scegli l'app per un tipo di file", keys: "pdf mp3 video musica foto immagini estensione tipo di file collegamento mailto archivi zip documenti" },
-        { page: "default-apps", text: "Browser predefinito", keys: "browser web firefox chrome brave internet" },
-        { page: "datetime", text: "Data e ora", keys: "orologio fuso orario sincronizza ntp" },
-        { page: "keyboard", text: "Tastiera", keys: "layout lingua input digitazione ripetizione tasti" },
-        { page: "mouse", text: "Mouse", keys: "puntatore velocità pulsante principale mancino rotellina scorrimento righe accelerazione precisione" },
-        { page: "touchpad", text: "Touchpad", keys: "tocco clic gesti dita scorrimento portatile trackpad" },
-        { page: "touchpad", text: "Gesti del touchpad", keys: "tre dita quattro dita cambia desktop app" },
-        { page: "clipboard", text: "Appunti", keys: "cronologia appunti win+v copia incolla" },
-        { page: "clipboard", text: "Strumento di cattura", keys: "screenshot cattura stamp schermata ritaglio" },
-        { page: "night-light", text: "Luce notturna", keys: "notte colori caldi blu sera pianifica tramonto" },
-        { page: "display", text: "Tearing nei giochi", keys: "giochi tearing latenza schermo intero vsync" },
-        { page: "accessibility", text: "Accessibilità", keys: "ipovedenti daltonismo" },
-        { page: "accessibility", text: "Lente di ingrandimento", keys: "zoom ingrandire magnifier" },
-        { page: "accessibility", text: "Filtri colore", keys: "scala di grigi daltonismo deuteranopia protanopia tritanopia" },
-        { page: "accessibility", text: "Tasti permanenti", keys: "sticky keys maiusc ctrl alt tastiera" }
+        { page: "display", text: qsTr("Display"), keys: qsTr("resolution scale refresh rate hz orientation monitor multiple displays arrangement") },
+        { page: "display", text: qsTr("Change the screen resolution"), keys: qsTr("resolution") },
+        { page: "display", text: qsTr("Change the scale"), keys: qsTr("scale size text dpi zoom") },
+        { page: "display", text: qsTr("Refresh rate"), keys: qsTr("hz refresh rate frequency") },
+        { page: "sound", text: qsTr("Sound"), keys: qsTr("volume speakers headphones microphone output input sound") },
+        { page: "sound", text: qsTr("Choose your output device"), keys: qsTr("output speakers headphones") },
+        { page: "sound", text: qsTr("Microphone"), keys: qsTr("input recording") },
+        { page: "notifications", text: qsTr("Notifications"), keys: qsTr("do not disturb alerts") },
+        { page: "notifications", text: qsTr("Do not disturb"), keys: qsTr("silent notifications") },
+        { page: "power", text: qsTr("Power"), keys: qsTr("screen off sleep idle battery energy saver lock") },
+        { page: "power", text: qsTr("Turn off the screen after"), keys: qsTr("idle timeout") },
+        { page: "power", text: qsTr("Power mode"), keys: qsTr("profile performance balanced") },
+        { page: "about", text: qsTr("About"), keys: qsTr("specifications processor ram memory pc name rename version kernel graphics card") },
+        { page: "about", text: qsTr("Rename this PC"), keys: qsTr("device name hostname") },
+        { page: "bluetooth", text: qsTr("Bluetooth"), keys: qsTr("devices headphones mouse keyboard pair add") },
+        { page: "bluetooth", text: qsTr("Add device"), keys: qsTr("pair bluetooth new") },
+        { page: "network", text: qsTr("Network & internet"), keys: qsTr("wifi wi-fi ethernet cable ip dns connection") },
+        { page: "network", text: qsTr("Wi-Fi"), keys: qsTr("wireless network password") },
+        { page: "personalization", text: qsTr("Personalization"), keys: qsTr("theme appearance") },
+        { page: "background", text: qsTr("Background"), keys: qsTr("picture desktop photo wallpaper") },
+        { page: "colors", text: qsTr("Colors"), keys: qsTr("accent color theme dark light mode") },
+        { page: "colors", text: qsTr("Choose your mode"), keys: qsTr("dark light theme apps mode") },
+        { page: "taskbar", text: qsTr("Taskbar"), keys: qsTr("taskbar alignment left center end task") },
+        { page: "apps", text: qsTr("Apps"), keys: qsTr("programs applications") },
+        { page: "installed-apps", text: qsTr("Installed apps"), keys: qsTr("uninstall remove programs") },
+        { page: "default-apps", text: qsTr("Default apps"), keys: qsTr("browser mail player open with default") },
+        { page: "default-apps", text: qsTr("Choose the app for a file type"), keys: qsTr("pdf mp3 video music photos images extension file type link mailto archives zip documents") },
+        { page: "default-apps", text: qsTr("Default browser"), keys: qsTr("web browser firefox chrome brave internet") },
+        { page: "datetime", text: qsTr("Date & time"), keys: qsTr("clock time zone sync ntp") },
+        { page: "time-language", text: qsTr("Language"), keys: qsTr("language english italian italiano inglese translation") },
+            { page: "keyboard", text: qsTr("Keyboard"), keys: qsTr("layout language input typing key repeat") },
+        { page: "mouse", text: qsTr("Mouse"), keys: qsTr("pointer speed primary button left-handed wheel scrolling lines acceleration precision") },
+        { page: "touchpad", text: qsTr("Touchpad"), keys: qsTr("tap click gestures fingers scrolling laptop trackpad") },
+        { page: "touchpad", text: qsTr("Touchpad gestures"), keys: qsTr("three fingers four fingers switch desktops apps") },
+        { page: "clipboard", text: qsTr("Clipboard"), keys: qsTr("clipboard history win+v copy paste") },
+        { page: "clipboard", text: qsTr("Snipping Tool"), keys: qsTr("screenshot capture print screen snip") },
+        { page: "night-light", text: qsTr("Night light"), keys: qsTr("night warm colors blue evening schedule sunset") },
+        { page: "display", text: qsTr("Tearing in games"), keys: qsTr("games tearing latency full screen vsync") },
+        { page: "accessibility", text: qsTr("Accessibility"), keys: qsTr("low vision color blindness") },
+        { page: "accessibility", text: qsTr("Magnifier"), keys: qsTr("zoom magnify magnifier") },
+        { page: "accessibility", text: qsTr("Color filters"), keys: qsTr("grayscale color blindness deuteranopia protanopia tritanopia") },
+        { page: "accessibility", text: qsTr("Sticky keys"), keys: qsTr("sticky keys shift ctrl alt keyboard") }
     ]
     readonly property var searchResults: {
         const q = search.text.trim().toLowerCase()
@@ -197,7 +198,7 @@ Window {
                     elide: Text.ElideRight
                 }
                 Text {
-                    text: "Account locale"
+                    text: qsTr("Local account")
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontCaption
                 }
@@ -210,7 +211,7 @@ Window {
             anchors.top: account.bottom
             anchors.topMargin: 20
             width: nav.width - 32
-            placeholderText: "Trova un'impostazione"
+            placeholderText: qsTr("Find a setting")
             rightPadding: 36
             Keys.onReturnPressed: {
                 if (root.searchResults.length > 0) {

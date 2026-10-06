@@ -52,14 +52,14 @@ Page {
     CardGroup {
         Card {
             icon: "preferences-desktop-wallpaper"
-            title: "Personalizza lo sfondo"
-            description: "Un'immagine riempie ogni schermo"
-            trailing: Choice { model: ["Immagine"]; currentIndex: 0 }
+            title: qsTr("Personalize your background")
+            description: qsTr("One picture fills every screen")
+            trailing: Choice { model: [qsTr("Picture")]; currentIndex: 0 }
             contentItem: Column {
                 width: parent.width
                 spacing: 8
                 Text {
-                    text: "Immagini recenti"
+                    text: qsTr("Recent images")
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontCaption
                     leftPadding: 36
@@ -77,16 +77,16 @@ Page {
         }
         Card {
             icon: "folder-pictures"
-            title: "Scegli una foto"
+            title: qsTr("Choose a photo")
             trailing: Button {
-                text: "Sfoglia foto"
+                text: qsTr("Browse photos")
                 onClicked: fileDialog.open()
             }
         }
     }
 
     CardGroup {
-        title: "Sfondi del sistema"
+        title: qsTr("System backgrounds")
         visible: system.count > 0
         Card {
             minimumHeight: 0
@@ -104,9 +104,9 @@ Page {
 
     FileDialog {
         id: fileDialog
-        title: "Scegli una foto"
+        title: qsTr("Choose a photo")
         currentFolder: StandardPaths.writableLocation(StandardPaths.PicturesLocation)
-        nameFilters: ["Immagini (*.jpg *.jpeg *.png *.webp *.bmp *.gif *.svg *.avif *.jxl)"]
+        nameFilters: [qsTr("Images (*.jpg *.jpeg *.png *.webp *.bmp *.gif *.svg *.avif *.jxl)")]
         onAccepted: Prefs.setWallpaper(selectedFile.toString())
     }
 }

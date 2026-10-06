@@ -10,20 +10,20 @@ Page {
     CardGroup {
         LinkCard {
             icon: "preferences-desktop-wallpaper"
-            title: "Sfondo"
-            description: "Immagine di sfondo del desktop"
+            title: qsTr("Background")
+            description: qsTr("Desktop background picture")
             onClicked: root.navigate("background")
         }
         LinkCard {
             icon: "preferences-desktop-color"
-            title: "Colori"
-            description: "Colore principale, modalità chiara o scura delle app"
+            title: qsTr("Colors")
+            description: qsTr("Accent color, light or dark mode for apps")
             onClicked: root.navigate("colors")
         }
         LinkCard {
             icon: "preferences-system-windows"
-            title: "Barra delle applicazioni"
-            description: "Allineamento, comportamenti della barra delle applicazioni"
+            title: qsTr("Taskbar")
+            description: qsTr("Alignment, taskbar behaviors")
             onClicked: root.navigate("taskbar")
         }
     }

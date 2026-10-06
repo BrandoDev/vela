@@ -5,7 +5,7 @@
 
 // La configurazione degli schermi che l'utente ha scelto (con un programma
 // di wlr-output-management, e più avanti con le Impostazioni di Vela),
-// ricordata tra una sessione e l'altra in ~/.config/vela/schermi.conf.
+// ricordata tra una sessione e l'altra in ~/.config/vela/outputs.conf.
 // Ogni monitor è riconosciuto da marca, modello e numero di serie, non dal
 // connettore: spostarlo su un'altra porta non gli fa perdere le impostazioni.
 

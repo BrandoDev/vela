@@ -84,7 +84,7 @@ bool VulkanDevice::init(int backendDrmFd)
 {
     uint32_t version = 0;
     if (vkEnumerateInstanceVersion(&version) != VK_SUCCESS || version < VK_API_VERSION_1_4) {
-        wlr_log(WLR_ERROR, "Vela richiede Vulkan 1.4: il sistema offre al massimo %u.%u",
+        wlr_log(WLR_ERROR, "Vela needs Vulkan 1.4: the system offers at most %u.%u",
             VK_API_VERSION_MAJOR(version), VK_API_VERSION_MINOR(version));
         return false;
     }
@@ -104,8 +104,8 @@ bool VulkanDevice::init(int backendDrmFd)
             layers.push_back("VK_LAYER_KHRONOS_validation");
             extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         } else {
-            wlr_log(WLR_ERROR, "VELA_VULKAN_VALIDATION: validation layer non installati "
-                               "(pacchetto vulkan-validation-layers)");
+            wlr_log(WLR_ERROR, "VELA_VULKAN_VALIDATION: validation layers not installed "
+                               "(package vulkan-validation-layers)");
         }
     }
 
@@ -126,7 +126,7 @@ bool VulkanDevice::init(int backendDrmFd)
         .ppEnabledExtensionNames = extensions.data(),
     };
     if (vkCreateInstance(&instanceInfo, nullptr, &instance) != VK_SUCCESS) {
-        wlr_log(WLR_ERROR, "Impossibile creare l'istanza Vulkan");
+        wlr_log(WLR_ERROR, "Can't create the Vulkan instance");
         return false;
     }
 
@@ -143,7 +143,7 @@ bool VulkanDevice::init(int backendDrmFd)
         auto create = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
             vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
         create(instance, &messengerInfo, nullptr, &m_messenger);
-        wlr_log(WLR_INFO, "Validation layer di Vulkan attivi");
+        wlr_log(WLR_INFO, "Vulkan validation layers enabled");
     }
 
     if (!pickPhysicalDevice(backendDrmFd) || !createDevice() || !openRenderNode()) {
@@ -151,7 +151,7 @@ bool VulkanDevice::init(int backendDrmFd)
     }
     queryFormats();
     if (renderFormats.len == 0) {
-        wlr_log(WLR_ERROR, "%s: nessun formato utilizzabile per disegnare sugli schermi", name.c_str());
+        wlr_log(WLR_ERROR, "%s: no format usable for drawing to outputs", name.c_str());
         return false;
     }
     return true;
@@ -191,8 +191,8 @@ bool VulkanDevice::pickPhysicalDevice(int backendDrmFd)
             }
         }
         if (props.apiVersion < VK_API_VERSION_1_4 || missing) {
-            wlr_log(WLR_INFO, "GPU %s scartata: %s", props.deviceName,
-                missing ? missing : "Vulkan 1.4 non supportato");
+            wlr_log(WLR_INFO, "GPU %s skipped: %s", props.deviceName,
+                missing ? missing : "Vulkan 1.4 not supported");
             continue;
         }
 
@@ -224,11 +224,11 @@ bool VulkanDevice::pickPhysicalDevice(int backendDrmFd)
     }
 
     if (!best) {
-        wlr_log(WLR_ERROR, "Nessuna GPU con Vulkan 1.4 e le estensioni per i dmabuf: Vela non può disegnare");
+        wlr_log(WLR_ERROR, "No GPU with Vulkan 1.4 and the dmabuf extensions: Vela can't draw");
         return false;
     }
     if (backendDev != 0 && bestScore < 100) {
-        wlr_log(WLR_ERROR, "La GPU dello schermo non ha Vulkan 1.4: uso %s", name.c_str());
+        wlr_log(WLR_ERROR, "The output's GPU has no Vulkan 1.4: using %s", name.c_str());
     }
     physical = best;
     return true;
@@ -248,7 +248,7 @@ bool VulkanDevice::createDevice()
         }
     }
     if (!found) {
-        wlr_log(WLR_ERROR, "%s: nessuna coda grafica", name.c_str());
+        wlr_log(WLR_ERROR, "%s: no graphics queue", name.c_str());
         return false;
     }
 
@@ -268,7 +268,7 @@ bool VulkanDevice::createDevice()
     vkGetPhysicalDeviceFeatures2(physical, &supported);
     if (!supported12.timelineSemaphore || !supported13.dynamicRendering || !supported13.synchronization2
         || !supported14.pushDescriptor) {
-        wlr_log(WLR_ERROR, "%s: mancano funzioni obbligatorie di Vulkan 1.4", name.c_str());
+        wlr_log(WLR_ERROR, "%s: required Vulkan 1.4 features are missing", name.c_str());
         return false;
     }
 
@@ -358,15 +358,15 @@ bool VulkanDevice::createDevice()
     if (globalPriority && (result == VK_ERROR_NOT_PERMITTED_KHR || result == VK_ERROR_INITIALIZATION_FAILED)) {
         queueInfo.pNext = nullptr;
         result = vkCreateDevice(physical, &deviceInfo, nullptr, &device);
-        wlr_log(WLR_INFO, "%s: coda della GPU a priorità normale (quella alta è stata rifiutata)", name.c_str());
+        wlr_log(WLR_INFO, "%s: normal-priority GPU queue (high priority was refused)", name.c_str());
     } else if (globalPriority && result == VK_SUCCESS) {
-        wlr_log(WLR_INFO, "%s: coda della GPU ad alta priorità", name.c_str());
+        wlr_log(WLR_INFO, "%s: high-priority GPU queue", name.c_str());
     } else if (!mayRaisePriority) {
-        wlr_log(WLR_INFO, "%s: coda della GPU a priorità normale (per quella alta serve CAP_SYS_NICE)",
+        wlr_log(WLR_INFO, "%s: normal-priority GPU queue (high priority needs CAP_SYS_NICE)",
             name.c_str());
     }
     if (result != VK_SUCCESS) {
-        wlr_log(WLR_ERROR, "%s: impossibile creare il device Vulkan", name.c_str());
+        wlr_log(WLR_ERROR, "%s: can't create the Vulkan device", name.c_str());
         return false;
     }
     vkGetDeviceQueue(device, queueFamily, 0, &queue);
@@ -387,9 +387,9 @@ bool VulkanDevice::createDevice()
             vkGetDeviceProcAddr(device, "vkGetCalibratedTimestampsKHR"));
     }
     if (timestampPeriod <= 0.0f) {
-        wlr_log(WLR_INFO, "%s: niente timestamp della GPU, il costo dei frame si stima dalla CPU", name.c_str());
+        wlr_log(WLR_INFO, "%s: no GPU timestamps, frame cost is estimated from the CPU", name.c_str());
     } else if (!getCalibratedTimestamps) {
-        wlr_log(WLR_INFO, "%s: niente timestamp calibrati, si misura solo la durata del lavoro della GPU",
+        wlr_log(WLR_INFO, "%s: no calibrated timestamps, only the GPU work duration is measured",
             name.c_str());
     }
 
@@ -409,7 +409,7 @@ bool VulkanDevice::createDevice()
         = VK_EXTERNAL_SEMAPHORE_FEATURE_EXPORTABLE_BIT | VK_EXTERNAL_SEMAPHORE_FEATURE_IMPORTABLE_BIT;
     syncFile = (semaphoreProps.externalSemaphoreFeatures & both) == both;
     if (!syncFile) {
-        wlr_log(WLR_INFO, "%s: niente semafori sync_file, la CPU aspetterà la GPU a ogni frame", name.c_str());
+        wlr_log(WLR_INFO, "%s: no sync_file semaphores, the CPU will wait for the GPU every frame", name.c_str());
     }
     return true;
 }
@@ -418,17 +418,17 @@ bool VulkanDevice::openRenderNode()
 {
     drmDevice* dev = nullptr;
     if (drmGetDeviceFromDevId(makedev(m_drm.renderMajor, m_drm.renderMinor), 0, &dev) != 0) {
-        wlr_log(WLR_ERROR, "%s: render node %ld:%ld non trovato", name.c_str(),
+        wlr_log(WLR_ERROR, "%s: render node %ld:%ld not found", name.c_str(),
             static_cast<long>(m_drm.renderMajor), static_cast<long>(m_drm.renderMinor));
         return false;
     }
     const std::string path = (dev->available_nodes & (1 << DRM_NODE_RENDER)) ? dev->nodes[DRM_NODE_RENDER] : "";
     drmFreeDevice(&dev);
     if (path.empty() || (renderFd = open(path.c_str(), O_RDWR | O_CLOEXEC)) < 0) {
-        wlr_log_errno(WLR_ERROR, "%s: impossibile aprire il render node %s", name.c_str(), path.c_str());
+        wlr_log_errno(WLR_ERROR, "%s: can't open the render node %s", name.c_str(), path.c_str());
         return false;
     }
-    wlr_log(WLR_INFO, "Renderer di Vela: %s (%s)", name.c_str(), path.c_str());
+    wlr_log(WLR_INFO, "Vela renderer: %s (%s)", name.c_str(), path.c_str());
     return true;
 }
 
@@ -531,7 +531,7 @@ bool VulkanDevice::importDmabuf(const wlr_dmabuf_attributes& dmabuf, VkFormat fo
         struct stat other {};
         fstat(dmabuf.fd[i], &other);
         if (other.st_ino != first.st_ino) {
-            wlr_log(WLR_ERROR, "dmabuf con piani in buffer diversi: non supportato");
+            wlr_log(WLR_ERROR, "dmabuf with planes in different buffers: not supported");
             return false;
         }
     }

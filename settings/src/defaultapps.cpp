@@ -6,6 +6,7 @@
 #include "appmodel.h"
 #include "mimeapps.h"
 
+#include <QCoreApplication>
 #include <QCollator>
 #include <QMimeDatabase>
 #include <QSet>
@@ -25,40 +26,40 @@ struct Category {
 const QList<Category>& categoryList()
 {
     static const QList<Category> list {
-        { "web", "Browser web", "internet-web-browser",
+        { "web", QT_TRANSLATE_NOOP("DefaultApps", "Web browser"), "internet-web-browser",
             { "x-scheme-handler/http", "x-scheme-handler/https", "text/html", "application/xhtml+xml" } },
-        { "mail", "Posta elettronica", "internet-mail", { "x-scheme-handler/mailto" } },
-        { "music", "Musica", "multimedia-audio-player",
+        { "mail", QT_TRANSLATE_NOOP("DefaultApps", "Email"), "internet-mail", { "x-scheme-handler/mailto" } },
+        { "music", QT_TRANSLATE_NOOP("DefaultApps", "Music"), "multimedia-audio-player",
             { "audio/mpeg", "audio/flac", "audio/ogg", "audio/x-vorbis+ogg", "audio/x-opus+ogg", "audio/x-wav",
                 "audio/mp4", "audio/aac", "audio/x-ms-wma" } },
-        { "video", "Video", "multimedia-video-player",
+        { "video", QT_TRANSLATE_NOOP("DefaultApps", "Video"), "multimedia-video-player",
             { "video/mp4", "video/x-matroska", "video/webm", "video/x-msvideo", "video/quicktime", "video/mpeg",
                 "video/ogg", "video/x-flv" } },
-        { "image", "Foto", "image-x-generic",
+        { "image", QT_TRANSLATE_NOOP("DefaultApps", "Photos"), "image-x-generic",
             { "image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/heif", "image/bmp",
                 "image/tiff" } },
-        { "pdf", "PDF", "application-pdf", { "application/pdf" } },
-        { "text", "File di testo", "accessories-text-editor", { "text/plain" } },
-        { "files", "Cartelle", "system-file-manager", { "inode/directory" } },
-        { "archive", "Archivi compressi", "package-x-generic",
+        { "pdf", QT_TRANSLATE_NOOP("DefaultApps", "PDF"), "application-pdf", { "application/pdf" } },
+        { "text", QT_TRANSLATE_NOOP("DefaultApps", "Text files"), "accessories-text-editor", { "text/plain" } },
+        { "files", QT_TRANSLATE_NOOP("DefaultApps", "Folders"), "system-file-manager", { "inode/directory" } },
+        { "archive", QT_TRANSLATE_NOOP("DefaultApps", "Compressed archives"), "package-x-generic",
             { "application/zip", "application/x-7z-compressed", "application/x-tar", "application/x-compressed-tar",
                 "application/x-xz-compressed-tar", "application/x-bzip2-compressed-tar", "application/vnd.rar" } },
-        { "document", "Documenti", "x-office-document",
+        { "document", QT_TRANSLATE_NOOP("DefaultApps", "Documents"), "x-office-document",
             { "application/vnd.oasis.opendocument.text",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword",
                 "application/rtf" } },
-        { "spreadsheet", "Fogli di calcolo", "x-office-spreadsheet",
+        { "spreadsheet", QT_TRANSLATE_NOOP("DefaultApps", "Spreadsheets"), "x-office-spreadsheet",
             { "application/vnd.oasis.opendocument.spreadsheet",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel",
                 "text/csv" } },
-        { "presentation", "Presentazioni", "x-office-presentation",
+        { "presentation", QT_TRANSLATE_NOOP("DefaultApps", "Presentations"), "x-office-presentation",
             { "application/vnd.oasis.opendocument.presentation",
                 "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                 "application/vnd.ms-powerpoint" } },
-        { "ebook", "Libri elettronici", "application-epub+zip",
+        { "ebook", QT_TRANSLATE_NOOP("DefaultApps", "E-books"), "application-epub+zip",
             { "application/epub+zip", "application/x-mobipocket-ebook" } },
-        { "calendar", "Calendario", "office-calendar", { "text/calendar" } },
-        { "torrent", "Torrent", "application-x-bittorrent", { "application/x-bittorrent", "x-scheme-handler/magnet" } },
+        { "calendar", QT_TRANSLATE_NOOP("DefaultApps", "Calendar"), "office-calendar", { "text/calendar" } },
+        { "torrent", QT_TRANSLATE_NOOP("DefaultApps", "Torrent"), "application-x-bittorrent", { "application/x-bittorrent", "x-scheme-handler/magnet" } },
     };
     return list;
 }
@@ -97,7 +98,7 @@ QVariantMap describe(const QString& mime)
 {
     if (mime.startsWith(QLatin1String("x-scheme-handler/"))) {
         const QString scheme = mime.mid(17);
-        return { { QStringLiteral("label"), QStringLiteral("Collegamenti %1:").arg(scheme.toUpper()) },
+        return { { QStringLiteral("label"), QCoreApplication::translate("DefaultApps", "%1 links:").arg(scheme.toUpper()) },
             { QStringLiteral("patterns"), scheme + u':' }, { QStringLiteral("icon"), QStringLiteral("text-html") } };
     }
     const QMimeType type = mimeDatabase().mimeTypeForName(mime);
@@ -190,7 +191,7 @@ QVariantList DefaultApps::categories() const
     for (const Category& c : categoryList()) {
         const QString current = MimeApps::defaultFor(c.mimes.first());
         out.append(QVariantMap { { QStringLiteral("key"), QLatin1String(c.key) },
-            { QStringLiteral("label"), QString::fromUtf8(c.label) }, { QStringLiteral("icon"), QLatin1String(c.icon) },
+            { QStringLiteral("label"), QCoreApplication::translate("DefaultApps", c.label) }, { QStringLiteral("icon"), QLatin1String(c.icon) },
             { QStringLiteral("current"), appInfo(current) },
             { QStringLiteral("candidates"), candidatesFor(c.mimes, current) } });
     }

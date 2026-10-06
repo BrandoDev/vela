@@ -224,7 +224,7 @@ Item {
             visible: view.model.count === 0 && !view.model.loading
             anchors.horizontalCenter: parent.horizontalCenter
             y: 24
-            text: view.model.search !== "" ? "Nessun elemento corrisponde alla ricerca." : view.model.exists ? "Questa cartella è vuota." : "Impossibile trovare questa cartella."
+            text: view.model.search !== "" ? qsTr("No items match your search.") : view.model.exists ? qsTr("This folder is empty.") : qsTr("Can't find this folder.")
             color: Theme.textDim
             font.pixelSize: Theme.fontNormal
         }

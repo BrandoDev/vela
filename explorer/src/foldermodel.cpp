@@ -62,7 +62,7 @@ FolderModel::Entry describe(const QFileInfo& info)
     e.hidden = e.name.startsWith(u'.');
     e.modified = info.lastModified();
     if (e.isDir) {
-        e.type = QStringLiteral("Cartella di file");
+        e.type = QCoreApplication::translate("Files", "File folder");
         e.icon = folderIcon(e.path);
         return e;
     }
@@ -85,7 +85,7 @@ QString formatSize(qint64 bytes)
 {
     const QLocale locale;
     if (bytes < 1024) {
-        return QStringLiteral("%1 byte").arg(bytes);
+        return QCoreApplication::translate("Files", "%1 bytes").arg(bytes);
     }
     static const char* units[] = { "KB", "MB", "GB", "TB" };
     double value = bytes / 1024.0;

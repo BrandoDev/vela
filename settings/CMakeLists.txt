@@ -38,7 +38,7 @@ qt_add_executable(vela-settings
     ${SHELL_SRC}/systemactions.h
     ${SHELL_SRC}/systemstatus.cpp
     ${SHELL_SRC}/systemstatus.h)
-target_include_directories(vela-settings PRIVATE ${SHELL_SRC})
+target_include_directories(vela-settings PRIVATE ${SHELL_SRC} ${PROJECT_SOURCE_DIR}/compositor/src)
 
 set(SETTINGS_QML_FILES
     qml/Main.qml
@@ -110,3 +110,15 @@ target_link_libraries(vela-settings PRIVATE
 
 install(TARGETS vela-settings RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES vela-settings.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+
+# Traduzione italiana: le stringhe del codice sono in inglese, l'italiano sta
+# in i18n/vela-settings_it.ts e finisce nell'eseguibile (:/i18n/vela-settings_it.qm, vedi
+# shell/src/language.h). Dopo aver cambiato testi:
+#   cmake --build build --target update_translations
+find_package(Qt6 6.7 REQUIRED COMPONENTS LinguistTools)
+qt_add_translations(TARGETS vela-settings SOURCE_TARGETS vela-settings
+    TS_FILES i18n/vela-settings_it.ts
+    RESOURCE_PREFIX /i18n
+    LUPDATE_TARGET vela-settings_lupdate
+    LRELEASE_TARGET vela-settings_lrelease
+    LUPDATE_OPTIONS -source-language en -target-language it -no-obsolete -locations none)

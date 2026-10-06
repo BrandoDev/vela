@@ -111,7 +111,7 @@ Window {
                 height: 32
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Appunti"
+                    text: qsTr("Clipboard")
                     color: Theme.text
                     font.pixelSize: Theme.fontNormal + 2
                     font.weight: Font.DemiBold
@@ -128,7 +128,7 @@ Window {
                     Text {
                         id: clearText
                         anchors.centerIn: parent
-                        text: "Cancella tutto"
+                        text: qsTr("Clear all")
                         color: Theme.text
                         font.pixelSize: Theme.fontSmall
                     }
@@ -148,20 +148,20 @@ Window {
                 spacing: 12
                 Text {
                     width: parent.width
-                    text: "Cronologia degli Appunti"
+                    text: qsTr("Clipboard history")
                     color: Theme.text
                     font.pixelSize: Theme.fontNormal
                     font.weight: Font.DemiBold
                 }
                 Text {
                     width: parent.width
-                    text: "Non puoi vedere la cronologia degli Appunti. Attivala per ritrovare qui ciò che copi e incollarlo di nuovo."
+                    text: qsTr("You can't see your clipboard history. Turn it on to find what you copy here and paste it again.")
                     color: Theme.textDim
                     font.pixelSize: Theme.fontNormal
                     wrapMode: Text.WordWrap
                 }
                 DialogButton {
-                    label: "Attiva"
+                    label: qsTr("Turn on")
                     primary: true
                     onClicked: Clip.enabled = true
                 }
@@ -169,7 +169,7 @@ Window {
             Text {
                 visible: Clip.enabled && Clip.items.length === 0
                 width: parent.width
-                text: "Non c'è niente qui. Quando copi qualcosa, lo ritrovi qui per incollarlo di nuovo."
+                text: qsTr("There's nothing here. When you copy something, you'll find it here to paste it again.")
                 color: Theme.textDim
                 font.pixelSize: Theme.fontNormal
                 wrapMode: Text.WordWrap
@@ -270,8 +270,8 @@ Window {
                                         const id = card.modelData.id
                                         const p = root.screenPoint(more, 0, more.height)
                                         Menus.open([
-                                            { text: card.modelData.pinned ? "&Rimuovi fissaggio" : "&Fissa", icon: card.modelData.pinned ? "window-unpin" : "window-pin", action: () => Clip.togglePin(id) },
-                                            { text: "&Elimina", icon: "edit-delete", shortcut: "Canc", action: () => Clip.remove(id) }
+                                            { text: card.modelData.pinned ? qsTr("&Unpin") : qsTr("&Pin"), icon: card.modelData.pinned ? "window-unpin" : "window-pin", action: () => Clip.togglePin(id) },
+                                            { text: qsTr("&Delete"), icon: "edit-delete", shortcut: qsTr("Del"), action: () => Clip.remove(id) }
                                         ], p.x, p.y, { screen: root.screen ? root.screen.name : "" })
                                     }
                                 }

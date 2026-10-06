@@ -5,7 +5,7 @@
 """Le prove funzionali di Vela, per ctest.
 
     run.py              gli scenari (finestre, schermi, sessione)
-    run.py --nitidezza  la prova bit per bit di scripts/test-sharpness.sh
+    run.py --sharpness  la prova bit per bit di scripts/test-sharpness.sh
 
 Serve una GPU con Vulkan 1.4: il renderer non ha ripieghi software. Senza
 (per esempio sui server della CI) esce con 77, che ctest conta come prova
@@ -27,13 +27,13 @@ from harness import gpu_available  # noqa: E402
 
 def main():
     if not gpu_available():
-        print("Nessuna GPU (/dev/dri/renderD*): prove funzionali saltate.")
+        print("No GPU (/dev/dri/renderD*): functional tests skipped.")
         return SKIP
-    if "--nitidezza" in sys.argv:
+    if "--sharpness" in sys.argv:
         # Il controllo dei pixel (scripts/sharpness-check.py) gira con il
         # python3 del PATH: è lì che servono numpy e Pillow.
         if subprocess.run(["python3", "-c", "import numpy, PIL"], capture_output=True).returncode != 0:
-            print("Servono numpy e Pillow per python3: prova di nitidezza saltata.")
+            print("python3 needs numpy and Pillow: sharpness test skipped.")
             return SKIP
         env = {key: value for key, value in os.environ.items() if key not in ("WAYLAND_DISPLAY", "DISPLAY")}
         env["VELA_TEST_MARK"] = "menu"

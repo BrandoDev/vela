@@ -80,14 +80,16 @@ void Toplevel::showInTaskbar(bool on)
 
 void Server::initWorkspaces()
 {
-    // desktop=<nome> per ogni desktop (vuoto: "Desktop N"); app-ovunque=<app_id>.
+    // desktop=<nome> per ogni desktop (vuoto: "Desktop N"); sticky-app=<app_id>.
     std::ifstream in(configPath());
     std::string line;
     while (std::getline(in, line)) {
         if (line.rfind("desktop=", 0) == 0) {
             workspaces.names.push_back(line.substr(8));
+        } else if (line.rfind("sticky-app=", 0) == 0 && line.size() > 11) {
+            workspaces.stickyApps.push_back(line.substr(11));
         } else if (line.rfind("app-ovunque=", 0) == 0 && line.size() > 12) {
-            workspaces.stickyApps.push_back(line.substr(12));
+            workspaces.stickyApps.push_back(line.substr(12)); // il nome di prima
         }
     }
     if (workspaces.names.empty()) {
@@ -105,12 +107,12 @@ void Server::saveWorkspaces() const
     const std::string temporary = path + ".tmp";
     {
         std::ofstream out(temporary, std::ios::trunc);
-        out << "# I desktop virtuali di Vela, nell'ordine (vuoto: \"Desktop N\")\n";
+        out << "# Vela's virtual desktops, in order (empty: \"Desktop N\")\n";
         for (const std::string& name : workspaces.names) {
             out << "desktop=" << name << '\n';
         }
         for (const std::string& app : workspaces.stickyApps) {
-            out << "app-ovunque=" << app << '\n';
+            out << "sticky-app=" << app << '\n';
         }
     }
     std::rename(temporary.c_str(), path.c_str());
@@ -313,7 +315,7 @@ void Server::switchWorkspace(int index, bool refocusAfter)
             refocus();
         }
     }
-    wlr_log(WLR_INFO, "Desktop %d di %d", index + 1, workspaceCount());
+    wlr_log(WLR_INFO, "Desktop %d of %d", index + 1, workspaceCount());
     announceWorkspaces();
 }
 

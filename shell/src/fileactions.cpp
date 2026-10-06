@@ -6,6 +6,7 @@
 
 #include "links.h"
 
+#include <QCoreApplication>
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QMimeData>
@@ -125,7 +126,7 @@ QString FileActions::createShortcut(const QString& directory, const QString& tar
 {
     QString error;
     const QString path = ::createShortcut(directory, target, name.trimmed(), &error);
-    return path.isEmpty() ? (error.isEmpty() ? QStringLiteral("Impossibile creare il collegamento.") : error) : QString();
+    return path.isEmpty() ? (error.isEmpty() ? QCoreApplication::translate("Desktop", "Couldn't create the shortcut.") : error) : QString();
 }
 
 QString FileActions::shortcutName(const QString& target, const QString& directory) const

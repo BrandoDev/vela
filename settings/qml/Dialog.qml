@@ -9,7 +9,7 @@ Item {
     id: dialog
     property string title
     property string primaryText: "OK"
-    property string secondaryText: "Annulla"
+    property string secondaryText: qsTr("Cancel")
     property bool primaryEnabled: true
     property int dialogWidth: 448
     default property alias content: body.data

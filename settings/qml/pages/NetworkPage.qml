@@ -18,10 +18,10 @@ Page {
     property string expanded: "" // il dispositivo con le proprietà aperte
 
     function stateText(d) {
-        if (d.state.indexOf("connected") === 0 && d.state.indexOf("disconnected") < 0) return "Connesso"
-        if (d.state === "unavailable") return d.type === "ethernet" ? "Cavo scollegato" : "Non disponibile"
-        if (d.state.indexOf("connecting") >= 0) return "Connessione in corso..."
-        return "Disconnesso"
+        if (d.state.indexOf("connected") === 0 && d.state.indexOf("disconnected") < 0) return qsTr("Connected")
+        if (d.state === "unavailable") return d.type === "ethernet" ? qsTr("Cable unplugged") : qsTr("Not available")
+        if (d.state.indexOf("connecting") >= 0) return qsTr("Connecting...")
+        return qsTr("Disconnected")
     }
 
     // In cima: lo stato, grande.
@@ -39,13 +39,13 @@ Page {
         Column {
             anchors { left: statusIcon.right; leftMargin: 16; verticalCenter: parent.verticalCenter }
             Text {
-                text: Status.networkConnected ? (Status.networkName !== "" ? Status.networkName : "Connesso") : "Non connesso"
+                text: Status.networkConnected ? (Status.networkName !== "" ? Status.networkName : qsTr("Connected")) : qsTr("Not connected")
                 color: Theme.text
                 font.pixelSize: Theme.fontSubtitle
                 font.weight: Font.DemiBold
             }
             Text {
-                text: Status.networkConnected ? "Connesso a Internet" : "Nessuna connessione"
+                text: Status.networkConnected ? qsTr("Connected to the Internet") : qsTr("No connection")
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontBody
             }
@@ -55,16 +55,16 @@ Page {
     Card {
         visible: !Network.available
         icon: "dialog-warning"
-        title: "NetworkManager non disponibile"
-        description: "Serve nmcli per vedere e cambiare le connessioni."
+        title: qsTr("NetworkManager isn't available")
+        description: qsTr("nmcli is needed to see and change connections.")
     }
 
     // --- Wi-Fi ---
     Card {
         visible: Status.wifiAvailable
         icon: "network-wireless"
-        title: "Wi-Fi"
-        description: Status.wifiEnabled ? (page.wifiDevice && page.wifiDevice.connection !== "" ? "Connesso a " + page.wifiDevice.connection : "Non connesso") : "Disattivato"
+        title: qsTr("Wi-Fi")
+        description: Status.wifiEnabled ? (page.wifiDevice && page.wifiDevice.connection !== "" ? qsTr("Connected to ") + page.wifiDevice.connection : qsTr("Not connected")) : qsTr("Off")
         trailing: Toggle {
             checked: Status.wifiEnabled
             onToggled: on => {
@@ -77,10 +77,10 @@ Page {
     Card {
         visible: Status.wifiAvailable && Status.wifiEnabled
         icon: "view-refresh"
-        title: "Reti disponibili"
-        description: Network.scanning ? "Ricerca in corso..." : Network.wifiNetworks.length + " reti"
+        title: qsTr("Available networks")
+        description: Network.scanning ? qsTr("Searching...") : Network.wifiNetworks.length + qsTr(" networks")
         trailing: Button {
-            text: "Aggiorna"
+            text: qsTr("Refresh")
             usable: !Network.scanning
             onClicked: Network.scan()
         }
@@ -115,7 +115,7 @@ Page {
                             font.pixelSize: Theme.fontBody
                         }
                         Text {
-                            text: (net.modelData.active ? "Connesso, " : "") + (net.modelData.secure ? "protetta" : "aperta")
+                            text: (net.modelData.active ? qsTr("Connected, ") : "") + (net.modelData.secure ? qsTr("secured") : qsTr("open"))
                             color: Theme.textSecondary
                             font.pixelSize: Theme.fontCaption
                         }
@@ -126,11 +126,11 @@ Page {
                         Button {
                             visible: net.modelData.known && !net.modelData.active
                             subtle: true
-                            text: "Dimentica"
+                            text: qsTr("Forget")
                             onClicked: Network.forget(net.modelData.ssid)
                         }
                         Button {
-                            text: net.modelData.active ? "Disconnetti" : "Connetti"
+                            text: net.modelData.active ? qsTr("Disconnect") : qsTr("Connect")
                             onClicked: {
                                 if (net.modelData.active) {
                                     Network.disconnectDevice(page.wifiDevice.device)
@@ -173,7 +173,7 @@ Page {
             id: deviceCard
             required property var modelData
             icon: modelData.type === "wifi" ? "network-wireless" : "network-wired"
-            title: (modelData.type === "wifi" ? "Wi-Fi" : "Ethernet") + (Network.devices.filter(d => d.type === modelData.type).length > 1 ? " (" + modelData.device + ")" : "")
+            title: (modelData.type === "wifi" ? qsTr("Wi-Fi") : qsTr("Ethernet")) + (Network.devices.filter(d => d.type === modelData.type).length > 1 ? " (" + modelData.device + ")" : "")
             description: page.stateText(modelData) + (modelData.connection !== "" && modelData.type === "ethernet" ? " · " + modelData.connection : "")
             visible: modelData.type === "ethernet" || (modelData.type === "wifi" && modelData.ip !== undefined)
             clickable: true
@@ -189,12 +189,12 @@ Page {
                 spacing: 6
                 Repeater {
                     model: [
-                        { label: "Indirizzo IPv4", value: deviceCard.modelData.ip || "—" },
-                        { label: "Gateway", value: deviceCard.modelData.gateway || "—" },
-                        { label: "Server DNS", value: deviceCard.modelData.dns || "—" },
-                        { label: "Indirizzo IPv6", value: deviceCard.modelData.ipv6 || "—" },
-                        { label: "Indirizzo fisico (MAC)", value: deviceCard.modelData.mac || "—" },
-                        { label: "Interfaccia", value: deviceCard.modelData.device }
+                        { label: qsTr("IPv4 address"), value: deviceCard.modelData.ip || "—" },
+                        { label: qsTr("Gateway"), value: deviceCard.modelData.gateway || "—" },
+                        { label: qsTr("DNS servers"), value: deviceCard.modelData.dns || "—" },
+                        { label: qsTr("IPv6 address"), value: deviceCard.modelData.ipv6 || "—" },
+                        { label: qsTr("Physical address (MAC)"), value: deviceCard.modelData.mac || "—" },
+                        { label: qsTr("Interface"), value: deviceCard.modelData.device }
                     ]
                     delegate: Row {
                         required property var modelData
@@ -220,12 +220,12 @@ Page {
     }
 
     CardGroup {
-        title: "Impostazioni di rete avanzate"
+        title: qsTr("Advanced network settings")
         LinkCard {
             visible: System.available("network")
             icon: "preferences-system-network"
-            title: "Connessioni"
-            description: "Indirizzi statici, VPN, proxy e tutte le opzioni delle connessioni"
+            title: qsTr("Connections")
+            description: qsTr("Static addresses, VPN, proxy and every connection option")
             onClicked: System.trigger("network")
         }
     }
@@ -234,15 +234,15 @@ Page {
         id: passwordDialog
         parent: root.contentItem
         property string ssid
-        title: "Connetti a " + ssid
-        primaryText: "Avanti"
+        title: qsTr("Connect to ") + ssid
+        primaryText: qsTr("Next")
         primaryEnabled: password.text.length >= 8
         onAccepted: Network.connectWifi(ssid, password.text)
         Column {
             width: parent.width
             spacing: 8
             Text {
-                text: "Immetti la chiave di sicurezza di rete"
+                text: qsTr("Enter the network security key")
                 color: Theme.text
                 font.pixelSize: Theme.fontBody
             }

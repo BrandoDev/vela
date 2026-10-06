@@ -39,7 +39,7 @@ QString quote(QString text)
 
 bool spawn(const QString& command, const QString& directory = QDir::homePath())
 {
-    qInfo("vela-shell: avvio %s", qPrintable(command));
+    qInfo("vela-shell: starting %s", qPrintable(command));
     return QProcess::startDetached(QStringLiteral("/bin/sh"), { QStringLiteral("-c"), command }, directory);
 }
 
@@ -77,7 +77,7 @@ QString velaFiles()
 // Un comando in un terminale che resta aperto a mostrare com'è andata.
 QString inTerminal(const QString& command)
 {
-    const QString script = command + QStringLiteral("; echo; read -r -p 'Premi Invio per chiudere' _");
+    const QString script = command + QCoreApplication::translate("System", "; echo; read -r -p 'Press Enter to close' _");
     return terminalProgram() + QStringLiteral(" -e sh -c ") + quote(script);
 }
 

@@ -249,7 +249,7 @@ Window {
             width: parent.width - 48
             spacing: 8
 
-            Title { text: "Condividi" }
+            Title { text: qsTr("Share") }
             Row {
                 spacing: 10
                 Image {
@@ -261,22 +261,22 @@ Window {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     width: share.width - 42
-                    text: root.paths.length === 1 ? root.paths[0].substring(root.paths[0].lastIndexOf("/") + 1) : root.paths.length + " elementi"
+                    text: root.paths.length === 1 ? root.paths[0].substring(root.paths[0].lastIndexOf("/") + 1) : root.paths.length + qsTr(" items")
                     color: Theme.text
                     font.pixelSize: Theme.fontNormal
                     elide: Text.ElideMiddle
                 }
             }
 
-            Section { text: "Condivisione nelle vicinanze" }
+            Section { text: qsTr("Nearby sharing") }
             Note {
                 visible: !FileActions.canKdeConnect()
-                text: "Per inviare file al telefono o a un altro computer installa KDE Connect e associali."
+                text: qsTr("To send files to your phone or another computer, install KDE Connect and pair them.")
             }
             Note {
                 visible: FileActions.canKdeConnect() && FileActions.devices.length === 0
-                text: FileActions.searching ? "Ricerca dei dispositivi in corso..."
-                    : "Nessun dispositivo vicino. Associa il telefono o il computer con KDE Connect."
+                text: FileActions.searching ? qsTr("Looking for devices...")
+                    : qsTr("No devices nearby. Pair your phone or computer with KDE Connect.")
             }
             Flow {
                 width: parent.width
@@ -321,22 +321,22 @@ Window {
                 }
             }
 
-            Section { text: "Condividi tramite" }
+            Section { text: qsTr("Share using") }
             Choice {
                 visible: FileActions.canEmail()
                 icon: "mail-message-new"
-                label: "Posta elettronica"
+                label: qsTr("Email")
                 onClicked: { FileActions.sendByEmail(root.paths); root.close() }
             }
             Choice {
                 visible: FileActions.canBluetooth() && Status.bluetoothAvailable
                 icon: "preferences-system-bluetooth"
-                label: "Bluetooth"
+                label: qsTr("Bluetooth")
                 onClicked: { FileActions.sendByBluetooth(root.paths); root.close() }
             }
             Note {
                 visible: !FileActions.canEmail() && !(FileActions.canBluetooth() && Status.bluetoothAvailable)
-                text: "Nessuna app per condividere."
+                text: qsTr("No apps to share with.")
             }
         }
 
@@ -351,7 +351,7 @@ Window {
 
             Title {
                 width: parent.width - 32
-                text: "Seleziona un'app per aprire questo file" + (FileActions.extension(root.path) !== "" ? " " + FileActions.extension(root.path) : "")
+                text: qsTr("Select an app to open this file") + (FileActions.extension(root.path) !== "" ? " " + FileActions.extension(root.path) : "")
             }
             Note { text: FileActions.typeName(root.path) }
 
@@ -365,7 +365,7 @@ Window {
                     id: appList
                     width: parent.width
                     spacing: 2
-                    Section { visible: root.suggested.length > 0; text: "App suggerite"; topPadding: 0; bottomPadding: 4 }
+                    Section { visible: root.suggested.length > 0; text: qsTr("Suggested apps"); topPadding: 0; bottomPadding: 4 }
                     Repeater {
                         model: root.suggested
                         delegate: Choice {
@@ -377,7 +377,7 @@ Window {
                             onDoubleClicked: { root.chosen = modelData.id; root.launchChosen(false) }
                         }
                     }
-                    Section { text: "Altre app"; bottomPadding: 4 }
+                    Section { text: qsTr("Other apps"); bottomPadding: 4 }
                     Repeater {
                         model: root.others
                         delegate: Choice {
@@ -394,8 +394,8 @@ Window {
             Row {
                 anchors.right: parent.right
                 spacing: 8
-                DialogButton { label: "Sempre"; primary: true; usable: root.chosen !== ""; onClicked: root.launchChosen(true) }
-                DialogButton { label: "Solo una volta"; usable: root.chosen !== ""; onClicked: root.launchChosen(false) }
+                DialogButton { label: qsTr("Always"); primary: true; usable: root.chosen !== ""; onClicked: root.launchChosen(true) }
+                DialogButton { label: qsTr("Just once"); usable: root.chosen !== ""; onClicked: root.launchChosen(false) }
             }
         }
 
@@ -410,14 +410,14 @@ Window {
 
             Title {
                 width: parent.width - 32
-                text: root.step === 0 ? "Per quale elemento vuoi creare un collegamento?" : "Come vuoi chiamare il collegamento?"
+                text: root.step === 0 ? qsTr("What item would you like to create a shortcut for?") : qsTr("What would you like to name the shortcut?")
             }
             Note {
                 visible: root.step === 0
-                text: "Puoi creare collegamenti a file, cartelle e programmi, sul computer o in rete, e a indirizzi Internet."
+                text: qsTr("You can create shortcuts to files, folders and programs, on this computer or on a network, and to Internet addresses.")
             }
             Text {
-                text: root.step === 0 ? "Immetti il percorso dell'elemento:" : "Immetti un nome per il collegamento:"
+                text: root.step === 0 ? qsTr("Type the location of the item:") : qsTr("Type a name for this shortcut:")
                 color: Theme.text
                 font.pixelSize: Theme.fontNormal
             }
@@ -436,13 +436,13 @@ Window {
                 anchors.right: parent.right
                 spacing: 8
                 DialogButton {
-                    label: root.step === 0 ? "Avanti" : "Fine"
+                    label: root.step === 0 ? qsTr("Next") : qsTr("Finish")
                     primary: true
                     usable: (root.step === 0 ? targetFieldBox.text : nameFieldBox.text).trim() !== ""
                     onClicked: root.shortcutNext()
                 }
                 DialogButton {
-                    label: root.step === 0 ? "Annulla" : "Indietro"
+                    label: root.step === 0 ? qsTr("Cancel") : qsTr("Back")
                     onClicked: {
                         if (root.step === 0) {
                             root.close()

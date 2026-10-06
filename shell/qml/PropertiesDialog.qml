@@ -65,7 +65,7 @@ Window {
         if (info.bytes !== undefined) {
             showSizes(info.bytes, info.onDisk, info.files, info.folders)
         } else {
-            sizeText = "Calcolo in corso…"
+            sizeText = qsTr("Calculating…")
             diskText = sizeText
             contentText = sizeText
         }
@@ -84,7 +84,7 @@ Window {
     function showSizes(bytes, onDisk, files, folders) {
         sizeText = Properties.formatSize(bytes)
         diskText = Properties.formatSize(onDisk)
-        contentText = files + (files === 1 ? " file, " : " file, ") + folders + (folders === 1 ? " cartella" : " cartelle")
+        contentText = files + (files === 1 ? qsTr(" file, ") : qsTr(" files, ")) + folders + (folders === 1 ? qsTr(" folder") : qsTr(" folders"))
     }
 
     function apply() {
@@ -183,7 +183,7 @@ Window {
         Text {
             x: 24
             y: 16
-            text: "Proprietà - " + (root.info.name || "")
+            text: qsTr("Properties - ") + (root.info.name || "")
             color: Theme.text
             font.pixelSize: Theme.fontNormal
             font.weight: Font.DemiBold
@@ -197,7 +197,7 @@ Window {
             y: 44
             spacing: 4
             Repeater {
-                model: root.single ? ["Generale", "Autorizzazioni", "Dettagli"] : ["Generale"]
+                model: root.single ? [qsTr("General"), qsTr("Permissions"), qsTr("Details")] : [qsTr("General")]
                 delegate: Item {
                     required property string modelData
                     required property int index
@@ -261,11 +261,11 @@ Window {
                 }
             }
             Line {}
-            Row { Label { text: "Tipo:" } Value { text: root.info.type || "" } }
+            Row { Label { text: qsTr("Type:") } Value { text: root.info.type || "" } }
             Row {
                 visible: root.defaultApp !== ""
                 height: 28
-                Label { text: "Apri con:"; anchors.verticalCenter: parent.verticalCenter }
+                Label { text: qsTr("Opens with:"); anchors.verticalCenter: parent.verticalCenter }
                 Row {
                     width: 260
                     spacing: 8
@@ -293,7 +293,7 @@ Window {
                         color: changeMouse.containsMouse ? Theme.hover : Theme.surfaceRaised
                         border.width: 1
                         border.color: Theme.stroke
-                        Text { anchors.centerIn: parent; text: "Cambia…"; color: Theme.text; font.pixelSize: Theme.fontSmall }
+                        Text { anchors.centerIn: parent; text: qsTr("Change…"); color: Theme.text; font.pixelSize: Theme.fontSmall }
                         MouseArea {
                             id: changeMouse
                             anchors.fill: parent
@@ -311,30 +311,30 @@ Window {
                 }
             }
             Line {}
-            Row { Label { text: "Percorso:" } Value { text: root.info.location || "" } }
-            Row { Label { text: "Dimensioni:" } Value { text: root.sizeText } }
-            Row { Label { text: "Su disco:" } Value { text: root.diskText } }
+            Row { Label { text: qsTr("Location:") } Value { text: root.info.location || "" } }
+            Row { Label { text: qsTr("Size:") } Value { text: root.sizeText } }
+            Row { Label { text: qsTr("Size on disk:") } Value { text: root.diskText } }
             Row {
                 visible: !!root.info.hasFolders || root.paths.length > 1
-                Label { text: "Contenuto:" }
+                Label { text: qsTr("Contains:") }
                 Value { text: root.contentText }
             }
             Line { visible: root.single }
-            Row { visible: root.single && !!root.info.created; Label { text: "Creato:" } Value { text: root.info.created || "" } }
-            Row { visible: root.single; Label { text: "Ultima modifica:" } Value { text: root.info.modified || "" } }
-            Row { visible: root.single; Label { text: "Ultimo accesso:" } Value { text: root.info.accessed || "" } }
+            Row { visible: root.single && !!root.info.created; Label { text: qsTr("Created:") } Value { text: root.info.created || "" } }
+            Row { visible: root.single; Label { text: qsTr("Modified:") } Value { text: root.info.modified || "" } }
+            Row { visible: root.single; Label { text: qsTr("Accessed:") } Value { text: root.info.accessed || "" } }
             Line {}
             Row {
                 spacing: 16
-                Label { text: "Attributi:"; width: 104; anchors.verticalCenter: parent.verticalCenter }
+                Label { text: qsTr("Attributes:"); width: 104; anchors.verticalCenter: parent.verticalCenter }
                 Check {
-                    label: "Sola lettura"
+                    label: qsTr("Read-only")
                     checked: root.readOnly
                     onToggled: root.readOnly = !root.readOnly
                 }
                 // Su Linux "nascosto" è il punto all'inizio del nome.
                 Check {
-                    label: "Nascosto"
+                    label: qsTr("Hidden")
                     checked: !!root.info.hidden
                     usable: false
                 }
@@ -347,7 +347,7 @@ Window {
                 spacing: 16
                 Label { text: ""; width: 104 }
                 Check {
-                    label: "Consenti l'esecuzione come programma"
+                    label: qsTr("Allow executing as a program")
                     usable: !!root.info.mine
                     checked: (root.permissions & 0o111) !== 0
                     onToggled: {
@@ -367,22 +367,22 @@ Window {
             y: 92
             spacing: 14
 
-            Row { Label { text: "Proprietario:" } Value { text: root.info.owner || "" } }
-            Row { Label { text: "Gruppo:" } Value { text: root.info.group || "" } }
+            Row { Label { text: qsTr("Owner:") } Value { text: root.info.owner || "" } }
+            Row { Label { text: qsTr("Group:") } Value { text: root.info.group || "" } }
             Line {}
             Text {
-                text: root.info.mine ? "Chi può fare cosa:" : "Solo il proprietario può cambiare le autorizzazioni."
+                text: root.info.mine ? qsTr("Who can do what:") : qsTr("Only the owner can change the permissions.")
                 color: Theme.textDim
                 font.pixelSize: Theme.fontNormal
             }
             Repeater {
-                model: [{ who: "Proprietario", shift: 6 }, { who: "Gruppo", shift: 3 }, { who: "Altri", shift: 0 }]
+                model: [{ who: qsTr("Owner"), shift: 6 }, { who: qsTr("Group"), shift: 3 }, { who: qsTr("Others"), shift: 0 }]
                 delegate: Row {
                     required property var modelData
                     spacing: 16
                     Label { text: modelData.who; width: 104 }
                     Repeater {
-                        model: [{ what: "Lettura", bit: 4 }, { what: "Scrittura", bit: 2 }, { what: root.info.isDir ? "Apertura" : "Esecuzione", bit: 1 }]
+                        model: [{ what: qsTr("Read"), bit: 4 }, { what: qsTr("Write"), bit: 2 }, { what: root.info.isDir ? qsTr("Open") : qsTr("Execute"), bit: 1 }]
                         delegate: Check {
                             required property var modelData
                             readonly property int mask: modelData.bit << parent.modelData.shift
@@ -402,10 +402,10 @@ Window {
             x: 24
             y: 92
             spacing: 12
-            Row { Label { text: "Nome:" } Value { text: root.info.name || "" } }
-            Row { Label { text: "Tipo MIME:" } Value { text: root.info.mimeName || "" } }
-            Row { visible: !!root.info.imageSize; Label { text: "Dimensioni:" } Value { text: (root.info.imageSize || "") + " pixel" } }
-            Row { Label { text: "Dimensioni file:" } Value { text: root.sizeText } }
+            Row { Label { text: qsTr("Name:") } Value { text: root.info.name || "" } }
+            Row { Label { text: qsTr("MIME type:") } Value { text: root.info.mimeName || "" } }
+            Row { visible: !!root.info.imageSize; Label { text: qsTr("Size:") } Value { text: (root.info.imageSize || "") + qsTr(" pixels") } }
+            Row { Label { text: qsTr("File size:") } Value { text: root.sizeText } }
         }
 
         Row {
@@ -447,11 +447,11 @@ Window {
                 onClicked: { root.apply(); root.visible = false }
             }
             DialogButton {
-                label: "Annulla"
+                label: qsTr("Cancel")
                 onClicked: root.visible = false
             }
             DialogButton {
-                label: "Applica"
+                label: qsTr("Apply")
                 usable: root.changed
                 onClicked: root.apply()
             }
