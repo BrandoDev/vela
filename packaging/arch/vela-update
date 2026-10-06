@@ -7,6 +7,10 @@
 # installa con pacman (chiede la password). La versione nuova parte alla
 # prossima sessione.
 #
+# Se GitHub Actions ha già costruito il pacchetto di quel commit (e c'è gh,
+# collegato all'account), chiede se scaricarlo invece di compilare: niente
+# minuti di compilazione, e niente crash del compilatore.
+#
 # Il repository si tiene in ~/.cache/vela-update, così ogni volta si
 # scaricano solo i commit nuovi; lì restano anche gli ultimi pacchetti, per
 # tornare indietro: sudo pacman -U ~/.cache/vela-update/pacchetti/<file>.
@@ -29,6 +33,8 @@ Aggiorna Vela all'ultimo commit e la installa.
   --controlla         dice solo se c'è un aggiornamento e cosa cambia
                       (esce con 0 se c'è, 1 se Vela è già aggiornata)
   --forza             ricostruisce e reinstalla anche se è già aggiornata
+  --compila           compila sempre qui, anche se su GitHub c'è il pacchetto
+  --scarica           se su GitHub c'è il pacchetto, lo scarica senza chiedere
   --jobs N            compilazioni in parallelo (altrimenti quelle di
                       /etc/makepkg.conf); con 1 si va piano ma sicuri
   --sorgente URL|DIR  da dove prendere Vela: un repository git o una
@@ -40,12 +46,15 @@ EOF
 
 check=0
 force=0
+prefer=""
 jobs=""
 source=""
 while [ $# -gt 0 ]; do
     case "$1" in
     --controlla) check=1 ;;
     --forza) force=1 ;;
+    --compila) prefer=compila ;;
+    --scarica) prefer=scarica ;;
     --jobs) shift; jobs="${1:-}" ;;
     --jobs=*) jobs="${1#*=}" ;;
     --sorgente) shift; source="${1:-}" ;;
@@ -98,6 +107,7 @@ if [ "$fetched" = no ]; then
 fi
 
 latest=$(git -C "$MIRROR" rev-parse --short=7 HEAD)
+latestFull=$(git -C "$MIRROR" rev-parse HEAD)
 installed=$(pacman -Q vela-git 2> /dev/null | sed -n 's/.*\.g\([0-9a-f]*\)-[0-9]*$/\1/p')
 
 if [ -n "$installed" ] && [ "${latest#"$installed"}" != "$latest" ] && [ "$force" = 0 ]; then
@@ -119,14 +129,87 @@ elif [ -n "$installed" ]; then
 else
     echo ":: Vela non è installata come pacchetto: la installo ($latest)."
 fi
+
+# Il repository su GitHub ("proprietario/nome"): dalla sorgente, o dal suo
+# origin se è una cartella. Vuoto se non è su GitHub.
+githubRepo() {
+    url="$source"
+    if [ -d "$source" ]; then
+        url=$(git -C "$source" remote get-url origin 2> /dev/null || true)
+    fi
+    printf '%s\n' "$url" | sed -n -E 's#^(ssh://git@github\.com/|git@github\.com:|https://github\.com/)([^/]+/[^/]+)$#\2#p' | sed 's/\.git$//'
+}
+
+# Il pacchetto di questo commit costruito da GitHub Actions, se c'è ancora
+# (gli artifact durano 14 giorni): l'id dell'esecuzione, o vuoto.
+ciRun=""
+repo=$(githubRepo)
+if [ "$prefer" != compila ] && [ -n "$repo" ] && command -v gh > /dev/null && gh auth status > /dev/null 2>&1; then
+    run=$(gh run list -R "$repo" -w compila.yml -c "$latestFull" -s success -L 1 \
+        --json databaseId -q '.[0].databaseId' 2> /dev/null || true)
+    if [ -n "$run" ] && [ -n "$(gh api "repos/$repo/actions/runs/$run/artifacts" \
+        -q '.artifacts[] | select(.name == "vela-git" and .expired == false) | .id' 2> /dev/null || true)" ]; then
+        ciRun="$run"
+    fi
+fi
+
 if [ "$check" = 1 ]; then
+    if [ -n "$ciRun" ]; then
+        echo ":: Su GitHub c'è già il pacchetto pronto: vela-update lo scarica senza compilare."
+    fi
     exit 0
+fi
+
+mkdir -p "$PACKAGES"
+
+# Solo gli ultimi pacchetti, per poter tornare indietro.
+prune() {
+    ls -t "$PACKAGES"/vela-git-*.pkg.tar.* 2> /dev/null | tail -n +$((KEEP + 1)) | while read -r old; do
+        rm -f "$old"
+    done
+}
+
+# Pacchetto pronto su GitHub: scaricarlo o compilare? Senza terminale (o con
+# --scarica) si scarica.
+if [ -n "$ciRun" ]; then
+    answer=s
+    if [ "$prefer" != scarica ] && [ -t 0 ]; then
+        printf ':: Su GitHub c'"'"'è già il pacchetto costruito per questa versione.\n'
+        printf '   Lo scarico e lo installo [S], o ricompilo qui [c]? '
+        read -r answer || answer=s
+    fi
+    case "$answer" in
+    c | C | compila) ciRun="" ;;
+    esac
+fi
+if [ -n "$ciRun" ]; then
+    DOWNLOAD="$CACHE/scaricato"
+    rm -rf "$DOWNLOAD"
+    echo ":: Scarico il pacchetto da GitHub"
+    if gh run download "$ciRun" -R "$repo" -n vela-git -D "$DOWNLOAD" \
+        && package=$(ls "$DOWNLOAD"/vela-git-[0-9]*."g$latest"-*.pkg.tar.* 2> /dev/null | head -n 1) \
+        && [ -n "$package" ]; then
+        mv -f "$package" "$PACKAGES/"
+        rm -rf "$DOWNLOAD"
+        package="$PACKAGES/$(basename "$package")"
+        if ! sudo pacman -U "$package"; then
+            echo "vela-update: il pacchetto è scaricato ma non è stato installato. Per installarlo:" >&2
+            echo "   sudo pacman -U $package" >&2
+            exit 1
+        fi
+        prune
+        echo ":: Vela è aggiornata ($(pacman -Q vela-git | cut -d' ' -f2)). La versione nuova"
+        echo "   parte alla prossima sessione: esci e rientra."
+        exit 0
+    fi
+    rm -rf "$DOWNLOAD"
+    echo ":: Il pacchetto di GitHub non si scarica: lo costruisco qui." >&2
 fi
 
 # La costruzione, con il PKGBUILD della versione nuova.
 WORK="$CACHE/costruzione"
 rm -rf "$WORK"
-mkdir -p "$WORK" "$PACKAGES"
+mkdir -p "$WORK"
 git -C "$MIRROR" show HEAD:packaging/arch/PKGBUILD > "$WORK/PKGBUILD"
 cd "$WORK"
 export VELA_GIT_URL="file://$MIRROR"
@@ -151,10 +234,7 @@ if ! BUILDDIR="$WORK" PKGDEST="$PACKAGES" SRCDEST="$CACHE/sorgenti" \
 fi
 rm -rf "$WORK"
 
-# Solo gli ultimi pacchetti, per poter tornare indietro.
-ls -t "$PACKAGES"/vela-git-*.pkg.tar.* 2> /dev/null | tail -n +$((KEEP + 1)) | while read -r old; do
-    rm -f "$old"
-done
+prune
 
 echo ":: Vela è aggiornata ($(pacman -Q vela-git | cut -d' ' -f2)). La versione nuova"
 echo "   parte alla prossima sessione: esci e rientra."

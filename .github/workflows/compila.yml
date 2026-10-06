@@ -40,10 +40,10 @@ jobs:
       - name: Dipendenze
         run: pacman -Syu --noconfirm --needed $DEPENDENZE
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Cache di ccache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .ccache
           key: ccache-${{ github.sha }}
@@ -80,7 +80,7 @@ jobs:
       - name: Dipendenze
         run: pacman -Syu --noconfirm --needed $DEPENDENZE
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # la versione del pacchetto conta i commit
 
@@ -92,11 +92,13 @@ jobs:
           cp -r packaging/arch /home/costruttore/pkgbuild
           chown -R costruttore /home/costruttore/pkgbuild
           git config --system --add safe.directory '*'
+          # Niente pacchetto -debug: raddoppia il tempo e pesa dieci volte tanto.
+          sed -i '/^OPTIONS=/s/\([( ]\)debug\b/\1!debug/' /etc/makepkg.conf
           cd /home/costruttore/pkgbuild
           su costruttore -c "VELA_GIT_URL=file://$GITHUB_WORKSPACE MAKEFLAGS=-j$(nproc) makepkg --noconfirm"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: vela-git
-          path: /home/costruttore/pkgbuild/*.pkg.tar.zst
+          path: /home/costruttore/pkgbuild/vela-git-[0-9]*.pkg.tar.zst
           retention-days: 14
