@@ -502,11 +502,22 @@ void DesktopModel::open(const QStringList& paths)
 {
     for (const QString& path : paths) {
         if (path == trashPath) {
-            runDetached(QStringLiteral("vela-files"), { trashFilesDir() }, m_dir);
+            runDetached(velaFilesExecutable(), { trashFilesDir() }, m_dir);
         } else if (path.endsWith(QLatin1String(".desktop")) && m_apps->launchDesktopFile(path)) {
             continue;
         } else {
-            runDetached(QStringLiteral("xdg-open"), { path }, m_dir);
+            const QFileInfo info(path);
+            if (info.isDir()) {
+                const QString files = velaFilesExecutable();
+                if (files.isEmpty() || !runDetached(files, { path }, m_dir))
+                    qWarning("vela-shell: couldn't open folder %s in Vela Files", qPrintable(path));
+            } else if (info.isFile()) {
+                const QString app = defaultAppFor(QMimeDatabase().mimeTypeForFile(info).name());
+                if (app.isEmpty() || !m_apps->launchWithFile(app, QUrl::fromLocalFile(path).toString()))
+                    emit chooseAppRequested(path);
+            } else {
+                qWarning("vela-shell: no handler for %s", qPrintable(path));
+            }
         }
     }
 }
