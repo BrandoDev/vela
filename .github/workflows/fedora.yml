@@ -3,10 +3,9 @@
 
 name: Fedora Build
 
+# PR validation only; post-merge build and packaging run in build.yml.
 on:
   pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
