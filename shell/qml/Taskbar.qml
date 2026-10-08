@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The taskbar: Start button, pinned and open apps in the center, clock on the
 // right.
@@ -293,7 +294,7 @@ Window {
                     width: 13
                     height: 13
                     radius: 2.5
-                    color: Theme.accentLight
+                    color: Theme.accentFill
                     opacity: 0.9
                 }
             }
@@ -417,8 +418,8 @@ Window {
 
                 Rectangle {
                     anchors { fill: parent; topMargin: 8; bottomMargin: 8 }
-                    radius: Theme.radiusSmall
-                    color: trayMouse.pressed ? Theme.pressed : Theme.hover
+                    radius: Theme.radius
+                    color: trayMouse.pressed ? Theme.subtlePressed : Theme.subtleHover
                     opacity: trayMouse.containsMouse ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: Theme.fast } }
                 }
@@ -473,8 +474,8 @@ Window {
 
         Rectangle {
             anchors { fill: parent; topMargin: 4; bottomMargin: 4 }
-            radius: Theme.radiusSmall
-            color: systemMouse.pressed ? Theme.pressed : Theme.hover
+            radius: Theme.radius
+            color: systemMouse.pressed ? Theme.subtlePressed : Theme.subtleHover
             opacity: systemMouse.containsMouse || Menus.quickSettingsOpen ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: Theme.fast } }
         }
@@ -559,8 +560,8 @@ Window {
 
         Rectangle {
             anchors { fill: parent; topMargin: 4; bottomMargin: 4 }
-            radius: Theme.radiusSmall
-            color: Theme.hover
+            radius: Theme.radius
+            color: Theme.subtleHover
             opacity: clockMouse.containsMouse || Menus.notificationCenterOpen ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: Theme.fast } }
         }
@@ -600,13 +601,13 @@ Window {
                 anchors.right: parent.right
                 text: Qt.formatTime(clock.now, "HH:mm")
                 color: Theme.text
-                font.pixelSize: Theme.fontSmall
+                font.pixelSize: Theme.fontCaption
             }
             Text {
                 anchors.right: parent.right
                 text: Qt.formatDate(clock.now, "dd/MM/yyyy")
                 color: Theme.text
-                font.pixelSize: Theme.fontSmall
+                font.pixelSize: Theme.fontCaption
             }
         }
 

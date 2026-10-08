@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // What to share, when an app (video call, recording) asks for the screen
 // through the portal: a whole output or a window, with previews. The answer
@@ -106,7 +107,7 @@ Window {
     Rectangle {
         id: panel
         anchors.fill: parent
-        radius: Theme.radiusLarge
+        radius: Theme.radiusOverlay
         color: Theme.dialog
         border.width: 1
         border.color: Theme.stroke
@@ -121,15 +122,15 @@ Window {
             y: 20
             text: qsTr("Choose what to share")
             color: Theme.text
-            font.pixelSize: Theme.fontNormal + 4
+            font.pixelSize: Theme.fontBody + 4
             font.weight: Font.DemiBold
         }
         Text {
             x: 24
             y: 50
             text: qsTr("An app wants to see your screen. It will only see what you choose here.")
-            color: Theme.textDim
-            font.pixelSize: Theme.fontNormal
+            color: Theme.textSecondary
+            font.pixelSize: Theme.fontBody
         }
 
         // The two tabs, underlined like in Windows 11.
@@ -146,16 +147,16 @@ Window {
                     height: 36
                     Rectangle {
                         anchors.fill: parent
-                        radius: Theme.radiusSmall
-                        color: Theme.hover
+                        radius: Theme.radius
+                        color: Theme.subtleHover
                         opacity: tabMouse.containsMouse ? 1 : 0
                     }
                     Text {
                         id: label
                         anchors.centerIn: parent
                         text: parent.modelData
-                        color: root.tab === parent.index ? Theme.text : Theme.textDim
-                        font.pixelSize: Theme.fontNormal
+                        color: root.tab === parent.index ? Theme.text : Theme.textSecondary
+                        font.pixelSize: Theme.fontBody
                         font.weight: root.tab === parent.index ? Font.DemiBold : Font.Normal
                     }
                     Rectangle {
@@ -201,8 +202,8 @@ Window {
 
                 Rectangle {
                     anchors { fill: parent; margins: 6 }
-                    radius: Theme.radiusSmall + 2
-                    color: card.chosen ? Qt.rgba(0.36, 0.55, 1.0, 0.18) : cardMouse.containsMouse ? Theme.hover : "transparent"
+                    radius: Theme.radiusOverlay
+                    color: card.chosen ? Qt.rgba(0.36, 0.55, 1.0, 0.18) : cardMouse.containsMouse ? Theme.subtleHover : "transparent"
                     border.width: card.chosen ? 2 : 0
                     border.color: Theme.accent
                 }
@@ -248,7 +249,7 @@ Window {
                         width: parent.width - 24
                         text: card.title
                         color: Theme.text
-                        font.pixelSize: Theme.fontSmall
+                        font.pixelSize: Theme.fontCaption
                         elide: Text.ElideRight
                     }
                 }
@@ -266,8 +267,8 @@ Window {
                 anchors.centerIn: parent
                 visible: grid.count === 0
                 text: root.tab === 0 ? qsTr("No screens") : qsTr("No open windows")
-                color: Theme.textDim
-                font.pixelSize: Theme.fontNormal
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontBody
             }
         }
 
@@ -275,43 +276,14 @@ Window {
             anchors { right: parent.right; bottom: parent.bottom; margins: 20 }
             spacing: 8
 
-            component DialogButton: Rectangle {
-                id: button
-                property string label
-                property bool primary: false
-                property bool usable: true
-                signal clicked()
-                width: 110
-                height: 32
-                radius: Theme.radiusSmall
-                opacity: usable ? 1 : 0.5
-                color: primary ? (mouse.pressed ? Qt.darker(Theme.accent, 1.2) : Theme.accent)
-                               : (mouse.pressed ? Theme.pressed : mouse.containsMouse ? Theme.hover : Theme.surfaceRaised)
-                border.width: primary ? 0 : 1
-                border.color: Theme.stroke
-                Text {
-                    anchors.centerIn: parent
-                    text: button.label
-                    color: button.primary ? "white" : Theme.text
-                    font.pixelSize: Theme.fontNormal
-                }
-                MouseArea {
-                    id: mouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    enabled: button.usable
-                    onClicked: button.clicked()
-                }
-            }
-
-            DialogButton {
-                label: qsTr("Share")
-                primary: true
+            Button {
+                text: qsTr("Share")
+                accent: true
                 usable: root.selected !== ""
                 onClicked: root.answer(root.selected)
             }
-            DialogButton {
-                label: qsTr("Cancel")
+            Button {
+                text: qsTr("Cancel")
                 onClicked: root.answer("")
             }
         }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // A settings row, like Windows 11 "settings cards": icon, title and
 // description on the left, the control on the right (the children). With

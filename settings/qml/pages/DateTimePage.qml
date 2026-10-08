@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Time & language > Date & time: the time as it is now, automatic sync and the
 // time zone (systemd-timedated).

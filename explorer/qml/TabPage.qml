@@ -3,6 +3,7 @@
 
 import QtQuick
 import Vela.Files.Backend
+import Vela.Controls
 
 // An Explorer tab: the address bar, the command bar, the navigation pane and
 // the content (Home, This PC or a folder), with its history. Selection,
@@ -501,8 +502,8 @@ Item {
     Rectangle {
         anchors { left: parent.left; right: parent.right; top: commandBar.bottom; bottom: parent.bottom }
         color: Theme.layer
-        topLeftRadius: Theme.radiusLarge
-        topRightRadius: Theme.radiusLarge
+        topLeftRadius: Theme.radiusOverlay
+        topRightRadius: Theme.radiusOverlay
         border.width: 1
         border.color: Theme.layerStroke
 

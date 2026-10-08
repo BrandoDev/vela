@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Bluetooth & devices: the switch, "Add device" and the paired devices, like
 // Windows 11.

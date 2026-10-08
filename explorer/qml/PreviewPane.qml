@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Explorer's right pane, like Windows 11. Two modes:
 // - "preview" (Alt+P), the preview pane: the image, the beginning of a text
@@ -39,8 +40,8 @@ Item {
             text: pane.count > 1 ? pane.count + qsTr(" items selected")
                 : pane.info && pane.info.isDir ? qsTr("Select a file to preview.")
                 : qsTr("Select a file to preview.")
-            color: Theme.textDim
-            font.pixelSize: Theme.fontNormal
+            color: Theme.textSecondary
+            font.pixelSize: Theme.fontBody
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
         }
@@ -70,7 +71,7 @@ Item {
                 textFormat: Text.PlainText
                 color: Theme.text
                 font.family: "monospace"
-                font.pixelSize: Theme.fontSmall
+                font.pixelSize: Theme.fontCaption
                 wrapMode: Text.WrapAnywhere
             }
         }
@@ -106,8 +107,8 @@ Item {
                 width: parent.width
                 text: pane.file ? qsTr("No preview available.") : ""
                 visible: thumb.status !== Image.Ready
-                color: Theme.textDim
-                font.pixelSize: Theme.fontNormal
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontBody
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
             }
@@ -132,15 +133,15 @@ Item {
                 width: parent.width
                 text: pane.count + qsTr(" items selected")
                 color: Theme.text
-                font.pixelSize: Theme.fontNormal + 2
+                font.pixelSize: Theme.fontBody + 2
                 font.weight: Font.DemiBold
                 wrapMode: Text.WordWrap
             }
             Text {
                 visible: pane.count > 1
                 text: qsTr("Total size: ") + (pane.model ? Ops.formatSize(pane.model.selectionSize) : "")
-                color: Theme.textDim
-                font.pixelSize: Theme.fontNormal
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontBody
             }
 
             // One item (or the open folder).
@@ -172,7 +173,7 @@ Item {
                 width: parent.width
                 text: pane.info ? (pane.count === 0 && pane.tab.isFolder ? pane.tab.title : pane.info.name) : ""
                 color: Theme.text
-                font.pixelSize: Theme.fontNormal + 2
+                font.pixelSize: Theme.fontBody + 2
                 font.weight: Font.DemiBold
                 wrapMode: Text.WrapAnywhere
             }
@@ -180,8 +181,8 @@ Item {
                 visible: !!pane.info && pane.count <= 1
                 width: parent.width
                 text: pane.info ? pane.info.type : ""
-                color: Theme.textDim
-                font.pixelSize: Theme.fontNormal
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontBody
                 wrapMode: Text.WordWrap
             }
             Rectangle { visible: !!pane.info && pane.count <= 1; width: parent.width; height: 1; color: Theme.divider }
@@ -189,7 +190,7 @@ Item {
                 visible: !!pane.info && pane.count <= 1
                 text: qsTr("Properties")
                 color: Theme.text
-                font.pixelSize: Theme.fontNormal
+                font.pixelSize: Theme.fontBody
                 font.weight: Font.DemiBold
             }
             Repeater {
@@ -212,14 +213,14 @@ Item {
                     spacing: 2
                     Text {
                         text: modelData[0]
-                        color: Theme.textDim
-                        font.pixelSize: Theme.fontSmall
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontCaption
                     }
                     Text {
                         width: parent.width
                         text: modelData[1]
                         color: Theme.text
-                        font.pixelSize: Theme.fontNormal
+                        font.pixelSize: Theme.fontBody
                         wrapMode: Text.WrapAnywhere
                     }
                 }

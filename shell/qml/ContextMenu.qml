@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The right-click menu window (docs/renderer.md §14): it covers the output and
 // is transparent; menus and submenus are panels inside it, and a click outside

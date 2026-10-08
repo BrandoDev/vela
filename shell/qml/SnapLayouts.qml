@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Windows 11 snap layouts: hovering the Maximize button (or Win+Z) opens a
 // panel below it with the possible arrangements; a click on a zone snaps the
@@ -143,7 +144,7 @@ Window {
         y: root.panelY
         width: grid.width + 24
         height: grid.height + 24
-        radius: Theme.radiusLarge
+        radius: Theme.radiusOverlay
         color: Theme.popup
         border.width: 1
         border.color: Theme.stroke
@@ -169,7 +170,7 @@ Window {
                     required property int index
                     width: 96
                     height: 60
-                    radius: Theme.radiusSmall
+                    radius: Theme.radius
                     color: Theme.light ? Qt.rgba(0, 0, 0, 0.03) : Qt.rgba(1, 1, 1, 0.05)
                     border.width: 1
                     border.color: Theme.stroke

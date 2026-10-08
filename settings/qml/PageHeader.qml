@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The page title with the path, like Windows 11: "System  ›  Display", where
 // the earlier pieces are links.

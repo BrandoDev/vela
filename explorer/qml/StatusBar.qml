@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The bottom line, like Windows: how many items, how many selected and how
 // much they weigh; Details and Large icons on the right.
@@ -20,7 +21,7 @@ Item {
     Text {
         anchors { left: parent.left; leftMargin: 16; verticalCenter: parent.verticalCenter }
         color: Theme.text
-        font.pixelSize: Theme.fontSmall
+        font.pixelSize: Theme.fontCaption
         text: {
             if (!bar.model) return bar.message
             let s = bar.plural(bar.model.count, qsTr("item"), qsTr("items"))

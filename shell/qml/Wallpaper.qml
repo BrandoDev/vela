@@ -3,6 +3,7 @@
 
 import QtQuick
 import QtQuick.Effects
+import Vela.Controls
 
 // The desktop wallpaper: a layer-shell surface below everything, even below
 // the taskbar, one per output (see screenwindows.cpp). The compositor decides
@@ -644,7 +645,7 @@ Window {
                             width: parent.width
                             text: icon.name
                             color: "white"
-                            font.pixelSize: Theme.fontSmall
+                            font.pixelSize: Theme.fontCaption
                             horizontalAlignment: Text.AlignHCenter
                             wrapMode: Text.Wrap
                             maximumLineCount: icon.selected ? 6 : 2
@@ -674,7 +675,7 @@ Window {
                                 x: 3
                                 y: 2
                                 width: parent.width - 6
-                                font.pixelSize: Theme.fontSmall
+                                font.pixelSize: Theme.fontCaption
                                 horizontalAlignment: TextInput.AlignHCenter
                                 wrapMode: TextInput.Wrap
                                 mapToScreen: (x, y) => editor.mapToItem(null, x, y)

@@ -14,7 +14,6 @@
 #include <QPixmap>
 #include <QPixmapCache>
 #include <QQuickImageProvider>
-#include <QTimer>
 #include <QUrl>
 
 #include <algorithm>
@@ -79,23 +78,6 @@ inline void applyIconTheme(bool light)
             QStringLiteral("org.kde.KIconLoader"), QStringLiteral("iconChanged"))
             << 0);
     }
-}
-
-// The image://icon prefix for the mode: "l/" or "d/".
-inline QString iconModeFor(bool light)
-{
-    return light ? QStringLiteral("l/") : QStringLiteral("d/");
-}
-
-// A change of mode: the icon theme changes at once, the image://icon prefix
-// (owner->setIconMode) a moment later, when the icon caches (KIconLoader's
-// too, which gets the D-Bus signal) are empty. Only then QML asks for the
-// icons again.
-template<typename Owner>
-void switchIconMode(Owner* owner, bool light)
-{
-    applyIconTheme(light);
-    QTimer::singleShot(300, owner, [owner, light] { owner->setIconMode(iconModeFor(light)); });
 }
 
 // Makes the system theme's icons available to QML:

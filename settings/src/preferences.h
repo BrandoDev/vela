@@ -34,8 +34,6 @@ class Preferences : public QObject {
     Q_PROPERTY(QString shellTheme READ shellTheme WRITE setShellTheme NOTIFY appThemeChanged)
     // Settings itself is light (it follows the apps' mode).
     Q_PROPERTY(bool light READ light NOTIFY appThemeChanged)
-    // "l/" or "d/" for image://icon, a moment after the mode (switchIconMode).
-    Q_PROPERTY(QString iconMode READ iconMode NOTIFY iconModeChanged)
     Q_PROPERTY(QString taskbarAlignment READ taskbarAlignment WRITE setTaskbarAlignment NOTIFY taskbarChanged)
     Q_PROPERTY(bool endTask READ endTask WRITE setEndTask NOTIFY taskbarChanged)
     Q_PROPERTY(bool taskView READ taskView WRITE setTaskView NOTIFY taskbarChanged)
@@ -90,10 +88,6 @@ class Preferences : public QObject {
     Q_PROPERTY(QString colorFilterKind READ colorFilterKind WRITE setColorFilterKind NOTIFY accessibilityChanged)
     Q_PROPERTY(bool colorFilterShortcut READ colorFilterShortcut WRITE setColorFilterShortcut NOTIFY accessibilityChanged)
     Q_PROPERTY(bool stickyKeys READ stickyKeys WRITE setStickyKeys NOTIFY accessibilityChanged)
-    // The Mica color of the title bar (the same computation as the compositor,
-    // decoration.c): so the window content continues the bar seamlessly.
-    Q_PROPERTY(QColor mica READ mica NOTIFY wallpaperChanged)
-    Q_PROPERTY(QColor micaInactive READ micaInactive NOTIFY wallpaperChanged)
 
 public:
     explicit Preferences(QObject* parent = nullptr);
@@ -112,14 +106,6 @@ public:
     QString shellTheme() const { return m_shellTheme; }
     void setShellTheme(const QString& theme);
     bool light() const { return m_appTheme == QLatin1String("light"); }
-    QString iconMode() const { return m_iconMode; }
-    void setIconMode(const QString& mode)
-    {
-        if (mode != m_iconMode) {
-            m_iconMode = mode;
-            emit iconModeChanged();
-        }
-    }
 
     QString taskbarAlignment() const { return m_taskbarAlignment; }
     void setTaskbarAlignment(const QString& alignment);
@@ -208,8 +194,6 @@ public:
     // "Clear clipboard data": the history (except pinned items), in the shell.
     Q_INVOKABLE void clearClipboard();
 
-    QColor mica() const { return m_mica; }
-    QColor micaInactive() const { return m_micaInactive; }
 
     // Rereads everything (the shell or another program may have changed
     // something).
@@ -227,7 +211,6 @@ signals:
     void nightLightChanged();
     void inputChanged();
     void clipboardChanged();
-    void iconModeChanged();
     void accessibilityChanged();
 
 private:
@@ -240,14 +223,12 @@ private:
     void queryCompositor(); // night light, magnifier...: the current state
     void watchConfig();
     void saveLayouts();
-    void computeMica();
 
     QString m_wallpaper;
     QStringList m_recentWallpapers;
     QColor m_accent;
     QString m_appTheme;
     QString m_shellTheme;
-    QString m_iconMode = QStringLiteral("d/");
     QString m_taskbarAlignment;
     bool m_endTask = true;
     bool m_taskView = true;
@@ -259,9 +240,6 @@ private:
     QVariantList m_layouts;
     int m_repeatDelay = 400;
     int m_repeatRate = 30;
-    QColor m_tint; // the wallpaper's average color
-    QColor m_mica;
-    QColor m_micaInactive;
     bool m_nightLight = false;
     int m_nightStrength = 48;
     QString m_nightSchedule = QStringLiteral("no");

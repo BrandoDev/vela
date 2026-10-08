@@ -3,6 +3,7 @@
 
 import QtQuick
 import QtQuick.Dialogs
+import Vela.Controls
 
 // "Run" (Win+R, or from the Win+X menu), like in Windows: at the bottom left,
 // opens a program, a folder, a document or an address.
@@ -85,7 +86,7 @@ Window {
 
     Rectangle {
         anchors.fill: parent
-        radius: Theme.radiusLarge
+        radius: Theme.radiusOverlay
         color: Theme.dialog
         border.width: 1
         border.color: Theme.stroke
@@ -104,7 +105,7 @@ Window {
             width: parent.width - x - 20
             text: qsTr("Type the name of a program, folder, document or Internet resource, and Vela will open it for you.")
             color: Theme.text
-            font.pixelSize: Theme.fontSmall
+            font.pixelSize: Theme.fontCaption
             wrapMode: Text.Wrap
         }
 
@@ -113,7 +114,7 @@ Window {
             y: 84
             text: qsTr("Open:")
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
         }
         Rectangle {
             id: fieldBox
@@ -121,8 +122,8 @@ Window {
             y: 76
             width: parent.width - x - 20
             height: 32
-            radius: Theme.radiusSmall
-            color: Theme.surfaceRaised
+            radius: Theme.radius
+            color: Theme.control
             border.width: 1
             border.color: field.activeFocus ? Theme.accent : Theme.stroke
 
@@ -146,8 +147,8 @@ Window {
                 Text {
                     anchors.centerIn: parent
                     text: "⌄"
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fontNormal
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontBody
                 }
                 MouseArea {
                     anchors.fill: parent
@@ -166,44 +167,18 @@ Window {
             anchors { right: parent.right; bottom: parent.bottom; margins: 20 }
             spacing: 8
 
-            component DialogButton: Rectangle {
-                id: button
-                property string label
-                property bool primary: false
-                signal clicked()
-                width: 96
-                height: 32
-                radius: Theme.radiusSmall
-                color: primary ? (mouse.pressed ? Qt.darker(Theme.accent, 1.2) : Theme.accent)
-                               : (mouse.pressed ? Theme.pressed : mouse.containsMouse ? Theme.hover : Theme.surfaceRaised)
-                border.width: primary ? 0 : 1
-                border.color: Theme.stroke
-                Text {
-                    anchors.centerIn: parent
-                    text: button.label
-                    color: button.primary ? "white" : Theme.text
-                    font.pixelSize: Theme.fontNormal
-                }
-                MouseArea {
-                    id: mouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: button.clicked()
-                }
-            }
-
-            DialogButton {
-                label: "OK"
-                primary: true
+            Button {
+                text: "OK"
+                accent: true
                 opacity: field.text.trim().length > 0 ? 1 : 0.5
                 onClicked: root.accept()
             }
-            DialogButton {
-                label: qsTr("Cancel")
+            Button {
+                text: qsTr("Cancel")
                 onClicked: root.close()
             }
-            DialogButton {
-                label: "Sfoglia..."
+            Button {
+                text: "Sfoglia..."
                 onClicked: {
                     root.browsing = true
                     browse.open()

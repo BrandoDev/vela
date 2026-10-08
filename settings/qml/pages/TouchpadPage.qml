@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Bluetooth & devices > Touchpad, like Windows 11: on or off (also only when
 // there's a mouse), speed, taps, scroll direction and three- and four-finger

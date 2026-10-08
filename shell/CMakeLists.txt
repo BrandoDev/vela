@@ -4,7 +4,7 @@
 # GuiPrivate is needed for a single private API (the taskbar's wl_surface, see
 # foreigntoplevels.cpp): after a Qt update the shell must be rebuilt.
 set(QT_NO_PRIVATE_MODULE_WARNING ON)
-find_package(Qt6 6.5 REQUIRED COMPONENTS DBus Gui GuiPrivate Qml Quick Svg WaylandClient)
+find_package(Qt6 6.5 REQUIRED COMPONENTS DBus Gui GuiPrivate Qml Quick QuickControls2 Svg WaylandClient)
 find_package(LayerShellQt REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.5)
@@ -17,12 +17,10 @@ qt_add_executable(vela-shell
     src/appmodel.h
     src/desktopexec.h
     src/mimeapps.h
-    src/backgroundeffects.cpp
     src/clipboard.cpp
     src/clipboard.h
     src/snip.cpp
     src/snip.h
-    src/backgroundeffects.h
     src/config.cpp
     src/config.h
     src/filethumbnails.cpp
@@ -90,7 +88,6 @@ foreach(name
         ext-foreign-toplevel-list/ext-foreign-toplevel-list-v1
         ext-image-capture-source/ext-image-capture-source-v1
         ext-image-copy-capture/ext-image-copy-capture-v1
-        ext-background-effect/ext-background-effect-v1
         ext-data-control/ext-data-control-v1)
     get_filename_component(base ${name} NAME)
     set(xml ${SHELL_WAYLAND_PROTOCOLS_DIR}/staging/${name}.xml)
@@ -107,7 +104,6 @@ endforeach()
 target_include_directories(vela-shell PRIVATE ${SHELL_GENERATED_DIR})
 
 set(VELA_QML_FILES
-    qml/Theme.qml
     qml/Taskbar.qml
     qml/TaskbarButton.qml
     qml/StartGlyph.qml
@@ -134,17 +130,16 @@ set(VELA_QML_FILES
     qml/SnapAssist.qml
     qml/TaskbarPreview.qml
     qml/FileDialogs.qml
-    qml/DialogButton.qml
     qml/ClipboardPanel.qml
     qml/SnipOverlay.qml)
 
 # The files are in qml/ for tidiness, but in the module they must be at the
-# root: so they see each other (Theme included, a singleton) without imports.
+# root: so they see each other without imports.
 foreach(file IN LISTS VELA_QML_FILES)
     get_filename_component(name ${file} NAME)
     set_source_files_properties(${file} PROPERTIES QT_RESOURCE_ALIAS ${name})
 endforeach()
-set_source_files_properties(qml/Theme.qml qml/Menus.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Menus.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(vela-shell
     URI Vela.Shell
@@ -162,6 +157,8 @@ target_link_libraries(vela-shell PRIVATE
     PkgConfig::SHELL_WAYLAND_CLIENT
     Qt6::GuiPrivate # the taskbar's wl_surface (see foreigntoplevels.cpp)
     LayerShellQt::Interface
+    vela-controls # Theme, Button, Style, Effects (common/)
+    vela-controlsplugin
     vela-app) # the mouse's Back and Forward buttons (common/)
 
 install(TARGETS vela-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

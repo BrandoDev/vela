@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The Windows 11 toggle switch, with "On"/"Off" on the left.
 Item {

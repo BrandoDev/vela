@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Task View (Win+Tab, or the taskbar button), like Windows 11: the current
 // desktop's windows on top, with previews; the desktops and "New desktop" at
@@ -213,8 +214,8 @@ Window {
                 visible: root.shownWindows.length === 0
                 anchors.centerIn: parent
                 text: qsTr("No open windows on this desktop")
-                color: Theme.textDim
-                font.pixelSize: Theme.fontNormal
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontBody
             }
 
             Repeater {
@@ -236,8 +237,8 @@ Window {
                         id: frame
                         width: card.width
                         height: card.height
-                        radius: Theme.radiusLarge
-                        color: hover.hovered || cardMouse.drag.active ? Theme.cardHover : Theme.card
+                        radius: Theme.radiusOverlay
+                        color: hover.hovered || cardMouse.drag.active ? Theme.taskCardHover : Theme.taskCard
                         border.width: hover.hovered ? 2 : 1
                         border.color: hover.hovered ? Theme.accent : Theme.stroke
                         scale: cardMouse.drag.active ? 0.5 : 1
@@ -263,7 +264,7 @@ Window {
                                 width: parent.width - 24
                                 text: card.modelData.title
                                 color: Theme.text
-                                font.pixelSize: Theme.fontSmall
+                                font.pixelSize: Theme.fontCaption
                                 elide: Text.ElideRight
                             }
                         }
@@ -294,7 +295,7 @@ Window {
                             anchors { right: parent.right; top: parent.top; margins: 6 }
                             width: 28
                             height: 24
-                            radius: Theme.radiusSmall
+                            radius: Theme.radius
                             color: closeMouse.containsMouse ? "#c42b1c" : "transparent"
                             Text {
                                 anchors.centerIn: parent
@@ -373,7 +374,7 @@ Window {
                         Rectangle {
                             width: desktops.cardWidth
                             height: desktops.cardHeight
-                            radius: Theme.radiusLarge
+                            radius: Theme.radiusOverlay
                             color: "black"
                             border.width: desk.current || drop.containsDrag ? 2 : deskHover.hovered ? 1 : 0
                             border.color: desk.current || drop.containsDrag ? Theme.accent : Theme.stroke
@@ -401,7 +402,7 @@ Window {
                                 anchors { right: parent.right; top: parent.top; margins: 6 }
                                 width: 24
                                 height: 24
-                                radius: Theme.radiusSmall
+                                radius: Theme.radius
                                 color: deskClose.containsMouse ? "#c42b1c" : Qt.rgba(0, 0, 0, 0.55)
                                 z: 2
                                 Text {
@@ -458,7 +459,7 @@ Window {
                                 width: parent.width
                                 text: Desktops.names[desk.index] || ""
                                 color: Theme.text
-                                font.pixelSize: Theme.fontNormal
+                                font.pixelSize: Theme.fontBody
                                 font.weight: desk.current ? Font.DemiBold : Font.Normal
                                 horizontalAlignment: Text.AlignHCenter
                                 elide: Text.ElideRight
@@ -470,7 +471,7 @@ Window {
                             Rectangle {
                                 visible: root.renaming === desk.index
                                 anchors.fill: parent
-                                radius: Theme.radiusSmall
+                                radius: Theme.radius
                                 color: Theme.dialog
                                 border.width: 1
                                 border.color: Theme.accent
@@ -508,8 +509,8 @@ Window {
                     Rectangle {
                         width: desktops.cardWidth
                         height: desktops.cardHeight
-                        radius: Theme.radiusLarge
-                        color: newMouse.containsMouse || newDrop.containsDrag ? Theme.cardHover : Theme.card
+                        radius: Theme.radiusOverlay
+                        color: newMouse.containsMouse || newDrop.containsDrag ? Theme.taskCardHover : Theme.taskCard
                         border.width: newDrop.containsDrag ? 2 : 1
                         border.color: newDrop.containsDrag ? Theme.accent : Theme.stroke
                         Text {
@@ -537,7 +538,7 @@ Window {
                         height: 24
                         text: qsTr("New desktop")
                         color: Theme.text
-                        font.pixelSize: Theme.fontNormal
+                        font.pixelSize: Theme.fontBody
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }

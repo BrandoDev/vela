@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // System > Power: when to turn off the screen, locking, the power saving mode
 // (power-profiles-daemon), the battery.

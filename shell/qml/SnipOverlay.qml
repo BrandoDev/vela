@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The Snipping Tool on one output (one per output, created by snip.cpp): the
 // darkened photo of the output, and at the top the mode bar like Windows 11:
@@ -126,7 +127,7 @@ Window {
         anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 24 }
         width: tools.width + 16
         height: 48
-        radius: Theme.radiusLarge
+        radius: Theme.radiusOverlay
         color: Theme.dialog
         border.width: 1
         border.color: Theme.stroke
@@ -147,8 +148,8 @@ Window {
                     readonly property bool current: Snip.mode === modelData.mode
                     width: 40
                     height: 36
-                    radius: Theme.radiusSmall
-                    color: current ? Theme.hover : toolMouse.containsMouse ? Theme.hover : "transparent"
+                    radius: Theme.radius
+                    color: current ? Theme.subtleHover : toolMouse.containsMouse ? Theme.subtleHover : "transparent"
                     border.width: current ? 1 : 0
                     border.color: Theme.accent
                     Image {
@@ -173,8 +174,8 @@ Window {
             Rectangle {
                 width: 40
                 height: 36
-                radius: Theme.radiusSmall
-                color: closeMouse.containsMouse ? Theme.hover : "transparent"
+                radius: Theme.radius
+                color: closeMouse.containsMouse ? Theme.subtleHover : "transparent"
                 Text {
                     anchors.centerIn: parent
                     text: "✕"

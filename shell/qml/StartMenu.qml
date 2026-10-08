@@ -4,6 +4,7 @@
 import QtQuick
 import QtQuick.Shapes
 import QtQuick.Effects
+import Vela.Controls
 
 // The Start menu: search at the top, all apps below, user at the bottom. It
 // opens rising and fading; it closes on a click outside or with Esc.
@@ -100,8 +101,8 @@ Window {
 
         Rectangle {
             anchors.fill: parent
-            radius: Theme.radiusSmall
-            color: entryMouse.pressed ? Theme.pressed : Theme.hover
+            radius: Theme.radius
+            color: entryMouse.pressed ? Theme.subtlePressed : Theme.subtleHover
             opacity: entryMouse.containsMouse ? 1 : 0
         }
         Image {
@@ -125,7 +126,7 @@ Window {
             anchors.verticalCenter: parent.verticalCenter
             text: entry.label
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
         }
         MouseArea {
             id: entryMouse
@@ -274,7 +275,7 @@ Window {
         y: restY
         width: root.width - 20
         height: root.height - 32 // 10 above, 22 below: 12 of gap from the taskbar
-        radius: Theme.radiusLarge
+        radius: Theme.radiusOverlay
         color: Theme.surface
         border.width: 1
         border.color: Theme.stroke
@@ -285,7 +286,7 @@ Window {
             anchors { top: parent.top; left: parent.left; right: parent.right; margins: 24 }
             height: 38
             radius: height / 2
-            color: Theme.surfaceRaised
+            color: Theme.control
             border.width: search.activeFocus ? 1 : 0
             border.color: Theme.accent
 
@@ -293,8 +294,8 @@ Window {
                 anchors { left: parent.left; leftMargin: 18; verticalCenter: parent.verticalCenter }
                 visible: search.text.length === 0
                 text: qsTr("Search apps")
-                color: Theme.textDim
-                font.pixelSize: Theme.fontNormal
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontBody
             }
 
             MenuTextField {
@@ -324,7 +325,7 @@ Window {
             anchors { top: searchBox.bottom; left: parent.left; topMargin: 20; leftMargin: 32 }
             text: search.text.length > 0 ? qsTr("Results") : root.showPinned ? qsTr("Pinned") : qsTr("All apps")
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
             font.weight: Font.DemiBold
         }
 
@@ -392,7 +393,7 @@ Window {
                     anchors { top: pinnedGrid.bottom; topMargin: 16; left: parent.left; leftMargin: 12 }
                     text: qsTr("All apps")
                     color: Theme.text
-                    font.pixelSize: Theme.fontNormal
+                    font.pixelSize: Theme.fontBody
                     font.weight: Font.DemiBold
                 }
             }
@@ -401,8 +402,8 @@ Window {
                 anchors.centerIn: parent
                 visible: grid.count === 0
                 text: qsTr("No apps found")
-                color: Theme.textDim
-                font.pixelSize: Theme.fontNormal
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontBody
             }
         }
 
@@ -432,7 +433,7 @@ Window {
                         anchors.centerIn: parent
                         text: Shell.userInitial
                         color: "white"
-                        font.pixelSize: Theme.fontNormal
+                        font.pixelSize: Theme.fontBody
                         font.weight: Font.DemiBold
                     }
                 }
@@ -440,7 +441,7 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     text: Shell.userName
                     color: Theme.text
-                    font.pixelSize: Theme.fontNormal
+                    font.pixelSize: Theme.fontBody
                 }
             }
 
@@ -455,8 +456,8 @@ Window {
 
                 Rectangle {
                     anchors.fill: parent
-                    radius: Theme.radiusSmall
-                    color: powerMouse.pressed ? Theme.pressed : Theme.hover
+                    radius: Theme.radius
+                    color: powerMouse.pressed ? Theme.subtlePressed : Theme.subtleHover
                     opacity: powerMouse.containsMouse || powerButton.menuOpen ? 1 : 0
                     Behavior on opacity {
                         NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
@@ -502,7 +503,7 @@ Window {
                     anchors { right: parent.right; bottom: parent.top; bottomMargin: 8 }
                     width: 200
                     height: powerEntries.implicitHeight + 8
-                    radius: Theme.radiusLarge
+                    radius: Theme.radiusOverlay
                     color: Theme.popup
                     border.width: 1
                     border.color: Theme.stroke

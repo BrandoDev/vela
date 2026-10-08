@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // A Windows 11 dialog inside Explorer: above the content, which darkens;
 // title, text and up to four buttons at the bottom (`buttons`: [{text, accent,
@@ -48,7 +49,7 @@ Item {
         anchors.centerIn: parent
         width: Math.min(dialog.dialogWidth, parent.width - 48)
         height: body.height + footer.height
-        radius: Theme.radiusLarge
+        radius: Theme.radiusOverlay
         color: Theme.dialog
         border.width: 1
         border.color: Qt.rgba(0, 0, 0, 0.45)
@@ -80,7 +81,7 @@ Item {
                 text: dialog.text
                 visible: text !== ""
                 color: Theme.text
-                font.pixelSize: Theme.fontNormal
+                font.pixelSize: Theme.fontBody
                 wrapMode: Text.Wrap
             }
             Item {
@@ -95,8 +96,8 @@ Item {
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: 1 }
             height: 80
             color: Theme.dialogFooter
-            bottomLeftRadius: Theme.radiusLarge - 1
-            bottomRightRadius: Theme.radiusLarge - 1
+            bottomLeftRadius: Theme.radiusOverlay - 1
+            bottomRightRadius: Theme.radiusOverlay - 1
             Row {
                 anchors { fill: parent; margins: 24 }
                 spacing: 8
@@ -107,8 +108,8 @@ Item {
                         required property var modelData
                         width: (parent.width - 8 * (dialog.buttons.length - 1)) / dialog.buttons.length
                         height: 32
-                        radius: Theme.radiusSmall
-                        color: modelData.accent ? (buttonMouse.containsMouse ? (Theme.light ? Qt.darker(Theme.accent, 1.05) : Qt.lighter(Theme.accent, 1.25)) : Theme.accentLight)
+                        radius: Theme.radius
+                        color: modelData.accent ? (buttonMouse.containsMouse ? (Theme.light ? Qt.darker(Theme.accent, 1.05) : Qt.lighter(Theme.accent, 1.25)) : Theme.accentFill)
                                                 : (buttonMouse.containsMouse ? Theme.controlHover : Theme.control)
                         border.width: 1
                         border.color: Theme.controlStroke
@@ -116,7 +117,7 @@ Item {
                             anchors.centerIn: parent
                             text: button.modelData.text
                             color: button.modelData.accent ? Theme.accentText : Theme.text
-                            font.pixelSize: Theme.fontNormal
+                            font.pixelSize: Theme.fontBody
                         }
                         MouseArea {
                             id: buttonMouse

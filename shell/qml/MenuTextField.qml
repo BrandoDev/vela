@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // A shell text field with the Windows right-click menu (Undo, Cut, Copy,
 // Paste, Delete, Select all), also with the Menu key or Shift+F10.
@@ -13,7 +14,7 @@ TextInput {
 
     color: Theme.text
     selectionColor: Theme.accent
-    font.pixelSize: Theme.fontNormal
+    font.pixelSize: Theme.fontBody
     selectByMouse: true
     persistentSelection: true // the menu takes the keyboard: the selection must stay
     clip: true

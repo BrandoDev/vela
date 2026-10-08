@@ -65,19 +65,20 @@ void Appearance::reload()
     m_accent = accent;
     m_mica = mica;
     m_micaInactive = micaInactive;
+    applyIconTheme(light); // before QML asks for the icons
+    const QString mode = light ? QStringLiteral("l/") : QStringLiteral("d/");
     if (first) {
-        applyIconTheme(light); // before QML asks for the icons
-        m_iconMode = iconModeFor(light);
+        m_iconMode = mode;
         return;
     }
-    switchIconMode(this, light);
     emit changed();
-}
-
-void Appearance::setIconMode(const QString& mode)
-{
-    if (mode != m_iconMode) {
-        m_iconMode = mode;
-        emit iconModeChanged();
-    }
+    // The image://icon prefix a moment later, when the icon caches
+    // (KIconLoader's too, which gets the D-Bus signal) are empty: only then
+    // QML asks for the icons again.
+    QTimer::singleShot(300, this, [this, mode] {
+        if (mode != m_iconMode) {
+            m_iconMode = mode;
+            emit iconModeChanged();
+        }
+    });
 }

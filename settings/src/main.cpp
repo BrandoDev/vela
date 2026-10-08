@@ -13,6 +13,7 @@
 #include "appmodel.h"
 #include "audio.h"
 #include "bluetooth.h"
+#include "controls.h"
 #include "datetime.h"
 #include "defaultapps.h"
 #include "displays.h"
@@ -34,6 +35,9 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QStandardPaths>
+#include <QtQml/QQmlExtensionPlugin>
+
+Q_IMPORT_QML_PLUGIN(Vela_ControlsPlugin)
 
 namespace {
 
@@ -151,11 +155,6 @@ int main(int argc, char* argv[])
     apps.reload();
     SystemActions system;
     Preferences preferences;
-    // Icons from the theme matching the apps' mode (breeze or breeze-dark).
-    applyIconTheme(preferences.light());
-    preferences.setIconMode(iconModeFor(preferences.light()));
-    QObject::connect(&preferences, &Preferences::appThemeChanged, &preferences,
-        [&preferences] { switchIconMode(&preferences, preferences.light()); });
     Displays displays;
     Audio audio;
     Network network;
@@ -168,7 +167,9 @@ int main(int argc, char* argv[])
 
     QQmlApplicationEngine engine;
     qmlEngine = &engine;
-    engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
+    // Theme, Button, TextBox and Style (the apps' mode, accent, Mica, icons):
+    // Vela.Controls.
+    vela::controls::install(engine, Appearance::Mode::Apps)->watch();
     engine.addImageProvider(QStringLiteral("fileicon"), new IconProvider(32));
     QQmlContext* context = engine.rootContext();
     context->setContextProperty(QStringLiteral("Router"), &router);

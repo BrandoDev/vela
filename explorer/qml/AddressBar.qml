@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The Windows 11 address bar: Back, Forward, Up, Refresh; the path in pieces
 // (each piece goes there, the arrow between pieces opens the subfolders); a
@@ -63,7 +64,7 @@ Item {
         id: address
         anchors { left: buttons.right; leftMargin: 8; right: searchBox.left; rightMargin: 8; verticalCenter: parent.verticalCenter }
         height: 32
-        radius: Theme.radiusSmall
+        radius: Theme.radius
         color: bar.editing ? Theme.field : addressMouse.containsMouse ? Theme.controlHover : Theme.control
         border.width: 1
         border.color: bar.editing ? Theme.accent : Theme.controlStroke
@@ -97,8 +98,8 @@ Item {
                             height: 26
                             anchors.verticalCenter: parent.verticalCenter
                             width: crumbContent.width + 12
-                            radius: Theme.radiusSmall
-                            color: crumbMouse.containsMouse || crumbDrop.containsDrag ? Theme.hover : "transparent"
+                            radius: Theme.radius
+                            color: crumbMouse.containsMouse || crumbDrop.containsDrag ? Theme.subtleHover : "transparent"
                             Row {
                                 id: crumbContent
                                 anchors.centerIn: parent
@@ -115,7 +116,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: crumb.modelData.label
                                     color: Theme.text
-                                    font.pixelSize: Theme.fontNormal
+                                    font.pixelSize: Theme.fontBody
                                 }
                             }
                             MouseArea {
@@ -143,12 +144,12 @@ Item {
                             height: 26
                             width: 18
                             anchors.verticalCenter: parent.verticalCenter
-                            radius: Theme.radiusSmall
-                            color: chevronMouse.containsMouse ? Theme.hover : "transparent"
+                            radius: Theme.radius
+                            color: chevronMouse.containsMouse ? Theme.subtleHover : "transparent"
                             Text {
                                 anchors.centerIn: parent
                                 text: "›"
-                                color: Theme.textDim
+                                color: Theme.textSecondary
                                 font.pixelSize: 16
                             }
                             MouseArea {
@@ -181,7 +182,7 @@ Item {
             color: Theme.text
             selectionColor: Theme.accent
             selectedTextColor: "white"
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
             selectByMouse: true
             clip: true
             Keys.onEscapePressed: { bar.editing = false; bar.tab.focusView() }
@@ -205,7 +206,7 @@ Item {
         anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
         width: Math.min(280, bar.width * 0.25)
         height: 32
-        radius: Theme.radiusSmall
+        radius: Theme.radius
         color: search.activeFocus ? Theme.field : searchMouse.containsMouse ? Theme.controlHover : Theme.control
         border.width: 1
         border.color: search.activeFocus ? Theme.accent : Theme.controlStroke
@@ -220,8 +221,8 @@ Item {
             visible: search.text === ""
             anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter; right: parent.right; rightMargin: 32 }
             text: qsTr("Search ") + bar.tab.title
-            color: Theme.textDim
-            font.pixelSize: Theme.fontNormal
+            color: Theme.textSecondary
+            font.pixelSize: Theme.fontBody
             elide: Text.ElideRight
         }
         TextInput {
@@ -232,7 +233,7 @@ Item {
             color: Theme.text
             selectionColor: Theme.accent
             selectedTextColor: "white"
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
             selectByMouse: true
             clip: true
             onTextChanged: searchDelay.restart()

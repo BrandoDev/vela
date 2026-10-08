@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The Windows 11 icon views: large icons (with thumbnails), medium and small
 // (icon and name on one line). Same selection, dragging and renaming as the
@@ -120,10 +121,10 @@ Item {
 
             Rectangle {
                 anchors { fill: parent; margins: 2 }
-                radius: Theme.radiusSmall
+                radius: Theme.radius
                 color: cellDrop.containsDrag ? Theme.selectionHover
                     : cell.selected ? (cellMouse.containsMouse ? Theme.selectionHover : Theme.selection)
-                    : cellMouse.containsMouse ? Theme.hover : "transparent"
+                    : cellMouse.containsMouse ? Theme.subtleHover : "transparent"
                 border.width: view.model.currentIndex === cell.index && view.tab.viewFocused ? 1 : 0
                 border.color: Theme.focusRing
             }
@@ -148,7 +149,7 @@ Item {
                 text: cell.name
                 color: Theme.text
                 opacity: cell.isCut ? 0.6 : 1
-                font.pixelSize: cell.small ? Theme.fontNormal : Theme.fontSmall + 1
+                font.pixelSize: cell.small ? Theme.fontBody : Theme.fontCaption + 1
                 horizontalAlignment: cell.small ? Text.AlignLeft : Text.AlignHCenter
                 wrapMode: cell.small ? Text.NoWrap : Text.Wrap
                 maximumLineCount: cell.small ? 1 : 2
@@ -225,8 +226,8 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             y: 24
             text: view.model.search !== "" ? qsTr("No items match your search.") : view.model.exists ? qsTr("This folder is empty.") : qsTr("Can't find this folder.")
-            color: Theme.textDim
-            font.pixelSize: Theme.fontNormal
+            color: Theme.textSecondary
+            font.pixelSize: Theme.fontBody
         }
     }
 

@@ -10,8 +10,8 @@
 // for "Open with", service menus) is prepared afterwards. With
 // VELA_FILES_TIMING=1 it prints how long it took.
 
-#include "appearance.h"
 #include "appmodel.h"
+#include "controls.h"
 #include "fileops.h"
 #include "language.h"
 #include "filethumbnails.h"
@@ -32,9 +32,12 @@
 #include <QQuickWindow>
 #include <QTimer>
 #include <QUrl>
+#include <QtQml/QQmlExtensionPlugin>
 
 #include <ctime>
 #include <unistd.h>
+
+Q_IMPORT_QML_PLUGIN(Vela_ControlsPlugin)
 
 namespace {
 
@@ -86,9 +89,6 @@ int main(int argc, char* argv[])
     QGuiApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("system-file-manager")));
 
     QIcon::setFallbackThemeName(QStringLiteral("hicolor"));
-    // The apps' mode, the accent and Mica from the shell; icons from the
-    // matching theme (breeze or breeze-dark).
-    Appearance appearance;
 
     // Where to open: the given folder, or the given file's folder (selected).
     QString start = QStringLiteral("home:");
@@ -115,7 +115,9 @@ int main(int argc, char* argv[])
 
     QQmlApplicationEngine engine;
     qmlEngine = &engine;
-    engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
+    // Theme and Style (the apps' mode, the accent and Mica from the shell;
+    // icons from the matching theme, breeze or breeze-dark): Vela.Controls.
+    Appearance* style = vela::controls::install(engine, Appearance::Mode::Apps);
     engine.addImageProvider(QStringLiteral("fileicon"), new IconProvider(32));
     engine.addImageProvider(QStringLiteral("filethumb"), new FileThumbnailProvider);
     QQmlContext* context = engine.rootContext();
@@ -124,7 +126,6 @@ int main(int argc, char* argv[])
     context->setContextProperty(QStringLiteral("Places"), &places);
     context->setContextProperty(QStringLiteral("System"), &system);
     context->setContextProperty(QStringLiteral("ServiceMenus"), &serviceMenus);
-    context->setContextProperty(QStringLiteral("Look"), &appearance);
     context->setContextProperty(QStringLiteral("StartLocation"), start);
     context->setContextProperty(QStringLiteral("StartSelection"), select);
     engine.loadFromModule("Vela.Files", "Main");
@@ -145,9 +146,9 @@ int main(int argc, char* argv[])
                     double(sinceMain.nsecsElapsed()) / 1e6, sinceProcessStart());
             }
             // What the first frame doesn't need.
-            QTimer::singleShot(0, &app, [&apps, &appearance] {
+            QTimer::singleShot(0, &app, [&apps, style] {
                 apps.reload();
-                appearance.watch();
+                style->watch();
             });
         }, Qt::QueuedConnection);
     }

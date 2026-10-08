@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The notification center and calendar (Win+N, or a click on the clock), like
 // Windows 11: past notifications on top, grouped by app, with "Do not disturb"
@@ -68,8 +69,8 @@ Window {
         height: 28
         Rectangle {
             anchors.fill: parent
-            radius: Theme.radiusSmall
-            color: smallButton.checked ? Theme.accent : Theme.hover
+            radius: Theme.radius
+            color: smallButton.checked ? Theme.accent : Theme.subtleHover
             opacity: smallButton.checked || buttonMouse.containsMouse ? 1 : 0
         }
         Text {
@@ -78,7 +79,7 @@ Window {
             anchors.centerIn: parent
             text: smallButton.label
             color: Theme.text
-            font.pixelSize: Theme.fontSmall
+            font.pixelSize: Theme.fontCaption
         }
         Image {
             visible: smallButton.icon !== ""
@@ -112,7 +113,7 @@ Window {
             id: notifications
             width: parent.width
             height: Math.min(Screen.height - Theme.taskbarHeight - calendar.height - 60, header.height + Math.max(list.contentHeight, 64) + 24)
-            radius: Theme.radiusMenu
+            radius: Theme.radiusOverlay
             color: Theme.surface
             border.width: 1
             border.color: Theme.stroke
@@ -128,7 +129,7 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     text: qsTr("Notifications")
                     color: Theme.text
-                    font.pixelSize: Theme.fontNormal
+                    font.pixelSize: Theme.fontBody
                     font.weight: Font.DemiBold
                 }
                 Row {
@@ -162,8 +163,8 @@ Window {
                     topPadding: 6
                     bottomPadding: 2
                     text: section
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fontSmall
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontCaption
                 }
 
                 delegate: Rectangle {
@@ -177,8 +178,8 @@ Window {
                     required property date time
                     width: list.width
                     height: itemContent.height + 20
-                    radius: Theme.radiusSmall
-                    color: itemHover.hovered ? Theme.hover : Theme.surfaceRaised
+                    radius: Theme.radius
+                    color: itemHover.hovered ? Theme.subtleHover : Theme.control
 
                     HoverHandler { id: itemHover }
                     MouseArea {
@@ -216,7 +217,7 @@ Window {
                                     width: parent.width - timeText.width - 30
                                     text: item.summary
                                     color: Theme.text
-                                    font.pixelSize: Theme.fontNormal
+                                    font.pixelSize: Theme.fontBody
                                     font.weight: Font.DemiBold
                                     elide: Text.ElideRight
                                 }
@@ -225,8 +226,8 @@ Window {
                                     anchors.right: parent.right
                                     anchors.rightMargin: 24
                                     text: Qt.formatTime(item.time, "HH:mm")
-                                    color: Theme.textDim
-                                    font.pixelSize: Theme.fontSmall
+                                    color: Theme.textSecondary
+                                    font.pixelSize: Theme.fontCaption
                                 }
                             }
                             Text {
@@ -234,8 +235,8 @@ Window {
                                 width: parent.width
                                 text: item.body
                                 textFormat: Text.StyledText
-                                color: Theme.textDim
-                                font.pixelSize: Theme.fontSmall
+                                color: Theme.textSecondary
+                                font.pixelSize: Theme.fontCaption
                                 wrapMode: Text.Wrap
                                 maximumLineCount: 4
                                 elide: Text.ElideRight
@@ -268,8 +269,8 @@ Window {
                     anchors.centerIn: parent
                     visible: list.count === 0
                     text: qsTr("No new notifications")
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fontNormal
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontBody
                 }
             }
         }
@@ -279,7 +280,7 @@ Window {
             id: calendar
             width: parent.width
             height: calendarContent.height + 32
-            radius: Theme.radiusMenu
+            radius: Theme.radiusOverlay
             color: Theme.surface
             border.width: 1
             border.color: Theme.stroke
@@ -298,7 +299,7 @@ Window {
                         return s.charAt(0).toUpperCase() + s.slice(1)
                     }
                     color: Theme.text
-                    font.pixelSize: Theme.fontNormal
+                    font.pixelSize: Theme.fontBody
                     font.weight: Font.DemiBold
                 }
 
@@ -312,7 +313,7 @@ Window {
                             return s.charAt(0).toUpperCase() + s.slice(1)
                         }
                         color: Theme.text
-                        font.pixelSize: Theme.fontNormal
+                        font.pixelSize: Theme.fontBody
                     }
                     Row {
                         anchors { right: parent.right; verticalCenter: parent.verticalCenter }
@@ -343,8 +344,8 @@ Window {
                             width: days.cell
                             height: 28
                             text: modelData
-                            color: Theme.textDim
-                            font.pixelSize: Theme.fontSmall
+                            color: Theme.textSecondary
+                            font.pixelSize: Theme.fontCaption
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                         }
@@ -367,15 +368,15 @@ Window {
                                 width: 32
                                 height: 32
                                 radius: 16
-                                color: parent.today ? Theme.accent : Theme.hover
+                                color: parent.today ? Theme.accent : Theme.subtleHover
                                 opacity: parent.today || dayMouse.containsMouse ? 1 : 0
                             }
                             Text {
                                 anchors.centerIn: parent
                                 text: parent.day.getDate()
-                                color: parent.today ? "white" : parent.inMonth ? Theme.text : Theme.textDim
+                                color: parent.today ? "white" : parent.inMonth ? Theme.text : Theme.textSecondary
                                 opacity: parent.inMonth || parent.today ? 1 : 0.5
-                                font.pixelSize: Theme.fontSmall
+                                font.pixelSize: Theme.fontCaption
                             }
                             MouseArea {
                                 id: dayMouse

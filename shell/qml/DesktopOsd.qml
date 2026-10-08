@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The desktop name, in the center of the output for a moment, when switching
 // desktops (Win+Ctrl+arrows), like Windows 11.
@@ -48,7 +49,7 @@ Window {
     Rectangle {
         id: pill
         anchors.fill: parent
-        radius: Theme.radiusLarge
+        radius: Theme.radiusOverlay
         color: Theme.surface
         border.width: 1
         border.color: Theme.stroke

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Time & language > Keyboard: the layouts (Win+Space switches between them),
 // and key repeat.

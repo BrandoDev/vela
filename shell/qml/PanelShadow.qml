@@ -3,6 +3,7 @@
 
 import QtQuick
 import QtQuick.Effects
+import Vela.Controls
 
 // A panel's soft shadow, drawn only *outside* the panel: acrylic panels are
 // semi-transparent and must show the blurred background below, not a shadow.
@@ -12,7 +13,7 @@ Item {
     id: root
 
     required property Item target
-    property real radius: Theme.radiusLarge
+    property real radius: Theme.radiusOverlay
     property real blur: 32
     property vector2d offset: Qt.vector2d(0, 6)
     property color color: Qt.rgba(0, 0, 0, 0.45)

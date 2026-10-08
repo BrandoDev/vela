@@ -3,6 +3,7 @@
 
 import QtQuick
 import QtCore
+import Vela.Controls
 
 // Explorer's window: tabs at the top (Ctrl+T, Ctrl+W, middle click on a
 // folder), the open tab below. Menus, dialogs and copy progress live here too.
@@ -135,9 +136,9 @@ Window {
                     readonly property bool active: root.currentIndex === index
                     width: tabRow.tabWidth
                     height: 34
-                    topLeftRadius: Theme.radiusLarge
-                    topRightRadius: Theme.radiusLarge
-                    color: active ? Theme.layer : tabMouse.containsMouse ? Theme.hover : "transparent"
+                    topLeftRadius: Theme.radiusOverlay
+                    topRightRadius: Theme.radiusOverlay
+                    color: active ? Theme.layer : tabMouse.containsMouse ? Theme.subtleHover : "transparent"
                     Image {
                         x: 12
                         anchors.verticalCenter: parent.verticalCenter
@@ -152,7 +153,7 @@ Window {
                         anchors.verticalCenter: parent.verticalCenter
                         text: tabButton.modelData.title
                         color: Theme.text
-                        font.pixelSize: Theme.fontSmall + 1
+                        font.pixelSize: Theme.fontCaption + 1
                         elide: Text.ElideRight
                     }
                     MouseArea {

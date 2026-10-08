@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // A question before an action that can't be undone (such as emptying the
 // Recycle Bin), like Windows confirmation dialogs. Opened with
@@ -48,7 +49,7 @@ Window {
     Rectangle {
         id: panel
         anchors.fill: parent
-        radius: Theme.radiusLarge
+        radius: Theme.radiusOverlay
         color: Theme.dialog
         border.width: 1
         border.color: Theme.stroke
@@ -62,7 +63,7 @@ Window {
             y: 20
             text: root.title
             color: Theme.text
-            font.pixelSize: Theme.fontNormal + 2
+            font.pixelSize: Theme.fontBody + 2
             font.weight: Font.DemiBold
         }
         Text {
@@ -71,7 +72,7 @@ Window {
             width: parent.width - 48
             text: root.text
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
             wrapMode: Text.Wrap
         }
 
@@ -79,39 +80,13 @@ Window {
             anchors { right: parent.right; bottom: parent.bottom; margins: 20 }
             spacing: 8
 
-            component DialogButton: Rectangle {
-                id: button
-                property string label
-                property bool primary: false
-                signal clicked()
-                width: 110
-                height: 32
-                radius: Theme.radiusSmall
-                color: primary ? (mouse.pressed ? Qt.darker(Theme.accent, 1.2) : Theme.accent)
-                               : (mouse.pressed ? Theme.pressed : mouse.containsMouse ? Theme.hover : Theme.surfaceRaised)
-                border.width: primary ? 0 : 1
-                border.color: Theme.stroke
-                Text {
-                    anchors.centerIn: parent
-                    text: button.label
-                    color: button.primary ? "white" : Theme.text
-                    font.pixelSize: Theme.fontNormal
-                }
-                MouseArea {
-                    id: mouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: button.clicked()
-                }
-            }
-
-            DialogButton {
-                label: root.yesText
-                primary: true
+            Button {
+                text: root.yesText
+                accent: true
                 onClicked: root.answer(true)
             }
-            DialogButton {
-                label: qsTr("No")
+            Button {
+                text: qsTr("No")
                 onClicked: root.answer(false)
             }
         }

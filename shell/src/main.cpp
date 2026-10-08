@@ -9,9 +9,9 @@
 
 #include "accessibility.h"
 #include "appmodel.h"
-#include "backgroundeffects.h"
 #include "clipboard.h"
 #include "config.h"
+#include "controls.h"
 #include "desktopmodel.h"
 #include "fileactions.h"
 #include "fileproperties.h"
@@ -46,9 +46,12 @@
 #include <QQuickWindow>
 #include <QScreen>
 #include <QtDebug>
+#include <QtQml/QQmlExtensionPlugin>
 
 #include <cstdio>
 #include <memory>
+
+Q_IMPORT_QML_PLUGIN(Vela_ControlsPlugin)
 
 namespace {
 
@@ -241,10 +244,6 @@ int main(int argc, char* argv[])
     QIcon::setFallbackThemeName(QStringLiteral("hicolor"));
 
     Config config;
-    // Icons from the theme matching the shell's mode (breeze or breeze-dark);
-    // outside Plasma Qt might not know the chosen one.
-    applyIconTheme(config.shellTheme() == QLatin1String("light"));
-    config.setIconMode(iconModeFor(config.shellTheme() == QLatin1String("light")));
 
     AppModel apps;
     appModel = &apps;
@@ -261,16 +260,12 @@ int main(int argc, char* argv[])
     shell.listen();
     shell.sendWallpaperTint(config.wallpaper());
     QObject::connect(&config, &Config::wallpaperChanged, &shell, [&] { shell.sendWallpaperTint(config.wallpaper()); });
-    // The mode to the compositor (acrylic tint, title bars). Icons change
-    // before QML asks for them (this connection comes first).
+    // The mode to the compositor (acrylic tint, title bars).
     auto sendTheme = [&config] {
         ShellController::sendToCompositor("theme " + config.shellTheme().toLatin1() + ' ' + config.appTheme().toLatin1());
     };
     sendTheme();
-    QObject::connect(&config, &Config::themeChanged, &shell, [&config, sendTheme] {
-        switchIconMode(&config, config.shellTheme() == QLatin1String("light"));
-        sendTheme();
-    });
+    QObject::connect(&config, &Config::themeChanged, &shell, sendTheme);
     shell.watchSleep();
 
     ForeignToplevelManager windows;
@@ -296,7 +291,6 @@ int main(int argc, char* argv[])
     // History turned on or off from Settings (vela-shell.conf).
     QObject::connect(&config, &Config::clipboardChanged, &clipboard,
         [&config, &clipboard] { clipboard.setEnabled(config.clipboardHistory()); });
-    BackgroundEffects effects;
     SystemStatus status;
     QObject::connect(&shell, &ShellController::volumeKeyPressed, &status, &SystemStatus::volumeKey);
     Mixer mixer(&apps);
@@ -306,7 +300,9 @@ int main(int argc, char* argv[])
 
     QQmlApplicationEngine engine;
     qmlEngine = &engine;
-    engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
+    // Theme, Style (the shell's mode, accent, icons) and Effects (the blur):
+    // Vela.Controls, like the apps.
+    vela::controls::install(engine, Appearance::Mode::Shell)->watch();
     engine.addImageProvider(QStringLiteral("fileicon"), new IconProvider(32));
     engine.addImageProvider(QStringLiteral("wallpaper"), new WallpaperProvider);
     engine.addImageProvider(QStringLiteral("thumbnail"), new ThumbnailProvider(&capture));
@@ -333,7 +329,6 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("FileActions"), &fileActions);
     engine.rootContext()->setContextProperty(QStringLiteral("Clip"), &clipboard);
     engine.rootContext()->setContextProperty(QStringLiteral("Snip"), &snip);
-    engine.rootContext()->setContextProperty(QStringLiteral("Effects"), &effects);
     engine.rootContext()->setContextProperty(QStringLiteral("Status"), &status);
     engine.rootContext()->setContextProperty(QStringLiteral("Mixer"), &mixer);
     engine.rootContext()->setContextProperty(QStringLiteral("Access"), &accessibility);

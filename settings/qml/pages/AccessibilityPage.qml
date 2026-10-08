@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Accessibility, like Windows 11: the magnifier, color filters (also with
 // Win+Ctrl+C) and sticky keys. The compositor applies them

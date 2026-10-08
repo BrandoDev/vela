@@ -56,15 +56,6 @@ void Config::reload()
         emit wallpaperChanged();
     }
 
-    QColor accent(settings.value(QStringLiteral("appearance/accent")).toString());
-    if (!accent.isValid()) {
-        accent = vela::defaults::accent();
-    }
-    if (accent != m_accent) {
-        m_accent = accent;
-        emit accentChanged();
-    }
-
     const QString alignment = settings.value(QStringLiteral("taskbar/alignment")).toString() == QLatin1String("left")
         ? QStringLiteral("left")
         : QStringLiteral("center");

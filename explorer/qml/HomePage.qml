@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Explorer's Home, like Windows 11: the Quick access folders as tiles, then
 // Favorite files and recently used ones.
@@ -24,8 +25,8 @@ Flickable {
         required property var modelData
         width: column.width
         height: 32
-        radius: Theme.radiusSmall
-        color: rowMouse.containsMouse ? Theme.hover : "transparent"
+        radius: Theme.radius
+        color: rowMouse.containsMouse ? Theme.subtleHover : "transparent"
         Image {
             x: 8
             anchors.verticalCenter: parent.verticalCenter
@@ -40,7 +41,7 @@ Flickable {
             anchors.verticalCenter: parent.verticalCenter
             text: row.modelData.name
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
             elide: Text.ElideRight
         }
         Text {
@@ -48,16 +49,16 @@ Flickable {
             width: 150
             anchors.verticalCenter: parent.verticalCenter
             text: Qt.formatDateTime(row.modelData.modified, "dd/MM/yyyy HH:mm")
-            color: Theme.textDim
-            font.pixelSize: Theme.fontSmall + 1
+            color: Theme.textSecondary
+            font.pixelSize: Theme.fontCaption + 1
         }
         Text {
             x: parent.width * 0.42 + 160
             width: parent.width - x - 8
             anchors.verticalCenter: parent.verticalCenter
             text: row.modelData.location
-            color: Theme.textDim
-            font.pixelSize: Theme.fontSmall + 1
+            color: Theme.textSecondary
+            font.pixelSize: Theme.fontCaption + 1
             elide: Text.ElideMiddle
         }
         MouseArea {
@@ -97,7 +98,7 @@ Flickable {
         Text {
             text: qsTr("Quick access")
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
             font.weight: Font.DemiBold
             bottomPadding: 4
         }
@@ -111,8 +112,8 @@ Flickable {
                     required property var modelData
                     width: 220
                     height: 64
-                    radius: Theme.radiusSmall
-                    color: tileMouse.containsMouse ? Theme.hover : "transparent"
+                    radius: Theme.radius
+                    color: tileMouse.containsMouse ? Theme.subtleHover : "transparent"
                     Image {
                         x: 10
                         anchors.verticalCenter: parent.verticalCenter
@@ -129,14 +130,14 @@ Flickable {
                             width: parent.width
                             text: tile.modelData.name
                             color: Theme.text
-                            font.pixelSize: Theme.fontNormal
+                            font.pixelSize: Theme.fontBody
                             elide: Text.ElideRight
                         }
                         Text {
                             width: parent.width
                             text: qsTr("Pinned")
-                            color: Theme.textDim
-                            font.pixelSize: Theme.fontSmall
+                            color: Theme.textSecondary
+                            font.pixelSize: Theme.fontCaption
                         }
                     }
                     MouseArea {
@@ -175,7 +176,7 @@ Flickable {
         Text {
             text: qsTr("Favorites")
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
             font.weight: Font.DemiBold
             topPadding: 20
             bottomPadding: 4
@@ -183,8 +184,8 @@ Flickable {
         Text {
             visible: page.favorites.length === 0
             text: qsTr("After you've added some files to Favorites, we'll show them here.")
-            color: Theme.textDim
-            font.pixelSize: Theme.fontNormal
+            color: Theme.textSecondary
+            font.pixelSize: Theme.fontBody
         }
         Repeater {
             model: page.favorites
@@ -194,7 +195,7 @@ Flickable {
         Text {
             text: qsTr("Recent")
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
             font.weight: Font.DemiBold
             topPadding: 20
             bottomPadding: 4
@@ -202,8 +203,8 @@ Flickable {
         Text {
             visible: page.recent.length === 0
             text: qsTr("Files you've opened recently will show up here.")
-            color: Theme.textDim
-            font.pixelSize: Theme.fontNormal
+            color: Theme.textSecondary
+            font.pixelSize: Theme.fontBody
         }
         Repeater {
             model: page.recent

@@ -3,6 +3,7 @@
 
 import QtQuick
 import QtQuick.Controls.Basic as C
+import Vela.Controls
 
 // The Windows 11 drop-down (ComboBox). `model` is a list of strings or of
 // objects with `text`; `currentIndex` the chosen one.

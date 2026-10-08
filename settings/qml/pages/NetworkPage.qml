@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Network & internet: how the PC is connected, the Wi-Fi networks around and
 // the properties of each connection (addresses, DNS), like Windows 11.

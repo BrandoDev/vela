@@ -3,6 +3,7 @@
 
 import QtQuick
 import QtQuick.Controls.Basic as C
+import Vela.Controls
 
 // A page's content: it scrolls, at most 1000 px wide as on Windows. Children
 // go in a column.

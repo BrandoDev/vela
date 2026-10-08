@@ -3,6 +3,7 @@
 
 import QtQuick
 import QtQuick.Shapes
+import Vela.Controls
 
 // Vela's symbol: a small stylized sail. It's the Start button.
 Item {
@@ -23,7 +24,7 @@ Item {
             fillGradient: LinearGradient {
                 x1: 12; y1: 1
                 x2: 21; y2: 16
-                GradientStop { position: 0; color: Theme.accentLight }
+                GradientStop { position: 0; color: Theme.accentFill }
                 GradientStop { position: 1; color: Theme.accent }
             }
             startX: 12; startY: 1
@@ -36,7 +37,7 @@ Item {
         ShapePath {
             strokeWidth: 0
             strokeColor: "transparent"
-            fillColor: Theme.accentLight
+            fillColor: Theme.accentFill
             startX: 10; startY: 5
             PathLine { x: 10; y: 16 }
             PathLine { x: 3; y: 16 }

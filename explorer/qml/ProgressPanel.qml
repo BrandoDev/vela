@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Copies and moves in progress, at the bottom right: title, percentage, the
 // current file, and the X to cancel; like Windows' progress dialog, in small.
@@ -18,7 +19,7 @@ Column {
             readonly property real fraction: modelData.total > 0 ? Math.min(1, modelData.done / modelData.total) : 0
             width: root.width
             height: content.height + 24
-            radius: Theme.radiusLarge
+            radius: Theme.radiusOverlay
             color: Theme.dialog
             border.width: 1
             border.color: Qt.rgba(0, 0, 0, 0.45)
@@ -39,7 +40,7 @@ Column {
                             : card.modelData.finished ? card.modelData.doneTitle
                             : card.modelData.title
                         color: card.modelData.error !== "" ? Theme.critical : Theme.text
-                        font.pixelSize: Theme.fontNormal
+                        font.pixelSize: Theme.fontBody
                         elide: Text.ElideRight
                     }
                     ToolButton {
@@ -54,8 +55,8 @@ Column {
                     text: Math.round(card.fraction * 100) + qsTr("% complete") + (card.modelData.current !== "" ? " · " + card.modelData.current : "")
                     visible: !card.modelData.finished
                     width: parent.width
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fontSmall
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontCaption
                     elide: Text.ElideMiddle
                 }
                 Rectangle {
@@ -67,7 +68,7 @@ Column {
                         width: parent.width * card.fraction
                         height: parent.height
                         radius: 2
-                        color: card.modelData.error !== "" ? Theme.critical : Theme.accentLight
+                        color: card.modelData.error !== "" ? Theme.critical : Theme.accentFill
                         Behavior on width { NumberAnimation { duration: Theme.normal } }
                     }
                 }

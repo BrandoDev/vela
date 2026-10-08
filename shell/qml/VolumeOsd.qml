@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The volume indicator, like Windows 11's: at the bottom in the middle, above
 // the taskbar, for a moment after a volume key, the knob or the wheel on the
@@ -117,7 +118,7 @@ Window {
         y: 12
         width: parent.width
         height: 52
-        radius: Theme.radiusLarge
+        radius: Theme.radiusOverlay
         color: Theme.surface
         border.width: 1
         border.color: Theme.stroke
@@ -139,8 +140,8 @@ Window {
             height: 36
             Rectangle {
                 anchors.fill: parent
-                radius: Theme.radiusSmall
-                color: Theme.hover
+                radius: Theme.radius
+                color: Theme.subtleHover
                 opacity: speakerMouse.containsMouse ? 1 : 0
             }
             Image {
@@ -187,7 +188,7 @@ Window {
                 width: parent.width * bar.shown
                 height: 4
                 radius: 2
-                color: root.muted ? Theme.textDim : Theme.accent
+                color: root.muted ? Theme.textSecondary : Theme.accent
             }
             Rectangle {
                 x: parent.width * bar.shown - width / 2
@@ -203,7 +204,7 @@ Window {
                     width: barMouse.pressed ? 8 : 10
                     height: width
                     radius: width / 2
-                    color: root.muted ? Theme.textDim : Theme.accent
+                    color: root.muted ? Theme.textSecondary : Theme.accent
                 }
             }
             MouseArea {
@@ -225,8 +226,8 @@ Window {
             width: 28 // "100" without the bar moving
             horizontalAlignment: Text.AlignRight
             text: Math.round(root.volume * 100)
-            color: root.muted ? Theme.textDim : Theme.text
-            font.pixelSize: Theme.fontNormal
+            color: root.muted ? Theme.textSecondary : Theme.text
+            font.pixelSize: Theme.fontBody
             font.features: { "tnum": 1 }
         }
     }

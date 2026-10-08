@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // System > Clipboard, like Windows 11: clipboard history (Win+V) and "Clear
 // clipboard data" (except pinned items).

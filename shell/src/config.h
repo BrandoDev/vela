@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <QColor>
 #include <QFileSystemWatcher>
 #include <QObject>
 #include <QTimer>
@@ -11,13 +10,12 @@
 // The user's choices the shell follows live: they're in
 // ~/.config/Vela/vela-shell.conf, written by the Settings app (or the shell
 // itself) and reread here as soon as the file changes. From QML:
-// Config.accent, Config.wallpaper...
+// Config.wallpaper, Config.taskbarAlignment... (light or dark, accent and
+// icons reach QML through Vela.Controls' Style.)
 class Config : public QObject {
     Q_OBJECT
     // The wallpaper: a chosen image, otherwise Vela's.
     Q_PROPERTY(QString wallpaper READ wallpaper NOTIFY wallpaperChanged)
-    // The accent color (buttons, selections, lit tiles).
-    Q_PROPERTY(QColor accent READ accent NOTIFY accentChanged)
     // "center" or "left", like "Taskbar alignment".
     Q_PROPERTY(QString taskbarAlignment READ taskbarAlignment NOTIFY taskbarChanged)
     // "End task" in the taskbar buttons' menu.
@@ -32,16 +30,11 @@ class Config : public QObject {
     // panels) and for apps (their windows and title bars).
     Q_PROPERTY(QString shellTheme READ shellTheme NOTIFY themeChanged)
     Q_PROPERTY(QString appTheme READ appTheme NOTIFY themeChanged)
-    // Icons for the shell's mode ("l/" or "d/" for image://icon): they change
-    // a moment after the mode, once the icon caches have been emptied (see
-    // switchIconMode).
-    Q_PROPERTY(QString iconMode READ iconMode NOTIFY iconModeChanged)
 
 public:
     explicit Config(QObject* parent = nullptr);
 
     QString wallpaper() const { return m_wallpaper; }
-    QColor accent() const { return m_accent; }
     QString taskbarAlignment() const { return m_taskbarAlignment; }
     bool endTask() const { return m_endTask; }
     bool taskView() const { return m_taskView; }
@@ -50,23 +43,13 @@ public:
     bool doNotDisturb() const { return m_doNotDisturb; }
     QString shellTheme() const { return m_shellTheme; }
     QString appTheme() const { return m_appTheme; }
-    QString iconMode() const { return m_iconMode; }
-    void setIconMode(const QString& mode)
-    {
-        if (mode != m_iconMode) {
-            m_iconMode = mode;
-            emit iconModeChanged();
-        }
-    }
 
 signals:
     void wallpaperChanged();
-    void accentChanged();
     void taskbarChanged();
     void doNotDisturbChanged(bool on);
     void themeChanged();
     void clipboardChanged();
-    void iconModeChanged();
 
 private:
     void reload();
@@ -76,7 +59,6 @@ private:
     QTimer m_debounce;
     QString m_path;
     QString m_wallpaper;
-    QColor m_accent;
     QString m_taskbarAlignment;
     bool m_endTask = true;
     bool m_taskView = true;
@@ -85,5 +67,4 @@ private:
     bool m_doNotDisturb = false;
     QString m_shellTheme = QStringLiteral("dark");
     QString m_appTheme = QStringLiteral("dark");
-    QString m_iconMode = QStringLiteral("d/");
 };
