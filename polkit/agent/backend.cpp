@@ -183,7 +183,10 @@ public:
     ~ProcessPrompt() override
     {
         // With stdin closed, a prompt that hasn't finished yet closes by itself.
-        m_link->owner = nullptr;
+        // The child watch may still come: it must not find us.
+        if (m_link) {
+            m_link->owner = nullptr;
+        }
         if (m_in >= 0) {
             close(m_in);
         }
@@ -212,7 +215,9 @@ public:
     }
 
 private:
-    // The child must be reaped even after the prompt is destroyed.
+    // The child must be reaped even after the prompt is destroyed. The watch
+    // owns the link and frees it; whichever of the two goes first unhooks
+    // itself from the other.
     struct Link {
         ProcessPrompt* owner;
     };
@@ -229,8 +234,9 @@ private:
             [](GPid pid, gint, gpointer data) {
                 auto* link = static_cast<Link*>(data);
                 g_spawn_close_pid(pid);
-                if (link->owner) {
-                    link->owner->exited();
+                if (ProcessPrompt* owner = link->owner) {
+                    owner->m_link = nullptr;
+                    owner->exited();
                 }
                 delete link;
             },

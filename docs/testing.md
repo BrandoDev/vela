@@ -25,7 +25,7 @@ CTest includes both CPU-only and GPU-dependent suites.
 | **Polkit agent / GoogleTest** (`polkit.*`) | The agent's queue, cancellations by polkit and by the user, a crashed dialog counting as "No", retries after a wrong password, sessions that fail by themselves, identity order and choice, the dialog protocol. | No |
 | **Sharpness** (`sharpness`) | Pixel-level checks that windows reach the expected physical pixels across fractional scales and common window states. | Yes |
 
-The compositor currently contains 52 GoogleTest cases and the polkit agent 23; the functional harness contains 70 end-to-end scenarios. Every scenario also checks that the compositor exits with status 0 when asked to stop: a crash on the way out would look like a real one to the supervisor.
+The compositor currently contains 52 GoogleTest cases and the polkit agent 23; the functional harness runs 79 end-to-end scenarios. Every scenario also checks that the compositor exits with status 0 when asked to stop: a crash on the way out would look like a real one to the supervisor.
 
 ## Run a subset
 
@@ -138,8 +138,8 @@ with Session(scale=1.25) as vela:
 
 `tests/functional/test_polkit.py` never talks to the real polkitd or PAM: a wrong password sent to PAM can lock the account (`pam_faillock`).
 
-- **The dialog** (`vela-polkit-prompt`) is started by the test, which plays the agent over its stdin/stdout ([protocol](polkit-agent.md#5-agent--prompt-protocol)). Covered: veil and dialog on the right outputs, the keyboard kept by the dialog while windows open, shortcuts switched off, clicks outside going nowhere, answers, "try again", Esc, cancellation by the agent, a dead agent, unavailable authentication, choosing another identity.
-- **The agent** (`vela-polkit-agent`) is started by the compositor (`VELA_POLKIT_AGENT`) and registers with `fake_polkitd.py`, a fake polkitd on a private D-Bus bus passed as `DBUS_SYSTEM_BUS_ADDRESS`. `VELA_POLKIT_TEST_PASSWORD` replaces PAM with a session that accepts one password; the agent refuses that mode on the real system bus. Covered: registration for the session in Vela's language, authorizing after a wrong password, "No", a request withdrawn by polkit, queued requests, restart after a crash, no restart when another agent owns the session.
+- **The dialog** (`vela-polkit-prompt`) is started by the test, which plays the agent over its stdin/stdout ([protocol](polkit-agent.md#5-agent--prompt-protocol)). Covered: veil and dialog on the right outputs, the keyboard kept by the dialog while windows open, shortcuts switched off, clicks outside going nowhere, answers, "try again", Esc, cancellation by the agent, a dead agent, unavailable authentication, choosing another identity, a keyboard Move ended by the dialog.
+- **The agent** (`vela-polkit-agent`) is started by the compositor (`VELA_POLKIT_AGENT`) and registers with `fake_polkitd.py`, a fake polkitd on a private D-Bus bus passed as `DBUS_SYSTEM_BUS_ADDRESS`. `VELA_POLKIT_TEST_PASSWORD` replaces PAM with a session that accepts one password; the agent refuses that mode unless the authority reports itself as the fake one. Covered: registration for the session in Vela's language, authorizing after a wrong password, "No", a request withdrawn by polkit, a crashed dialog counting as "No", queued requests, restart after a crash, no restart when another agent owns the session, test mode refused against another authority.
 
 The agent tests need `dbus-python` and `dbus-daemon`; without them they are skipped.
 

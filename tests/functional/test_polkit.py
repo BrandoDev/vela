@@ -221,6 +221,31 @@ class PromptTests(unittest.TestCase):
         self.vela.wait_for(lambda s: s.window(state["focused"])["snap"] is not None, what="snap works again")
 
 
+    def test_keyboard_move_ends_when_the_dialog_appears(self):
+        window = self.vela.open_window(300, 200, decorated=True)
+        x = self.vela.state().window(window)["x"]
+        self.vela.command("window active move")
+        self.vela.keys("Right", "Right")
+        self.vela.wait_for(lambda s: s.window(window)["x"] == x + 20, what="moving by keyboard")
+        # vela-input's virtual keyboard has just gone: the seat loses its only
+        # keyboard and gets one back with the next vela-input. If that happens
+        # while the dialog's window opens, Qt can leave it inactive (a Qt race
+        # on wl_keyboard replacement, not ours): let the seat settle first.
+        time.sleep(0.5)
+        # The dialog appears mid-move: the move ends as with Esc, and the keys
+        # go to the dialog.
+        prompt = Prompt(self.vela)
+        prompt.show()
+        self.vela.wait_for(lambda s: s.window(window)["x"] == x, what="the window back in place")
+        type_and_enter(self.vela, PASSWORD)
+        self.assertEqual(prompt.read_line(), "response " + PASSWORD)
+        # Under the dialog, the window menu can't start another one.
+        prompt.send("request 0 Password: ")
+        self.vela.command("window active move")
+        type_and_enter(self.vela, PASSWORD)
+        self.assertEqual(prompt.read_line(), "response " + PASSWORD)
+
+
 class PromptOnTwoOutputs(unittest.TestCase):
     def test_dialog_under_the_pointer_and_veils_elsewhere(self):
         with Session(scale="HEADLESS-1=1,HEADLESS-2=1") as vela:
@@ -246,12 +271,13 @@ class PromptOnTwoOutputs(unittest.TestCase):
 class AgentTests(unittest.TestCase):
     """The real agent, started by the compositor, with a fake polkitd."""
 
-    def start(self, reject=False, language=None):
+    def start(self, reject=False, language=None, backend=None):
         self.bus = subprocess.Popen(["dbus-daemon", "--session", "--nofork", "--print-address=1"],
                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         self.address = self.bus.stdout.readline().decode().strip()
         self.fake = subprocess.Popen([sys.executable, os.path.join(HERE, "fake_polkitd.py"), self.address]
-                                     + (["--reject"] if reject else []), stdout=subprocess.PIPE)
+                                     + (["--reject"] if reject else [])
+                                     + (["--backend", backend] if backend else []), stdout=subprocess.PIPE)
         self.assertEqual(self.fake.stdout.readline().strip(), b"ready")
         self.config = tempfile.mkdtemp(prefix="vela-polkit-test-")
         if language:
@@ -302,7 +328,7 @@ class AgentTests(unittest.TestCase):
             time.sleep(0.05)
         return "pending"
 
-    def agent_pid(self):
+    def child_named(self, prefix, parent):
         for pid in os.listdir("/proc"):
             if not pid.isdigit():
                 continue
@@ -310,12 +336,15 @@ class AgentTests(unittest.TestCase):
                 with open(f"/proc/{pid}/comm") as comm:
                     name = comm.read().strip()
                 with open(f"/proc/{pid}/stat") as stat:
-                    parent = int(stat.read().rsplit(")", 1)[1].split()[1])
+                    ppid = int(stat.read().rsplit(")", 1)[1].split()[1])
             except OSError:
                 continue
-            if name.startswith("vela-polkit-age") and parent == self.vela.process.pid:
+            if name.startswith(prefix) and ppid == parent:
                 return int(pid)
         return None
+
+    def agent_pid(self):
+        return self.child_named("vela-polkit-age", self.vela.process.pid)
 
     def test_registers_for_the_session_in_vela_language(self):
         self.start(language="it")
@@ -374,6 +403,31 @@ class AgentTests(unittest.TestCase):
         time.sleep(0.4)
         type_and_enter(self.vela, PASSWORD)
         self.assertEqual(self.result("c2"), "ok")
+
+    def test_crashed_dialog_counts_as_no(self):
+        self.start()
+        self.registrations()
+        agent = self.agent_pid()
+        self.begin("c1")
+        self.vela.wait_for(dialog_shown, timeout=8, what="the dialog")
+        prompt = self.child_named("vela-polkit-pro", agent)
+        self.assertIsNotNone(prompt)
+        os.kill(prompt, signal.SIGKILL)
+        self.assertIn("Cancelled", self.result("c1"))
+        # The agent is still there, and the next request works.
+        self.assertEqual(self.agent_pid(), agent)
+        self.begin("c2")
+        self.vela.wait_for(dialog_shown, timeout=8, what="the next dialog")
+        type_and_enter(self.vela, PASSWORD)
+        self.assertEqual(self.result("c2"), "ok")
+
+    def test_test_mode_refuses_a_real_polkitd(self):
+        # A private bus, but an authority that isn't the fake one: the test
+        # password must not take the place of the session's agent.
+        self.start(backend="js")
+        self.vela.wait_for_log("works only with the tests' fake polkitd")
+        time.sleep(0.5)
+        self.assertEqual(self.control.Registrations(), [])
 
     def test_restarted_after_a_crash(self):
         self.start()

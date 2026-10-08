@@ -14,7 +14,9 @@ drives it through the org.vela.Test interface on /org/vela/Test:
     Result(cookie) -> "pending" | "ok" | "error:<name>"
     Registrations() -> [(kind, session-id, locale, path)]
 
-    fake_polkitd.py ADDRESS [--reject]   (--reject: "agent already registered")
+    fake_polkitd.py ADDRESS [--reject] [--backend NAME]
+        --reject: "agent already registered"
+        --backend: the backend name to report (the real polkitd says "js")
 """
 
 import sys
@@ -33,10 +35,11 @@ class Failed(dbus.DBusException):
 
 
 class Authority(dbus.service.Object):
-    def __init__(self, bus, reject):
+    def __init__(self, bus, reject, backend):
         super().__init__(bus, "/org/freedesktop/PolicyKit1/Authority")
         self.bus = bus
         self.reject = reject
+        self.backend = backend
         self.agent = None  # (bus name, path)
         self.registrations = []
 
@@ -62,7 +65,7 @@ class Authority(dbus.service.Object):
 
     @dbus.service.method("org.freedesktop.DBus.Properties", in_signature="s", out_signature="a{sv}")
     def GetAll(self, interface):
-        return {"BackendName": "fake", "BackendVersion": "0", "BackendFeatures": dbus.UInt32(0)}
+        return {"BackendName": self.backend, "BackendVersion": "0", "BackendFeatures": dbus.UInt32(0)}
 
 
 class Control(dbus.service.Object):
@@ -110,7 +113,8 @@ class Control(dbus.service.Object):
 def main():
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     bus = dbus.bus.BusConnection(sys.argv[1])
-    authority = Authority(bus, "--reject" in sys.argv)
+    backend = sys.argv[sys.argv.index("--backend") + 1] if "--backend" in sys.argv else "vela-fake-polkitd"
+    authority = Authority(bus, "--reject" in sys.argv, backend)
     Control(bus, authority)
     # Names only after the objects: whoever waits for the name finds everything ready.
     names = [dbus.service.BusName("org.freedesktop.PolicyKit1", bus), dbus.service.BusName("org.vela.Test", bus)]

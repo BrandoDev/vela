@@ -263,6 +263,12 @@ Behavior:
   Try again."
 - A `request` with no password field on screen (e.g. after a fingerprint
   timeout) shows one.
+- The dialog never grows past its output. The band with Yes and No stays in
+  view and the content above it scrolls. Identities show three and a half at
+  most and details 140 px at most, and both scroll. The password field
+  scrolls into view when it takes the focus.
+- Every text is plain text: app names, polkit's message and PAM's words
+  come from outside, and markup in them must not change the dialog.
 - Text follows Vela's rules: English in the code, Italian in
   `i18n/vela-polkit-prompt_it.ts`. polkit's own message is already in the
   user's language.
@@ -292,9 +298,14 @@ of the dialog is still to do (§12).
 3. **The modal dialog** (`vela_focus_modal_layer`, `focus.c`): a mapped
    `overlay` surface with exclusive keyboard interactivity.
    - Global bindings are off while it is there: Super, Alt+Tab, Alt+F4,
-     Win+D, snapping, desktops... **Exceptions:** switching VT, Win+L
-     (locking is always allowed; after unlocking, the dialog has the keyboard
-     again) and the developer exit (Alt+Shift+Esc).
+     Win+D, snapping, desktops... **Exceptions:** switching VT, the
+     keyboard's media and volume keys (they act on the player and the volume,
+     never on windows, and muting a loud video while typing the password is
+     useful), Win+L (locking is always allowed; after unlocking, the dialog
+     has the keyboard again) and the developer exit (Alt+Shift+Esc).
+   - A keyboard Move/Size in progress ends as with Esc when the dialog takes
+     the keyboard, and none can start under it: its keys would swallow the
+     password.
    - Neither a window nor a shell panel opening meanwhile takes the keyboard;
      a newer `overlay` surface can.
    - `vela_focus_refocus()` gives the keyboard back to the dialog first (after
@@ -336,6 +347,10 @@ What this design protects:
   prevents other clients from reading keystrokes.
 - **The idle process is small.** No Qt, no QML, no GPU driver. Its inputs
   come from polkitd (root) and from its own child.
+- **Test mode can't replace the real agent.** `VELA_POLKIT_TEST_PASSWORD` is
+  refused unless the authority on the bus reports itself as the tests' fake
+  polkitd (`BackendName` `vela-fake-polkitd`): an address alone could name
+  the real system bus.
 
 What it doesn't protect, as with every Linux agent:
 
@@ -364,17 +379,18 @@ None of them uses polkitd or PAM.
   is checking, Esc, `cancel` from the agent, a dead agent, `failed`,
   choosing another identity from the keyboard, clicks outside going nowhere,
   a window opening without taking the keyboard, shortcuts off (snap, Alt+F4,
-  Alt+Tab) and back on afterwards, dialog under the pointer and veils on the
-  other outputs.
+  Alt+Tab) and back on afterwards, a keyboard Move ended by the dialog and
+  refused under it, dialog under the pointer and veils on the other outputs.
 - **Whole agent (functional, `test_polkit.py`).** The compositor starts the
   real `vela-polkit-agent` (`VELA_POLKIT_AGENT`), which registers with
   `fake_polkitd.py` on a private bus given as `DBUS_SYSTEM_BUS_ADDRESS`.
   `VELA_POLKIT_TEST_PASSWORD` replaces PAM with a session accepting one
-  password; the agent refuses it without a private system bus, so it can
-  never sit on the real polkitd in test mode. Covered: registration for a
-  `unix-session` in Vela's language, authorized after a wrong password, "No",
-  withdrawn by polkit, two requests queued, restarted after a crash, not
-  restarted when another agent owns the session.
+  password; the agent refuses it unless the authority is the fake one
+  (§9). Covered: registration for a `unix-session` in Vela's language,
+  authorized after a wrong password, "No", withdrawn by polkit, a crashed
+  dialog counting as "No" with the agent going on, two requests queued,
+  restarted after a crash, not restarted when another agent owns the
+  session, test mode refused against an authority that isn't the fake.
 - The whole agent also ran under AddressSanitizer and UBSan through the
   functional tests: no reports.
 - **By hand, by the user** (with the correct password only):

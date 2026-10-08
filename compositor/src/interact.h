@@ -69,6 +69,9 @@ void vela_interact_begin_keyboard(struct vela_server *server, struct vela_view *
 // While it runs, keys are its own (true) and presses move the window.
 bool vela_interact_keyboard(struct vela_server *server, const uint32_t *syms, int count, uint32_t modifiers,
     bool pressed);
+// Ends a keyboard Move/Size as Esc would (the window goes back): the polkit
+// dialog takes the keyboard, and its keys must reach it.
+void vela_interact_cancel_keyboard(struct vela_server *server);
 
 // The window goes away: forget it.
 void vela_interact_forget(struct vela_server *server, struct vela_view *view);

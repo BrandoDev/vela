@@ -185,6 +185,24 @@ void vela_listener_class_init(VelaListenerClass* klass)
 
 // ------------------------------------------------------- registration --
 
+// The backend name the tests' fake polkitd reports (fake_polkitd.py); the real
+// polkitd reports its JavaScript engine.
+constexpr const char* fakeBackendName = "vela-fake-polkitd";
+
+bool fakeAuthority()
+{
+    GError* error = nullptr;
+    PolkitAuthority* authority = polkit_authority_get_sync(nullptr, &error);
+    if (!authority) {
+        g_clear_error(&error);
+        return false;
+    }
+    const gchar* name = polkit_authority_get_backend_name(authority);
+    const bool fake = name && std::strcmp(name, fakeBackendName) == 0;
+    g_object_unref(authority);
+    return fake;
+}
+
 struct Registration {
     PolkitAgentListener* listener = nullptr;
     PolkitSubject* subject = nullptr;
@@ -266,10 +284,12 @@ int main(int argc, char* argv[])
     const char* testPassword = std::getenv("VELA_POLKIT_TEST_PASSWORD");
     if (testPassword && *testPassword) {
         // On the real polkitd a test agent would authorize nothing, but it
-        // would take the session agent's place: only on a private bus (the
-        // tests' fake polkitd).
-        if (!std::getenv("DBUS_SYSTEM_BUS_ADDRESS")) {
-            g_warning("VELA_POLKIT_TEST_PASSWORD needs a private DBUS_SYSTEM_BUS_ADDRESS");
+        // would take the session agent's place: only with the tests' fake
+        // polkitd, on a private bus. The address alone proves nothing (it can
+        // name the real system bus): the authority must say it is the fake.
+        if (!std::getenv("DBUS_SYSTEM_BUS_ADDRESS") || !fakeAuthority()) {
+            g_warning("VELA_POLKIT_TEST_PASSWORD works only with the tests' fake polkitd on a private "
+                      "DBUS_SYSTEM_BUS_ADDRESS");
             return 1;
         }
         g_message("Test mode: no PAM, a fixed password");

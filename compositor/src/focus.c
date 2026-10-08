@@ -91,6 +91,11 @@ void vela_focus_layer(struct vela_server *server, struct vela_layer_surface *lay
     if (modal && modal != layer && layer->wlr->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY) {
         return;
     }
+    // The dialog takes the keyboard: a keyboard Move/Size in progress would
+    // swallow its keys (the password, Esc).
+    if (layer == modal) {
+        vela_interact_cancel_keyboard(server);
+    }
     // Like Windows: opening the Start menu "dims" the active window.
     struct vela_view *active = vela_views_focused(server);
     if (active) {

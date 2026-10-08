@@ -478,6 +478,11 @@ void vela_interact_begin_keyboard(struct vela_server *server, struct vela_view *
     if (view->minimized || view->maximized || view->fullscreen || server->cursor_mode != VELA_CURSOR_PASSTHROUGH) {
         return;
     }
+    // Not under the polkit dialog: the keys are the dialog's (the window
+    // menu can still ask for it from the shell).
+    if (vela_focus_modal_layer(server)) {
+        return;
+    }
     if (!vela_snap_is_none(view->snap)) {
         vela_view_set_snap(view, vela_snap_none, NULL);
     }
@@ -588,6 +593,11 @@ static void finish_keyboard(struct vela_server *server, bool confirm)
     server->grabbed = NULL;
     wlr_cursor_set_xcursor(server->cursor, server->cursor_manager, "default");
     vela_interact_motion(server, 0);
+}
+
+void vela_interact_cancel_keyboard(struct vela_server *server)
+{
+    finish_keyboard(server, false);
 }
 
 void vela_interact_forget(struct vela_server *server, struct vela_view *view)
