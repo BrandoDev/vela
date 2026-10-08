@@ -75,6 +75,14 @@ stay in the selected log across logout/reboot and are also exported as
 derived file. Excluding session logs removes the derived evidence too. Live
 sampling of additional selected processes remains optional.
 
+The session-log summary counts descriptor exhaustion, shell restarts after
+errors and layer-shell buffer commits before configuration. Observations
+explain that restarting the shell can reset the wallpaper and desktop panels;
+they do not attribute the underlying fault to a driver or component. The
+summary is refreshed with the log and removed when session logs are excluded.
+Package evidence includes `layer-shell-qt`; the environment allowlist includes
+Qt's platform, shell integration and scene-graph rendering selections.
+
 Known boundaries: rotations and changes during copying are recorded rather than
 reconstructed. Older logs without supervisor samples cannot retroactively
 provide descriptor history. The reporter records current process instances and marks exited

@@ -527,6 +527,31 @@ class ReportingTests(unittest.TestCase):
         sample = json.loads(self.report.preview("logs/resource-history.jsonl"))
         self.assertEqual(sample["sync_file"], 950)
 
+    def test_shell_protocol_failures_are_reported_without_fd_exhaustion(self):
+        source = self.home / "shell.log"
+        source.write_text('zwlr_layer_surface_v1#71: error 2: layer_surface has never been configured\n'
+                          '[ERROR] Shell "/usr/bin/vela-shell" exited (code 255): restarting it\n'
+                          '[INFO] Shell "/usr/bin/vela-shell" exited (code 0)\n')
+        Collector(self.report).collect(["logs"], {"log_path": str(source)}, {})
+        summary = json.loads(self.report.preview("logs/error-summary.json"))
+        self.assertEqual(summary["shell_restarts"], 1)
+        self.assertEqual(summary["layer_surface_unconfigured_errors"], 1)
+        self.assertEqual(summary["file_descriptor_exhaustion_messages"], 0)
+        self.assertEqual(len(self.report.observations), 2)
+        self.report.remove_collection("logs")
+        self.assertEqual(self.report.observations, [])
+
+    def test_refresh_removes_derived_errors_no_longer_in_selected_log(self):
+        source = self.home / "current.log"
+        source.write_text('layer_surface has never been configured\n')
+        self.report.context = {"log_path": str(source)}
+        collector = Collector(self.report)
+        collector.logs()
+        source.write_text('new contents, no errors\n')
+        collector.logs()
+        self.assertNotIn("logs/error-summary.json", self.report.artifacts)
+        self.assertEqual(self.report.observations, [])
+
     def test_no_coredumps_is_collected_empty_evidence(self):
         self.report.context = {"boot": "a" * 32}
         result = Collector(self.report, lambda args, **kw: Result(

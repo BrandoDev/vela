@@ -27,7 +27,7 @@ CTest includes both CPU-only and GPU-dependent suites.
 | **Polkit agent / GoogleTest** (`polkit.*`) | The agent's queue, cancellations by polkit and by the user, a crashed dialog counting as "No", retries after a wrong password, sessions that fail by themselves, identity order and choice, the dialog protocol. | No |
 | **Sharpness** (`sharpness`) | Pixel-level checks that windows reach the expected physical pixels across fractional scales and common window states. | Yes |
 
-The compositor currently contains 59 GoogleTest cases and the polkit agent 23; the functional harness runs 83 end-to-end scenarios. Every scenario also checks that the compositor exits with status 0 when asked to stop: a crash on the way out would look like a real one to the supervisor.
+The compositor currently contains 59 GoogleTest cases and the polkit agent 23; the functional harness runs 87 end-to-end scenarios when the Qt shell is built. Every scenario also checks that the compositor exits with status 0 when asked to stop: a crash on the way out would look like a real one to the supervisor.
 
 ## Run a subset
 
@@ -234,6 +234,19 @@ Reporter fixtures cover complete logs above the former 2 MiB cap, preserving
 startup and final errors in oversized logs, refreshing evidence after live
 recording, rotation, historical descriptor records and matching retained logs
 to their incident boot. An unknown boot must never become current-boot evidence.
+
+`tests/functional/test_shell.py` runs the actual Qt shell with a private D-Bus
+session and isolated configuration, using threaded OpenGL rendering, CPU
+compositor synchronization and a 100 Hz output. It checks repeated Super
+toggles, reopening during the close animation, and the Wayland trace of each
+native surface lifetime: configure and ACK precede the first buffer, the hidden
+menu releases its native surface, and blur binds to the new surface on reopen.
+Run, Quick Settings and Notification Center also reopen after native surface
+destruction. A fake shell or `vela-panel` cannot exercise this Qt lifecycle.
+These tests do not establish that a driver-specific protocol error is fixed
+on NVIDIA; they enforce the observable lifecycle and animation contracts.
+Reporter fixtures separately check protocol errors and shell restarts without
+descriptor exhaustion, including removing derived summaries during review.
 
 `sharpness-cpu` repeats the pixel comparison at all five scales with
 `VELA_SYNC_FILE=0`, so CPU compatibility must preserve exactly the same pixels.

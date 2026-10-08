@@ -48,6 +48,8 @@ OVERRIDES = [
     "VELA_LOCK_ON_IDLE", "VELA_STATS", "VELA_VULKAN_VALIDATION", "VELA_DEBUG",
     "VELA_DEBUG_SYNC", "VELA_DEBUG_LINEAR", "VELA_DEBUG_DAMAGE", "VELA_DEBUG_SCANOUT",
     "VELA_SYNC_FILE", "WLR_RENDER_NO_EXPLICIT_SYNC", "__NV_DISABLE_EXPLICIT_SYNC",
+    "QT_QPA_PLATFORM", "QT_QUICK_BACKEND", "QSG_RHI_BACKEND", "QSG_RENDER_LOOP",
+    "QT_WAYLAND_SHELL_INTEGRATION", "QT_WAYLAND_RECONNECT",
     "XKB_DEFAULT_LAYOUT", "XKB_DEFAULT_VARIANT", "XKB_DEFAULT_OPTIONS",
 ]
 
@@ -257,7 +259,7 @@ class Collector:
     def version(self):
         results = []
         packages = ["vela-git", "wlroots0.20", "qt6-base", "qt6-wayland", "wayland", "mesa",
-                    "libdrm", "vulkan-icd-loader", "egl-wayland"]
+                    "libdrm", "vulkan-icd-loader", "egl-wayland", "layer-shell-qt"]
         if shutil.which("pacman"):
             args = ["pacman", "-Q", *packages]
         elif shutil.which("dpkg-query"):
@@ -338,10 +340,18 @@ class Collector:
             if derived in self.report.artifacts:
                 self.report.remove(derived)
         count, first, last = 0, None, None
+        shell_restarts, layer_errors = 0, 0
+        last_shell_restart, last_layer_error = None, None
         samples = deque(maxlen=10000)
         sample_count = 0
         keys = {"pid", "elapsed_s", "fds", "sync_file", "dmabuf", "eventfd", "sockets", "nofile", "rss_kib"}
         for line in io.StringIO(data):
+            if re.search(r'\bShell "[^"\n]+" exited \((?:code [0-9]+|signal [^)]*)\): restarting it', line):
+                shell_restarts += 1
+                last_shell_restart = line.strip()[:4096]
+            if "layer_surface has never been configured" in line:
+                layer_errors += 1
+                last_layer_error = line.strip()[:4096]
             if "Too many open files" in line:
                 count += 1
                 last = line.strip()[:4096]
@@ -357,13 +367,24 @@ class Collector:
                     samples.append(values)
                     sample_count += 1
         self.report.observations = [o for o in self.report.observations if not o.startswith("Session log:")]
-        if count:
+        if count or shell_restarts or layer_errors:
             self.report.add_json("logs", "logs/error-summary.json",
                                  {"file_descriptor_exhaustion_messages": count,
                                   "first": first, "last": last,
-                                  "scope": "retained log bytes; this does not identify the leaking component"})
+                                  "shell_restarts": shell_restarts,
+                                  "last_shell_restart": last_shell_restart,
+                                  "layer_surface_unconfigured_errors": layer_errors,
+                                  "last_layer_surface_error": last_layer_error,
+                                  "scope": "retained log bytes; these messages do not establish the underlying cause"})
+        if count:
             self.report.observations.append("Session log: file descriptor exhaustion (Too many open files); "
                                             "see logs/error-summary.json and retained resource samples.")
+        if shell_restarts:
+            self.report.observations.append(f"Session log: shell restarted {shell_restarts} times after an error; "
+                                            "this can reset the wallpaper and desktop panels.")
+        if layer_errors:
+            self.report.observations.append(f"Session log: {layer_errors} layer-shell buffer commits before configure; "
+                                            "Wayland disconnects the offending client.")
         if samples:
             self.report.add_text("logs", "logs/resource-history.jsonl",
                                  "".join(json.dumps(s) + "\n" for s in samples),

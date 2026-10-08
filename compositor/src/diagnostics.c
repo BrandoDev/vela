@@ -21,18 +21,23 @@ bool vela_process_resources(pid_t pid, struct vela_process_resources *out)
     if (!dir) {
         return false;
     }
+    int directory_fd = dirfd(dir);
+    if (directory_fd < 0) {
+        closedir(dir);
+        return false;
+    }
     struct dirent *entry;
     while ((entry = readdir(dir))) {
         if (entry->d_name[0] < '0' || entry->d_name[0] > '9') {
             continue;
         }
         // Do not count the sampler's own directory handle in self-tests.
-        if (pid == getpid() && atoi(entry->d_name) == dirfd(dir)) {
+        if (pid == getpid() && atoi(entry->d_name) == directory_fd) {
             continue;
         }
         ++out->fds;
         char target[256];
-        ssize_t length = readlinkat(dirfd(dir), entry->d_name, target, sizeof(target) - 1);
+        ssize_t length = readlinkat(directory_fd, entry->d_name, target, sizeof(target) - 1);
         if (length < 0) {
             continue; // the compositor closed it during the snapshot
         }
