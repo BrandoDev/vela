@@ -89,10 +89,9 @@ QString velaFilesExecutable()
 
 namespace vela::trash {
 
-QStringList emptyHome()
+QStringList empty(const QString& trashDirectory)
 {
-    // Vela Files currently presents the home trash at $XDG_DATA_HOME/Trash/files.
-    const QDir trash(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/Trash"));
+    const QDir trash(trashDirectory);
     const QDir files(trash.filePath(QStringLiteral("files")));
     const QDir info(trash.filePath(QStringLiteral("info")));
     constexpr QDir::Filters entries = QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System;
@@ -114,6 +113,12 @@ QStringList emptyHome()
         if (!QFile::remove(record.absoluteFilePath())) failed.append(record.fileName());
     }
     return failed;
+}
+
+QStringList emptyHome()
+{
+    // Vela Files currently presents the home trash at $XDG_DATA_HOME/Trash/files.
+    return empty(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/Trash"));
 }
 
 } // namespace vela::trash
