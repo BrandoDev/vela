@@ -1,10 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 name: Sanitizer Tests
+# PR validation only; post-merge build and packaging run in build.yml.
 on:
   pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
