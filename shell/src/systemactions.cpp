@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "systemactions.h"
+#include "appmodel.h"
+#include "mimeapps.h"
 
 #include <QCoreApplication>
 #include <QDBusConnection>
@@ -10,6 +12,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
+#include <QMimeDatabase>
 #include <QProcess>
 #include <QSettings>
 #include <QStandardPaths>
@@ -69,10 +72,6 @@ QString velaSettings()
     return velaTool(QStringLiteral("vela-settings"), QStringLiteral("settings"));
 }
 
-QString velaFiles()
-{
-    return velaTool(QStringLiteral("vela-files"), QStringLiteral("explorer"));
-}
 
 // A command in a terminal that stays open to show how it went.
 QString inTerminal(const QString& command)
@@ -82,6 +81,42 @@ QString inTerminal(const QString& command)
 }
 
 } // namespace
+
+QString velaFilesExecutable()
+{
+    return velaTool(QStringLiteral("vela-files"), QStringLiteral("explorer"));
+}
+
+namespace vela::trash {
+
+QStringList emptyHome()
+{
+    // Vela Files currently presents the home trash at $XDG_DATA_HOME/Trash/files.
+    const QDir trash(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/Trash"));
+    const QDir files(trash.filePath(QStringLiteral("files")));
+    const QDir info(trash.filePath(QStringLiteral("info")));
+    constexpr QDir::Filters entries = QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System;
+    QStringList failed;
+
+    for (const QFileInfo& entry : files.entryInfoList(entries)) {
+        const bool removed = entry.isDir() && !entry.isSymLink()
+            ? QDir(entry.absoluteFilePath()).removeRecursively()
+            : QFile::remove(entry.absoluteFilePath());
+        if (!removed) failed.append(entry.fileName());
+    }
+    // Retain metadata for entries that survived deletion. Also clean orphans
+    // from operations interrupted before their .trashinfo could be removed.
+    for (const QFileInfo& record : info.entryInfoList(entries)) {
+        if (!record.fileName().endsWith(QLatin1String(".trashinfo"))) continue;
+        const QString name = record.fileName().chopped(10);
+        const QFileInfo entry(files.filePath(name));
+        if (entry.exists() || entry.isSymLink()) continue;
+        if (!QFile::remove(record.absoluteFilePath())) failed.append(record.fileName());
+    }
+    return failed;
+}
+
+} // namespace vela::trash
 
 QString terminalProgram()
 {
@@ -164,7 +199,7 @@ QString SystemActions::command(const QString& name) const
     }
     if (name == QLatin1String("files")) {
         // Vela's Explorer, if present.
-        if (const QString files = velaFiles(); !files.isEmpty()) {
+        if (const QString files = velaFilesExecutable(); !files.isEmpty()) {
             return quote(files);
         }
         return first({ { "xdg-open", "xdg-open \"$HOME\"" } });
@@ -271,7 +306,7 @@ void SystemActions::showInFolder(const QString& pathOrUrl) const
 {
     const QUrl url = pathOrUrl.contains(QLatin1String("://")) ? QUrl(pathOrUrl) : QUrl::fromLocalFile(pathOrUrl);
     // Vela's Explorer opens the folder with the file selected.
-    if (const QString files = velaFiles(); !files.isEmpty() && url.isLocalFile()) {
+    if (const QString files = velaFilesExecutable(); !files.isEmpty() && url.isLocalFile()) {
         QProcess::startDetached(files, { url.toLocalFile() });
         return;
     }
