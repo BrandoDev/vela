@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+"""La barra del titolo di Vela (docs/renderer.md §9) per le app che la
+accettano con xdg-decoration: alta 32, sopra il contenuto, col titolo
+scritto dal compositor e i tre pulsanti; chiudere, massimizzare col doppio
+clic. La si trova sullo schermo, non dallo stato."""
+
+import unittest
+
+from harness import Session
+
+BAR = 32
+BUTTON = 46
+
+
+class Decorations(unittest.TestCase):
+    def setUp(self):
+        self.vela = Session()
+        self.vela.start()
+
+    def tearDown(self):
+        self.vela.stop()
+
+    def open(self):
+        window = self.vela.open_window(400, 300, decorated=True)
+        state = self.vela.wait_for(lambda s: s["focused"] == window)
+        w = state.window(window)
+        image = self.vela.pixels()
+        # Dall'alto, nella colonna a metà del titolo: lo sfondo e l'ombra
+        # sono neri, la barra no.
+        column = w["x"] + 200
+        top = next(y for y in range(image.height) if image.at(column, y) != (0, 0, 0))
+        return window, w, image, top
+
+    def test_bar_above_the_content(self):
+        window, w, image, top = self.open()
+        # Il contenuto dell'app comincia subito sotto: vela-pattern codifica
+        # le coordinate del pixel (R = x, G = y).
+        self.assertEqual(image.at(w["x"] + 100, top + BAR), (100, 0, 0))
+        self.assertEqual(image.at(w["x"] + 100, top + BAR - 1)[:2] != (100, 0), True)
+        # Il titolo ("vela-pattern") è scritto: antialiasing, più colori.
+        self.assertGreaterEqual(len(image.colors(w["x"] + 12, top, w["x"] + 200, top + BAR)), 4)
+        # E i simboli dei pulsanti.
+        for i in range(1, 4):
+            left = w["x"] + w["w"] - i * BUTTON
+            self.assertGreaterEqual(len(image.colors(left, top, left + BUTTON, top + BAR)), 2, f"button {i}")
+
+    def test_close_button(self):
+        window, w, image, top = self.open()
+        self.vela.input("move", w["x"] + w["w"] - BUTTON // 2, top + BAR // 2, "sleep", "50", "click")
+        self.vela.wait_for(lambda s: not s.has(window), what="closed by its close button")
+
+    def test_double_click_on_the_title_maximizes(self):
+        window, w, image, top = self.open()
+        self.vela.input("move", w["x"] + 150, top + BAR // 2, "sleep", "50", "click", "sleep", "60", "click")
+        self.vela.wait_for(lambda s: s.window(window)["maximized"], what="maximized")
+
+
+if __name__ == "__main__":
+    unittest.main()

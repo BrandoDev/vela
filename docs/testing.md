@@ -18,13 +18,13 @@ CTest includes both CPU-only and GPU-dependent suites.
 
 | Suite | What it covers | GPU required |
 |---|---|---:|
-| **Compositor / GoogleTest** | FrameClock, vblank grid, late latching, adaptive margin, learned host latency, animation curves, output scale selection, pixel geometry, night light, color filters, sunrise/sunset and `vela.conf` parsing. | No |
+| **Compositor / GoogleTest** | FrameClock, vblank grid, late latching, adaptive margin, learned host latency, animation curves, output scale selection, pixel geometry, night light, color filters, sunrise/sunset, `vela.conf` parsing and `outputs.conf` persistence. | No |
 | **Files** (`files-copies`) | Copy/move behavior, staged replacement and failure handling including a simulated full disk with `RLIMIT_FSIZE`. | No |
 | **Shell** (`shell-*`) | `.desktop` `Exec=` parsing and default-app resolution through `mimeapps.list`. | No |
-| **Functional** (`functional`) | Opening and manipulating windows, snap, maximize/restore, minimize/Alt+Tab, virtual desktops, output hotplug, per-output scale, lock/unlock, screen power, compositor crash recovery, and an app whose GPU finishes 150 ms late (explicit and implicit sync) without a missed vblank. | Yes |
+| **Functional** (`functional`) | Opening and manipulating windows (Wayland and X11), menus (popups and X11 override-redirect menus) kept where they belong, resizing from the invisible borders, keyboard Move/Resize, the window menu, drag-to-edge snap with Snap Assist, snap layouts and snap groups, snap, maximize/restore, minimize/Alt+Tab, virtual desktops, Vela's title bar (text, buttons, double click), shell layers (reserved space, live blur), partial redraws identical to full redraws, output hotplug, per-output scale and position set like Settings does, accessibility quick settings (night light and its schedule, color filters, magnifier, sticky keys), Super alone opening Start, lock/unlock, screen power, compositor crash recovery, a shell that crashes (restarted, then given up) or exits cleanly (left alone), and an app whose GPU finishes 150 ms late (explicit and implicit sync) without a missed vblank. | Yes |
 | **Sharpness** (`sharpness`) | Pixel-level checks that windows reach the expected physical pixels across fractional scales and common window states. | Yes |
 
-The compositor currently contains 43 GoogleTest cases; the functional harness contains 26 end-to-end scenarios.
+The compositor currently contains 52 GoogleTest cases; the functional harness contains 53 end-to-end scenarios.
 
 ## Run a subset
 
@@ -102,6 +102,7 @@ The test tools can then drive and inspect it:
 build/tools/vela-input key super+Left
 build/tools/vela-windows list
 build/tools/vela-shot screen.png
+build/tools/vela-randr --output HEADLESS-1 --scale 1.5
 ```
 
 The command socket is:
@@ -149,6 +150,20 @@ sh scripts/test-sharpness.sh 1 1.25 1.5 1.75 2
 ```
 
 The test exercises normal, snapped, maximized and restored window states so fractional-scale correctness is checked across window-management transitions rather than only in a static scene.
+
+## Messages to the shell
+
+The compositor tells the Qt shell what to show (Start, Alt+Tab, the window menu,
+accessibility state) with one line per message on
+`$XDG_RUNTIME_DIR/vela-shell-$WAYLAND_DISPLAY.sock`. In the harness,
+`vela.fake_shell()` listens on that socket and collects the lines, so scenarios can
+assert on them without the real shell:
+
+```python
+shell = vela.fake_shell()
+vela.keys("super")
+shell.wait_for("toggle-start")
+```
 
 ## Slow apps
 

@@ -6,7 +6,7 @@ For renderer design and frame scheduling, see [renderer.md](renderer.md). For th
 
 ## Build
 
-Vela requires CMake 3.22 or newer, Ninja, a C++20 compiler, wlroots 0.20, Qt 6.7 or newer with its Linguist tools, LayerShellQt, Vulkan headers and loader, `glslc`, GBM, libdrm, FreeType, HarfBuzz, Fontconfig and PAM. librsvg is optional (app icons in the title bar). The development tools and tests also need zlib, GoogleTest and Python 3. Distribution package lists are in the [README](../README.md#build-from-source).
+Vela requires CMake 3.22 or newer, Ninja, a C17 and C++20 compiler, wlroots 0.20, Qt 6.7 or newer with its Linguist tools, LayerShellQt, Vulkan headers and loader, `glslc`, GBM, libdrm, FreeType, HarfBuzz, Fontconfig and PAM. librsvg is optional (app icons in the title bar). The development tools and tests also need zlib, GoogleTest and Python 3. Distribution package lists are in the [README](../README.md#build-from-source).
 
 The normal development build is:
 
@@ -83,7 +83,10 @@ The tools under `build/tools/` are small clients intended for development and fu
 | `vela-input` | Inject keys, clicks, drags and typed text when `VELA_DEBUG_INPUT=1`. |
 | `vela-windows` | Inspect windows and compositor-visible state. |
 | `vela-shot` | Capture an output or region to PNG. |
-| `vela-pattern` | Produce deterministic visual test content. |
+| `vela-pattern` | Produce deterministic visual test content (`--decorated` asks for Vela's title bar, `--popup X,Y` opens a 200×150 magenta menu anchored at that point of the window). |
+| `vela-panel` | Fake shell pieces on wlr-layer-shell: `wallpaper`, and `taskbar [--blur]` with a reserved area and background blur. |
+| `vela-x11` | An X11 app (through Xwayland) for the X11 tests: an orange 300×200 window with class `vela.x11`, `--menu X,Y` adds an override-redirect menu, `--probe` just connects (starts Xwayland). |
+| `vela-randr` | Configure outputs like Settings > Display (wlr-output-management): list them, or `--output NAME` with `--on`/`--off`, `--scale`, `--pos X,Y`, `--mode WxH`. |
 | `vela-testlock` | Test the lock path without requiring a password; it unlocks itself. |
 | `vela-slowgpu` | An app whose GPU finishes each frame late (Vulkan compute job, explicit or `--implicit` sync), to check that the screen never waits for it. |
 
@@ -109,18 +112,33 @@ reload-config
 ## Project layout
 
 ```text
-compositor/src/     compositor core
+compositor/src/     compositor core, in C (see c-core.md)
   scene/            scene graph, flattening, occlusion and damage
   render/           Vulkan renderer, allocation, synchronization and shaders
-  supervisor.cpp    Wayland socket holder and compositor crash recovery
-  server.*          startup, focus, bindings, commands and session glue
-  output.cpp        outputs, frame scheduling, refresh rate, VRR and hotplug
-  toplevel.cpp      windows, popups, decorations and animations
-  snap.cpp          snap layouts, Snap Assist and snap groups
-  workspaces.cpp    virtual desktops
-  accessibility.cpp night light, color filters, magnifier and sticky keys
-  input.cpp         pointer, touchpad and gestures
-  lock.cpp          session lock and idle handling
+  supervisor.c      Wayland socket holder and compositor crash recovery
+  main.c, server.c  arguments, startup, main loop, shutdown, animations
+  command.c         command socket and the JSON state it answers with
+  session.c         session environment (systemd, D-Bus) and hooks
+  output.c          outputs, frame scheduling, refresh rate, VRR and power
+  output_config.c   outputs.conf: what the user chose for each monitor
+  output_manager.c  wlr-output-management: monitor changes from tools
+  nested.c          Vela in a window of another session (scale, shortcuts)
+  view.c            windows (xdg-shell), taskbar handles, open animation;
+                    xwayland.c for X11 windows
+  popup.c, layer.c  menus and shell pieces (wlr-layer-shell)
+  decoration.c      Vela's title bar
+  snapshot.c        frozen window images for close/minimize/maximize animations
+  focus.c           keyboard focus between windows and shell pieces
+  interact.c        pointer on windows: move, resize, title bar, keyboard move
+  bindings.c        shortcuts, window menu and window actions
+  switcher.c        Alt+Tab
+  snap.c            snap, Snap Assist, snap layouts and snap groups
+  workspace.c       virtual desktops
+  a11y.c            night light, color filters, magnifier and sticky keys
+  input.c           seat, pointer, touchpad, gestures, pointer constraints
+  keyboard.c        keyboards, layouts and key handling
+  shell.c           the supervised Qt shell and messages to it
+  lock.c            session lock and idle handling
 
 compositor/tests/   compositor unit tests
 shell/              Qt Quick shell: taskbar, launcher, panels and desktop

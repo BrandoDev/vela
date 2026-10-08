@@ -9,7 +9,7 @@
 #include <QVariantMap>
 
 // I desktop virtuali, come li vede la shell: li decide il compositor
-// (compositor/src/workspaces.cpp), che a ogni cambiamento manda lo stato in
+// (compositor/src/workspace.c), che a ogni cambiamento manda lo stato in
 // JSON; da qui partono i comandi (passa a, nuovo, chiudi, rinomina, sposta
 // una finestra...). Li usano la Visualizzazione attività e la taskbar.
 class Workspaces : public QObject {

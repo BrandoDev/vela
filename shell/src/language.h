@@ -45,7 +45,7 @@ inline QString configured()
     QString value;
     while (!file.atEnd()) {
         const QString line = QString::fromUtf8(file.readLine()).trimmed();
-        // "lingua=" è il nome di prima (legacysettings.hpp).
+        // "lingua=" è il nome di prima (compositor/src/legacy_names.c).
         if (line.startsWith(QLatin1String("language="))) {
             value = line.mid(9).trimmed();
         } else if (line.startsWith(QLatin1String("lingua="))) {

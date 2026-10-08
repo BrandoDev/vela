@@ -286,7 +286,7 @@ sudo ln -s /usr/local/share/wayland-sessions/vela.desktop /usr/share/wayland-ses
 
 ## Build from source
 
-You need CMake ≥ 3.22, Ninja, a C++20 compiler, **wlroots 0.20**, Qt ≥ 6.7 with its Linguist tools, LayerShellQt,
+You need CMake ≥ 3.22, Ninja, a C17 and C++20 compiler, **wlroots 0.20**, Qt ≥ 6.7 with its Linguist tools, LayerShellQt,
 the Vulkan headers and loader, `glslc`, GBM, libdrm, FreeType, HarfBuzz, Fontconfig and
 PAM. librsvg is optional (app icons in the title bar). The tests also use GoogleTest and
 Python 3.
@@ -365,7 +365,7 @@ shortcut reference.
 flowchart TB
     DM["Login screen<br/>(SDDM, Plasma Login)"] --> S["vela-session"]
     S --> SUP["Supervisor<br/><i>holds the Wayland socket,<br/>restarts the compositor</i>"]
-    SUP --> C["vela-compositor<br/>C++20 · wlroots 0.20<br/>own scene graph · Vulkan 1.4 renderer"]
+    SUP --> C["vela-compositor<br/>C17 · wlroots 0.20<br/>own scene graph · Vulkan 1.4 renderer"]
     C -- "layer-shell · foreign-toplevel<br/>ext-background-effect · image capture" --> SH["vela-shell<br/>Qt Quick: taskbar, Start, panels, desktop"]
     C --> APPS["Apps<br/>Wayland and Xwayland"]
     C --> F["vela-files"]
@@ -381,7 +381,7 @@ flowchart TB
 - **The shell** is a separate Qt Quick process using LayerShellQt. It talks to the
   compositor through standard Wayland protocols, plus a small command socket (for
   example, Super opens Start). A shell crash never takes your windows down.
-- **Motion design lives in one place**: `compositor/src/motion.hpp` and
+- **Motion design lives in one place**: `compositor/src/motion.h` and
   `shell/qml/Theme.qml` share the same cubic-bezier(0, 0, 0.2, 1) curve.
 - **The session** declares itself `XDG_CURRENT_DESKTOP=Vela:KDE`. Qt/KDE apps use KDE's
   theme, and browsers and Electron apps use KDE's wallet, exactly as inside Plasma. It

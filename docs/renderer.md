@@ -185,7 +185,7 @@ A single differing pixel fails the test.
 
 The magnifier (Accessibility, Win+Plus) is not an effect applied to the
 finished image: the output under the cursor builds the scene starting from
-another point of the layout and at a larger scale (`OutputFrame::setMagnifier`).
+another point of the layout and at a larger scale (`vela_output_frame_set_magnifier`).
 Each surface is therefore drawn from its own buffer at the magnified size, with
 the bicubic filter of §3.3, and text stays more readable than when enlarging
 pixels that were already drawn. Damage is found by comparing with the previous
@@ -420,11 +420,15 @@ the same synchronization. The code is in `compositor/src/render/`:
 
 | File | What it does |
 |---|---|
-| `vulkan.*` | device, importable formats (textures, render targets, wl_shm), dmabuf import |
-| `renderer.*` | GPU submission with a timeline semaphore, deferred destruction, staging memory for uploads, dmabuf render targets, pipelines; syncobj timeline for app releases and GPU timestamps (S3); the `wlr_renderer` |
-| `frame_clock.hpp` | an output's time: vblank grid, learned latency, late-latching cost and margin, the plan of each frame (§4) |
-| `texture.*` | textures from dmabuf (one import per buffer) and from memory (upload of changed areas only), pixel reads |
-| `pass.*` | drawing: textured or solid-color quads, rectangle clipping, barriers, implicit and explicit sync, timing; the `wlr_render_pass` |
+| `renderer.h` | the public API the rest of the compositor uses; `render.h` holds the structs the render files share |
+| `vulkan.c` | device, importable formats (textures, render targets, wl_shm), dmabuf import |
+| `renderer.c` | GPU submission with a timeline semaphore, deferred destruction (typed lists of retired images and used semaphores, freed when the timeline reaches their point), staging memory for uploads, dmabuf render targets, pipelines; syncobj timeline for app releases and GPU timestamps (S3); the `wlr_renderer` |
+| `texture.c` | textures from dmabuf (one import per buffer) and from memory (upload of changed areas only), pixel reads |
+| `pass.c` | drawing: textured or solid-color quads, rectangle clipping, barriers, implicit and explicit sync, timing; the `wlr_render_pass` |
+| `allocator.c`, `formats.c`, `pixel_buffer.c` | GBM output buffers, the pixel format table, CPU images as `wlr_buffer` |
+
+An output's time (vblank grid, learned latency, late-latching cost and
+margin, the plan of each frame, §4) is `compositor/src/frame_clock.c`.
 
 The scene and the frame are in `compositor/src/scene/` (§5, §6).
 
@@ -457,7 +461,7 @@ app's GPU: one late app would make the whole output miss vblanks, cursor and
 animations included. So a commit with a buffer that isn't ready yet is held back
 (`wlr_surface_lock_pending`) and applied when its fence is signaled; meanwhile
 the surface keeps its previous, ready state, which is what every frame draws
-(`scene/readiness.cpp`). The fence is:
+(`scene/ready.c`). The fence is:
 
 - with explicit sync, the acquire point of the commit being held. wlroots 0.20
   only exposes the current `linux-drm-syncobj-v1` state; the pending one is the
@@ -507,7 +511,7 @@ checks that without the wait the output really does stall.
 - Few, generic pipelines: textured quad (rounded clip, opacity, chosen filter),
   solid-color quad, analytic shadow, blur downsample/upsample, "acrylic"
   composition.
-- No heavy libraries: Vulkan's C API with small RAII wrappers like `Listener`.
+- No heavy libraries: Vulkan's C API, used from plain C.
   Our own memory allocation (few, long-lived resources; client buffers are
   external memory). VMA will be considered only if it is really needed.
 
@@ -553,10 +557,10 @@ shader, in **physical pixels**, with antialiasing of exactly one physical pixel.
 Sharp at every scale. It applies to the window's frame (not to shadow margins
 drawn by the app).
 
-How it is done: a scene tree can have a **shape** (`scene::Shape`: rectangle,
+How it is done: a scene tree can have a **shape** (`struct vela_shape`: rectangle,
 radius, shadow); the elements of its children inherit the clip (popups don't:
-`Node::unclipped`). The window computes its own on every frame
-(`Toplevel::updateShape`): radius 8, none when maximized, fullscreen or snapped,
+`vela_node.unclipped`). The window computes its own on every frame
+(`vela_view_update_shape`): radius 8, none when maximized, fullscreen or snapped,
 nor for apps with their own shadow margins (GTK). Corners don't count as opaque;
 with corners there is no direct scanout. Animation snapshots carry the shape
 with them. The sharpness test stays bit for bit outside the corner squares.
@@ -595,7 +599,7 @@ corners): it costs a frame, not the whole area.
 - Blurs on top of each other (the Start menu over the taskbar) compose in the
   right order because drawing goes from bottom to top.
 
-How it is done: Vela implements the protocol itself (`scene/effects.cpp`;
+How it is done: Vela implements the protocol itself (`scene/effects.c`;
 wlroots doesn't have it). While drawing, upon reaching a panel with a region to
 blur, the render pass is closed, what is already drawn underneath is read (the
 output's buffer, also imported as a texture if the format allows it), four
@@ -1026,7 +1030,7 @@ Files uses the same file menu (milestone 3).
 ### 14.10 Task View and notifications
 
 With virtual desktops (milestone 3, done: `shell/qml/TaskView.qml`,
-`compositor/src/workspaces.cpp`):
+`compositor/src/workspace.c`):
 
 - **A window preview**: "Snap left", "Snap right", "Move to" › (the desktops,
   "New desktop"), "Show this window on all desktops", "Show windows from this app

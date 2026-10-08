@@ -7,7 +7,7 @@
 
 // Luce notturna, filtri colore, lente di ingrandimento e tasti permanenti,
 // come li vede la shell: li applica il compositor
-// (compositor/src/accessibility.cpp), che a ogni cambiamento manda lo stato
+// (compositor/src/a11y.c), che a ogni cambiamento manda lo stato
 // in JSON ("accessibility <json>"); da qui le impostazioni rapide li
 // accendono e spengono.
 class Accessibility : public QObject {

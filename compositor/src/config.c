@@ -1,0 +1,257 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#include "config.h"
+
+#include "legacy_names.h"
+
+#include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+
+bool vela_config_path(const char *name, char *out, size_t size)
+{
+    const char *config = getenv("XDG_CONFIG_HOME");
+    const char *home = getenv("HOME");
+    const char *file = name ? "/" : "";
+    name = name ? name : "";
+    int n;
+    if (config && *config) {
+        n = snprintf(out, size, "%s/vela%s%s", config, file, name);
+    } else if (home) {
+        n = snprintf(out, size, "%s/.config/vela%s%s", home, file, name);
+    } else {
+        return false;
+    }
+    return n > 0 && (size_t)n < size;
+}
+
+// La riga con i nomi di adesso (legacy_names.h): una copia nuova se è
+// cambiata, NULL se va bene com'è. Commenti e righe vuote restano.
+static char *modernize(const char *line)
+{
+    const char *eq = strchr(line, '=');
+    if (!*line || *line == '#' || !eq) {
+        return NULL;
+    }
+    char *key = strndup(line, (size_t)(eq - line));
+    const char *value = eq + 1;
+    const char *new_key = vela_legacy_key(key);
+    const char *new_value = vela_legacy_value(new_key ? new_key : key, value);
+    char *result = NULL;
+    if (new_key || new_value) {
+        if (asprintf(&result, "%s=%s", new_key ? new_key : key, new_value ? new_value : value) < 0) {
+            result = NULL;
+        }
+    }
+    free(key);
+    return result;
+}
+
+// Le righe di un file, per riscriverlo. Ogni riga è allocata.
+struct lines {
+    char **items;
+    int count;
+    int capacity;
+};
+
+static void lines_push(struct lines *lines, char *line)
+{
+    if (lines->count == lines->capacity) {
+        lines->capacity = lines->capacity ? lines->capacity * 2 : 32;
+        lines->items = realloc(lines->items, (size_t)lines->capacity * sizeof(*lines->items));
+    }
+    lines->items[lines->count++] = line;
+}
+
+static void lines_free(struct lines *lines)
+{
+    for (int i = 0; i < lines->count; ++i) {
+        free(lines->items[i]);
+    }
+    free(lines->items);
+}
+
+// Il file riga per riga, già con i nomi di adesso; *changed se qualcuna
+// aveva ancora quelli di prima.
+static void read_lines(const char *path, struct lines *lines, bool *changed)
+{
+    FILE *file = fopen(path, "r");
+    if (!file) {
+        return;
+    }
+    char *line = NULL;
+    size_t capacity = 0;
+    ssize_t n;
+    while ((n = getline(&line, &capacity, file)) >= 0) {
+        if (n > 0 && line[n - 1] == '\n') {
+            line[n - 1] = '\0';
+        }
+        char *modern = modernize(line);
+        if (modern && changed) {
+            *changed = true;
+        }
+        lines_push(lines, modern ? modern : strdup(line));
+    }
+    free(line);
+    fclose(file);
+}
+
+// Un file nuovo al posto del vecchio: chi legge non vede mai metà file.
+static void write_lines(const char *path, const struct lines *lines)
+{
+    char temporary[PATH_MAX];
+    if (snprintf(temporary, sizeof(temporary), "%s.tmp", path) >= (int)sizeof(temporary)) {
+        return;
+    }
+    FILE *file = fopen(temporary, "w");
+    if (!file) {
+        return;
+    }
+    bool ok = true;
+    for (int i = 0; i < lines->count; ++i) {
+        ok = fprintf(file, "%s\n", lines->items[i]) >= 0 && ok;
+    }
+    ok = fclose(file) == 0 && ok;
+    if (ok) {
+        rename(temporary, path);
+    } else {
+        remove(temporary);
+    }
+}
+
+static void set_entry(struct vela_config *config, const char *line, size_t key_length)
+{
+    char *entry = strdup(line);
+    entry[key_length] = '\0';
+    for (int i = 0; i < config->count; ++i) {
+        if (strcmp(config->entries[i].key, entry) == 0) {
+            free(config->entries[i].key);
+            config->entries[i].key = entry;
+            config->entries[i].value = entry + key_length + 1;
+            return;
+        }
+    }
+    if (config->count == config->capacity) {
+        config->capacity = config->capacity ? config->capacity * 2 : 32;
+        config->entries = realloc(config->entries, (size_t)config->capacity * sizeof(*config->entries));
+    }
+    config->entries[config->count].key = entry;
+    config->entries[config->count].value = entry + key_length + 1;
+    ++config->count;
+}
+
+void vela_config_read(struct vela_config *config)
+{
+    memset(config, 0, sizeof(*config));
+    char path[PATH_MAX];
+    if (!vela_config_path("vela.conf", path, sizeof(path))) {
+        return;
+    }
+    struct lines lines = { 0 };
+    read_lines(path, &lines, NULL);
+    for (int i = 0; i < lines.count; ++i) {
+        const char *line = lines.items[i];
+        const char *eq = strchr(line, '=');
+        if (*line && *line != '#' && eq) {
+            set_entry(config, line, (size_t)(eq - line));
+        }
+    }
+    lines_free(&lines);
+}
+
+void vela_config_finish(struct vela_config *config)
+{
+    for (int i = 0; i < config->count; ++i) {
+        free(config->entries[i].key);
+    }
+    free(config->entries);
+    memset(config, 0, sizeof(*config));
+}
+
+const char *vela_config_get(const struct vela_config *config, const char *key, const char *fallback)
+{
+    for (int i = 0; i < config->count; ++i) {
+        if (strcmp(config->entries[i].key, key) == 0) {
+            return config->entries[i].value;
+        }
+    }
+    return fallback;
+}
+
+bool vela_config_flag(const struct vela_config *config, const char *key, bool fallback)
+{
+    const char *value = vela_config_get(config, key, NULL);
+    if (!value || !*value) {
+        return fallback;
+    }
+    return strcmp(value, "yes") == 0 || strcmp(value, "1") == 0 || strcmp(value, "true") == 0;
+}
+
+int vela_config_int(const struct vela_config *config, const char *key, int fallback)
+{
+    const char *value = vela_config_get(config, key, NULL);
+    return value && *value ? atoi(value) : fallback;
+}
+
+void vela_config_write(const char *key, const char *value)
+{
+    char dir[PATH_MAX];
+    char path[PATH_MAX];
+    if (!vela_config_path(NULL, dir, sizeof(dir)) || !vela_config_path("vela.conf", path, sizeof(path))) {
+        return;
+    }
+    mkdir(dir, 0755);
+
+    struct lines lines = { 0 };
+    read_lines(path, &lines, NULL);
+    char *wanted = NULL;
+    if (asprintf(&wanted, "%s=%s", key, value) < 0) {
+        lines_free(&lines);
+        return;
+    }
+    size_t key_length = strlen(key);
+    bool found = false;
+    int kept = 0;
+    for (int i = 0; i < lines.count; ++i) {
+        char *line = lines.items[i];
+        bool same_key = strncmp(line, key, key_length) == 0 && line[key_length] == '=';
+        if (same_key && found) {
+            free(line); // doppioni: ne resta uno
+            continue;
+        }
+        if (same_key) {
+            free(line);
+            line = strdup(wanted);
+            found = true;
+        }
+        lines.items[kept++] = line;
+    }
+    lines.count = kept;
+    if (lines.count == 0) {
+        lines_push(&lines, strdup("# Vela settings (written by the Settings app)"));
+    }
+    if (!found) {
+        lines_push(&lines, strdup(wanted));
+    }
+    free(wanted);
+    write_lines(path, &lines);
+    lines_free(&lines);
+}
+
+void vela_config_migrate(void)
+{
+    char path[PATH_MAX];
+    if (!vela_config_path("vela.conf", path, sizeof(path))) {
+        return;
+    }
+    struct lines lines = { 0 };
+    bool changed = false;
+    read_lines(path, &lines, &changed);
+    if (changed) {
+        write_lines(path, &lines);
+    }
+    lines_free(&lines);
+}

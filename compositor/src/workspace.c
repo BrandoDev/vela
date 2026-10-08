@@ -1,0 +1,596 @@
+// SPDX-FileCopyrightText: 2026 Brando Giuffrida
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#include "workspace.h"
+
+#include "focus.h"
+#include "buffer.h"
+#include "config.h"
+#include "motion.h"
+#include "output.h"
+#include "scene/scene.h"
+#include "server.h"
+#include "shell.h"
+#include "snap.h"
+#include "util.h"
+#include "view.h"
+
+#include <limits.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
+#include <wlr/types/wlr_output.h>
+#include <wlr/util/log.h>
+
+static void push_string(char ***items, int *count, int *capacity, const char *text)
+{
+    *items = vela_grow(*items, capacity, *count + 1, sizeof(**items));
+    (*items)[(*count)++] = strdup(text);
+}
+
+static void free_strings(char **items, int count)
+{
+    for (int i = 0; i < count; ++i) {
+        free(items[i]);
+    }
+    free(items);
+}
+
+struct vela_workspaces *vela_workspaces_create(struct vela_server *server)
+{
+    struct vela_workspaces *ws = calloc(1, sizeof(*ws));
+    ws->server = server;
+    ws->next_map_serial = 1;
+    ws->start_ms = -1.0;
+    // desktop=<nome> per ogni desktop (vuoto: "Desktop N"); sticky-app=<app_id>.
+    char path[PATH_MAX];
+    FILE *in = vela_config_path("desktop.conf", path, sizeof(path)) ? fopen(path, "re") : NULL;
+    if (in) {
+        char *line = NULL;
+        size_t size = 0;
+        ssize_t length;
+        while ((length = getline(&line, &size, in)) >= 0) {
+            if (length > 0 && line[length - 1] == '\n') {
+                line[--length] = '\0';
+            }
+            if (strncmp(line, "desktop=", 8) == 0) {
+                push_string(&ws->names, &ws->count, &ws->capacity, line + 8);
+            } else if (strncmp(line, "sticky-app=", 11) == 0 && length > 11) {
+                push_string(&ws->sticky_apps, &ws->sticky_count, &ws->sticky_capacity, line + 11);
+            } else if (strncmp(line, "app-ovunque=", 12) == 0 && length > 12) {
+                push_string(&ws->sticky_apps, &ws->sticky_count, &ws->sticky_capacity, line + 12); // il nome di prima
+            }
+        }
+        free(line);
+        fclose(in);
+    }
+    if (ws->count == 0) {
+        push_string(&ws->names, &ws->count, &ws->capacity, "");
+    }
+    return ws;
+}
+
+void vela_workspaces_destroy(struct vela_workspaces *ws)
+{
+    if (!ws) {
+        return;
+    }
+    free_strings(ws->names, ws->count);
+    free_strings(ws->sticky_apps, ws->sticky_count);
+    free(ws->outgoing);
+    free(ws);
+}
+
+static void save(const struct vela_workspaces *ws)
+{
+    char directory[PATH_MAX];
+    char path[PATH_MAX];
+    char temporary[PATH_MAX];
+    if (!vela_config_path(NULL, directory, sizeof(directory)) || !vela_config_path("desktop.conf", path, sizeof(path))
+        || !vela_format(temporary, sizeof(temporary), "%s.tmp", path)) {
+        return;
+    }
+    mkdir(directory, 0755);
+    FILE *out = fopen(temporary, "we");
+    if (!out) {
+        return;
+    }
+    fputs("# Vela's virtual desktops, in order (empty: \"Desktop N\")\n", out);
+    for (int i = 0; i < ws->count; ++i) {
+        fprintf(out, "desktop=%s\n", ws->names[i]);
+    }
+    for (int i = 0; i < ws->sticky_count; ++i) {
+        fprintf(out, "sticky-app=%s\n", ws->sticky_apps[i]);
+    }
+    fclose(out);
+    rename(temporary, path);
+}
+
+void vela_workspace_name(const struct vela_workspaces *ws, int index, char *out, size_t size)
+{
+    if (index < 0 || index >= ws->count) {
+        snprintf(out, size, "%s", "");
+    } else if (!ws->names[index][0]) {
+        snprintf(out, size, "Desktop %d", index + 1);
+    } else {
+        snprintf(out, size, "%s", ws->names[index]);
+    }
+}
+
+bool vela_view_on_current_workspace(const struct vela_view *view)
+{
+    return view->sticky || view->workspace == view->server->workspaces->current;
+}
+
+// ------------------------------------------------------------ la shell --
+
+static const char *view_id(const struct vela_view *view)
+{
+    return view->ext_handle ? view->ext_handle->identifier : NULL;
+}
+
+static void append_tile(struct vela_buffer *out, struct vela_snap s)
+{
+    vela_buffer_appendf(out, "[%d,%d,%d,%d]", s.x0, s.y0, s.x1, s.y1);
+}
+
+void vela_workspaces_json(struct vela_server *server, struct vela_buffer *out)
+{
+    // {"current":0,"names":["Desktop 1"],"windows":{"<id ext>":0 (-1: tutti)},"stickyApps":[...]}
+    const struct vela_workspaces *ws = server->workspaces;
+    vela_buffer_appendf(out, "{\"current\":%d,\"names\":[", ws->current);
+    for (int i = 0; i < ws->count; ++i) {
+        char name[256];
+        vela_workspace_name(ws, i, name, sizeof(name));
+        vela_buffer_append(out, i ? "," : "");
+        vela_buffer_append_json(out, name);
+    }
+    vela_buffer_append(out, "],\"windows\":{");
+    bool first = true;
+    struct vela_view *view;
+    wl_list_for_each (view, &server->views, link) {
+        if (!view->mapped || !view_id(view)) {
+            continue;
+        }
+        vela_buffer_append(out, first ? "" : ",");
+        vela_buffer_append_json(out, view_id(view));
+        vela_buffer_appendf(out, ":%d", view->sticky ? -1 : view->workspace);
+        first = false;
+    }
+    vela_buffer_append(out, "},\"stickyApps\":[");
+    for (int i = 0; i < ws->sticky_count; ++i) {
+        vela_buffer_append(out, i ? "," : "");
+        vela_buffer_append_json(out, ws->sticky_apps[i]);
+    }
+    // I gruppi di snap: [{"output":nome,"windows":[{"id":...,"tile":[x0,y0,x1,y1]}]}],
+    // nell'ordine in cui compaiono le loro finestre.
+    vela_buffer_append(out, "],\"snapGroups\":[");
+    bool first_group = true;
+    struct vela_view *leader;
+    wl_list_for_each (leader, &server->views, link) {
+        uint32_t group = leader->snap_group;
+        bool seen = group == 0;
+        struct vela_view *earlier;
+        wl_list_for_each (earlier, &server->views, link) {
+            if (earlier == leader) {
+                break;
+            }
+            seen = seen || earlier->snap_group == group;
+        }
+        if (seen) {
+            continue;
+        }
+        struct vela_buffer members = { 0 };
+        struct vela_output *output = NULL;
+        struct vela_view *member;
+        wl_list_for_each (member, &server->views, link) {
+            if (member->snap_group != group || !member->mapped || !view_id(member)) {
+                continue;
+            }
+            output = output ? output : vela_view_output(member);
+            vela_buffer_append(&members, members.length ? ",{\"id\":" : "{\"id\":");
+            vela_buffer_append_json(&members, view_id(member));
+            vela_buffer_append(&members, ",\"tile\":");
+            append_tile(&members, member->snap);
+            vela_buffer_append(&members, "}");
+        }
+        if (members.length) {
+            vela_buffer_append(out, first_group ? "{\"output\":" : ",{\"output\":");
+            vela_buffer_append_json(out, output ? output->wlr->name : "");
+            vela_buffer_appendf(out, ",\"windows\":[%s]}", vela_buffer_text(&members));
+            first_group = false;
+        }
+        vela_buffer_finish(&members);
+    }
+    vela_buffer_append(out, "]}");
+}
+
+void vela_workspaces_announce(struct vela_server *server)
+{
+    struct vela_buffer line = { 0 };
+    vela_buffer_append(&line, "workspaces ");
+    vela_workspaces_json(server, &line);
+    vela_shell_send(server, vela_buffer_text(&line));
+    vela_buffer_finish(&line);
+}
+
+// --------------------------------------------------------------- finestre --
+
+static int compare_map_serial(const void *a, const void *b)
+{
+    uint64_t x = (*(struct vela_view *const *)a)->map_serial;
+    uint64_t y = (*(struct vela_view *const *)b)->map_serial;
+    return x < y ? -1 : x > y;
+}
+
+void vela_workspaces_sync_taskbar(struct vela_server *server)
+{
+    // Nell'ordine di apertura: la taskbar le mostra in quell'ordine.
+    int count = wl_list_length(&server->views);
+    struct vela_view **ordered = calloc((size_t)(count ? count : 1), sizeof(*ordered));
+    int n = 0;
+    struct vela_view *view;
+    wl_list_for_each (view, &server->views, link) {
+        ordered[n++] = view;
+    }
+    qsort(ordered, (size_t)n, sizeof(*ordered), compare_map_serial);
+    for (int i = 0; i < n; ++i) {
+        if (ordered[i]->mapped) {
+            vela_view_show_in_taskbar(ordered[i], vela_view_on_current_workspace(ordered[i]));
+        }
+    }
+    free(ordered);
+}
+
+static bool is_sticky_app(const struct vela_workspaces *ws, const char *app_id)
+{
+    for (int i = 0; i < ws->sticky_count; ++i) {
+        if (strcmp(ws->sticky_apps[i], app_id) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void vela_workspaces_view_mapped(struct vela_server *server, struct vela_view *view)
+{
+    struct vela_workspaces *ws = server->workspaces;
+    view->map_serial = ws->next_map_serial++;
+    view->workspace = ws->current;
+    view->sticky = is_sticky_app(ws, vela_view_app_id(view));
+}
+
+void vela_workspaces_forget(struct vela_server *server, struct vela_view *view)
+{
+    struct vela_workspaces *ws = server->workspaces;
+    int kept = 0;
+    for (int i = 0; i < ws->outgoing_count; ++i) {
+        if (ws->outgoing[i] != view) {
+            ws->outgoing[kept++] = ws->outgoing[i];
+        }
+    }
+    ws->outgoing_count = kept;
+}
+
+static bool is_outgoing(const struct vela_workspaces *ws, const struct vela_view *view)
+{
+    for (int i = 0; i < ws->outgoing_count; ++i) {
+        if (ws->outgoing[i] == view) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// ------------------------------------------------------------- passaggio --
+
+void vela_workspaces_switch(struct vela_server *server, int index, bool refocus_after)
+{
+    struct vela_workspaces *ws = server->workspaces;
+    if (index < 0 || index >= ws->count || index == ws->current || server->locked) {
+        return;
+    }
+    vela_workspaces_finish_switch(server); // un passaggio ancora in corso finisce subito
+    int previous = ws->current;
+    ws->current = index;
+    ws->direction = index > previous ? 1 : -1;
+
+    // Le uscenti, dal basso verso l'alto: in layers.windows_out, nello stesso ordine.
+    struct vela_node *node, *next;
+    wl_list_for_each_safe (node, next, &server->layers.windows->children, link) {
+        struct vela_owner *owner = node->data;
+        if (!owner || owner->kind != VELA_OWNER_VIEW) {
+            continue;
+        }
+        struct vela_view *view = (struct vela_view *)owner;
+        if (view->sticky || view->workspace != previous || !view->mapped || view->minimized) {
+            continue;
+        }
+        vela_node_reparent(&view->tree->node, server->layers.windows_out);
+        ws->outgoing = vela_grow(ws->outgoing, &ws->outgoing_capacity, ws->outgoing_count + 1, sizeof(*ws->outgoing));
+        ws->outgoing[ws->outgoing_count++] = view;
+    }
+    // Tutte le altre: accese se sono del nuovo desktop. Quelle a schermo
+    // intero stanno in un altro strato e cambiano senza scorrere.
+    struct vela_view *view;
+    wl_list_for_each (view, &server->views, link) {
+        if (view->mapped && !view->minimized && !is_outgoing(ws, view)) {
+            vela_node_set_enabled(&view->tree->node, vela_view_on_current_workspace(view));
+        }
+    }
+    if (server->cursor_mode != VELA_CURSOR_PASSTHROUGH && server->grabbed
+        && !vela_view_on_current_workspace(server->grabbed)) {
+        vela_snap_end_zone(server, false);
+        server->grabbed = NULL;
+        server->cursor_mode = VELA_CURSOR_PASSTHROUGH;
+    }
+
+    ws->start_ms = -1.0; // al primo frame
+    vela_node_set_position(&server->layers.windows_out->node, 0, 0);
+    vela_node_set_opacity(&server->layers.windows_out->node, 1.0f);
+    vela_node_set_opacity(&server->layers.windows->node, 0.0f);
+    vela_server_schedule_frames(server);
+
+    vela_workspaces_sync_taskbar(server);
+    if (refocus_after) {
+        struct vela_view *focused = vela_views_focused(server);
+        if (!focused || !vela_view_on_current_workspace(focused)) {
+            vela_focus_refocus(server);
+        }
+    }
+    wlr_log(WLR_INFO, "Desktop %d of %d", index + 1, ws->count);
+    vela_workspaces_announce(server);
+}
+
+bool vela_workspaces_tick(struct vela_server *server, double now_ms)
+{
+    struct vela_workspaces *ws = server->workspaces;
+    if (ws->direction == 0) {
+        return false;
+    }
+    if (ws->start_ms < 0.0) {
+        ws->start_ms = now_ms;
+    }
+    double x = vela_clampd((now_ms - ws->start_ms) / VELA_WORKSPACE_SWITCH_MS, 0.0, 1.0);
+    double t = vela_curve_eval(&vela_decelerate, x);
+    int narrowest = 0;
+    struct vela_output *output;
+    wl_list_for_each (output, &server->outputs, link) {
+        int width = 0;
+        int height = 0;
+        wlr_output_effective_resolution(output->wlr, &width, &height);
+        narrowest = narrowest == 0 ? width : vela_min(narrowest, width);
+    }
+    double distance = narrowest * VELA_WORKSPACE_SLIDE_FRACTION * ws->direction;
+    struct vela_layers *layers = &server->layers;
+    vela_node_set_position(&layers->windows_out->node, round(-distance * t), 0);
+    vela_node_set_opacity(&layers->windows_out->node, (float)(1.0 - t));
+    // Le nuove diventano opache subito: sfumando insieme si vedrebbero
+    // l'una attraverso l'altra.
+    vela_node_set_position(&layers->windows->node, round(distance * (1.0 - t)), 0);
+    vela_node_set_opacity(&layers->windows->node, (float)fmin(1.0, x * 4.0));
+    if (x >= 1.0) {
+        vela_workspaces_finish_switch(server);
+        return false;
+    }
+    return true;
+}
+
+void vela_workspaces_finish_switch(struct vela_server *server)
+{
+    struct vela_workspaces *ws = server->workspaces;
+    if (ws->direction == 0) {
+        return;
+    }
+    ws->direction = 0;
+    struct vela_layers *layers = &server->layers;
+    // Le uscenti tornano al loro strato, spente, sotto le altre e nel loro ordine.
+    for (int i = ws->outgoing_count - 1; i >= 0; --i) {
+        struct vela_view *view = ws->outgoing[i];
+        vela_node_reparent(&view->tree->node, layers->windows);
+        struct wl_list *children = &layers->windows->children;
+        if (wl_list_length(children) > 1) {
+            struct vela_node *first = wl_container_of(children->next, first, link);
+            if (first == &view->tree->node) {
+                first = wl_container_of(first->link.next, first, link);
+            }
+            vela_node_place_below(&view->tree->node, first);
+        }
+        vela_node_set_enabled(&view->tree->node, vela_view_on_current_workspace(view) && !view->minimized);
+    }
+    ws->outgoing_count = 0;
+    vela_node_set_position(&layers->windows_out->node, 0, 0);
+    vela_node_set_opacity(&layers->windows_out->node, 1.0f);
+    vela_node_set_position(&layers->windows->node, 0, 0);
+    vela_node_set_opacity(&layers->windows->node, 1.0f);
+    vela_scene_changed(server->scene);
+}
+
+// -------------------------------------------------------- elenco dei desktop --
+
+int vela_workspaces_add(struct vela_server *server)
+{
+    struct vela_workspaces *ws = server->workspaces;
+    push_string(&ws->names, &ws->count, &ws->capacity, "");
+    save(ws);
+    vela_workspaces_announce(server);
+    return ws->count - 1;
+}
+
+void vela_workspaces_remove(struct vela_server *server, int index)
+{
+    struct vela_workspaces *ws = server->workspaces;
+    if (index < 0 || index >= ws->count || ws->count <= 1) {
+        return;
+    }
+    vela_workspaces_finish_switch(server);
+    // Come Windows: le finestre passano al desktop a sinistra (o a destra,
+    // se era il primo).
+    int target = index > 0 ? index - 1 : 0; // dopo la rimozione, il primo diventa lo 0
+    bool was_current = index == ws->current;
+    if (was_current) {
+        vela_workspaces_switch(server, index > 0 ? index - 1 : 1, false);
+        vela_workspaces_finish_switch(server);
+    }
+    free(ws->names[index]);
+    memmove(&ws->names[index], &ws->names[index + 1], (size_t)(ws->count - index - 1) * sizeof(*ws->names));
+    --ws->count;
+    struct vela_view *view;
+    wl_list_for_each (view, &server->views, link) {
+        if (view->workspace == index) {
+            view->workspace = target;
+        } else if (view->workspace > index) {
+            --view->workspace;
+        }
+    }
+    if (ws->current > index) {
+        --ws->current;
+    }
+    // Le finestre arrivate sul desktop in uso si accendono.
+    wl_list_for_each (view, &server->views, link) {
+        if (view->mapped && !view->minimized) {
+            vela_node_set_enabled(&view->tree->node, vela_view_on_current_workspace(view));
+        }
+    }
+    vela_workspaces_sync_taskbar(server);
+    if (was_current) {
+        vela_focus_refocus(server);
+    }
+    save(ws);
+    vela_workspaces_announce(server);
+}
+
+void vela_workspaces_rename(struct vela_server *server, int index, const char *name)
+{
+    struct vela_workspaces *ws = server->workspaces;
+    if (index < 0 || index >= ws->count) {
+        return;
+    }
+    char *clean = malloc(strlen(name) + 1);
+    size_t n = 0;
+    for (const char *c = name; *c; ++c) {
+        if (*c != '\n' && *c != '\r') {
+            clean[n++] = *c;
+        }
+    }
+    clean[n] = '\0';
+    // Il nome predefinito non si salva: così segue la numerazione.
+    char fallback[32];
+    snprintf(fallback, sizeof(fallback), "Desktop %d", index + 1);
+    if (strcmp(clean, fallback) == 0) {
+        clean[0] = '\0';
+    }
+    free(ws->names[index]);
+    ws->names[index] = clean;
+    save(ws);
+    vela_workspaces_announce(server);
+}
+
+void vela_workspaces_move(struct vela_server *server, int from, int to)
+{
+    struct vela_workspaces *ws = server->workspaces;
+    if (from < 0 || to < 0 || from >= ws->count || to >= ws->count || from == to) {
+        return;
+    }
+    vela_workspaces_finish_switch(server);
+    // I nomi predefiniti seguono la posizione; quelli scelti seguono il desktop.
+    char *name = ws->names[from];
+    if (from < to) {
+        memmove(&ws->names[from], &ws->names[from + 1], (size_t)(to - from) * sizeof(*ws->names));
+    } else {
+        memmove(&ws->names[to + 1], &ws->names[to], (size_t)(from - to) * sizeof(*ws->names));
+    }
+    ws->names[to] = name;
+    struct vela_view *view;
+    wl_list_for_each (view, &server->views, link) {
+        int i = view->workspace;
+        if (i == from) {
+            view->workspace = to;
+        } else if (from < to && i > from && i <= to) {
+            view->workspace = i - 1;
+        } else if (from > to && i >= to && i < from) {
+            view->workspace = i + 1;
+        }
+    }
+    int c = ws->current;
+    if (c == from) {
+        ws->current = to;
+    } else if (from < to && c > from && c <= to) {
+        ws->current = c - 1;
+    } else if (from > to && c >= to && c < from) {
+        ws->current = c + 1;
+    }
+    save(ws);
+    vela_workspaces_announce(server);
+}
+
+void vela_workspaces_move_view(struct vela_server *server, struct vela_view *view, int index)
+{
+    struct vela_workspaces *ws = server->workspaces;
+    if (!view || index < 0 || index >= ws->count) {
+        return;
+    }
+    view->sticky = false;
+    view->workspace = index;
+    vela_view_leave_snap_group(view); // il gruppo resta sull'altro desktop
+    bool was_focused = vela_views_focused(server) == view;
+    if (view->mapped && !view->minimized) {
+        vela_node_set_enabled(&view->tree->node, vela_view_on_current_workspace(view));
+    }
+    vela_workspaces_sync_taskbar(server);
+    if (was_focused && !vela_view_on_current_workspace(view)) {
+        vela_view_set_activated(view, false);
+        wl_list_remove(&view->link);
+        wl_list_insert(server->views.prev, &view->link);
+        vela_focus_refocus(server);
+    }
+    vela_workspaces_announce(server);
+}
+
+void vela_workspaces_set_sticky(struct vela_server *server, struct vela_view *view, bool on)
+{
+    if (!view || view->sticky == on) {
+        return;
+    }
+    view->sticky = on;
+    // Tolta da "tutti i desktop", resta su quello in uso.
+    view->workspace = server->workspaces->current;
+    vela_workspaces_sync_taskbar(server);
+    vela_workspaces_announce(server);
+}
+
+void vela_workspaces_set_app_sticky(struct vela_server *server, const char *app_id, bool on)
+{
+    struct vela_workspaces *ws = server->workspaces;
+    if (!app_id || !*app_id) {
+        return;
+    }
+    int kept = 0;
+    for (int i = 0; i < ws->sticky_count; ++i) {
+        if (strcmp(ws->sticky_apps[i], app_id) == 0) {
+            free(ws->sticky_apps[i]);
+        } else {
+            ws->sticky_apps[kept++] = ws->sticky_apps[i];
+        }
+    }
+    ws->sticky_count = kept;
+    if (on) {
+        push_string(&ws->sticky_apps, &ws->sticky_count, &ws->sticky_capacity, app_id);
+    }
+    struct vela_view *view;
+    wl_list_for_each (view, &server->views, link) {
+        if (strcmp(vela_view_app_id(view), app_id) == 0) {
+            view->sticky = on;
+            view->workspace = ws->current;
+            if (view->mapped && !view->minimized) {
+                vela_node_set_enabled(&view->tree->node, true);
+            }
+        }
+    }
+    vela_workspaces_sync_taskbar(server);
+    save(ws);
+    vela_workspaces_announce(server);
+}

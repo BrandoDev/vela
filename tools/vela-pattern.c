@@ -15,10 +15,15 @@
 // la ritrova e confronta tutto bit per bit. Righe e colonne alternate e
 // valori vicini tra loro sono il caso peggiore per qualunque filtro.
 //
-// Uso: vela-pattern [--scale1] [--app-id ID] [LARGHEZZA ALTEZZA]   (logiche; predefinito 401x301)
+// Uso: vela-pattern [--scale1] [--app-id ID] [--decorated] [--popup X,Y]
+//                    [LARGHEZZA ALTEZZA]   (logiche; predefinito 401x301)
 //
 // --scale1: come un'app vecchia, disegna sempre a scala 1 (il compositor
 // deve ingrandire): righe di un pixel e scacchiera, per giudicare il filtro.
+// --decorated: chiede la barra del titolo di Vela (xdg-decoration), come
+// le app Qt e KDE.
+// --popup X,Y: apre anche un menu (xdg-popup) magenta di 200x150, ancorato
+// al punto (X, Y) della finestra; può scorrere per restare sullo schermo.
 
 #define _GNU_SOURCE
 #include <math.h>
@@ -32,6 +37,7 @@
 
 #include "fractional-scale-v1-client-protocol.h"
 #include "viewporter-client-protocol.h"
+#include "xdg-decoration-unstable-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 
 static struct wl_compositor* compositor;
@@ -39,6 +45,7 @@ static struct wl_shm* shm;
 static struct xdg_wm_base* wmBase;
 static struct wp_viewporter* viewporter;
 static struct wp_fractional_scale_manager_v1* fractionalManager;
+static struct zxdg_decoration_manager_v1* decorationManager;
 
 static struct wl_surface* surface;
 static struct wp_viewport* viewport;
@@ -54,10 +61,19 @@ static int configured;
 static int legacy;
 static int running = 1;
 
+#define POPUP_WIDTH 200
+#define POPUP_HEIGHT 150
+static int popupWanted;
+static int popupX;
+static int popupY;
+static struct wl_surface* popupSurface;
+
 static void onGlobal(void* data, struct wl_registry* registry, uint32_t name, const char* interface, uint32_t version)
 {
     if (!strcmp(interface, wl_compositor_interface.name)) {
         compositor = wl_registry_bind(registry, name, &wl_compositor_interface, 4);
+    } else if (!strcmp(interface, zxdg_decoration_manager_v1_interface.name)) {
+        decorationManager = wl_registry_bind(registry, name, &zxdg_decoration_manager_v1_interface, 1);
     } else if (!strcmp(interface, wl_shm_interface.name)) {
         shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
     } else if (!strcmp(interface, xdg_wm_base_interface.name)) {
@@ -135,6 +151,68 @@ static void draw(void)
         scale120, width, height);
 }
 
+// Il menu: un rettangolo magenta a scala 1.
+static void drawPopup(void)
+{
+    const int stride = POPUP_WIDTH * 4;
+    const size_t size = (size_t)stride * POPUP_HEIGHT;
+    const int fd = memfd_create("vela-pattern-popup", MFD_CLOEXEC);
+    if (fd < 0 || ftruncate(fd, (off_t)size) < 0) {
+        perror("vela-pattern: memfd");
+        exit(1);
+    }
+    uint32_t* pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    for (int i = 0; i < POPUP_WIDTH * POPUP_HEIGHT; ++i) {
+        pixels[i] = 0xffff00ffu;
+    }
+    munmap(pixels, size);
+    struct wl_shm_pool* pool = wl_shm_create_pool(shm, fd, (int32_t)size);
+    struct wl_buffer* buffer
+        = wl_shm_pool_create_buffer(pool, 0, POPUP_WIDTH, POPUP_HEIGHT, stride, WL_SHM_FORMAT_XRGB8888);
+    wl_buffer_add_listener(buffer, &bufferListener, NULL);
+    wl_shm_pool_destroy(pool);
+    close(fd);
+    wl_surface_attach(popupSurface, buffer, 0, 0);
+    wl_surface_damage_buffer(popupSurface, 0, 0, POPUP_WIDTH, POPUP_HEIGHT);
+    wl_surface_commit(popupSurface);
+}
+
+static void onPopupSurfaceConfigure(void* data, struct xdg_surface* xdg, uint32_t serial)
+{
+    xdg_surface_ack_configure(xdg, serial);
+    drawPopup();
+}
+
+static const struct xdg_surface_listener popupSurfaceListener = { onPopupSurfaceConfigure };
+
+static void onPopupConfigure(void* data, struct xdg_popup* popup, int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    fprintf(stderr, "vela-pattern: popup at %d,%d (%dx%d)\n", x, y, width, height);
+}
+
+static void onPopupDone(void* data, struct xdg_popup* popup) { }
+static void onPopupRepositioned(void* data, struct xdg_popup* popup, uint32_t token) { }
+
+static const struct xdg_popup_listener popupListener = { onPopupConfigure, onPopupDone, onPopupRepositioned };
+
+static void openPopup(void)
+{
+    struct xdg_positioner* positioner = xdg_wm_base_create_positioner(wmBase);
+    xdg_positioner_set_size(positioner, POPUP_WIDTH, POPUP_HEIGHT);
+    xdg_positioner_set_anchor_rect(positioner, popupX, popupY, 1, 1);
+    xdg_positioner_set_anchor(positioner, XDG_POSITIONER_ANCHOR_TOP_LEFT);
+    xdg_positioner_set_gravity(positioner, XDG_POSITIONER_GRAVITY_BOTTOM_RIGHT);
+    xdg_positioner_set_constraint_adjustment(positioner,
+        XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_X | XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_Y);
+    popupSurface = wl_compositor_create_surface(compositor);
+    struct xdg_surface* xdg = xdg_wm_base_get_xdg_surface(wmBase, popupSurface);
+    xdg_surface_add_listener(xdg, &popupSurfaceListener, NULL);
+    struct xdg_popup* popup = xdg_surface_get_popup(xdg, xdgSurface, positioner);
+    xdg_popup_add_listener(popup, &popupListener, NULL);
+    xdg_positioner_destroy(positioner);
+    wl_surface_commit(popupSurface);
+}
+
 static void onPreferredScale(void* data, struct wp_fractional_scale_v1* fractional, uint32_t scale)
 {
     if (legacy || scale == scale120) {
@@ -164,6 +242,9 @@ static void onSurfaceConfigure(void* data, struct xdg_surface* xdg, uint32_t ser
     }
     configured = 1;
     draw();
+    if (popupWanted && !popupSurface) {
+        openPopup();
+    }
 }
 
 static const struct xdg_surface_listener surfaceListener = { onSurfaceConfigure };
@@ -190,14 +271,20 @@ int main(int argc, char** argv)
 {
     int arg = 1;
     const char* appId = "vela.pattern";
-    if (arg < argc && !strcmp(argv[arg], "--scale1")) {
-        legacy = 1;
-        ++arg;
-    }
-    // --app-id: per le prove che dipendono dall'app (dialoghi di sistema).
-    if (arg + 1 < argc && !strcmp(argv[arg], "--app-id")) {
-        appId = argv[arg + 1];
-        arg += 2;
+    int decorated = 0;
+    for (; arg < argc && !strncmp(argv[arg], "--", 2); ++arg) {
+        if (!strcmp(argv[arg], "--scale1")) {
+            legacy = 1;
+        } else if (!strcmp(argv[arg], "--decorated")) {
+            decorated = 1;
+        } else if (!strcmp(argv[arg], "--popup") && arg + 1 < argc
+            && sscanf(argv[arg + 1], "%d,%d", &popupX, &popupY) == 2) {
+            popupWanted = 1;
+            ++arg;
+        } else if (!strcmp(argv[arg], "--app-id") && arg + 1 < argc) {
+            // Per le prove che dipendono dall'app (dialoghi di sistema).
+            appId = argv[++arg];
+        }
     }
     if (arg + 1 < argc) {
         logicalWidth = atoi(argv[arg]);
@@ -227,6 +314,15 @@ int main(int argc, char** argv)
     xdg_toplevel_add_listener(toplevel, &toplevelListener, NULL);
     xdg_toplevel_set_title(toplevel, "vela-pattern");
     xdg_toplevel_set_app_id(toplevel, appId);
+    if (decorated) {
+        if (!decorationManager) {
+            fprintf(stderr, "vela-pattern: no xdg-decoration\n");
+            return 1;
+        }
+        struct zxdg_toplevel_decoration_v1* decoration
+            = zxdg_decoration_manager_v1_get_toplevel_decoration(decorationManager, toplevel);
+        zxdg_toplevel_decoration_v1_set_mode(decoration, ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+    }
     wl_surface_commit(surface);
 
     while (running && wl_display_dispatch(display) != -1) {

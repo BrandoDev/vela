@@ -1,15 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// FrameClock (render/frame_clock.hpp, docs/renderer.md §4): la griglia dei
+// Il frame clock (frame_clock.h, docs/renderer.md §4): la griglia dei
 // vblank, il piano del late latching, il costo, il margine che cresce e
 // cala, la latenza dello schermo imparata.
 
-#include "render/frame_clock.hpp"
+extern "C" {
+#include "frame_clock.h"
+}
 
 #include <gtest/gtest.h>
 
-using vela::render::FrameClock;
+#include <algorithm>
 
 namespace {
 
@@ -24,7 +26,7 @@ int64_t periodFor(int hz)
 // Un ciclo di frame simulato: si pianifica, si consegna, lo schermo mostra il
 // frame al vblank previsto più `hostDelay` vblank (come un compositor ospite).
 struct Simulation {
-    FrameClock clock;
+    vela_frame_clock clock;
     int64_t period;
     int64_t now;
     uint32_t seq = 1;
@@ -34,18 +36,19 @@ struct Simulation {
         : period(periodFor(hz))
         , now(10 * second)
     {
-        clock.setModeRefresh(hz * 1000);
-        clock.presented(0, now, period); // la prima comparsa: c'è la griglia
+        vela_frame_clock_init(&clock);
+        vela_frame_clock_set_mode_refresh(&clock, hz * 1000);
+        vela_frame_clock_presented(&clock, 0, now, period); // la prima comparsa: c'è la griglia
     }
 
     // Un frame; `late`: arriva un vblank dopo il previsto (frame lento).
-    FrameClock::Plan frame(int64_t cost = 1 * ms, bool late = false)
+    vela_frame_plan frame(int64_t cost = 1 * ms, bool late = false)
     {
-        const FrameClock::Plan plan = clock.plan(now, true);
-        clock.addCost(plan.start + cost, cost);
-        clock.committed(seq, plan.start, plan.present);
+        const vela_frame_plan plan = vela_frame_clock_plan(&clock, now, true);
+        vela_frame_clock_add_cost(&clock, plan.start + cost, cost);
+        vela_frame_clock_committed(&clock, seq, plan.start, plan.present);
         const int64_t shown = plan.deadline + (hostDelay + (late ? 1 : 0)) * period;
-        clock.presented(seq, shown, period);
+        vela_frame_clock_presented(&clock, seq, shown, period);
         ++seq;
         now = shown + period / 10; // il prossimo frame si chiede poco dopo
         return plan;
@@ -56,74 +59,81 @@ struct Simulation {
 
 TEST(FrameClock, UnknownRefreshIs60Hz)
 {
-    FrameClock clock;
-    EXPECT_EQ(clock.periodNs(), 16'666'667);
-    clock.setModeRefresh(180'000);
-    EXPECT_EQ(clock.periodNs(), periodFor(180));
+    vela_frame_clock clock;
+    vela_frame_clock_init(&clock);
+    EXPECT_EQ(vela_frame_clock_period(&clock), 16'666'667);
+    vela_frame_clock_set_mode_refresh(&clock, 180'000);
+    EXPECT_EQ(vela_frame_clock_period(&clock), periodFor(180));
 }
 
 TEST(FrameClock, PresentedPeriodWinsOverMode)
 {
-    FrameClock clock;
-    clock.setModeRefresh(60'000);
-    clock.presented(0, 1 * second, 6'944'444); // 144 Hz dal feedback vero
-    EXPECT_EQ(clock.periodNs(), 6'944'444);
+    vela_frame_clock clock;
+    vela_frame_clock_init(&clock);
+    vela_frame_clock_set_mode_refresh(&clock, 60'000);
+    vela_frame_clock_presented(&clock, 0, 1 * second, 6'944'444); // 144 Hz dal feedback vero
+    EXPECT_EQ(vela_frame_clock_period(&clock), 6'944'444);
 }
 
 TEST(FrameClock, VblankGrid)
 {
-    FrameClock clock;
+    vela_frame_clock clock;
+    vela_frame_clock_init(&clock);
     const int64_t period = periodFor(60);
     const int64_t t0 = 5 * second;
-    EXPECT_EQ(clock.vblankAfter(t0 + 123), t0 + 123); // nessuna griglia ancora
-    clock.presented(0, t0, period);
-    EXPECT_EQ(clock.vblankAfter(t0 + period / 3), t0 + period);
-    EXPECT_EQ(clock.vblankAfter(t0 + period), t0 + 2 * period); // sempre il successivo
-    EXPECT_EQ(clock.vblankAfter(t0 + 10 * period + 1), t0 + 11 * period);
+    EXPECT_EQ(vela_frame_clock_vblank_after(&clock, t0 + 123), t0 + 123); // nessuna griglia ancora
+    vela_frame_clock_presented(&clock, 0, t0, period);
+    EXPECT_EQ(vela_frame_clock_vblank_after(&clock, t0 + period / 3), t0 + period);
+    EXPECT_EQ(vela_frame_clock_vblank_after(&clock, t0 + period), t0 + 2 * period); // sempre il successivo
+    EXPECT_EQ(vela_frame_clock_vblank_after(&clock, t0 + 10 * period + 1), t0 + 11 * period);
 }
 
 TEST(FrameClock, PlanWithoutGridDrawsNow)
 {
-    FrameClock clock;
-    clock.setModeRefresh(60'000);
-    const FrameClock::Plan plan = clock.plan(2 * second, true);
+    vela_frame_clock clock;
+    vela_frame_clock_init(&clock);
+    vela_frame_clock_set_mode_refresh(&clock, 60'000);
+    const vela_frame_plan plan = vela_frame_clock_plan(&clock, 2 * second, true);
     EXPECT_EQ(plan.start, 2 * second);
-    EXPECT_EQ(plan.deadline, 2 * second + clock.periodNs());
+    EXPECT_EQ(plan.deadline, 2 * second + vela_frame_clock_period(&clock));
     EXPECT_EQ(plan.present, plan.deadline);
 }
 
 TEST(FrameClock, LateLatchingStartsCostPlusMarginBeforeVblank)
 {
-    FrameClock clock;
+    vela_frame_clock clock;
+    vela_frame_clock_init(&clock);
     const int64_t period = periodFor(60);
     const int64_t t0 = 5 * second;
-    clock.presented(0, t0, period);
-    clock.addCost(t0, 2 * ms);
+    vela_frame_clock_presented(&clock, 0, t0, period);
+    vela_frame_clock_add_cost(&clock, t0, 2 * ms);
     const int64_t now = t0 + period / 10;
-    const FrameClock::Plan plan = clock.plan(now, true);
+    const vela_frame_plan plan = vela_frame_clock_plan(&clock, now, true);
     EXPECT_EQ(plan.deadline, t0 + period);
     EXPECT_EQ(plan.start, t0 + period - (2 * ms + 1 * ms)); // costo + margine di base
     EXPECT_EQ(plan.present, plan.deadline);
     // Senza late latching si comincia subito, per lo stesso vblank.
-    const FrameClock::Plan eager = clock.plan(now, false);
+    const vela_frame_plan eager = vela_frame_clock_plan(&clock, now, false);
     EXPECT_EQ(eager.start, now);
     EXPECT_EQ(eager.deadline, t0 + period);
 }
 
 TEST(FrameClock, CostIsWorstOfLastSecondButAtLeastEightFrames)
 {
-    FrameClock clock;
-    clock.addCost(1 * second, 9 * ms); // vecchio e lento
+    vela_frame_clock clock;
+    vela_frame_clock_init(&clock);
+    vela_frame_clock_add_cost(&clock, 1 * second, 9 * ms); // vecchio e lento
     for (int i = 0; i < 10; ++i) {
-        clock.addCost(3 * second + i * ms, 1 * ms);
+        vela_frame_clock_add_cost(&clock, 3 * second + i * ms, 1 * ms);
     }
-    EXPECT_EQ(clock.costNs(3 * second + 20 * ms), 1 * ms); // fuori dall'ultimo secondo
-    FrameClock few;
-    few.addCost(1 * second, 9 * ms);
+    EXPECT_EQ(vela_frame_clock_cost(&clock, 3 * second + 20 * ms), 1 * ms); // fuori dall'ultimo secondo
+    vela_frame_clock few;
+    vela_frame_clock_init(&few);
+    vela_frame_clock_add_cost(&few, 1 * second, 9 * ms);
     for (int i = 0; i < 5; ++i) {
-        few.addCost(3 * second + i * ms, 1 * ms);
+        vela_frame_clock_add_cost(&few, 3 * second + i * ms, 1 * ms);
     }
-    EXPECT_EQ(few.costNs(3 * second + 20 * ms), 9 * ms); // tra gli ultimi 8: conta
+    EXPECT_EQ(vela_frame_clock_cost(&few, 3 * second + 20 * ms), 9 * ms); // tra gli ultimi 8: conta
 }
 
 // Il budget non supera mai "periodo − min(0,5 ms, periodo/4)": appena dopo
@@ -132,13 +142,14 @@ TEST(FrameClock, CostIsWorstOfLastSecondButAtLeastEightFrames)
 TEST(FrameClock, BudgetNeverHalvesTheRefreshRate)
 {
     for (int hz : { 60, 75, 120, 144, 165, 180, 240, 360 }) {
-        FrameClock clock;
+        vela_frame_clock clock;
+        vela_frame_clock_init(&clock);
         const int64_t period = periodFor(hz);
         const int64_t t0 = 5 * second;
-        clock.presented(0, t0, period);
-        clock.addCost(t0, 100 * ms); // un frame lentissimo
-        EXPECT_EQ(clock.budgetNs(t0), period - std::min<int64_t>(500'000, period / 4)) << hz << " Hz";
-        const FrameClock::Plan plan = clock.plan(t0 + 1000, true); // subito dopo il vblank
+        vela_frame_clock_presented(&clock, 0, t0, period);
+        vela_frame_clock_add_cost(&clock, t0, 100 * ms); // un frame lentissimo
+        EXPECT_EQ(vela_frame_clock_budget(&clock, t0), period - std::min<int64_t>(500'000, period / 4)) << hz << " Hz";
+        const vela_frame_plan plan = vela_frame_clock_plan(&clock, t0 + 1000, true); // subito dopo il vblank
         EXPECT_EQ(plan.deadline, t0 + period) << hz << " Hz";
         EXPECT_GE(plan.start, t0 + 1000) << hz << " Hz";
     }
@@ -148,18 +159,18 @@ TEST(FrameClock, OnTimeFramesPredictExactly)
 {
     Simulation sim(180);
     for (int i = 0; i < 400; ++i) {
-        const FrameClock::Plan plan = sim.frame();
+        const vela_frame_plan plan = sim.frame();
         EXPECT_EQ(plan.present, plan.deadline);
     }
-    EXPECT_EQ(sim.clock.latencyFrames(), 0);
-    EXPECT_EQ(sim.clock.marginNs(), 1 * ms);
+    EXPECT_EQ(sim.clock.latency_frames, 0);
+    EXPECT_EQ(vela_frame_clock_margin(&sim.clock), 1 * ms);
 }
 
 TEST(FrameClock, WarmupDoesNotGrowTheMargin)
 {
     Simulation sim(60);
     sim.frame(1 * ms, true); // tardi nel primo secondo (allocazioni, modeset)
-    EXPECT_EQ(sim.clock.marginNs(), 1 * ms);
+    EXPECT_EQ(vela_frame_clock_margin(&sim.clock), 1 * ms);
 }
 
 TEST(FrameClock, MissedVblankGrowsTheMarginThenItDecays)
@@ -169,18 +180,18 @@ TEST(FrameClock, MissedVblankGrowsTheMarginThenItDecays)
         sim.frame(); // oltre il secondo di warmup
     }
     sim.frame(1 * ms, true);
-    const int64_t grown = sim.clock.marginNs();
+    const int64_t grown = vela_frame_clock_margin(&sim.clock);
     EXPECT_EQ(grown, 1 * ms + std::max<int64_t>(250'000, sim.period / 10));
     // Puntuale: torna giù di circa 0,25 ms al secondo, fino al minimo.
     for (int i = 0; i < 60; ++i) {
         sim.frame();
     }
-    EXPECT_LT(sim.clock.marginNs(), grown);
-    EXPECT_NEAR(double(grown - sim.clock.marginNs()), 250'000.0, 2'000.0);
-    while (sim.clock.marginNs() > 1 * ms) {
+    EXPECT_LT(vela_frame_clock_margin(&sim.clock), grown);
+    EXPECT_NEAR(double(grown - vela_frame_clock_margin(&sim.clock)), 250'000.0, 2'000.0);
+    while (vela_frame_clock_margin(&sim.clock) > 1 * ms) {
         sim.frame();
     }
-    EXPECT_EQ(sim.clock.marginNs(), 1 * ms);
+    EXPECT_EQ(vela_frame_clock_margin(&sim.clock), 1 * ms);
 }
 
 // Annidato in un compositor che aggiunge un vblank (KWin): il margine sale
@@ -193,23 +204,23 @@ TEST(FrameClock, LearnsTheLatencyOfAHostCompositor)
     for (int i = 0; i < 300; ++i) {
         sim.frame();
     }
-    EXPECT_EQ(sim.clock.latencyFrames(), 1);
-    EXPECT_EQ(sim.clock.marginNs(), 1 * ms);
-    const FrameClock::Plan plan = sim.frame();
+    EXPECT_EQ(sim.clock.latency_frames, 1);
+    EXPECT_EQ(vela_frame_clock_margin(&sim.clock), 1 * ms);
+    const vela_frame_plan plan = sim.frame();
     EXPECT_EQ(plan.present, plan.deadline + sim.period);
 }
 
 TEST(FrameClock, StatsAfterTwoSeconds)
 {
     Simulation sim(120);
-    FrameClock::Stats stats {};
-    EXPECT_FALSE(sim.clock.takeStats(sim.now, stats)); // l'inizio
+    vela_frame_stats stats {};
+    EXPECT_FALSE(vela_frame_clock_take_stats(&sim.clock, sim.now, &stats)); // l'inizio
     const int64_t start = sim.now;
     while (sim.now < start + 2 * second + sim.period) {
         sim.frame();
     }
-    ASSERT_TRUE(sim.clock.takeStats(sim.now, stats));
+    ASSERT_TRUE(vela_frame_clock_take_stats(&sim.clock, sim.now, &stats));
     EXPECT_NEAR(stats.fps, 120.0, 2.0);
     EXPECT_EQ(stats.missed, 0);
-    EXPECT_NEAR(stats.errorMeanMs, 0.0, 1e-9);
+    EXPECT_NEAR(stats.error_mean_ms, 0.0, 1e-9);
 }

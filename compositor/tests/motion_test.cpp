@@ -1,15 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Le curve e i tween delle animazioni (motion.hpp): uguali alle curve
+// Le curve e i tween delle animazioni (motion.h): uguali alle curve
 // cubic-bezier di CSS e QML, che usa anche la shell.
 
-#include "motion.hpp"
+extern "C" {
+#include "motion.h"
+}
 
 #include <gtest/gtest.h>
 
-using vela::CubicBezier;
-using vela::Tween;
+#include <cmath>
 
 namespace {
 
@@ -38,18 +39,18 @@ double reference(double x1, double y1, double x2, double y2, double x)
 
 TEST(Motion, EndpointsAndClamping)
 {
-    const CubicBezier& curve = vela::motion::decelerate;
-    EXPECT_EQ(curve(0.0), 0.0);
-    EXPECT_EQ(curve(1.0), 1.0);
-    EXPECT_EQ(curve(-0.5), 0.0);
-    EXPECT_EQ(curve(1.5), 1.0);
+    const vela_curve* curve = &vela_decelerate;
+    EXPECT_EQ(vela_curve_eval(curve, 0.0), 0.0);
+    EXPECT_EQ(vela_curve_eval(curve, 1.0), 1.0);
+    EXPECT_EQ(vela_curve_eval(curve, -0.5), 0.0);
+    EXPECT_EQ(vela_curve_eval(curve, 1.5), 1.0);
 }
 
 TEST(Motion, LinearCurveIsIdentity)
 {
-    const CubicBezier linear(0.0, 0.0, 1.0, 1.0);
+    const vela_curve linear { 0.0, 0.0, 1.0, 1.0 };
     for (double x = 0.0; x <= 1.0; x += 0.05) {
-        EXPECT_NEAR(linear(x), x, 1e-6);
+        EXPECT_NEAR(vela_curve_eval(&linear, x), x, 1e-6);
     }
 }
 
@@ -60,43 +61,45 @@ TEST(Motion, MatchesCubicBezierDefinition)
     };
     for (const Case& c : { Case { 0.0, 0.0, 0.2, 1.0 }, Case { 0.25, 0.1, 0.25, 1.0 }, Case { 0.42, 0.0, 0.58, 1.0 },
              Case { 0.1, 0.9, 0.2, 1.0 } }) {
-        const CubicBezier curve(c.x1, c.y1, c.x2, c.y2);
+        const vela_curve curve { c.x1, c.y1, c.x2, c.y2 };
         for (double x = 0.05; x < 1.0; x += 0.05) {
-            EXPECT_NEAR(curve(x), reference(c.x1, c.y1, c.x2, c.y2, x), 1e-4) << "x=" << x;
+            EXPECT_NEAR(vela_curve_eval(&curve, x), reference(c.x1, c.y1, c.x2, c.y2, x), 1e-4) << "x=" << x;
         }
     }
 }
 
 TEST(Motion, DecelerateIsMonotonicAndFrontLoaded)
 {
-    const CubicBezier& curve = vela::motion::decelerate;
+    const vela_curve* curve = &vela_decelerate;
     double previous = 0.0;
     for (int i = 1; i <= 1000; ++i) {
-        const double value = curve(i / 1000.0);
+        const double value = vela_curve_eval(curve, i / 1000.0);
         EXPECT_GE(value, previous);
         previous = value;
     }
     // Parte decisa: a metà del tempo ha già fatto ben più di metà strada,
     // ma non così tanto da sparire nei primi frame ad alta frequenza.
-    EXPECT_GT(curve(0.5), 0.7);
-    EXPECT_LT(curve(3.0 / 45.0), 0.35); // 3 frame a 180 Hz di un'animazione da 250 ms
+    EXPECT_GT(vela_curve_eval(curve, 0.5), 0.7);
+    EXPECT_LT(vela_curve_eval(curve, 3.0 / 45.0), 0.35); // 3 frame a 180 Hz di un'animazione da 250 ms
 }
 
 TEST(Motion, TweenStartsAtFirstRead)
 {
-    Tween tween(250.0, &vela::motion::decelerate);
-    EXPECT_FALSE(tween.finished(1000.0)); // non ancora letto: non è partito
-    EXPECT_EQ(tween.progress(1000.0), 0.0); // il primo frame è lo stato iniziale
-    EXPECT_GT(tween.progress(1100.0), 0.0);
-    EXPECT_FALSE(tween.finished(1249.0));
-    EXPECT_TRUE(tween.finished(1250.0));
-    EXPECT_EQ(tween.progress(1300.0), 1.0);
+    vela_tween tween;
+    vela_tween_start(&tween, 250.0, &vela_decelerate);
+    EXPECT_FALSE(vela_tween_finished(&tween, 1000.0)); // non ancora letto: non è partito
+    EXPECT_EQ(vela_tween_progress(&tween, 1000.0), 0.0); // il primo frame è lo stato iniziale
+    EXPECT_GT(vela_tween_progress(&tween, 1100.0), 0.0);
+    EXPECT_FALSE(vela_tween_finished(&tween, 1249.0));
+    EXPECT_TRUE(vela_tween_finished(&tween, 1250.0));
+    EXPECT_EQ(vela_tween_progress(&tween, 1300.0), 1.0);
 }
 
 TEST(Motion, TweenWithoutCurveIsLinear)
 {
-    Tween tween(100.0, nullptr);
-    EXPECT_EQ(tween.progress(0.0), 0.0);
-    EXPECT_DOUBLE_EQ(tween.progress(25.0), 0.25);
-    EXPECT_DOUBLE_EQ(tween.progress(100.0), 1.0);
+    vela_tween tween;
+    vela_tween_start(&tween, 100.0, nullptr);
+    EXPECT_EQ(vela_tween_progress(&tween, 0.0), 0.0);
+    EXPECT_DOUBLE_EQ(vela_tween_progress(&tween, 25.0), 0.25);
+    EXPECT_DOUBLE_EQ(vela_tween_progress(&tween, 100.0), 1.0);
 }

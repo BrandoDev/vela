@@ -89,7 +89,7 @@ class Preferences : public QObject {
     Q_PROPERTY(bool colorFilterShortcut READ colorFilterShortcut WRITE setColorFilterShortcut NOTIFY accessibilityChanged)
     Q_PROPERTY(bool stickyKeys READ stickyKeys WRITE setStickyKeys NOTIFY accessibilityChanged)
     // Il colore Mica della barra del titolo (lo stesso calcolo del
-    // compositor, decoration.cpp): così il contenuto della finestra continua
+    // compositor, decoration.c): così il contenuto della finestra continua
     // la barra senza stacchi.
     Q_PROPERTY(QColor mica READ mica NOTIFY wallpaperChanged)
     Q_PROPERTY(QColor micaInactive READ micaInactive NOTIFY wallpaperChanged)

@@ -5,7 +5,7 @@
 
 vela-slowgpu fa il commit di ogni fotogramma mentre la sua GPU lavora
 ancora per ~150 ms. Vela tiene il commit in attesa finché la fence non è
-segnalata (scene/readiness.cpp) e intanto mostra il fotogramma precedente:
+segnalata (scene/ready.c) e intanto mostra il fotogramma precedente:
 il cursore che si muove resta a 60 Hz. Senza l'attesa (VELA_READY_WAIT=0)
 ogni frame aspetterebbe la GPU dell'app e lo schermo perderebbe quasi tutti
 i vblank: la terza prova controlla che il test se ne accorga davvero.
@@ -44,7 +44,7 @@ class ReadyCommits(unittest.TestCase):
 
     def test_implicit_sync(self):
         # Anche i buffer ridisegnati ma non mostrati: restano importati solo
-        # finché servono (render/texture.cpp), o il kernel farebbe aspettare
+        # finché servono (render/texture.c), o il kernel farebbe aspettare
         # le loro fence a ogni nostro invio.
         missed, frames, held = self.measure("--implicit")
         self.assertLessEqual(missed, 2, f"{frames} frames, {held} held commits")

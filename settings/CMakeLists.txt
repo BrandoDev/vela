@@ -28,6 +28,8 @@ qt_add_executable(vela-settings
     src/keyboardlayouts.h
     src/preferences.cpp
     src/preferences.h
+    ${PROJECT_SOURCE_DIR}/compositor/src/legacy_names.c
+    ${PROJECT_SOURCE_DIR}/compositor/src/legacy_names.h
     ${SHELL_SRC}/appmodel.cpp
     ${SHELL_SRC}/appmodel.h
     ${SHELL_SRC}/iconprovider.h

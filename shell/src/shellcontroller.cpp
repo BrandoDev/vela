@@ -85,7 +85,7 @@ ShellController::ShellController(QObject* parent)
 
 QString ShellController::socketPath()
 {
-    // Deve coincidere con Server::sendShellCommand() nel compositor.
+    // Deve coincidere con vela_shell_send() nel compositor (shell.c).
     const QString runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
     const QString display = qEnvironmentVariable("WAYLAND_DISPLAY", QStringLiteral("wayland-0"));
     return runtimeDir + QStringLiteral("/vela-shell-") + display + QStringLiteral(".sock");
@@ -143,7 +143,7 @@ bool ShellController::sendToRunningInstance(const QByteArray& command)
     return true;
 }
 
-// Il socket dei comandi del compositor: vedi Server::listenForCommands().
+// Il socket dei comandi del compositor: vedi vela_commands_listen() (command.c).
 bool ShellController::sendToCompositor(const QByteArray& command)
 {
     const QString runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);

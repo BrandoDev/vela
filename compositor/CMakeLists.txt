@@ -69,7 +69,7 @@ vela_own_protocol(${WAYLAND_PROTOCOLS_DIR}/staging/ext-background-effect/ext-bac
     ext-background-effect-v1)
 
 # Lato client, per parlare con il compositor ospite quando Vela gira in una
-# finestra (nested.cpp).
+# finestra (nested.c).
 pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
 set(VELA_CLIENT_PROTOCOL_SOURCES)
 function(vela_client_protocol xml name)
@@ -107,39 +107,70 @@ foreach(shader quad.vert texture.frag rect.frag shadow.frag blur_down.frag blur_
     list(APPEND VELA_SHADERS ${output})
 endforeach()
 
+# I moduli senza wlroots né GPU (logica pura, provata dai test): il
+# compositor e le prove li condividono.
+add_library(vela-pure STATIC
+    src/buffer.c
+    src/color.c
+    src/config.c
+    src/frame_clock.c
+    src/geometry.c
+    src/legacy_names.c
+    src/motion.c
+    src/output_config.c
+    src/sun.c
+    src/util.c)
+target_include_directories(vela-pure PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_compile_definitions(vela-pure PUBLIC _GNU_SOURCE)
+target_compile_options(vela-pure PRIVATE -Wall -Wextra -Wno-unused-parameter)
+set_target_properties(vela-pure PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
+find_library(MATH_LIBRARY m)
+if(MATH_LIBRARY)
+    target_link_libraries(vela-pure PUBLIC ${MATH_LIBRARY})
+endif()
+
 add_executable(vela-compositor
-    src/main.cpp
-    src/supervisor.cpp
-    src/nested.cpp
-    src/server.cpp
-    src/output.cpp
-    src/pointer.cpp
-    src/outputconfig.cpp
-    src/toplevel.cpp
-    src/xwayland.cpp
-    src/layer.cpp
-    src/decoration.cpp
-    src/icons.cpp
-    src/text.cpp
-    src/workspaces.cpp
-    src/accessibility.cpp
-    src/input.cpp
-    src/render/pixelbuffer.cpp
-    src/lock.cpp
-    src/keyboard.cpp
-    src/settings.cpp
-    src/snap.cpp
-    src/snapshot.cpp
-    src/render/allocator.cpp
-    src/render/pass.cpp
-    src/render/renderer.cpp
-    src/render/texture.cpp
-    src/render/vulkan.cpp
-    src/scene/capture.cpp
-    src/scene/effects.cpp
-    src/scene/frame.cpp
-    src/scene/readiness.cpp
-    src/scene/scene.cpp
+    src/a11y.c
+    src/bindings.c
+    src/command.c
+    src/decoration.c
+    src/focus.c
+    src/icons.c
+    src/input.c
+    src/interact.c
+    src/keyboard.c
+    src/layer.c
+    src/lock.c
+    src/main.c
+    src/nested.c
+    src/output.c
+    src/output_manager.c
+    src/popup.c
+    src/process.c
+    src/server.c
+    src/session.c
+    src/shell.c
+    src/snap.c
+    src/snapshot.c
+    src/supervisor.c
+    src/switcher.c
+    src/text.c
+    src/view.c
+    src/workspace.c
+    src/xwayland.c
+    src/render/allocator.c
+    src/render/formats.c
+    src/render/pass.c
+    src/render/pixel_buffer.c
+    src/render/renderer.c
+    src/render/texture.c
+    src/render/vulkan.c
+    src/scene/capture.c
+    src/scene/effects.c
+    src/scene/frame.c
+    src/scene/ready.c
+    src/scene/scene.c
+    src/scene/surface.c
     ${VELA_SHADERS}
     ${VELA_PROTOCOL_HEADERS}
     ${VELA_CLIENT_PROTOCOL_SOURCES}
@@ -153,7 +184,9 @@ target_compile_definitions(vela-compositor PRIVATE WLR_USE_UNSTABLE
 # servono (gli altri valgono zero): l'avviso sui campi omessi sarebbe rumore.
 target_compile_options(vela-compositor PRIVATE -Wall -Wextra -Wno-unused-parameter
     -Wno-missing-field-initializers)
+set_target_properties(vela-compositor PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
 target_link_libraries(vela-compositor PRIVATE
+    vela-pure
     PkgConfig::WLROOTS
     PkgConfig::WAYLAND_SERVER
     PkgConfig::WAYLAND_CLIENT
@@ -185,10 +218,10 @@ if(VELA_BUILD_TOOLS)
             tests/geometry_test.cpp
             tests/color_sun_test.cpp
             tests/settings_test.cpp
-            src/settings.cpp)
-        target_include_directories(vela-compositor-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+            tests/output_config_test.cpp
+            tests/buffer_test.cpp)
         target_compile_options(vela-compositor-tests PRIVATE -Wall -Wextra)
-        target_link_libraries(vela-compositor-tests PRIVATE GTest::gtest_main)
+        target_link_libraries(vela-compositor-tests PRIVATE vela-pure GTest::gtest_main)
         include(GoogleTest)
         gtest_discover_tests(vela-compositor-tests TEST_PREFIX "compositor.")
     else()

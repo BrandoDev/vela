@@ -4,7 +4,7 @@
 #pragma once
 
 // Il colore Mica delle finestre di Vela: lo stesso calcolo del compositor
-// per la barra del titolo (compositor/src/decoration.cpp, micaColor), così
+// per la barra del titolo (compositor/src/decoration.c, mica_color), così
 // il contenuto delle app di Vela (Impostazioni, Esplora) continua la barra
 // senza stacchi. La tinta è il colore medio dello sfondo: la calcola la
 // shell e la lascia anche in ~/.cache/vela/wallpaper-tint, da leggere al
@@ -49,7 +49,7 @@ inline QColor cachedWallpaperTint()
 
 // Scuro: attiva base #202020 al 30% verso la tinta, inattiva #2b2b2b al
 // 45%. Chiaro: #f3f3f3 e #f9f9f9, con la tinta portata nella fascia
-// chiara. Come micaColor in compositor/src/decoration.cpp.
+// chiara. Come mica_color in compositor/src/decoration.c.
 inline QColor micaFromTint(const QColor& tint, bool active, bool light = false)
 {
     const float base = light ? (active ? 0.953f : 0.976f) : (active ? 0.125f : 0.169f);

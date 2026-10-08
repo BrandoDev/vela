@@ -6,6 +6,7 @@ supervisore che riavvia il compositor dopo un crash (anche bloccato)."""
 
 import os
 import signal
+import tempfile
 import time
 import unittest
 
@@ -51,6 +52,32 @@ class Lock(unittest.TestCase):
             vela.wait_for(lambda s: s.output["powered"], what="screen back on")
             vela.wait_for(lambda s: not s["locked"], timeout=8, what="unlocked")
             self.assertTrue(vela.state().has(window))
+
+
+class Shell(unittest.TestCase):
+    """Il comando di avvio (la shell): rilanciato se cade, ma non se esce
+    bene né se cade di continuo appena partito (shell.c)."""
+
+    def runs(self, script):
+        count = tempfile.mktemp(prefix="vela-shell-runs-")
+        with Session(startup=f"sh -c 'echo run >> {count}; {script}'") as vela:
+            time.sleep(2.5)
+            log = vela.log_text()
+        runs = len(open(count).read().split()) if os.path.exists(count) else 0
+        if os.path.exists(count):
+            os.unlink(count)
+        return runs, log
+
+    def test_shell_that_keeps_crashing_is_given_up(self):
+        runs, log = self.runs("exit 3")
+        self.assertEqual(runs, 3)
+        self.assertIn("exited (code 3): restarting it", log)
+        self.assertIn("keeps exiting (code 3): not restarting it", log)
+
+    def test_shell_that_exits_cleanly_is_not_restarted(self):
+        runs, log = self.runs("exit 0")
+        self.assertEqual(runs, 1)
+        self.assertNotIn("restarting it", log)
 
 
 class Supervisor(unittest.TestCase):

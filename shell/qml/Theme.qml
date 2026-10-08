@@ -6,7 +6,7 @@ pragma Singleton
 import QtQuick
 
 // Linguaggio visivo di Vela in un solo posto. Le curve e le durate sono le
-// stesse del compositor (compositor/src/motion.hpp): finestre e shell si
+// stesse del compositor (compositor/src/motion.h): finestre e shell si
 // muovono nello stesso modo.
 QtObject {
     // --- colori: tema scuro o chiaro ("Scegli la modalità" nelle Impostazioni) ---

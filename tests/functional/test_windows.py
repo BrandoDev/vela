@@ -5,9 +5,10 @@
 ridurre a icona, Alt+Tab, desktop virtuali, chiudere. Ogni prova parte da
 una sessione nuova; gli stati si leggono dal compositor (richiesta "state")."""
 
+import time
 import unittest
 
-from harness import Session
+from harness import Session, tool
 
 LEFT_HALF = [0, 0, 6, 12]
 RIGHT_HALF = [6, 0, 12, 12]
@@ -122,6 +123,27 @@ class Windows(unittest.TestCase):
         self.vela.keys("alt+F4")
         self.vela.wait_for(lambda s: not s.has(window), what="window closed")
 
+
+    def test_popup_stays_on_screen(self):
+        # Un menu che uscirebbe dallo schermo a destra scivola dentro
+        # (popup.c); uno che ci sta resta dove l'app lo vuole.
+        magenta = (255, 0, 255)
+        for anchor_x, inside in ((1500, False), (40, True)):
+            window = self.vela.open_window(300, 200, command=[tool("vela-pattern"), "--popup", f"{anchor_x},50",
+                                                               "300", "200"])
+            w = self.vela.state().window(window)
+            out = self.vela.state().output
+            x = w["x"] + anchor_x if inside else out["x"] + out["w"] - 200
+            y = w["y"] + 50
+            time.sleep(0.4)
+            image = self.vela.pixels()
+            at = lambda lx, ly: image.at(round(lx * self.scale), round(ly * self.scale))
+            self.assertEqual(at(x + 100, y + 75), magenta, f"popup anchored at {anchor_x}")
+            self.assertEqual(at(x + 3, y + 3), magenta)
+            self.assertEqual(at(x + 196, y + 146), magenta)
+            self.assertNotEqual(at(x - 4, y + 75), magenta)
+            self.vela.keys("alt+F4")
+            self.vela.wait_for(lambda s: not s.has(window), what="window closed")
 
 class WindowsAt125(Windows):
     """Le stesse prove a scala frazionaria."""

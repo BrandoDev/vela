@@ -3,7 +3,9 @@
 
 #include "preferences.h"
 
-#include "legacysettings.hpp"
+extern "C" {
+#include "legacy_names.h"
+}
 
 #include "iconprovider.h"
 #include "mica.h"
@@ -148,11 +150,22 @@ void Preferences::reload()
 
 namespace {
 
-// Una riga di vela.conf con i nomi di adesso (compositor/src/legacysettings.hpp).
+// Una riga di vela.conf con i nomi di adesso (compositor/src/legacy_names.h).
 QString modernLine(const QString& line)
 {
-    std::string text = line.toStdString();
-    return vela::legacy::modernizeLine(text) ? QString::fromStdString(text) : line;
+    const qsizetype eq = line.indexOf(u'=');
+    if (line.isEmpty() || line.startsWith(u'#') || eq < 0) {
+        return line;
+    }
+    const QByteArray key = line.left(eq).toUtf8();
+    const QByteArray value = line.mid(eq + 1).toUtf8();
+    const char* newKey = vela_legacy_key(key.constData());
+    const char* newValue = vela_legacy_value(newKey ? newKey : key.constData(), value.constData());
+    if (!newKey && !newValue) {
+        return line;
+    }
+    return QString::fromUtf8(newKey ? QByteArray(newKey) : key) + u'='
+        + QString::fromUtf8(newValue ? QByteArray(newValue) : value);
 }
 
 } // namespace

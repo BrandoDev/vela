@@ -11,6 +11,6 @@ mkdir -p "$STATE_DIR"
 [ -f "$STATE_DIR/vela.log" ] && mv -f "$STATE_DIR/vela.log" "$STATE_DIR/vela.log.old"
 
 # --supervise: se il compositor va in crash si riavvia, e le app Qt e KDE
-# si ricollegano (vedi compositor/src/supervisor.cpp).
+# si ricollegano (vedi compositor/src/supervisor.c).
 exec "@CMAKE_INSTALL_FULL_BINDIR@/vela-compositor" --supervise -s "@CMAKE_INSTALL_FULL_BINDIR@/vela-shell" "$@" \
     2> "$STATE_DIR/vela.log"

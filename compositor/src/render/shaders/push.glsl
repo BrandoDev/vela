@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Le costanti di ogni disegno: vedi QuadPush in render/renderer.hpp.
+// Le costanti di ogni disegno: vedi struct vela_quad_push in render/render.h.
 layout(push_constant) uniform Push {
     vec4 dst; // x, y, larghezza, altezza in pixel della destinazione
     vec2 target; // dimensioni della destinazione
