@@ -9,7 +9,8 @@
 #   .desktop and default app ones. The functional and sharpness tests
 #   (tests/functional) are reported as skipped here: the renderer wants a GPU
 #   with a DRM node, which GitHub runners don't have.
-# - package: only for main, the vela-git package built with the PKGBUILD,
+# - package: main pushes and manual runs (including test branches), built
+#   with the PKGBUILD,
 #   downloadable from the run's page (Artifacts) and installable with
 #   sudo pacman -U.
 
@@ -75,9 +76,10 @@ jobs:
           for script in packaging/arch/vela-update session/vela-session-env scripts/*.sh; do
             sh -n "$script"
           done
+          python packaging/arch/tests/test_update.py
 
   package:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
     container: archlinux:latest

@@ -27,8 +27,11 @@ usage() {
     cat << EOF
 Usage: vela-update [options]
 
-Updates Vela to the latest commit and installs it.
+Updates Vela to the repository's default branch and installs it.
 
+  --branch NAME       install the latest commit of this branch, just this time
+  --commit SHA        install this exact commit (full or abbreviated SHA),
+                      just this time; cannot be combined with --branch
   --check             only tell whether there is an update and what changed
                       (exits with 0 if there is one, 1 if Vela is up to date)
   --force             rebuild and reinstall even if Vela is up to date
@@ -48,12 +51,27 @@ force=0
 prefer=""
 jobs=""
 source=""
+branch=""
+commit=""
 while [ $# -gt 0 ]; do
     case "$1" in
     --check) check=1 ;;
     --force) force=1 ;;
     --build) prefer=build ;;
     --download) prefer=download ;;
+    --branch | --commit)
+        option="$1"
+        if [ $# -lt 2 ] || [ -z "$2" ]; then
+            echo "vela-update: $option needs a value" >&2; exit 2
+        fi
+        shift
+        case "$option" in
+        --branch) branch="$1" ;;
+        --commit) commit="$1" ;;
+        esac
+        ;;
+    --branch=*) branch="${1#*=}"; [ -n "$branch" ] || { echo "vela-update: --branch needs a value" >&2; exit 2; } ;;
+    --commit=*) commit="${1#*=}"; [ -n "$commit" ] || { echo "vela-update: --commit needs a value" >&2; exit 2; } ;;
     --jobs) shift; jobs="${1:-}" ;;
     --jobs=*) jobs="${1#*=}" ;;
     --source) shift; source="${1:-}" ;;
@@ -63,6 +81,15 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
+if [ -n "$branch" ] && [ -n "$commit" ]; then
+    echo "vela-update: use either --branch or --commit, not both" >&2; exit 2
+fi
+if [ -n "$branch" ] && ! git check-ref-format --branch "$branch" > /dev/null 2>&1; then
+    echo "vela-update: invalid branch name: $branch" >&2; exit 2
+fi
+case "$commit" in
+*[!0-9a-fA-F]*) echo "vela-update: --commit needs a full or abbreviated commit SHA" >&2; exit 2 ;;
+esac
 if [ -n "$jobs" ]; then
     case "$jobs" in
     *[!0-9]* | 0) echo "vela-update: --jobs needs a number" >&2; exit 2 ;;
@@ -110,11 +137,27 @@ if [ "$fetched" = no ]; then
     exit 1
 fi
 
-latest=$(git -C "$MIRROR" rev-parse --short=7 HEAD)
-latestFull=$(git -C "$MIRROR" rev-parse HEAD)
+# Resolve once: the changelog, CI artifact and local build must all use the
+# same commit. Selecting a test version never changes the mirror's HEAD.
+target=HEAD
+if [ -n "$branch" ]; then
+    target="refs/heads/$branch"
+elif [ -n "$commit" ]; then
+    target="$commit"
+fi
+if ! latestFull=$(git -C "$MIRROR" rev-parse --verify "$target^{commit}" 2> /dev/null); then
+    # A full SHA may still be fetchable after its branch has been deleted.
+    if [ -z "$commit" ] || ! git -C "$MIRROR" fetch --quiet origin "$commit" 2> /dev/null \
+        || ! latestFull=$(git -C "$MIRROR" rev-parse --verify "$target^{commit}" 2> /dev/null); then
+        echo "vela-update: can't find the requested revision: $target" >&2
+        exit 1
+    fi
+fi
+latest=$(git -C "$MIRROR" rev-parse --short=7 "$latestFull")
+echo ":: Selected revision: ${branch:-${commit:-default branch}} ($latestFull)"
 installed=$(pacman -Q vela-git 2> /dev/null | sed -n 's/.*\.g\([0-9a-f]*\)-[0-9]*$/\1/p')
 
-if [ -n "$installed" ] && [ "${latest#"$installed"}" != "$latest" ] && [ "$force" = 0 ]; then
+if [ -n "$installed" ] && [ "${latestFull#"$installed"}" != "$latestFull" ] && [ "$force" = 0 ]; then
     echo ":: Vela is up to date ($(pacman -Q vela-git | cut -d' ' -f2))."
     [ "$check" = 1 ] && exit 1
     exit 0
@@ -122,11 +165,11 @@ fi
 
 # What's new: the commits after the installed one (if it's among them).
 if [ -n "$installed" ] && git -C "$MIRROR" cat-file -e "$installed^{commit}" 2> /dev/null \
-    && git -C "$MIRROR" merge-base --is-ancestor "$installed" HEAD 2> /dev/null; then
-    count=$(git -C "$MIRROR" rev-list --count "$installed..HEAD")
+    && git -C "$MIRROR" merge-base --is-ancestor "$installed" "$latestFull" 2> /dev/null; then
+    count=$(git -C "$MIRROR" rev-list --count "$installed..$latestFull")
     if [ "$count" -gt 0 ]; then
         echo ":: What's new ($count):"
-        git -C "$MIRROR" log --format='   %s' "$installed..HEAD"
+        git -C "$MIRROR" log --format='   %s' "$installed..$latestFull"
     fi
 elif [ -n "$installed" ]; then
     echo ":: Installed version: $(pacman -Q vela-git | cut -d' ' -f2); new: $latest"
@@ -218,9 +261,12 @@ fi
 WORK="$CACHE/build"
 rm -rf "$WORK"
 mkdir -p "$WORK"
-git -C "$MIRROR" show HEAD:packaging/arch/PKGBUILD > "$WORK/PKGBUILD"
+git -C "$MIRROR" show "$latestFull:packaging/arch/PKGBUILD" > "$WORK/PKGBUILD"
+# Advertise the selected commit to makepkg's mirror clone even when it was
+# fetched by SHA and no branch points to it anymore.
+git -C "$MIRROR" update-ref refs/vela-update/selected "$latestFull"
 cd "$WORK"
-export VELA_GIT_URL="file://$MIRROR"
+export VELA_GIT_URL="file://$MIRROR#commit=$latestFull"
 if [ -n "$jobs" ]; then
     export MAKEFLAGS="-j$jobs"
 fi

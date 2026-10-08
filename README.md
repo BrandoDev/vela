@@ -270,7 +270,23 @@ vela-update --check         # only check, and list the changes
 vela-update --download      # use GitHub's package without asking
 vela-update --build         # always build locally
 vela-update --jobs 2        # fewer parallel compile jobs
+vela-update --branch fix/nvidia --download  # test this branch's latest commit
+vela-update --commit abc1234 --download    # test an exact commit
 ```
+
+`--branch` and `--commit` apply only to that invocation and cannot be combined.
+The next plain `vela-update` returns to the repository's default branch (`main`
+on GitHub), including when this means installing an older version. Commit SHAs
+may be full or abbreviated, provided the abbreviation is unambiguous.
+Both options also work with `--check` and `--build`; local builds use the exact
+selected commit too. `--download` uses that commit's CI package if available,
+otherwise it builds locally as usual.
+
+To prepare a package for a test branch, run the **Build** workflow manually in
+GitHub Actions, selecting that branch (or run
+`gh workflow run build.yml --ref fix/nvidia`). Manual runs produce the same
+`vela-git` artifact as pushes to `main`; artifacts expire after 14 days.
+The tester needs a version of `vela-update` that already supports these options.
 
 The last three packages stay in `~/.cache/vela-update` for easy rollback.
 
