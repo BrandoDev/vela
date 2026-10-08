@@ -1,0 +1,70 @@
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: Standalone Package Test
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: standalone-package-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  package-build:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Build dependencies
+        run: >-
+          pacman -Syu --noconfirm --needed
+          base-devel git cmake shaderc vulkan-headers wayland-protocols
+          qt6-tools wlroots0.20 wayland libxkbcommon pixman libinput
+          libdrm mesa vulkan-icd-loader freetype2 harfbuzz fontconfig
+          librsvg cairo qt6-base qt6-declarative qt6-svg qt6-wayland
+          layer-shell-qt pam hicolor-icon-theme
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Build checked-out revision with makepkg
+        shell: bash
+        run: |
+          git config --system --add safe.directory '*'
+          git checkout -B ci-package-source HEAD
+          useradd -m builder
+          cp -r packaging/arch /home/builder/pkgbuild
+          chown -R builder:builder /home/builder/pkgbuild
+          sed -i '/^OPTIONS=/s/\([( ]\)debug\b/\1!debug/' /etc/makepkg.conf
+          su -s /bin/bash builder -c \
+            "cd /home/builder/pkgbuild && VELA_GIT_URL=file://$GITHUB_WORKSPACE MAKEFLAGS=-j2 makepkg --noconfirm"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vela-smoke-package
+          path: /home/builder/pkgbuild/vela-git-*.pkg.tar.zst
+          if-no-files-found: error
+          retention-days: 7
+  package-install:
+    needs: package-build
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Update fresh Arch image
+        run: pacman -Syu --noconfirm
+      - uses: actions/download-artifact@v7
+        with:
+          name: vela-smoke-package
+          path: package-download
+      - name: Install package and dependencies
+        shell: bash
+        run: |
+          shopt -s nullglob
+          packages=(package-download/vela-git-*.pkg.tar.zst)
+          if [ "${#packages[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one package"
+            exit 1
+          fi
+          pacman -U --noconfirm --needed "${packages[0]}"
+      - name: Smoke-test installed package
+        run: bash scripts/ci-check-package.sh
