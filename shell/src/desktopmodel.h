@@ -120,6 +120,7 @@ signals:
     // A file just created (New, Paste): the view selects it and, if asked, has
     // it renamed.
     void created(const QString& path, bool rename);
+    void chooseAppRequested(const QString& path);
 
 private:
     struct Item {
