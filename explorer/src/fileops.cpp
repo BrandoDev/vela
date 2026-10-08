@@ -6,7 +6,7 @@
 #include "appmodel.h"
 #include "foldermodel.h"
 #include "links.h"
-#include "trash.h"
+#include "systemactions.h"
 
 #include <QClipboard>
 #include <QCollator>
