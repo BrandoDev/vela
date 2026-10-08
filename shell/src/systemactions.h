@@ -7,6 +7,17 @@
 #include <QString>
 #include <QStringList>
 
+class AppModel;
+
+namespace vela::trash {
+// Empty Vela Files' FreeDesktop home trash without external gio/ktrash tools.
+// Returns entries that could not be deleted; never follows symlinks.
+QStringList emptyHome();
+}
+
+// Locate Vela Files both when installed and when running from a build tree.
+QString velaFilesExecutable();
+
 // The menu entries that open a piece of the system (Win+X, clock, taskbar...),
 // mapped to the Linux programs doing the same thing (docs/renderer.md §14.11).
 // An entry without an installed program is "unavailable" and the menu shows it
@@ -16,6 +27,7 @@ class SystemActions : public QObject {
 
 public:
     explicit SystemActions(QObject* parent = nullptr);
+    void setAppModel(AppModel* apps) { m_apps = apps; }
 
     // Names: installed-apps, mobility, power, events, system, devices,
     // network, disks, computer, terminal, terminal-admin, task-manager,
@@ -43,7 +55,11 @@ public:
     Q_INVOKABLE bool canUninstall(const QString& desktopFile) const;
     Q_INVOKABLE void uninstall(const QString& desktopFile) const;
 
+signals:
+    void chooseAppRequested(const QString& path);
+
 private:
+    AppModel* m_apps = nullptr;
     QString command(const QString& name) const;
 };
 
