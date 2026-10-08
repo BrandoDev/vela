@@ -15,7 +15,7 @@ Page {
             icon: "preferences-desktop-locale"
             title: qsTr("Vela language")
             description: qsTr("The language of Vela's menus, windows and settings")
-            // I nomi delle lingue restano nella loro lingua, come su Windows.
+            // Language names stay in their own language, like on Windows.
             trailing: Choice {
                 model: [qsTr("Same as the system"), "Italiano", "English"]
                 currentIndex: Prefs.language === "it" ? 1 : Prefs.language === "en" ? 2 : 0

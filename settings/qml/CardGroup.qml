@@ -3,8 +3,8 @@
 
 import QtQuick
 
-// Un gruppo di schede con il suo titolo, come le sezioni di Windows 11
-// ("Scala e layout", "Impostazioni correlate"...): schede staccate di poco.
+// A group of cards with its title, like Windows 11 sections ("Scale & layout",
+// "Related settings"...): cards slightly apart.
 Column {
     id: group
     property string title

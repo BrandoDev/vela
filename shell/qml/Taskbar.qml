@@ -3,26 +3,26 @@
 
 import QtQuick
 
-// La taskbar: pulsante Start, app fissate e app aperte al centro, orologio
-// a destra.
+// The taskbar: Start button, pinned and open apps in the center, clock on the
+// right.
 Window {
     id: root
     objectName: "taskbar"
-    // Una per schermo (ScreenWindows): sul principale anche l'area di
-    // notifica e le icone di sistema, sugli altri l'orologio, come Windows.
+    // One per output (ScreenWindows): the main one also has the notification
+    // area and system icons, the others the clock, like Windows.
     property bool primary: false
     readonly property string screenName: screen ? screen.name : ""
 
-    // Resta invisibile finché main.cpp non l'ha trasformata in un pannello
-    // layer-shell. La larghezza la decide il compositor (ancorata ai lati).
+    // It stays invisible until main.cpp has turned it into a layer-shell
+    // panel. The compositor decides the width (anchored to the sides).
     visible: false
     width: 1280
     height: Theme.taskbarHeight
     color: "transparent"
 
-    // Le app fissate al primo avvio (id dei file .desktop; quelle non
-    // installate si saltano). Poi valgono quelle scelte dall'utente: si
-    // fissano e si tolgono dai menu, si riordinano trascinando i pulsanti.
+    // The apps pinned at first start (.desktop ids; those not installed are
+    // skipped). Afterwards the user's choices apply: pinned and unpinned from
+    // the menus, reordered by dragging the buttons.
     readonly property list<string> pinnedIds: [
         "vela-files.desktop",
         "org.kde.konsole.desktop",
@@ -32,7 +32,8 @@ Window {
         "org.kde.kate.desktop",
         "vela-settings.desktop"
     ]
-    // Solo al primo avvio: poi valgono quelle salvate (aggiunte e tolte dai menu).
+    // Only at first start: afterwards the saved ones apply (pinned and
+    // unpinned from the menus).
     Component.onCompleted: {
         if (!Tasks.pinsSaved) {
             Tasks.pinnedIds = pinnedIds
@@ -40,14 +41,14 @@ Window {
         updateBlur()
     }
 
-    // Tutta la taskbar sopra lo sfondo sfocato (acrylic).
+    // The whole taskbar above the blurred background (acrylic).
     function updateBlur() {
         Effects.setBlur(root, [Qt.rect(0, 0, width, height)])
     }
     onWidthChanged: updateBlur()
     onHeightChanged: updateBlur()
 
-    // Le anteprime delle finestre di un pulsante (TaskbarPreview.qml).
+    // A button's window previews (TaskbarPreview.qml).
     Timer {
         id: previewDelay
         property var task: null
@@ -59,30 +60,31 @@ Window {
         }
     }
 
-    // --- menu del tasto destro (docs/renderer.md §14.4-14.6) ---
+    // --- right-click menus (docs/renderer.md §14.4-14.6) ---
 
-    // La taskbar sta in fondo allo schermo: da coordinate sue a quelle dello schermo.
+    // The taskbar is at the bottom of the output: from its coordinates to the
+    // output's.
     function screenPoint(item, x, y) {
         const p = item.mapToItem(null, x, y)
         return Qt.point(p.x, Screen.height - root.height + p.y)
     }
-    // I menu della taskbar salgono dal suo bordo superiore.
+    // Taskbar menus rise from its top edge.
     readonly property real menuBottom: Screen.height - root.height - 4
 
     function openAbove(entries, item, centered, options) {
         const p = screenPoint(item, centered ? item.width / 2 : 0, 0)
         root.openMenu(entries, p.x, menuBottom, Object.assign({ above: true, centered: centered }, options || {}))
     }
-    // I menu della taskbar si aprono sul suo schermo; anche i pannelli che
-    // apre (Start, impostazioni rapide...) vanno lì.
+    // Taskbar menus open on its output; the panels it opens (Start, quick
+    // settings...) go there too.
     function openMenu(entries, x, y, options) {
         Menus.panelScreen = root.screenName
         Menus.open(entries, x, y, Object.assign({ screen: root.screenName }, options || {}))
     }
     function fromHere() { Menus.panelScreen = root.screenName }
 
-    // La jump list di un pulsante: file fissati e recenti, attività
-    // dell'app, poi l'app, fissa/togli, chiudi.
+    // A button's jump list: pinned and recent files, the app's tasks, then the
+    // app, pin/unpin, close.
     function jumpList(task) {
         const id = task.desktopId
         const entries = []
@@ -136,7 +138,7 @@ Window {
         return entries
     }
 
-    // Win+X: il menu del pulsante Start.
+    // Win+X: the Start button menu.
     function winXEntries() {
         const item = (text, icon, name) => ({ text: text, icon: icon, enabled: System.available(name), action: () => System.trigger(name) })
         const entries = [item(qsTr("Insta&lled apps"), "system-software-install", "installed-apps")]
@@ -187,7 +189,7 @@ Window {
         root.openMenu(winXEntries(), p.x, menuBottom, { above: true, keyboard: keyboard })
     }
 
-    // Il menu di un'icona dell'area di notifica (lo decide l'app).
+    // The menu of a notification area icon (the app decides it).
     Connections {
         target: Tray
         enabled: root.primary
@@ -209,7 +211,7 @@ Window {
         anchors.fill: parent
         color: Theme.taskbar
 
-        // Spazio vuoto: Gestione attività e impostazioni della taskbar.
+        // Empty space: Task Manager and taskbar settings.
         MouseArea {
             id: emptyArea
             anchors.fill: parent
@@ -223,7 +225,7 @@ Window {
             }
         }
 
-        // Sottile riga di luce sul bordo superiore, come un vetro.
+        // A thin line of light on the top edge, like glass.
         Rectangle {
             anchors { left: parent.left; right: parent.right; top: parent.top }
             height: 1
@@ -233,9 +235,9 @@ Window {
 
     Row {
         id: buttons
-        // Centrata a mano invece che con anchors: così, quando un'app si
-        // apre o si chiude, la fila scivola al nuovo centro invece di saltare.
-        // Oppure a sinistra, come le versioni precedenti di Windows.
+        // Centered by hand instead of with anchors: so when an app opens or
+        // closes, the row slides to the new center instead of jumping. Or on
+        // the left, like earlier versions of Windows.
         x: Config.taskbarAlignment === "left" ? 12 : Math.round((parent.width - width) / 2)
         anchors.verticalCenter: parent.verticalCenter
         spacing: 4
@@ -243,7 +245,7 @@ Window {
         Behavior on x {
             NumberAnimation { duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
         }
-        // Il pulsante di un'app appena aperta entra crescendo.
+        // The button of an app just opened comes in growing.
         add: Transition {
             NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.normal }
             NumberAnimation {
@@ -266,7 +268,7 @@ Window {
             StartGlyph { anchors.centerIn: parent }
         }
 
-        // Visualizzazione attività: due finestre sovrapposte, come l'icona di Windows 11.
+        // Task View: two overlapping windows, like the Windows 11 icon.
         TaskbarButton {
             visible: Config.taskView
             tooltip: qsTr("Task view")
@@ -304,7 +306,8 @@ Window {
             TaskbarButton {
                 id: task
                 draggable: true
-                // Lasciato più in là: si sposta di tanti posti quanti pulsanti ha superato.
+                // Dropped further away: it moves by as many places as buttons
+                // it passed.
                 onDropped: dx => {
                     const to = Math.max(0, Math.min(taskRepeater.count - 1, index + Math.round(dx / (width + buttons.spacing))))
                     if (to !== index) Tasks.move(index, to)
@@ -326,8 +329,8 @@ Window {
                     Tasks.activate(index)
                 }
                 onMiddleClicked: Tasks.launchNew(index)
-                // Le anteprime delle sue finestre, col mouse fermo sul pulsante
-                // (subito, se quelle di un altro pulsante sono già aperte).
+                // The previews of its windows, with the mouse resting on the
+                // button (at once, if another button's are already open).
                 onHoveredChanged: {
                     Menus.previewButtonHovered = hovered
                     if (hovered && windowCount > 0) {
@@ -352,7 +355,7 @@ Window {
                     }
                 }
 
-                // Il compositor fa volare qui le finestre ridotte a icona.
+                // The compositor flies minimized windows here.
                 function reportGeometry() {
                     if (windowCount > 0) {
                         const p = mapToItem(null, 0, 0)
@@ -377,8 +380,8 @@ Window {
         }
     }
 
-    // Area di notifica: le icone delle app (Telegram, Discord, Steam...),
-    // a sinistra dell'orologio come su Windows.
+    // Notification area: the apps' icons (Telegram, Discord, Steam...), left
+    // of the clock like on Windows.
     Row {
         id: tray
         visible: root.primary
@@ -413,7 +416,7 @@ Window {
                     smooth: true
                     mipmap: true
                 }
-                // Chiede attenzione (messaggi non letti): un puntino.
+                // Asks for attention (unread messages): a dot.
                 Rectangle {
                     visible: trayItem.attention
                     width: 6
@@ -444,9 +447,9 @@ Window {
         }
     }
 
-    // Le icone di sistema (rete, volume, batteria) in un solo pulsante: apre
-    // le impostazioni rapide, come su Windows 11. La rotellina sul volume lo
-    // cambia; col tasto destro i loro menu (§14.5).
+    // The system icons (network, volume, battery) in a single button: it opens
+    // quick settings, like on Windows 11. The wheel over the volume changes
+    // it; the right button opens their menus (§14.5).
     Item {
         id: systemIcons
         visible: root.primary
@@ -498,7 +501,7 @@ Window {
                     Shell.quickSettingsRequested()
                     return
                 }
-                // Il menu dell'icona sotto il mouse: volume o rete.
+                // The menu of the icon under the mouse: volume or network.
                 const p = root.screenPoint(systemMouse, mouse.x, 0)
                 const overVolume = volumeIcon.visible && mouse.x >= volumeIcon.x + iconsRow.x - 5
                     && mouse.x < volumeIcon.x + iconsRow.x + volumeIcon.width + 5
@@ -518,7 +521,7 @@ Window {
         }
     }
 
-    // Orologio: ora sopra, data sotto.
+    // Clock: time on top, date below.
     Item {
         id: clock
         anchors { right: parent.right; top: parent.top; bottom: parent.bottom; rightMargin: 12 }
@@ -540,8 +543,8 @@ Window {
             opacity: clockMouse.containsMouse || Menus.notificationCenterOpen ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: Theme.fast } }
         }
-        // Le notifiche da leggere: un numero accanto all'orologio, come Windows
-        // 11 (con "Non disturbare" una campana spenta).
+        // Notifications to read: a number next to the clock, like Windows 11
+        // (with "Do not disturb" a muted bell).
         Rectangle {
             visible: Notifications.history.count > 0 || Notifications.doNotDisturb
             anchors { right: parent.right; rightMargin: -2; verticalCenter: parent.verticalCenter }

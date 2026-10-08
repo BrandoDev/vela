@@ -6,14 +6,14 @@
 #include <QQuickAsyncImageProvider>
 #include <QThreadPool>
 
-// Le miniature dei file (le immagini sul desktop, come in Windows):
-//   Image { source: "image://filethumb/" + encodeURIComponent(percorso) }
-// Usa la cache condivisa di freedesktop (~/.cache/thumbnails), la stessa di
-// Dolphin e Nautilus: se un'altra app ha già fatto la miniatura (anche di
-// un video o di un PDF) la si prende da lì; le immagini che mancano si
-// fanno qui, in un thread a parte, e si salvano per tutti.
-// Se non c'è modo di avere una miniatura la richiesta fallisce e il QML
-// mostra l'icona del tipo di file.
+// File thumbnails (images on the desktop, like in Windows):
+//   Image { source: "image://filethumb/" + encodeURIComponent(path) }
+// It uses the shared freedesktop cache (~/.cache/thumbnails), the same as
+// Dolphin and Nautilus: if another app already made the thumbnail (of a video
+// or a PDF too) it's taken from there; missing images are made here, in a
+// separate thread, and saved for everyone.
+// When there's no way to get a thumbnail the request fails and QML shows the
+// file type's icon.
 class FileThumbnailProvider : public QQuickAsyncImageProvider {
 public:
     FileThumbnailProvider();

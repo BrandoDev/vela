@@ -44,8 +44,8 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# La shell di quella sessione (la lancia il compositor con WAYLAND_DISPLAY
-# già impostato) e il compositor, che ne è il padre.
+# That session's shell (the compositor launches it with WAYLAND_DISPLAY already
+# set) and the compositor, its parent.
 SHELL_PID=""
 for pid in $(pgrep -u "$(id -u)" -x vela-shell || true); do
     display=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | sed -n 's/^WAYLAND_DISPLAY=//p')
@@ -69,14 +69,14 @@ pss_mib() {
     awk '/^Pss:/ { printf "%.1f", $2 / 1024 }' "/proc/$1/smaps_rollup"
 }
 cpu_ticks() {
-    # utime + stime: campi 14 e 15, contando dopo il nome tra parentesi.
+    # utime + stime: fields 14 and 15, counting after the name in parentheses.
     sed 's/^.*) //' "/proc/$1/stat" | awk '{ print $12 + $13 }'
 }
 wakeups() {
     awk '/^voluntary_ctxt_switches:/ { print $2 }' "/proc/$1/status"
 }
 battery_uw() {
-    # Potenza istantanea in µW di tutte le batterie che si scaricano; vuoto se a rete.
+    # Instantaneous power in µW of all discharging batteries; empty when on AC.
     total=""
     for bat in /sys/class/power_supply/BAT*; do
         [ -d "$bat" ] || continue
@@ -124,7 +124,7 @@ else
     POWER=""
 fi
 
-# Avvio a freddo di Esplora: il primo fotogramma, dall'avvio del processo.
+# File Explorer cold start: the first frame, from the process start.
 FILES_MS=""
 if [ "$FILES_RUN" = 1 ]; then
     FILES=$(command -v vela-files || true)
@@ -135,7 +135,7 @@ if [ "$FILES_RUN" = 1 ]; then
             | sed -n 's/.*, \([0-9]*\) ms after process start.*/\1/p' | head -n 1 || true)
         [ -n "$t" ] && times="$times $t"
     done
-    # La mediana delle cinque prove.
+    # The median of the five runs.
     FILES_MS=$(echo "$times" | tr ' ' '\n' | grep . | sort -n | awk '{ a[NR] = $1 } END { if (NR) print a[int((NR + 1) / 2)] }')
 fi
 

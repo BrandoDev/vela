@@ -28,8 +28,8 @@ const QString watcherPath = QStringLiteral("/StatusNotifierWatcher");
 const QString itemInterface = QStringLiteral("org.kde.StatusNotifierItem");
 const QString menuInterface = QStringLiteral("com.canonical.dbusmenu");
 
-// IconPixmap e simili: a(iiay), ARGB32 in ordine di rete. Si prende la
-// più grande fino a 64 pixel (la tray ne disegna 16-24, anche a scala 2).
+// IconPixmap and the like: a(iiay), ARGB32 in network order. The largest up to
+// 64 pixels is taken (the tray draws 16-24, even at scale 2).
 QImage decodePixmaps(const QVariant& value)
 {
     if (!value.canConvert<QDBusArgument>()) {
@@ -67,7 +67,7 @@ QImage decodePixmaps(const QVariant& value)
     return best;
 }
 
-// Il titolo del ToolTip: (sa(iiay)ss).
+// The ToolTip title: (sa(iiay)ss).
 QString tooltipTitle(const QVariant& value)
 {
     if (!value.canConvert<QDBusArgument>()) {
@@ -94,8 +94,8 @@ QString tooltipTitle(const QVariant& value)
     return title;
 }
 
-// Un'icona per nome, cercata prima nella cartella che l'app indica
-// (IconThemePath), poi nel tema.
+// An icon by name, looked up first in the directory the app gives
+// (IconThemePath), then in the theme.
 QString iconSource(const QString& name, const QString& themePath)
 {
     if (name.isEmpty()) {
@@ -120,7 +120,7 @@ QString iconSource(const QString& name, const QString& themePath)
     return QStringLiteral("image://icon/") + QString::fromUtf8(QUrl::toPercentEncoding(name));
 }
 
-// Le etichette dei menu hanno le "mnemoniche" con il trattino basso.
+// Menu labels have "mnemonics" with an underscore.
 QString menuLabel(QString label)
 {
     label.replace(QLatin1String("__"), QStringLiteral("\x01"));
@@ -129,7 +129,7 @@ QString menuLabel(QString label)
     return label;
 }
 
-// Una voce di com.canonical.dbusmenu: (ia{sv}av), ricorsiva.
+// A com.canonical.dbusmenu entry: (ia{sv}av), recursive.
 QVariantMap parseMenuEntry(const QDBusArgument& argument)
 {
     int id = 0;
@@ -166,7 +166,7 @@ QVariantMap parseMenuEntry(const QDBusArgument& argument)
     };
 }
 
-// Riceve i segnali D-Bus di un'icona (nuova icona, nuovo stato...).
+// Receives an icon's D-Bus signals (new icon, new status...).
 class ItemSignals : public QObject {
     Q_OBJECT
 public:
@@ -180,7 +180,7 @@ Q_SIGNALS:
 
 } // namespace
 
-// ------------------------------------------------------------- registro --
+// ------------------------------------------------------------- registry --
 
 StatusNotifierWatcher::StatusNotifierWatcher(QObject* parent)
     : QObject(parent)
@@ -216,8 +216,8 @@ bool StatusNotifierWatcher::registerService()
 
 void StatusNotifierWatcher::RegisterStatusNotifierItem(const QString& service)
 {
-    // L'app può dare il suo nome sul bus o solo il percorso dell'oggetto
-    // (libappindicator): l'indirizzo è sempre "servizio/percorso".
+    // The app can give its bus name or only the object path (libappindicator):
+    // the address is always "service/path".
     QString address;
     if (service.startsWith(QLatin1Char('/'))) {
         address = message().service() + service;
@@ -239,7 +239,7 @@ void StatusNotifierWatcher::RegisterStatusNotifierHost(const QString&)
     Q_EMIT StatusNotifierHostRegistered();
 }
 
-// ---------------------------------------------------------------- icone --
+// ---------------------------------------------------------------- icons --
 
 struct TrayModel::Item {
     QString address;
@@ -247,7 +247,7 @@ struct TrayModel::Item {
     QString path;
     QString title;
     QString status;
-    QString icon; // sorgente per Image
+    QString icon; // source for Image
     QString menuPath;
     bool itemIsMenu = false;
     bool loaded = false;
@@ -272,7 +272,7 @@ void TrayModel::start()
         connect(m_watcher, &StatusNotifierWatcher::StatusNotifierItemRegistered, this, &TrayModel::addItem);
         connect(m_watcher, &StatusNotifierWatcher::StatusNotifierItemUnregistered, this, &TrayModel::removeItem);
     } else {
-        // Il registro c'è già (Plasma): ci si iscrive come host.
+        // The registry already exists (Plasma): we sign up as a host.
         delete m_watcher;
         m_watcher = nullptr;
         bus.connect(watcherService, watcherPath, watcherService, QStringLiteral("StatusNotifierItemRegistered"), this,
@@ -366,8 +366,8 @@ void TrayModel::refresh(Item* item)
         item->itemIsMenu = properties.value(QStringLiteral("ItemIsMenu")).toBool();
         item->menuPath = properties.value(QStringLiteral("Menu")).value<QDBusObjectPath>().path();
 
-        // L'icona: quella di "attenzione" se l'app la chiede; il nome nel
-        // tema, altrimenti l'immagine che manda l'app.
+        // The icon: the "attention" one if the app asks for it; the theme
+        // name, otherwise the image the app sends.
         const bool attention = item->status == QLatin1String("NeedsAttention");
         const QString themePath = properties.value(QStringLiteral("IconThemePath")).toString();
         QString name = properties.value(QLatin1String(attention ? "AttentionIconName" : "IconName")).toString();
@@ -417,8 +417,8 @@ QVariant TrayModel::data(const QModelIndex& index, int role) const
     }
     switch (role) {
     case IconRole:
-        // Nascoste finché non si sa com'è l'icona, e quelle "passive" (le
-        // app le usano per dire "adesso non serve mostrarmi").
+        // Hidden until the icon's look is known, and "passive" ones (apps use
+        // them to say "no need to show me now").
         return item->loaded && item->status != QLatin1String("Passive") ? item->icon : QString();
     case TitleRole: return item->title;
     case AttentionRole: return item->status == QLatin1String("NeedsAttention");
@@ -431,7 +431,7 @@ QHash<int, QByteArray> TrayModel::roleNames() const
     return { { IconRole, "icon" }, { TitleRole, "title" }, { AttentionRole, "attention" } };
 }
 
-// ------------------------------------------------------------- comandi --
+// ------------------------------------------------------------ commands --
 
 void TrayModel::activate(int row, int anchorX)
 {
@@ -450,8 +450,8 @@ void TrayModel::activate(int row, int anchorX)
     const QString address = item->address;
     connect(pending, &QDBusPendingCallWatcher::finished, this, [this, address, anchorX](QDBusPendingCallWatcher* p) {
         p->deleteLater();
-        // Molte app (libappindicator, Electron) non sanno fare Activate:
-        // al clic mostrano il menu.
+        // Many apps (libappindicator, Electron) can't Activate: on click they
+        // show the menu.
         if (p->isError()) {
             for (size_t i = 0; i < m_items.size(); ++i) {
                 if (m_items[i]->address == address) {
@@ -489,7 +489,7 @@ void TrayModel::requestMenu(int row, int anchorX)
         return;
     }
     QDBusConnection bus = QDBusConnection::sessionBus();
-    // Alcune app riempiono il menu solo quando sta per aprirsi.
+    // Some apps fill the menu only when it's about to open.
     QDBusMessage about = QDBusMessage::createMethodCall(item->service, item->menuPath, menuInterface,
         QStringLiteral("AboutToShow"));
     about << 0;
@@ -526,7 +526,7 @@ void TrayModel::activateMenuEntry(int row, int entryId)
     QDBusConnection::sessionBus().asyncCall(event);
 }
 
-// -------------------------------------------------------------- immagini --
+// ---------------------------------------------------------------- images --
 
 QImage TrayImageProvider::requestImage(const QString& id, QSize* size, const QSize& requestedSize)
 {

@@ -3,9 +3,9 @@
 
 import QtQuick
 
-// Una domanda prima di un'azione che non si può annullare (es. svuotare il
-// Cestino), come le finestre di conferma di Windows. Si apre con
-// Menus.confirm(); Invio conferma, Esc rinuncia.
+// A question before an action that can't be undone (such as emptying the
+// Recycle Bin), like Windows confirmation dialogs. Opened with
+// Menus.confirm(); Enter confirms, Esc gives up.
 Window {
     id: root
     objectName: "confirmDialog"

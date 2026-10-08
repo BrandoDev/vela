@@ -4,8 +4,8 @@
 import QtQuick
 import QtQuick.Controls.Basic as C
 
-// Il contenuto di una pagina: scorre, largo al massimo 1000 px come su
-// Windows. I figli vanno in colonna.
+// A page's content: it scrolls, at most 1000 px wide as on Windows. Children
+// go in a column.
 Flickable {
     id: page
     default property alias content: column.data

@@ -1,17 +1,17 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Compilazione automatica a ogni push, in un container Arch Linux (le
-# versioni di wlroots e Qt che usa Vela sono quelle di Arch).
+# Automatic build on every push, in an Arch Linux container (the wlroots
+# and Qt versions Vela uses are Arch's).
 #
-# - build: tutto il progetto, strumenti di prova compresi, e le prove
-#   (ctest): quelle del compositor (FrameClock, geometria, colore...), di
-#   Esplora, dei .desktop e delle app predefinite. Le prove funzionali e di
-#   nitidezza (tests/functional) qui risultano saltate: il renderer vuole una
-#   GPU con un nodo DRM, che i runner di GitHub non hanno.
-# - package: solo per main, il pacchetto vela-git costruito con il
-#   PKGBUILD, scaricabile dalla pagina dell'esecuzione (Artifacts) e
-#   installabile con sudo pacman -U.
+# - build: the whole project, test tools included, and the tests (ctest):
+#   the compositor's (FrameClock, geometry, color...), the Explorer's, the
+#   .desktop and default app ones. The functional and sharpness tests
+#   (tests/functional) are reported as skipped here: the renderer wants a GPU
+#   with a DRM node, which GitHub runners don't have.
+# - package: only for main, the vela-git package built with the PKGBUILD,
+#   downloadable from the run's page (Artifacts) and installable with
+#   sudo pacman -U.
 
 name: Build
 
@@ -21,7 +21,7 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Un push nuovo sullo stesso ramo ferma la compilazione precedente.
+# A new push on the same branch stops the previous build.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -87,17 +87,18 @@ jobs:
 
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0 # la versione del pacchetto conta i commit
+          fetch-depth: 0 # the package version counts commits
 
-      # makepkg non gira come root: un utente apposta, che prende Vela da
-      # questa copia del repository.
+      # makepkg doesn't run as root: a dedicated user, which takes Vela from
+      # this copy of the repository.
       - name: Package
         run: |
           useradd -m builder
           cp -r packaging/arch /home/builder/pkgbuild
           chown -R builder /home/builder/pkgbuild
           git config --system --add safe.directory '*'
-          # Niente pacchetto -debug: raddoppia il tempo e pesa dieci volte tanto.
+          # No -debug package: it doubles the time and weighs ten times as
+          # much.
           sed -i '/^OPTIONS=/s/\([( ]\)debug\b/\1!debug/' /etc/makepkg.conf
           cd /home/builder/pkgbuild
           su builder -c "VELA_GIT_URL=file://$GITHUB_WORKSPACE MAKEFLAGS=-j$(nproc) makepkg --noconfirm"

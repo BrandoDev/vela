@@ -22,7 +22,7 @@ struct Recent {
     QString url;
     QDateTime when;
     QStringList appNames; // bookmark:application name
-    QStringList programs; // il primo pezzo di bookmark:application exec
+    QStringList programs; // the first part of bookmark:application exec
 };
 
 QList<Recent> readRecentlyUsed()
@@ -53,11 +53,11 @@ QList<Recent> readRecentlyUsed()
             current = &out.last();
         } else if (current && xml.name() == QLatin1String("application")) {
             current->appNames << attributes.value(QLatin1String("name")).toString();
-            // exec="'kate -b %u'": il programma, senza percorso né apici.
+            // exec="'kate -b %u'": the program, without path or quotes.
             QString exec = attributes.value(QLatin1String("exec")).toString();
             exec.remove(u'\'');
             current->programs << exec.section(u' ', 0, 0).section(u'/', -1);
-            // Il momento dell'ultimo uso da parte di quest'app.
+            // When this app last used it.
             const QDateTime modified
                 = QDateTime::fromString(attributes.value(QLatin1String("modified")).toString(), Qt::ISODate);
             if (modified.isValid() && modified > current->when) {
@@ -70,7 +70,7 @@ QList<Recent> readRecentlyUsed()
 
 QString settingsKey(const char* group, const QString& desktopId)
 {
-    // Le chiavi di QSettings non amano '/': negli id non c'è, ma meglio esserne certi.
+    // QSettings keys don't like '/': ids don't contain it, but better be sure.
     return QLatin1String(group) + u'/' + QString(desktopId).replace(u'/', u'_');
 }
 
@@ -118,7 +118,7 @@ QVariantList JumpLists::recent(const QString& desktopId, int limit) const
         }
         const QUrl url(r.url);
         if (url.isLocalFile() && !QFileInfo::exists(url.toLocalFile())) {
-            continue; // cancellato o spostato
+            continue; // deleted or moved
         }
         out.append(describe(r.url));
         if (out.size() >= limit) {

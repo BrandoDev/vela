@@ -5,50 +5,50 @@ pragma Singleton
 
 import QtQuick
 
-// Tutti i menu del tasto destro di Vela passano da qui (docs/renderer.md
-// §14): chi vuole un menu chiama Menus.open(voci, x, y, opzioni) e la
-// finestra ContextMenu lo mostra. x e y sono in coordinate dello schermo.
+// All of Vela's right-click menus go through here (docs/renderer.md §14):
+// whoever wants a menu calls Menus.open(entries, x, y, options) and the
+// ContextMenu window shows it. x and y are in output coordinates.
 //
-// Una voce è un oggetto JS:
-//   { text: "&Apri", icon: "document-open", shortcut: "Ctrl+O",
-//     enabled: true, checked: true/false (solo se attivabile), radio: true,
-//     action: function() {...}, children: [voci], context: [voci] }
-//   { separator: true }       una riga di separazione
-//   { header: "Recenti" }     un titolo di gruppo (jump list)
-//   { ..., pin: { pinned: false, toggle: function() {...} } }  la puntina
-// La "&" segna la lettera per la tastiera (sottolineata se aperto da tastiera).
+// An entry is a JS object:
+//   { text: "&Open", icon: "document-open", shortcut: "Ctrl+O",
+//     enabled: true, checked: true/false (only if checkable), radio: true,
+//     action: function() {...}, children: [entries], context: [entries] }
+//   { separator: true }       a separator line
+//   { header: "Recent" }      a group title (jump list)
+//   { ..., pin: { pinned: false, toggle: function() {...} } }  the pin
+// "&" marks the keyboard letter (underlined when opened from the keyboard).
 //
-// Opzioni: screen (nome dello schermo), above (il menu sale da y), centered
-// (x è il centro), keyboard (aperto da tastiera), minWidth, rebuild
-// (funzione che rifà le voci, es. dopo aver fissato un file), onClosed.
+// Options: screen (output name), above (the menu rises from y), centered
+// (x is the center), keyboard (opened from the keyboard), minWidth, rebuild
+// (a function rebuilding the entries, such as after pinning a file), onClosed.
 QtObject {
     id: menus
 
-    // Aperto: i pannelli da cui nasce (es. il menu Start) non si chiudono
-    // quando perdono la tastiera a favore del menu.
+    // Open: the panels it starts from (such as the Start menu) don't close
+    // when they lose the keyboard to the menu.
     property bool isOpen: false
-    // I pannelli a destra della taskbar: si apre uno alla volta.
+    // The panels on the right of the taskbar: one opens at a time.
     property bool quickSettingsOpen: false
     property bool notificationCenterOpen: false
-    // La Visualizzazione attività è aperta.
+    // Task View is open.
     property bool taskViewOpen: false
-    // Il layout di snap appena scelto ({window, zones: [[x0,y0,x1,y1]...]}):
-    // Snap Assist propone le finestre per le sue altre zone.
+    // The snap layout just chosen ({window, zones: [[x0,y0,x1,y1]...]}): Snap
+    // Assist offers the windows for its other zones.
     property var snapLayout: null
-    // Le anteprime delle finestre di un pulsante della taskbar
-    // (TaskbarPreview.qml): {key, appIds, center (x sullo schermo)}, o null.
-    // Restano finché il mouse sta sul pulsante o sulle anteprime.
+    // The window previews of a taskbar button (TaskbarPreview.qml): {key,
+    // appIds, center (x on the output)}, or null. They stay while the mouse is
+    // on the button or the previews.
     property var preview: null
-    // Lo schermo della taskbar da cui si è aperto un pannello (Start,
-    // impostazioni rapide, centro notifiche, Visualizzazione attività): il
-    // pannello va lì. Vuoto: lo schermo principale (aperto da tastiera).
+    // The output of the taskbar a panel was opened from (Start, quick
+    // settings, notification center, Task View): the panel goes there. Empty:
+    // the main output (opened from the keyboard).
     property string panelScreen: ""
     function targetScreen() {
         const name = panelScreen !== "" ? panelScreen : Shell.primaryScreen
         panelScreen = ""
         return Qt.application.screens.find(s => s.name === name) || null
     }
-    // Mette `window` (nascosta) sullo schermo del pannello.
+    // Puts `window` (hidden) on the panel's output.
     function placeOnTargetScreen(window) {
         const screen = targetScreen()
         if (screen) {
@@ -60,20 +60,20 @@ QtObject {
 
     signal openRequested(var entries, real x, real y, var options)
     signal closeRequested()
-    // Una domanda con Sì e No (es. "Svuota Cestino"): ConfirmDialog.qml.
+    // A Yes/No question (such as "Empty Recycle Bin"): ConfirmDialog.qml.
     signal confirmRequested(string title, string text, string yesText, var action)
 
     function confirm(title, text, yesText, action) {
         confirmRequested(title, text, yesText, action)
     }
 
-    // La finestra Proprietà (PropertiesDialog.qml) per questi file.
+    // The Properties window (PropertiesDialog.qml) for these files.
     signal propertiesRequested(var paths)
     function showProperties(paths) {
         propertiesRequested(paths)
     }
 
-    // Condividi, "Scegli un'altra app", Nuovo > Collegamento (FileDialogs.qml).
+    // Share, "Choose another app", New > Shortcut (FileDialogs.qml).
     signal shareRequested(var paths)
     signal openWithRequested(string path)
     signal newShortcutRequested(string folder)
@@ -90,7 +90,7 @@ QtObject {
         closeRequested()
     }
 
-    // Le voci del menu di un campo di testo, come in Windows.
+    // The menu entries of a text field, like in Windows.
     function textEntries(input) {
         const selected = input.selectedText.length > 0
         const editable = !input.readOnly
@@ -106,8 +106,8 @@ QtObject {
         ]
     }
 
-    // Il menu della finestra (barra del titolo, Alt+Spazio, Maiusc+clic
-    // destro sul pulsante della taskbar). act(azione) la esegue.
+    // The window menu (title bar, Alt+Space, Shift+right click on the taskbar
+    // button). act(action) runs it.
     function windowEntries(maximized, minimized, resizable, act) {
         return [
             { text: qsTr("&Restore"), icon: "window-restore", enabled: maximized || minimized, action: () => act("restore") },

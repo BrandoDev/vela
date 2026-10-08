@@ -3,12 +3,11 @@
 
 #pragma once
 
-// Il colore Mica delle finestre di Vela: lo stesso calcolo del compositor
-// per la barra del titolo (compositor/src/decoration.c, mica_color), così
-// il contenuto delle app di Vela (Impostazioni, Esplora) continua la barra
-// senza stacchi. La tinta è il colore medio dello sfondo: la calcola la
-// shell e la lascia anche in ~/.cache/vela/wallpaper-tint, da leggere al
-// volo all'avvio delle app.
+// The Mica color of Vela's windows: the same computation the compositor uses
+// for the title bar (compositor/src/decoration.c, mica_color), so the content
+// of Vela's apps (Settings, Explorer) continues the bar seamlessly. The tint
+// is the wallpaper's average color: the shell computes it and also leaves it
+// in ~/.cache/vela/wallpaper-tint, for apps to read quickly at startup.
 
 #include <QColor>
 #include <QDir>
@@ -33,7 +32,7 @@ inline void saveWallpaperTint(const QColor& tint)
     }
 }
 
-// Non valido se la shell non l'ha ancora scritta.
+// Invalid if the shell hasn't written it yet.
 inline QColor cachedWallpaperTint()
 {
     QFile file(wallpaperTintCachePath());
@@ -47,9 +46,9 @@ inline QColor cachedWallpaperTint()
     return QColor(parts[0].toInt(), parts[1].toInt(), parts[2].toInt());
 }
 
-// Scuro: attiva base #202020 al 30% verso la tinta, inattiva #2b2b2b al
-// 45%. Chiaro: #f3f3f3 e #f9f9f9, con la tinta portata nella fascia
-// chiara. Come mica_color in compositor/src/decoration.c.
+// Dark: active base #202020 30% toward the tint, inactive #2b2b2b 45%. Light:
+// #f3f3f3 and #f9f9f9, with the tint brought into the light band. Like
+// mica_color in compositor/src/decoration.c.
 inline QColor micaFromTint(const QColor& tint, bool active, bool light = false)
 {
     const float base = light ? (active ? 0.953f : 0.976f) : (active ? 0.125f : 0.169f);

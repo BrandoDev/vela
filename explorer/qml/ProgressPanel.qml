@@ -3,9 +3,8 @@
 
 import QtQuick
 
-// Le copie e gli spostamenti in corso, in basso a destra: titolo,
-// percentuale, il file di adesso, e la X per annullare; come il riquadro di
-// avanzamento di Windows, in piccolo.
+// Copies and moves in progress, at the bottom right: title, percentage, the
+// current file, and the X to cancel; like Windows' progress dialog, in small.
 Column {
     id: root
     spacing: 8

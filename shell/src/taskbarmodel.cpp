@@ -57,7 +57,7 @@ void TaskbarModel::move(int from, int to)
         return;
     }
     const bool pinned = m_items[from].pinned;
-    // Dentro il proprio gruppo (fissate prima, poi le altre).
+    // Within its own group (pinned first, then the others).
     int first = 0;
     int last = int(m_items.size()) - 1;
     for (int i = 0; i < m_items.size(); ++i) {
@@ -81,7 +81,7 @@ void TaskbarModel::move(int from, int to)
     }
     keys.move(from - first, to - first);
     if (pinned) {
-        // Anche le fissate non mostrate (app non installate) restano, in fondo.
+        // Pinned apps not shown (apps not installed) stay too, at the end.
         QStringList ids = keys;
         for (const QString& id : std::as_const(m_pinnedIds)) {
             if (!ids.contains(id)) {
@@ -113,8 +113,8 @@ QList<TaskbarModel::Item> TaskbarModel::buildItems()
         return nullptr;
     };
 
-    // App fissate. Quelle non installate si saltano, e la stessa app può
-    // esistere sia come pacchetto sia come Flatpak: ne teniamo una.
+    // Pinned apps. Those not installed are skipped, and the same app can exist
+    // both as a package and as a Flatpak: we keep one.
     for (const QString& id : std::as_const(m_pinnedIds)) {
         const QVariantMap entry = m_apps->entry(id);
         const QString name = entry.value(QStringLiteral("name")).toString();
@@ -129,8 +129,8 @@ QList<TaskbarModel::Item> TaskbarModel::buildItems()
     }
     const qsizetype pinnedCount = items.size();
 
-    // Finestre aperte, raggruppate per app. Le finestre di dialogo stanno
-    // sotto la finestra principale, non hanno un pulsante loro.
+    // Open windows, grouped by app. Dialogs stay under the main window, they
+    // don't have a button of their own.
     QList<Item> running;
     for (ForeignToplevel* window : m_windows->windows()) {
         if (window->parentWindow) {
@@ -141,7 +141,7 @@ QList<TaskbarModel::Item> TaskbarModel::buildItems()
 
         Item* item = findItem(key);
         if (!item && !desktopId.isEmpty()) {
-            // La versione fissata della stessa app (es. Flatpak vs pacchetto).
+            // The pinned version of the same app (such as Flatpak vs package).
             const QString name = m_apps->entry(desktopId).value(QStringLiteral("name")).toString();
             for (qsizetype i = 0; i < pinnedCount && !item; ++i) {
                 if (items[i].name == name) {
@@ -169,7 +169,7 @@ QList<TaskbarModel::Item> TaskbarModel::buildItems()
         item->windows.append(window);
     }
 
-    // Le app non fissate mantengono il posto che avevano quando sono comparse.
+    // Unpinned apps keep the place they had when they appeared.
     for (const Item& item : std::as_const(running)) {
         if (!m_unpinnedOrder.contains(item.key)) {
             m_unpinnedOrder.append(item.key);
@@ -190,8 +190,9 @@ void TaskbarModel::rebuild()
 {
     QList<Item> items = buildItems();
 
-    // Aggiorniamo il modello con inserimenti e rimozioni mirate: la taskbar
-    // può animare il pulsante che compare o sparisce, senza ricreare gli altri.
+    // We update the model with targeted inserts and removals: the taskbar can
+    // animate the button that appears or disappears, without recreating the
+    // others.
     const auto keyAt = [](const QList<Item>& list, const QString& key) {
         for (qsizetype i = 0; i < list.size(); ++i) {
             if (list[i].key == key) {
@@ -213,7 +214,7 @@ void TaskbarModel::rebuild()
             continue;
         }
         if (keyAt(m_items, items[i].key) > i) {
-            // Ordine cambiato (es. nuove app fissate): si riparte da capo.
+            // Order changed (such as newly pinned apps): start over.
             beginResetModel();
             m_items = std::move(items);
             endResetModel();
@@ -226,7 +227,7 @@ void TaskbarModel::rebuild()
     if (!m_items.isEmpty()) {
         emit dataChanged(index(0), index(int(m_items.size()) - 1));
     }
-    sendButtonRects(); // anche le finestre appena aperte devono saperlo
+    sendButtonRects(); // the windows just opened must know too
 }
 
 QStringList TaskbarModel::appIds(int row) const
@@ -322,13 +323,13 @@ void TaskbarModel::activate(int row)
         if (item.windows.size() == 1) {
             (*active)->requestMinimize();
         } else {
-            // Più finestre della stessa app: si passa alla successiva.
+            // Several windows of the same app: move to the next one.
             const qsizetype next = (active - item.windows.cbegin() + 1) % item.windows.size();
             item.windows.at(next)->requestActivate();
         }
         return;
     }
-    // Altrimenti torna la finestra dell'app usata più di recente.
+    // Otherwise the app's most recently used window comes back.
     const auto recent = std::max_element(item.windows.cbegin(), item.windows.cend(),
         [](const ForeignToplevel* a, const ForeignToplevel* b) { return a->lastActivated < b->lastActivated; });
     (*recent)->requestActivate();
@@ -395,8 +396,8 @@ void TaskbarModel::windowAction(int row, const QString& action)
     } else if (action == QLatin1String("close")) {
         window->close();
     } else if (action == QLatin1String("move") || action == QLatin1String("resize")) {
-        // Da tastiera, come su Windows: la finestra va davanti e il
-        // compositor la fa muovere con le frecce.
+        // From the keyboard, like on Windows: the window comes forward and the
+        // compositor moves it with the arrows.
         window->requestActivate();
         ShellController::sendToCompositor("window active " + action.toLatin1());
     }
@@ -418,7 +419,8 @@ void TaskbarModel::toggleDesktop()
         }
         return;
     }
-    // Tutto già ridotto: tornano quelle di prima, la più recente per ultima (davanti).
+    // Everything already minimized: the previous ones come back, the most
+    // recent last (in front).
     std::sort(m_hiddenByDesktop.begin(), m_hiddenByDesktop.end(),
         [](const QPointer<ForeignToplevel>& a, const QPointer<ForeignToplevel>& b) {
             return (a ? a->lastActivated : 0) < (b ? b->lastActivated : 0);

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# vela-lock: la schermata di blocco (ext-session-lock-v1 + PAM).
+# vela-lock: the lock screen (ext-session-lock-v1 + PAM).
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Gui Svg)
 find_package(PkgConfig REQUIRED)
@@ -30,7 +30,7 @@ foreach(xml
 endforeach()
 
 qt_add_executable(vela-lock main.cpp ${LOCK_PROTOCOL_SOURCES})
-# Lo stesso sfondo predefinito della shell.
+# The shell's default wallpaper.
 qt_add_resources(vela-lock "images"
     PREFIX "/vela"
     BASE ${PROJECT_SOURCE_DIR}
@@ -40,12 +40,12 @@ target_compile_options(vela-lock PRIVATE -Wall -Wextra -Wno-unused-parameter -Wn
 target_link_libraries(vela-lock PRIVATE Qt6::Gui Qt6::Svg PkgConfig::LOCK_DEPS ${PAM_LIBRARY})
 
 install(TARGETS vela-lock RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-# Il servizio PAM: la stessa verifica dell'accesso da console.
+# The PAM service: the same check as a console login.
 install(FILES vela-lock.pam DESTINATION /etc/pam.d RENAME vela-lock)
 
-# Traduzione italiana: le stringhe del codice sono in inglese, l'italiano sta
-# in i18n/vela-lock_it.ts e finisce nell'eseguibile (:/i18n/vela-lock_it.qm, vedi
-# shell/src/language.h). Dopo aver cambiato testi:
+# Italian translation: strings in the code are in English, Italian lives
+# in i18n/vela-lock_it.ts and ends up in the executable (:/i18n/vela-lock_it.qm, see
+# shell/src/language.h). After changing texts:
 #   cmake --build build --target update_translations
 find_package(Qt6 6.7 REQUIRED COMPONENTS LinguistTools)
 qt_add_translations(TARGETS vela-lock SOURCE_TARGETS vela-lock

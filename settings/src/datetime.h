@@ -6,8 +6,8 @@
 #include <QObject>
 #include <QStringList>
 
-// Ora e lingua > Data e ora, con systemd-timedated: fuso orario e
-// sincronizzazione automatica (NTP). Cambiarli chiede la password (polkit).
+// Time & language > Date & time, with systemd-timedated: time zone and
+// automatic sync (NTP). Changing them asks for the password (polkit).
 class DateTime : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool available READ available CONSTANT)
@@ -28,7 +28,7 @@ public:
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void setNtp(bool on);
     Q_INVOKABLE void setTimezone(const QString& zone);
-    // Il fuso con lo scarto da UTC: "(UTC+01:00) Europe/Rome".
+    // The zone with its UTC offset: "(UTC+01:00) Europe/Rome".
     Q_INVOKABLE QString describe(const QString& zone) const;
 
 signals:

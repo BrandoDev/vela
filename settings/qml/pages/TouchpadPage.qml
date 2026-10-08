@@ -3,9 +3,9 @@
 
 import QtQuick
 
-// Bluetooth e dispositivi > Touchpad, come Windows 11: acceso o spento
-// (anche solo quando c'è un mouse), velocità, tocchi, direzione dello
-// scorrimento e gesti a tre e quattro dita. Le applica il compositor.
+// Bluetooth & devices > Touchpad, like Windows 11: on or off (also only when
+// there's a mouse), speed, taps, scroll direction and three- and four-finger
+// gestures. The compositor applies them.
 Page {
     id: page
     readonly property var actions: ["app", "desktop", "no"]

@@ -3,8 +3,8 @@
 
 import QtQuick
 
-// Ora e lingua > Data e ora: l'ora com'è adesso, la sincronizzazione
-// automatica e il fuso orario (systemd-timedated).
+// Time & language > Date & time: the time as it is now, automatic sync and the
+// time zone (systemd-timedated).
 Page {
     id: page
     property date now: new Date()

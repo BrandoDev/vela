@@ -3,7 +3,7 @@
 
 import QtQuick
 
-// Sistema > Informazioni: il dispositivo e il sistema, come Windows 11.
+// System > About: the device and the system, like Windows 11.
 Page {
     id: page
 
@@ -86,7 +86,7 @@ Page {
         }
     }
 
-    // Per "Copia": il testo passa dagli appunti attraverso un campo nascosto.
+    // For "Copy": the text goes to the clipboard through a hidden field.
     TextEdit { id: copyHelper; visible: false }
 
     SpecGroup {

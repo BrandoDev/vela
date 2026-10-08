@@ -20,7 +20,7 @@ struct Category {
     const char* key;
     const char* label;
     const char* icon;
-    QStringList mimes; // il primo decide qual è l'app attuale; si impostano tutti
+    QStringList mimes; // the first decides which is the current app; all are set
 };
 
 const QList<Category>& categoryList()
@@ -80,8 +80,8 @@ const QMimeDatabase& mimeDatabase()
     return database;
 }
 
-// Il tipo e quelli da cui discende (un'app per text/plain apre anche
-// text/x-python), con gli alias.
+// The type and those it descends from (an app for text/plain also opens
+// text/x-python), with aliases.
 QStringList withAncestors(const QString& mime)
 {
     QStringList out { mime };
@@ -93,7 +93,7 @@ QStringList withAncestors(const QString& mime)
     return out;
 }
 
-// Descrizione ed estensioni di un tipo, per mostrarlo.
+// A type's description and extensions, to show it.
 QVariantMap describe(const QString& mime)
 {
     if (mime.startsWith(QLatin1String("x-scheme-handler/"))) {
@@ -145,8 +145,8 @@ QVariantMap DefaultApps::appInfo(const QString& appId) const
         { QStringLiteral("icon"), entry->icon } };
 }
 
-// Le app che aprono uno di quei tipi (o un loro genitore), più quelle
-// associate a mano; l'attuale per prima, le altre in ordine di nome.
+// The apps opening one of those types (or a parent), plus those associated by
+// hand; the current one first, the others by name.
 QVariantList DefaultApps::candidatesFor(const QStringList& mimes, const QString& current) const
 {
     QSet<QString> accepted;

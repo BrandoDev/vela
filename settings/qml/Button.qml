@@ -3,14 +3,14 @@
 
 import QtQuick
 
-// Pulsante di Windows 11: standard (grigio) o d'accento.
+// A Windows 11 button: standard (gray) or accent.
 Rectangle {
     id: button
     property string text
     property string icon
     property bool accent: false
     property bool usable: true
-    property bool subtle: false // senza fondo, come i pulsanti "..." delle schede
+    property bool subtle: false // no background, like the cards' "..." buttons
     signal clicked()
 
     implicitWidth: Math.max(subtle && text === "" ? 32 : 96, content.width + 24)

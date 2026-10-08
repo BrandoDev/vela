@@ -4,14 +4,14 @@
 import QtQuick
 import Vela.Files.Backend
 
-// Una scheda di Esplora: la barra degli indirizzi, la barra dei comandi, il
-// riquadro di navigazione e il contenuto (Home, Questo PC o una cartella),
-// con la sua cronologia. Qui stanno anche selezione, tastiera e menu del
-// tasto destro (docs/renderer.md §14.9, gli stessi del desktop).
+// An Explorer tab: the address bar, the command bar, the navigation pane and
+// the content (Home, This PC or a folder), with its history. Selection,
+// keyboard and right-click menus live here too (docs/renderer.md §14.9, the
+// same as the desktop's).
 Item {
     id: page
-    property var menus // il MenuLayer della finestra
-    property var win // la finestra: schede, dialoghi, preferenze di vista
+    property var menus // the window's MenuLayer
+    property var win // the window: tabs, dialogs, view preferences
     property string location: "home:"
 
     readonly property bool isFolder: location.startsWith("/")
@@ -24,7 +24,7 @@ Item {
     readonly property string viewMode: isFolder ? win.viewModeFor(location) : "details"
     property bool viewFocused: keys.activeFocus
 
-    // --- cronologia ---
+    // --- history ---
     property var history: []
     property int historyIndex: -1
     readonly property bool canGoBack: historyIndex > 0
@@ -55,8 +55,8 @@ Item {
         navigate(parent, location)
     }
     function refresh() { if (isFolder) folder.reload(); else if (location === "thispc:") Places.refreshDrives() }
-    // Un'unità non ancora montata: udisks la monta (chiedendo la password
-    // se serve), poi ci si va.
+    // A drive not mounted yet: udisks mounts it (asking for the password if
+    // needed), then we go there.
     property string mountingVolume: ""
     function openVolume(volume) {
         mountingVolume = volume
@@ -90,7 +90,8 @@ Item {
     }
     Connections {
         target: Ops
-        // Un file appena creato o incollato in questa cartella: si seleziona (e si rinomina).
+        // A file just created or pasted in this folder: it's selected (and
+        // renamed).
         function onCreated(path, rename) {
             if (!page.isFolder || path.substring(0, path.lastIndexOf("/")) !== page.location) return
             if (rename) page.renameWhenAppears = path
@@ -98,7 +99,7 @@ Item {
         }
     }
 
-    // --- selezione col mouse ---
+    // --- mouse selection ---
     property int anchorRow: -1
     property int pendingSingle: -1
     function pressItem(row, button, modifiers) {
@@ -117,7 +118,7 @@ Item {
             anchorRow = row
         } else {
             folder.currentIndex = row
-            pendingSingle = row // tra più selezionati: al rilascio resta solo lui (se non si trascina)
+            pendingSingle = row // among several selected: on release only it stays (if not dragging)
         }
     }
     function releaseItem(row, button, modifiers) {
@@ -128,11 +129,11 @@ Item {
         pendingSingle = -1
     }
     function dragUrls(row) {
-        folder.selectionVersion // si rilegge quando cambia la selezione
+        folder.selectionVersion // reread when the selection changes
         return folder.isSelected(row) ? folder.selectedUrls() : [folder.urlAt(row)]
     }
 
-    // --- aprire ---
+    // --- opening ---
     function activate(row) {
         const path = folder.pathAt(row)
         if (folder.isDirAt(row)) {
@@ -154,7 +155,7 @@ Item {
         if (files.length > 0 && !isTrash) Ops.open(files)
     }
 
-    // --- operazioni ---
+    // --- operations ---
     property string renamingPath: ""
     property string renameWhenAppears: ""
     function copySelection() { if (folder.selectionCount > 0) Ops.copy(folder.selectedPaths()) }
@@ -194,7 +195,7 @@ Item {
         win.setViewMode(location, modes[i])
     }
 
-    // --- menu (docs/renderer.md §14.9) ---
+    // --- menus (docs/renderer.md §14.9) ---
     function openMenu(entries, x, y, keyboard) {
         menuPoint = Qt.point(x, y)
         menus.open(entries, x, y, { keyboard: !!keyboard })
@@ -271,7 +272,7 @@ Item {
         ]
     }
 
-    // Il menu di uno o più elementi.
+    // The menu of one or more items.
     function itemMenu(row, x, y, keyboard) {
         if (!folder.isSelected(row)) folder.select(row)
         openMenu(itemEntries(folder.selectedPaths()), x, y, keyboard)
@@ -309,7 +310,7 @@ Item {
             openWith.push({ text: qsTr("Choose another app"), action: () => Ops.chooseApp(single) })
             entries.push({ text: qsTr("Open &with"), icon: "document-open", children: openWith })
         }
-        // Un collegamento: dove sta l'originale.
+        // A shortcut: where the original is.
         if (single !== "" && Ops.isLink(single)) {
             const target = Ops.linkTarget(single)
             entries.push({ text: qsTr("Open file &location"), icon: "folder-open",
@@ -363,7 +364,7 @@ Item {
         return entries
     }
 
-    // Il menu dello spazio vuoto della cartella.
+    // The menu of the folder's empty space.
     function backgroundMenu(x, y, keyboard) {
         if (!isFolder) return
         openMenu(backgroundEntries(), x, y, keyboard)
@@ -414,8 +415,8 @@ Item {
         return entries
     }
 
-    // --- tastiera ---
-    property string typed: "" // le lettere scritte di fila: si salta al nome
+    // --- keyboard ---
+    property string typed: "" // the letters typed in a row: jump to the name
     Timer { id: typedReset; interval: 900; onTriggered: page.typed = "" }
 
     Item {
@@ -470,7 +471,7 @@ Item {
                 if (view && view.step) page.moveTo(view.step(event.key), shift, ctrl)
             }
             else if (event.text.length === 1 && event.text.charCodeAt(0) > 32 && !ctrl && !alt) {
-                // Scrivendo un nome si salta lì, come Windows.
+                // Typing a name jumps there, like Windows.
                 page.typed += event.text
                 typedReset.restart()
                 const row = folder.find(page.typed, page.typed.length === 1 ? folder.currentIndex : folder.currentIndex - 1)
@@ -487,7 +488,7 @@ Item {
         if (contentLoader.item && contentLoader.item.ensureVisible) contentLoader.item.ensureVisible(row)
     }
 
-    // --- aspetto ---
+    // --- look ---
     AddressBar {
         id: addressBar
         tab: page
@@ -516,7 +517,7 @@ Item {
             onOpenVolume: volume => page.openVolume(volume)
             onContextMenu: (entries, x, y) => page.openMenu(entries, x, y)
         }
-        // Il bordo del riquadro: si trascina per allargarlo.
+        // The pane's border: drag to widen it.
         Rectangle {
             id: splitter
             anchors { left: nav.right; top: parent.top; bottom: statusBar.top }
@@ -538,7 +539,8 @@ Item {
                 : page.location === "thispc:" ? thisPcComponent
                 : page.viewMode === "details" ? detailsComponent : iconComponent
         }
-        // Il riquadro di anteprima o dei dettagli, a destra (si allarga trascinandone il bordo).
+        // The preview or details pane, on the right (widened by dragging its
+        // border).
         Rectangle {
             id: paneSplitter
             visible: sidePane.visible

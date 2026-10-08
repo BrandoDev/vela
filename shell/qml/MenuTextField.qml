@@ -3,21 +3,19 @@
 
 import QtQuick
 
-// Un campo di testo della shell con il menu del tasto destro di Windows
-// (Annulla, Taglia, Copia, Incolla, Elimina, Seleziona tutto), anche con
-// il tasto Menu o Maiusc+F10.
+// A shell text field with the Windows right-click menu (Undo, Cut, Copy,
+// Paste, Delete, Select all), also with the Menu key or Shift+F10.
 TextInput {
     id: input
 
-    // Da coordinate del campo a coordinate dello schermo: ogni finestra
-    // della shell sa dove si trova.
+    // From field to output coordinates: every shell window knows where it is.
     property var mapToScreen: (x, y) => input.mapToItem(null, x, y)
 
     color: Theme.text
     selectionColor: Theme.accent
     font.pixelSize: Theme.fontNormal
     selectByMouse: true
-    persistentSelection: true // il menu prende la tastiera: la selezione deve restare
+    persistentSelection: true // the menu takes the keyboard: the selection must stay
     clip: true
 
     function openMenu(x, y, keyboard) {

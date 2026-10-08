@@ -2,19 +2,18 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Controlla bit per bit la finestra di vela-pattern in uno screenshot.
+"""Checks the vela-pattern window in a screenshot, bit for bit.
 
-Ogni pixel del client codifica le sue coordinate nel buffer
-(R = x % 256, G = y % 256, B = (x // 256) * 16 + y // 256): ogni pixel dello
-schermo "vota" per l'origine della finestra; si prende quella più votata e
-si confronta l'intero rettangolo con il motivo atteso.
+Each client pixel encodes its coordinates in the buffer
+(R = x % 256, G = y % 256, B = (x // 256) * 16 + y // 256): every screen
+pixel "votes" for the window's origin; the most voted one is taken and the
+whole rectangle is compared with the expected pattern.
 
-Uso: sharpness-check.py SCREENSHOT.png NOME [ANGOLO]
-ANGOLO: il lato in pixel dei quadrati agli angoli da non contare (gli angoli
-arrotondati delle finestre, docs/renderer.md §8.1): lì il compositor
-ritaglia, e i pixel non sono più quelli dell'app.
-Stampa una riga di risultato; esce con 1 se anche un solo pixel è diverso.
-"""
+Usage: sharpness-check.py SCREENSHOT.png NAME [CORNER]
+CORNER: the side in pixels of the corner squares not to count (the windows'
+rounded corners, docs/renderer.md §8.1): the compositor clips there, and the
+pixels are no longer the app's.
+Prints one result line; exits with 1 if even a single pixel differs."""
 import sys
 
 import numpy as np
@@ -42,7 +41,7 @@ vy, vx = np.nonzero(voters)
 x0, x1, y0, y1 = vx.min(), vx.max() + 1, vy.min(), vy.max() + 1
 region = voters[y0:y1, x0:x1].copy()
 if corner > 0:
-    # Gli angoli arrotondati: ritagliati dal compositor, non contano.
+    # Rounded corners: clipped by the compositor, they don't count.
     region[:corner, :corner] = True
     region[:corner, -corner:] = True
     region[-corner:, :corner] = True

@@ -28,7 +28,7 @@
 
 namespace {
 
-// Gli escape previsti dalla specifica Desktop Entry per i valori stringa.
+// The escapes the Desktop Entry spec provides for string values.
 QString unescape(const QString& value)
 {
     QString out;
@@ -55,7 +55,8 @@ QString unescape(const QString& value)
     return out;
 }
 
-// Toglie i "field code" (%f, %U, ...) che servono solo quando si aprono file.
+// Removes the "field codes" (%f, %U, ...) that are only needed when opening
+// files.
 QString cleanExec(const QString& exec)
 {
     static const QRegularExpression fieldCodes(QStringLiteral("%[fFuUdDnNickvm]"));
@@ -73,7 +74,7 @@ bool listContains(const QString& list, const QString& item)
     });
 }
 
-// Legge un file .desktop. Restituisce false se non va mostrato nel menu.
+// Reads a .desktop file. Returns false if it must not show in the menu.
 bool parseDesktopFile(const QString& path, const QStringList& localeKeys, AppModel::Entry& entry)
 {
     QFile file(path);
@@ -81,8 +82,8 @@ bool parseDesktopFile(const QString& path, const QStringList& localeKeys, AppMod
         return false;
     }
 
-    // Ogni gruppo ([Desktop Entry], [Desktop Action nuova-finestra], ...)
-    // con le sue chiavi.
+    // Each group ([Desktop Entry], [Desktop Action new-window], ...) with its
+    // keys.
     QHash<QString, QHash<QString, QString>> groups;
     QString group;
     QTextStream stream(&file);
@@ -126,7 +127,7 @@ bool parseDesktopFile(const QString& path, const QStringList& localeKeys, AppMod
         return false;
     }
 
-    // Prima la versione tradotta (Name[it_IT], Name[it]), poi quella base.
+    // The translated version first (Name[it_IT], Name[it]), then the base one.
     const auto localizedIn = [&](const QHash<QString, QString>& values, const QString& key) {
         for (const QString& locale : localeKeys) {
             const auto it = values.constFind(QStringLiteral("%1[%2]").arg(key, locale));
@@ -150,7 +151,7 @@ bool parseDesktopFile(const QString& path, const QStringList& localeKeys, AppMod
     }
     entry.workDir = unescape(values.value(QStringLiteral("Path")));
     entry.path = path;
-    // Le azioni dell'app (le "attività" della jump list), nell'ordine dato.
+    // The app's actions (the jump list "tasks"), in the given order.
     for (const QString& id : values.value(QStringLiteral("Actions")).split(u';', Qt::SkipEmptyParts)) {
         const QHash<QString, QString> action = groups.value(QStringLiteral("Desktop Action ") + id);
         AppModel::Action a { id, localizedIn(action, QStringLiteral("Name")), action.value(QStringLiteral("Icon")),
@@ -177,14 +178,14 @@ void AppModel::reload()
     QElapsedTimer timer;
     timer.start();
 
-    const QString localeName = QLocale().name(); // es. it_IT
+    const QString localeName = QLocale().name(); // such as it_IT
     QStringList localeKeys { localeName };
     if (const qsizetype underscore = localeName.indexOf(u'_'); underscore > 0) {
         localeKeys << localeName.left(underscore);
     }
 
-    // Le cartelle sono in ordine di priorità: la prima occorrenza di un id
-    // vince (es. ~/.local/share/applications sovrascrive /usr/share/...).
+    // The directories are in priority order: the first occurrence of an id
+    // wins (such as ~/.local/share/applications overriding /usr/share/...).
     QList<Entry> entries;
     QSet<QString> seen;
     const QStringList dirs = QStandardPaths::standardLocations(QStandardPaths::ApplicationsLocation);
@@ -192,13 +193,14 @@ void AppModel::reload()
         QDirIterator it(dir, { QStringLiteral("*.desktop") }, QDir::Files, QDirIterator::Subdirectories);
         while (it.hasNext()) {
             const QString path = it.next();
-            // L'id include le sottocartelle con '-' (specifica Desktop Entry).
+            // The id includes the subdirectories joined by '-' (Desktop Entry
+            // spec).
             QString id = QDir(dir).relativeFilePath(path);
             id.replace(u'/', u'-');
             if (seen.contains(id)) {
                 continue;
             }
-            seen.insert(id); // anche se nascosta: una copia locale può nascondere quella di sistema
+            seen.insert(id); // even if hidden: a local copy can hide the system one
             Entry entry;
             if (parseDesktopFile(path, localeKeys, entry)) {
                 entry.id = id;
@@ -245,10 +247,10 @@ void AppModel::applyFilter()
             visible.append(i);
         }
     } else {
-        // Punteggio semplice: prima chi inizia con il testo cercato, poi chi
-        // ha una parola che inizia così, poi le corrispondenze nelle
-        // descrizioni e nelle parole chiave.
-        QList<QPair<int, int>> scored; // (punteggio, indice)
+        // A simple score: first those starting with the searched text, then
+        // those with a word starting that way, then matches in descriptions
+        // and keywords.
+        QList<QPair<int, int>> scored; // (score, index)
         for (int i = 0; i < m_all.size(); ++i) {
             const Entry& e = m_all.at(i);
             int score = 0;
@@ -351,10 +353,10 @@ QString AppModel::findDesktopId(const QString& appId) const
     if (appId.isEmpty()) {
         return {};
     }
-    const auto baseId = [](const Entry& e) { return e.id.chopped(8); }; // senza ".desktop"
+    const auto baseId = [](const Entry& e) { return e.id.chopped(8); }; // without ".desktop"
     const auto program = [](const Entry& e) { return e.program; };
-    // Dalla regola più affidabile alla più approssimativa. Le app moderne
-    // usano come app_id il nome del proprio file .desktop.
+    // From the most reliable rule to the roughest. Modern apps use their
+    // .desktop file name as app_id.
     const std::function<bool(const Entry&)> rules[] = {
         [&](const Entry& e) { return baseId(e).compare(appId, Qt::CaseInsensitive) == 0; },
         [&](const Entry& e) { return e.wmClass.compare(appId, Qt::CaseInsensitive) == 0; },
@@ -377,7 +379,7 @@ QString AppModel::iconForAppId(const QString& appId) const
 {
     const QString desktopId = findDesktopId(appId);
     const QString icon = desktopId.isEmpty() ? QString() : entry(desktopId).value(QStringLiteral("iconName")).toString();
-    return icon.isEmpty() ? appId : icon; // spesso il tema ha un'icona col nome dell'app_id
+    return icon.isEmpty() ? appId : icon; // the theme often has an icon named after the app_id
 }
 
 const AppModel::Entry* AppModel::find(const QString& id) const
@@ -424,12 +426,12 @@ bool AppModel::launchWithFile(const QString& id, const QString& url)
     if (!e) {
         return false;
     }
-    // Il file prende il posto dei field code (%f, %u...); se l'app non ne
-    // ha, va in fondo agli argomenti (vedi launchEntry).
+    // The file takes the place of the field codes (%f, %u...); if the app has
+    // none, it goes at the end of the arguments (see launchEntry).
     return launchEntry(*e, { QUrl(url) });
 }
 
-// L'app predefinita per un tipo di file, dai mimeapps.list (mimeapps.h).
+// The default app for a file type, from mimeapps.list (mimeapps.h).
 QString defaultAppFor(const QString& mime)
 {
     return MimeApps::defaultFor(mime);
@@ -517,8 +519,8 @@ bool AppModel::launchEntry(const Entry& entry, const QList<QUrl>& files) const
         return false;
     }
     const DesktopExec::Context context { entry.icon, entry.name, entry.path };
-    // %f o %u con più file: un processo per file. Un'app senza field code
-    // riceve comunque i file in fondo, come prima ("Apri con").
+    // %f or %u with several files: one process per file. An app without field
+    // codes still gets the files at the end, as before ("Open with").
     QList<QList<QUrl>> runs { files };
     if (files.size() > 1 && DesktopExec::onePerFile(parsed.arguments)) {
         runs.clear();

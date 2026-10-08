@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// vela-settings: le Impostazioni di Vela, come quelle di Windows 11.
+// vela-settings: Vela's Settings, like Windows 11's.
 //
-//   vela-settings [--page <nome>]
+//   vela-settings [--page <name>]
 //
-// Una sola finestra: se è già aperta, una seconda chiamata le chiede solo
-// di mostrare la pagina e di venire in primo piano (la shell apre così
-// "Impostazioni schermo", "Personalizza" e le altre voci dei menu).
+// A single window: if it's already open, a second call only asks it to show
+// the page and come to the front (that's how the shell opens "Display
+// settings", "Personalize" and the other menu entries).
 
 #include "about.h"
 #include "appmodel.h"
@@ -44,8 +44,8 @@ QString socketPath()
         + qEnvironmentVariable("WAYLAND_DISPLAY", QStringLiteral("wayland-0")) + QStringLiteral(".sock");
 }
 
-// C'è già una finestra aperta: le si passa la pagina (e il token per venire
-// in primo piano) e si esce.
+// A window is already open: it gets the page (and the token to come to the
+// front) and we exit.
 bool forwardToRunningInstance(const QString& page)
 {
     QLocalSocket socket;
@@ -58,7 +58,7 @@ bool forwardToRunningInstance(const QString& page)
     return true;
 }
 
-// Riceve i "page <nome> [token]" delle chiamate successive.
+// Receives the "page <name> [token]" of later calls.
 class PageRouter : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString initialPage READ initialPage CONSTANT)
@@ -82,7 +82,7 @@ public:
                         const QList<QByteArray> words = client->readLine().trimmed().split(' ');
                         if (words.value(0) == "page") {
                             if (words.size() > 2 && !words[2].isEmpty()) {
-                                qputenv("XDG_ACTIVATION_TOKEN", words[2]); // lo usa requestActivate()
+                                qputenv("XDG_ACTIVATION_TOKEN", words[2]); // requestActivate() uses it
                             }
                             emit pageRequested(QString::fromUtf8(words.value(1)));
                         }
@@ -106,9 +106,9 @@ private:
 
 int main(int argc, char* argv[])
 {
-    // Testo con FreeType e l'hinting dei font, come Plasma e come Windows:
-    // più netto del testo predefinito di Qt Quick (campi di distanza, senza
-    // hinting), ai pixel veri dello schermo anche a scala frazionaria.
+    // Text with FreeType and font hinting, like Plasma and Windows: crisper
+    // than Qt Quick's default text (distance fields, no hinting), on the
+    // output's real pixels even at fractional scales.
     if (qEnvironmentVariableIsEmpty("QT_QUICK_DEFAULT_TEXT_RENDER_TYPE")) {
         QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering);
     }
@@ -152,7 +152,7 @@ int main(int argc, char* argv[])
     apps.reload();
     SystemActions system;
     Preferences preferences;
-    // Le icone del tema adatto alla modalità delle app (breeze o breeze-dark).
+    // Icons from the theme matching the apps' mode (breeze or breeze-dark).
     applyIconTheme(preferences.light());
     preferences.setIconMode(preferences.light() ? QStringLiteral("l/") : QStringLiteral("d/"));
     QObject::connect(&preferences, &Preferences::appThemeChanged, &preferences, [&preferences] {

@@ -62,11 +62,11 @@ QVariantList Audio::list(const QString& what, const QString& defaultName) const
     for (const QJsonValue& value : devices) {
         const QJsonObject device = value.toObject();
         const QString name = device[QStringLiteral("name")].toString();
-        // I "monitor" delle uscite non sono microfoni.
+        // Output "monitors" aren't microphones.
         if (what == QLatin1String("sources") && name.endsWith(QLatin1String(".monitor"))) {
             continue;
         }
-        // Il volume: la media dei canali (65536 = 100%).
+        // The volume: the channels' average (65536 = 100%).
         const QJsonObject channels = device[QStringLiteral("volume")].toObject();
         double sum = 0.0;
         for (const QJsonValue& channel : channels) {
@@ -89,9 +89,9 @@ void Audio::refresh()
     if (!m_available) {
         return;
     }
-    // La prima volta che la pagina si apre: da lì in poi si aggiorna da sé.
+    // The first time the page opens: from then on it updates itself.
     if (m_subscribe.state() == QProcess::NotRunning) {
-        // Se usciamo di colpo (crash), pactl non deve restare orfano.
+        // If we exit abruptly (crash), pactl must not be left orphaned.
         m_subscribe.setChildProcessModifier([] { prctl(PR_SET_PDEATHSIG, SIGTERM); });
         m_subscribe.start(QStringLiteral("pactl"), { QStringLiteral("subscribe") });
     }

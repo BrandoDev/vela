@@ -3,8 +3,8 @@
 
 import QtQuick
 
-// Sistema > Appunti, come Windows 11: la cronologia degli Appunti (Win+V)
-// e "Cancella dati degli Appunti" (tranne gli elementi fissati).
+// System > Clipboard, like Windows 11: clipboard history (Win+V) and "Clear
+// clipboard data" (except pinned items).
 Page {
     CardGroup {
         Card {

@@ -26,7 +26,7 @@
 
 namespace {
 
-// Le finestre visibili, chieste al compositor.
+// The visible windows, asked of the compositor.
 QVariantList queryWindows()
 {
     const QString runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
@@ -60,7 +60,7 @@ Snip::Snip(QQmlEngine* engine, WindowCapture* capture, Clipboard* clipboard, Not
             showOverlays();
         }
     });
-    // Un clic sulla notifica: si apre lo screenshot.
+    // A click on the notification: the screenshot opens.
     connect(m_notifications, &NotificationServer::ActionInvoked, this, [this](uint id, const QString&) {
         const QString path = m_saved.take(id);
         if (!path.isEmpty()) {
@@ -102,7 +102,7 @@ void Snip::start()
         cancel();
         return;
     }
-    // Se una cattura non torna, si va avanti con quelle che ci sono.
+    // If a capture doesn't come back, go on with those there are.
     QTimer::singleShot(1500, this, [this] {
         if (m_waiting > 0) {
             m_waiting = 0;
@@ -178,7 +178,7 @@ void Snip::finish(const QString& screenName, qreal x, qreal y, qreal width, qrea
         cancel();
         return;
     }
-    // Da coordinate logiche ai pixel dell'immagine (la scala dello schermo).
+    // From logical coordinates to image pixels (the output's scale).
     const qreal sx = full.width() / qreal(screen->geometry().width());
     const qreal sy = full.height() / qreal(screen->geometry().height());
     const QRect area = QRect(qRound(x * sx), qRound(y * sy), qRound(width * sx), qRound(height * sy))
@@ -193,7 +193,7 @@ void Snip::finish(const QString& screenName, qreal x, qreal y, qreal width, qrea
     }
 
     m_clipboard->copyImage(cut);
-    // In Immagini/Screenshot, come Windows.
+    // In Pictures/Screenshots, like Windows.
     const QString folder = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation) + QStringLiteral("/Screenshot");
     QDir().mkpath(folder);
     const QString path = folder + QStringLiteral("/Screenshot ")

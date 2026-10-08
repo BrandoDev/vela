@@ -5,11 +5,10 @@
 
 #include <QObject>
 
-// Luce notturna, filtri colore, lente di ingrandimento e tasti permanenti,
-// come li vede la shell: li applica il compositor
-// (compositor/src/a11y.c), che a ogni cambiamento manda lo stato
-// in JSON ("accessibility <json>"); da qui le impostazioni rapide li
-// accendono e spengono.
+// Night light, color filters, magnifier and sticky keys as the shell sees
+// them: the compositor applies them (compositor/src/a11y.c) and sends the
+// state as JSON on every change ("accessibility <json>"); quick settings turn
+// them on and off from here.
 class Accessibility : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool nightLight READ nightLight WRITE setNightLight NOTIFY changed)
@@ -29,9 +28,9 @@ public:
     bool stickyKeys() const { return m_stickyKeys; }
     void setStickyKeys(bool on);
 
-    // Lo stato mandato dal compositor.
+    // The state sent by the compositor.
     void update(const QByteArray& json);
-    // Lo chiede al compositor (all'avvio della shell).
+    // Asks the compositor for it (when the shell starts).
     void query();
 
 signals:

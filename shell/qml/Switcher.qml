@@ -3,9 +3,9 @@
 
 import QtQuick
 
-// Alt+Tab: le finestre aperte con anteprima, dalla più recente. La tastiera
-// la gestisce il compositor, che ci dice cosa mostrare e cosa è selezionato:
-// qui si disegna e basta.
+// Alt+Tab: the open windows with previews, most recent first. The compositor
+// handles the keyboard and tells us what to show and what's selected: here we
+// just draw.
 Window {
     id: root
     objectName: "switcher"
@@ -25,8 +25,8 @@ Window {
 
     ListModel { id: windows }
 
-    // Come su Windows: un Alt+Tab veloce cambia finestra senza far
-    // lampeggiare il pannello.
+    // Like on Windows: a quick Alt+Tab switches window without flashing the
+    // panel.
     Timer {
         id: showDelay
         interval: 100
@@ -81,7 +81,8 @@ Window {
         }
     }
 
-    // Lo sfondo sfocato solo sotto il pannello (la finestra copre lo schermo).
+    // The blurred background only under the panel (the window covers the
+    // output).
     function updateBlur() {
         Effects.setBlur(root, [Qt.rect(panel.x, panel.y, panel.width, panel.height)])
     }
@@ -125,7 +126,7 @@ Window {
                     border.width: current ? 2 : 0
                     border.color: Theme.accent
 
-                    // Un clic su un'anteprima ci porta subito.
+                    // A click on a preview takes us there at once.
                     MouseArea {
                         id: cardMouse
                         anchors.fill: parent
@@ -133,7 +134,7 @@ Window {
                         onClicked: Shell.pickSwitcher(card.index)
                     }
 
-                    // Icona e titolo sopra l'anteprima.
+                    // Icon and title above the preview.
                     Row {
                         id: header
                         anchors { left: parent.left; right: parent.right; top: parent.top; margins: 12 }
@@ -167,7 +168,7 @@ Window {
                             cache: false
                             smooth: true
                         }
-                        // Finché l'anteprima non c'è: l'icona grande.
+                        // Until the preview exists: the big icon.
                         Image {
                             anchors.centerIn: parent
                             width: 48

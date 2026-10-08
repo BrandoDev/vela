@@ -3,7 +3,7 @@
 
 import QtQuick
 
-// Una casella del menu Start: icona e nome.
+// A Start menu tile: icon and name.
 Item {
     id: root
 
@@ -14,7 +14,7 @@ Item {
     property bool current: false
 
     signal activated()
-    signal contextRequested(real x, real y) // tasto destro, in coordinate della casella
+    signal contextRequested(real x, real y) // right button, in the tile's coordinates
 
     Rectangle {
         anchors.fill: parent

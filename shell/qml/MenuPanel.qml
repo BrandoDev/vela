@@ -5,27 +5,27 @@ import QtQuick
 import QtQuick.Effects
 import QtQuick.Shapes
 
-// Un livello di un menu (il menu o un suo sottomenu), come i menu di
-// Windows 11: angoli arrotondati, righe da 32 con l'icona a sinistra e la
-// scorciatoia a destra, evidenziazione staccata dai bordi.
+// One level of a menu (the menu or one of its submenus), like Windows 11
+// menus: rounded corners, 32-high rows with the icon on the left and the
+// shortcut on the right, highlight detached from the edges.
 Item {
     id: panel
 
     property var entries: []
     property int level: 0
-    // Dove nasce: il punto (anchorX, anchorY); se a destra non c'è spazio si
-    // va a altX (i sottomenu si aprono allora a sinistra del padre).
+    // Where it starts: point (anchorX, anchorY); if there's no room on the
+    // right it goes to altX (submenus then open to the left of the parent).
     property real anchorX: 0
     property real anchorY: 0
     property real altX: NaN
-    property bool above: false // il menu sale da anchorY (es. dalla taskbar)
-    property bool centered: false // anchorX è il centro
+    property bool above: false // the menu rises from anchorY (such as from the taskbar)
+    property bool centered: false // anchorX is the center
     property real minWidth: 0
     property bool keyboardMode: false
     property int currentIndex: -1
-    property int parentIndex: -1 // la voce del padre che l'ha aperto
+    property int parentIndex: -1 // the parent's entry that opened it
 
-    // Il contenitore (tutto lo schermo) per tenerlo dentro i bordi.
+    // The container (the whole output) to keep it within the edges.
     readonly property real areaWidth: parent ? parent.width : 0
     readonly property real areaHeight: parent ? parent.height : 0
 
@@ -33,11 +33,11 @@ Item {
     signal hovered(int index, real rowY)
     signal submenuRequested(int index, real rowY, bool fromKeyboard)
     signal contextRequested(var entry, real x, real y)
-    signal backRequested() // freccia sinistra o Esc
+    signal backRequested() // left arrow or Esc
     signal closeAllRequested()
-    signal pinToggled() // le voci vanno rifatte (un file è stato fissato o tolto)
+    signal pinToggled() // the entries must be rebuilt (a file was pinned or unpinned)
 
-    // --- misure ---
+    // --- sizes ---
     readonly property int padding: 4
     readonly property int rowHeight: 32
     readonly property int separatorHeight: 9
@@ -54,7 +54,7 @@ Item {
     function plainText(text) {
         return (text || "").replace(/&(.)/g, "$1")
     }
-    // Il testo con la lettera per la tastiera sottolineata ("&&" è una "&" vera).
+    // The text with the keyboard letter underlined ("&&" is a real "&").
     function styledText(text) {
         const escape = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
         let out = ""
@@ -127,7 +127,7 @@ Item {
         return Math.round(Math.max(margin, Math.min(areaHeight - height - margin, top)))
     }
 
-    // Entra sfumando e scivolando di poco dal lato da cui nasce.
+    // It comes in fading and sliding slightly from the side it starts from.
     opacity: 0
     property real slide: above ? 8 : -8
     transform: Translate { y: panel.slide }
@@ -138,7 +138,7 @@ Item {
         NumberAnimation { target: panel; property: "slide"; to: 0; duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
     }
 
-    // --- tastiera ---
+    // --- keyboard ---
     function move(step) {
         const count = entries.length
         const start = currentIndex >= 0 ? currentIndex : (step > 0 ? -1 : count)
@@ -194,8 +194,8 @@ Item {
             closeAllRequested()
             break
         default: {
-            // La lettera di una voce: se è una sola la si esegue, altrimenti
-            // si passa alla prossima che la usa.
+            // An entry's letter: if only one entry has it, it's run, otherwise
+            // focus moves to the next one using it.
             const letter = event.text.toLowerCase()
             if (letter.length !== 1) {
                 return
@@ -216,7 +216,7 @@ Item {
         event.accepted = true
     }
 
-    // --- aspetto ---
+    // --- look ---
     PanelShadow {
         target: panel
         radius: Theme.radiusMenu
@@ -233,7 +233,7 @@ Item {
         border.color: Theme.stroke
     }
 
-    // I clic sul pannello non chiudono il menu.
+    // Clicks on the panel don't close the menu.
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.AllButtons
@@ -257,7 +257,7 @@ Item {
                 width: panel.width
                 height: panel.rowHeightOf(entry)
 
-                // Separatore
+                // Separator
                 Rectangle {
                     visible: row.entry.separator === true
                     anchors.verticalCenter: parent.verticalCenter
@@ -267,7 +267,7 @@ Item {
                     color: Theme.stroke
                 }
 
-                // La riga di icone dei menu dei file: Taglia, Copia, Rinomina...
+                // The icon row of file menus: Cut, Copy, Rename...
                 Row {
                     visible: !!row.entry.iconRow
                     x: 8
@@ -306,7 +306,7 @@ Item {
                     }
                 }
 
-                // Titolo di gruppo
+                // Group title
                 Text {
                     visible: row.entry.header !== undefined
                     x: 16
@@ -330,7 +330,7 @@ Item {
                         opacity: row.isCurrent && row.usable ? 1 : 0
                     }
 
-                    // Icona, oppure spunta o pallino delle voci a scelta.
+                    // Icon, or the check mark or dot of choice entries.
                     Item {
                         x: 16
                         width: 16
@@ -376,7 +376,8 @@ Item {
                         x: panel.textLeft
                         width: parent.width - x - 16 - (row.entry.children || row.entry.pin ? 28 : 0) - shortcutText.implicitWidth
                         anchors.verticalCenter: parent.verticalCenter
-                        // La lettera per la tastiera si vede solo se il menu è aperto da tastiera.
+                        // The keyboard letter shows only when the menu was
+                        // opened from the keyboard.
                         textFormat: panel.keyboardMode ? Text.StyledText : Text.PlainText
                         text: panel.keyboardMode ? panel.styledText(row.entry.text) : panel.plainText(row.entry.text)
                         color: row.usable ? Theme.text : Theme.textDim
@@ -390,7 +391,7 @@ Item {
                         color: Theme.textDim
                         font.pixelSize: Theme.fontSmall
                     }
-                    // Freccia del sottomenu.
+                    // Submenu arrow.
                     Shape {
                         visible: !!row.entry.children
                         anchors { right: parent.right; rightMargin: 16; verticalCenter: parent.verticalCenter }
@@ -426,8 +427,8 @@ Item {
                         }
                     }
                     onClicked: mouse => {
-                        // Tasto destro: il menu della voce (es. un file della
-                        // jump list); se non ne ha, vale come il sinistro.
+                        // Right button: the entry's menu (such as a jump list
+                        // file); if it has none, it acts like the left one.
                         if (mouse.button === Qt.RightButton && row.entry.context) {
                             const p = mapToItem(panel.parent, mouse.x, mouse.y)
                             panel.contextRequested(row.entry, p.x, p.y)
@@ -437,7 +438,7 @@ Item {
                     }
                 }
 
-                // La puntina (jump list): si vede al passaggio del mouse.
+                // The pin (jump list): shown on hover.
                 Item {
                     visible: !!row.entry.pin && (rowMouse.containsMouse || pinMouse.containsMouse)
                     anchors { right: parent.right; rightMargin: 8; verticalCenter: parent.verticalCenter }

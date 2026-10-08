@@ -8,20 +8,20 @@
 #include <QVariantList>
 #include <QVariantMap>
 
-// I desktop virtuali, come li vede la shell: li decide il compositor
-// (compositor/src/workspace.c), che a ogni cambiamento manda lo stato in
-// JSON; da qui partono i comandi (passa a, nuovo, chiudi, rinomina, sposta
-// una finestra...). Li usano la Visualizzazione attività e la taskbar.
+// Virtual desktops as the shell sees them: the compositor decides them
+// (compositor/src/workspace.c) and sends the state as JSON on every change;
+// commands start from here (switch to, new, close, rename, move a window...).
+// Task View and the taskbar use them.
 class Workspaces : public QObject {
     Q_OBJECT
     Q_PROPERTY(int current READ current NOTIFY changed)
     Q_PROPERTY(int count READ count NOTIFY changed)
     Q_PROPERTY(QStringList names READ names NOTIFY changed)
-    // identificativo ext della finestra -> desktop (-1: su tutti)
+    // the window's ext identifier -> desktop (-1: all)
     Q_PROPERTY(QVariantMap windows READ windows NOTIFY changed)
     Q_PROPERTY(QStringList stickyApps READ stickyApps NOTIFY changed)
-    // I gruppi di snap: [{output, windows: [{id, tile: [x0, y0, x1, y1]}]}],
-    // tile in dodicesimi dell'area utile.
+    // Snap groups: [{output, windows: [{id, tile: [x0, y0, x1, y1]}]}], tile
+    // in twelfths of the usable area.
     Q_PROPERTY(QVariantList snapGroups READ snapGroups NOTIFY changed)
 
 public:
@@ -34,7 +34,7 @@ public:
     QStringList stickyApps() const { return m_stickyApps; }
     QVariantList snapGroups() const { return m_snapGroups; }
 
-    // Il desktop di una finestra (-1: tutti; -2: sconosciuta).
+    // A window's desktop (-1: all; -2: unknown).
     Q_INVOKABLE int workspaceOf(const QString& window) const;
 
     Q_INVOKABLE void switchTo(int index);
@@ -47,9 +47,9 @@ public:
     Q_INVOKABLE void setWindowSticky(const QString& window, bool on);
     Q_INVOKABLE void setAppSticky(const QString& window, bool on);
 
-    // Lo stato mandato dal compositor ("workspaces <json>").
+    // The state sent by the compositor ("workspaces <json>").
     void update(const QByteArray& json);
-    // Lo chiede al compositor (all'avvio della shell).
+    // Asks the compositor for it (when the shell starts).
     void query();
 
 signals:

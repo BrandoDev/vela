@@ -3,12 +3,12 @@
 
 import QtQuick
 
-// App > App predefinite, come Windows 11: un tipo di file o di collegamento
-// preciso, gli usi comuni, e le app una per una (DefaultAppPage.qml).
+// Apps > Default apps, like Windows 11: a specific file or link type, the
+// common uses, and the apps one by one (DefaultAppPage.qml).
 Page {
     id: page
 
-    // Si ricalcolano quando una scelta cambia (DefaultApps.changed).
+    // Recomputed when a choice changes (DefaultApps.changed).
     readonly property var result: {
         DefaultApps.categories
         return DefaultApps.lookup(typeField.text)
@@ -27,7 +27,7 @@ Page {
         bottomPadding: 8
     }
 
-    // --- un tipo preciso: ".mkv", "mp3", "mailto" ---
+    // --- a specific type: ".mkv", "mp3", "mailto" ---
     CardGroup {
         title: qsTr("Set a default for a file type or link type")
         Card {
@@ -62,7 +62,7 @@ Page {
         }
     }
 
-    // --- gli usi comuni ---
+    // --- common uses ---
     CardGroup {
         title: qsTr("Common uses")
         Repeater {

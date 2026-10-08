@@ -24,7 +24,7 @@ Appearance::Appearance(QObject* parent)
 
 void Appearance::watch()
 {
-    // Chi scrive i file li sostituisce: si osservano anche le cartelle.
+    // Whoever writes the files replaces them: the directories are watched too.
     const QString shellConfig = QSettings(QStringLiteral("Vela"), QStringLiteral("vela-shell")).fileName();
     for (const QString& path : { shellConfig, wallpaperTintCachePath() }) {
         const QFileInfo info(path);
@@ -62,7 +62,7 @@ void Appearance::reload()
     m_accent = accent;
     m_mica = mica;
     m_micaInactive = micaInactive;
-    applyIconTheme(light); // prima che il QML richieda le icone
+    applyIconTheme(light); // before QML asks for the icons
     const QString mode = light ? QStringLiteral("l/") : QStringLiteral("d/");
     if (first) {
         m_iconMode = mode;

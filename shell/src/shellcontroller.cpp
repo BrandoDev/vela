@@ -29,8 +29,7 @@
 
 namespace {
 
-// Al primo avvio: le app di tutti i giorni, se installate (la Start salta
-// quelle che non ci sono).
+// At first start: everyday apps, if installed (Start skips the missing ones).
 const QStringList defaultStartPins {
     QStringLiteral("firefox.desktop"),
     QStringLiteral("org.mozilla.firefox.desktop"),
@@ -61,7 +60,7 @@ ShellController::ShellController(QObject* parent)
                 while (socket->canReadLine()) {
                     const QByteArray line = socket->readLine().trimmed();
                     if (line == "choose-source") {
-                        startChooser(socket); // risponde quando l'utente sceglie
+                        startChooser(socket); // answers when the user chooses
                     } else {
                         handleCommand(line);
                     }
@@ -70,9 +69,9 @@ ShellController::ShellController(QObject* parent)
             connect(socket, &QLocalSocket::disconnected, this, [this, socket] {
                 if (m_chooser == socket) {
                     m_chooser = nullptr;
-                    emit chooseSourceCancelled(); // il portale ha rinunciato
+                    emit chooseSourceCancelled(); // the portal gave up
                 }
-                // Un eventuale comando senza "a capo" finale.
+                // A possible command without a final newline.
                 const QByteArray rest = socket->readAll().trimmed();
                 if (!rest.isEmpty()) {
                     handleCommand(rest);
@@ -85,7 +84,7 @@ ShellController::ShellController(QObject* parent)
 
 QString ShellController::socketPath()
 {
-    // Deve coincidere con vela_shell_send() nel compositor (shell.c).
+    // Must match vela_shell_send() in the compositor (shell.c).
     const QString runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
     const QString display = qEnvironmentVariable("WAYLAND_DISPLAY", QStringLiteral("wayland-0"));
     return runtimeDir + QStringLiteral("/vela-shell-") + display + QStringLiteral(".sock");
@@ -100,7 +99,8 @@ QByteArray ShellController::askRunningInstance(const QByteArray& command)
     }
     socket.write(command + '\n');
     socket.waitForBytesWritten(1000);
-    // L'utente può metterci quanto vuole: si aspetta la risposta o la chiusura.
+    // The user can take as long as they want: wait for the answer or the
+    // close.
     while (!socket.canReadLine()) {
         if (!socket.waitForReadyRead(-1)) {
             break;
@@ -112,7 +112,7 @@ QByteArray ShellController::askRunningInstance(const QByteArray& command)
 void ShellController::startChooser(QLocalSocket* socket)
 {
     if (m_chooser && m_chooser != socket) {
-        chooseSource(QString()); // una richiesta nuova prende il posto della vecchia
+        chooseSource(QString()); // a new request takes the old one's place
     }
     m_chooser = socket;
     emit chooseSourceRequested();
@@ -143,7 +143,7 @@ bool ShellController::sendToRunningInstance(const QByteArray& command)
     return true;
 }
 
-// Il socket dei comandi del compositor: vedi vela_commands_listen() (command.c).
+// The compositor's command socket: see vela_commands_listen() (command.c).
 bool ShellController::sendToCompositor(const QByteArray& command)
 {
     const QString runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
@@ -180,7 +180,7 @@ QDBusInterface login1()
 
 void callLogin1(const char* method)
 {
-    // interactive = true: se serve un'autorizzazione, polkit la chiede.
+    // interactive = true: if authorization is needed, polkit asks for it.
     QDBusInterface manager = login1();
     manager.asyncCall(QLatin1String(method), true);
 }
@@ -202,8 +202,8 @@ void ShellController::powerOff()
     callLogin1("PowerOff");
 }
 
-// Prima di sospendere, lo schermo si blocca: al risveglio il desktop non è
-// mai esposto. logind aspetta finché teniamo aperto il "ritardo".
+// Before suspending, the screen locks: on wakeup the desktop is never exposed.
+// logind waits as long as we keep the "delay" open.
 void ShellController::watchSleep()
 {
     QDBusConnection::systemBus().connect(QStringLiteral("org.freedesktop.login1"),
@@ -228,12 +228,12 @@ void ShellController::takeSleepDelay()
 void ShellController::onPrepareForSleep(bool starting)
 {
     if (!starting) {
-        takeSleepDelay(); // risvegliati: pronti per la prossima volta
+        takeSleepDelay(); // woken up: ready for next time
         return;
     }
     lock();
-    // Un momento perché la schermata di blocco compaia, poi si lascia
-    // sospendere (chiudendo il ritardo).
+    // A moment for the lock screen to appear, then suspending is allowed
+    // (closing the delay).
     QTimer::singleShot(700, this, [this] { m_sleepDelay = QDBusUnixFileDescriptor(); });
 }
 
@@ -247,7 +247,7 @@ bool ShellController::canSuspend() const
 bool ShellController::listen()
 {
     const QString path = socketPath();
-    QLocalServer::removeServer(path); // socket rimasto da un'esecuzione precedente
+    QLocalServer::removeServer(path); // socket left over from a previous run
     m_server.setSocketOptions(QLocalServer::UserAccessOption);
     if (!m_server.listen(path)) {
         qWarning("vela-shell: can't listen on %s: %s", qPrintable(path),
@@ -297,11 +297,12 @@ void ShellController::handleCommand(const QByteArray& command)
     } else if (parts.first() == "workspaces") {
         emit workspacesReceived(command.mid(11));
     } else if (parts.first() == "snap-layouts" && parts.size() == 6) {
-        // snap-layouts <finestra> <schermo> <x> <y> <da tastiera>
+        // snap-layouts <window> <output> <x> <y> <from keyboard>
         emit snapLayoutsRequested(QString::fromLatin1(parts.at(1)), QString::fromUtf8(parts.at(2)), parts.at(3).toInt(),
             parts.at(4).toInt(), parts.at(5) == "1");
     } else if (parts.first() == "properties") {
-        // properties ["percorso", ...]: la finestra Proprietà, chiesta da Esplora.
+        // properties ["path", ...]: the Properties window, asked for by
+        // Explorer.
         QStringList paths;
         for (const QJsonValue& value : QJsonDocument::fromJson(command.mid(11)).array()) {
             paths.append(value.toString());
@@ -310,7 +311,7 @@ void ShellController::handleCommand(const QByteArray& command)
             emit propertiesRequested(paths);
         }
     } else if (parts.first() == "share") {
-        // share ["percorso", ...]: Condividi, chiesto da Esplora.
+        // share ["path", ...]: Share, asked for by Explorer.
         QStringList paths;
         for (const QJsonValue& value : QJsonDocument::fromJson(command.mid(6)).array()) {
             paths.append(value.toString());
@@ -319,13 +320,13 @@ void ShellController::handleCommand(const QByteArray& command)
             emit shareRequested(paths);
         }
     } else if (parts.first() == "open-with") {
-        // open-with ["percorso"]: "Scegli un'altra app", chiesto da Esplora.
+        // open-with ["path"]: "Choose another app", asked for by Explorer.
         const QJsonArray paths = QJsonDocument::fromJson(command.mid(10)).array();
         if (!paths.isEmpty()) {
             emit openWithRequested(paths.first().toString());
         }
     } else if (parts.first() == "new-shortcut") {
-        // new-shortcut ["cartella"]: "Nuovo > Collegamento", chiesto da Esplora.
+        // new-shortcut ["folder"]: "New > Shortcut", asked for by Explorer.
         const QJsonArray folders = QJsonDocument::fromJson(command.mid(13)).array();
         if (!folders.isEmpty()) {
             emit newShortcutRequested(folders.first().toString());
@@ -335,7 +336,8 @@ void ShellController::handleCommand(const QByteArray& command)
     } else if (parts.first() == "snap-assist") {
         emit snapAssistRequested(QString::fromUtf8(command.mid(12)));
     } else if (parts.first() == "window-menu" && parts.size() == 8) {
-        // window-menu <id> <schermo> <x> <y> <massimizzata> <ridimensionabile> <da tastiera>
+        // window-menu <id> <output> <x> <y> <maximized> <resizable> <from
+        // keyboard>
         emit windowMenuRequested(QString::fromLatin1(parts.at(1)), QString::fromUtf8(parts.at(2)), parts.at(3).toInt(),
             parts.at(4).toInt(), parts.at(5) == "1", parts.at(6) == "1", parts.at(7) == "1");
     } else if (!command.isEmpty() && command != "ping") {
@@ -377,7 +379,7 @@ QString ShellController::primaryScreen() const
 
 QString ShellController::userName() const
 {
-    // Il nome completo dell'account (campo GECOS), altrimenti il login.
+    // The account's full name (GECOS field), otherwise the login.
     if (const passwd* pw = getpwuid(getuid())) {
         const QString gecos = QString::fromLocal8Bit(pw->pw_gecos).section(u',', 0, 0).trimmed();
         if (!gecos.isEmpty()) {
@@ -390,7 +392,8 @@ QString ShellController::userName() const
 
 void ShellController::sendWallpaperTint(const QString& wallpaper) const
 {
-    // Ridotto a pochi pixel già in lettura (anche gli SVG): poi la media.
+    // Scaled down to a few pixels already while reading (SVGs too): then the
+    // average.
     QImageReader reader(wallpaper);
     reader.setScaledSize(QSize(32, 18));
     const QImage image = reader.read().convertToFormat(QImage::Format_RGB32);
@@ -418,7 +421,7 @@ QString ShellController::userInitial() const
     return name.isEmpty() ? QStringLiteral("?") : name.left(1).toUpper();
 }
 
-// ------------------------------------------------------- app nella Start --
+// --------------------------------------------------------- apps in Start --
 
 
 void ShellController::saveStartPins()
@@ -430,7 +433,7 @@ void ShellController::saveStartPins()
 void ShellController::pinToStart(const QString& id)
 {
     if (!id.isEmpty() && !m_startPins.contains(id)) {
-        m_startPins.append(id); // in fondo, come Windows
+        m_startPins.append(id); // at the end, like Windows
         saveStartPins();
     }
 }

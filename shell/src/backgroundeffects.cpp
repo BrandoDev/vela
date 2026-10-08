@@ -8,7 +8,7 @@
 #include <QRectF>
 #include <QtDebug>
 #include <QtGui/qguiapplication_platform.h>
-// API privata di Qt (come in foreigntoplevels.cpp): la wl_surface di una finestra.
+// Qt private API (as in foreigntoplevels.cpp): a window's wl_surface.
 #include <QtGui/qpa/qplatformwindow_p.h>
 
 #include <cstring>
@@ -40,7 +40,7 @@ struct EffectCallbacks {
         qInfo("vela-shell: compositor blur %s", blur ? "available" : "missing");
         if (blur != self->m_blurAvailable) {
             self->m_blurAvailable = blur;
-            // Le regioni chieste prima che la capacità arrivasse.
+            // The regions asked for before the capability arrived.
             for (auto& entry : self->m_entries) {
                 self->apply(entry);
             }
@@ -59,8 +59,8 @@ BackgroundEffects::BackgroundEffects(QObject* parent)
     }
     m_registry = wl_display_get_registry(wayland->display());
     wl_registry_add_listener(m_registry, &EffectCallbacks::registryListener, this);
-    // Global e capacità arrivano con gli eventi di Qt: le regioni chieste
-    // prima si applicano allora (vedi capabilities).
+    // Global and capability arrive with Qt's events: regions asked for earlier
+    // are applied then (see capabilities).
     wl_display_flush(wayland->display());
 }
 
@@ -89,16 +89,16 @@ void BackgroundEffects::setBlur(QWindow* window, const QVariantList& rects)
     if (!entry.connected) {
         entry.connected = true;
         connect(window, &QObject::destroyed, this, [this, window] { m_entries.remove(window); });
-        // L'interfaccia nativa c'è solo da quando la finestra esiste davvero.
+        // The native interface exists only once the window really exists.
         connect(window, &QWindow::visibleChanged, this, [this, window](bool visible) {
             if (visible && m_entries.contains(window)) {
                 follow(m_entries[window]);
                 apply(m_entries[window]);
             }
         });
-        // Chiesta mentre la finestra nativa non c'era ancora (un pannello
-        // appena reso visibile): la si segue da quando nasce. Senza, la
-        // prima apertura restava senza sfocatura.
+        // Asked for while the native window didn't exist yet (a panel just
+        // made visible): it's followed from its birth. Without this, the first
+        // opening had no blur.
         window->installEventFilter(this);
     }
     follow(entry);
@@ -109,7 +109,7 @@ bool BackgroundEffects::eventFilter(QObject* watched, QEvent* event)
 {
     if (event->type() == QEvent::PlatformSurface
         && static_cast<QPlatformSurfaceEvent*>(event)->surfaceEventType() == QPlatformSurfaceEvent::SurfaceCreated) {
-        // Subito dopo l'evento: la finestra nativa è appena nata.
+        // Right after the event: the native window has just been born.
         QMetaObject::invokeMethod(this, [this, window = QPointer<QWindow>(qobject_cast<QWindow*>(watched))] {
             if (window && m_entries.contains(window)) {
                 follow(m_entries[window]);
@@ -122,7 +122,8 @@ bool BackgroundEffects::eventFilter(QObject* watched, QEvent* event)
 
 void BackgroundEffects::follow(Entry& entry)
 {
-    // La wl_surface cambia quando la finestra si nasconde e torna: si segue.
+    // The wl_surface changes when the window hides and comes back: it's
+    // followed.
     if (entry.following || !entry.window) {
         return;
     }
@@ -160,7 +161,7 @@ void BackgroundEffects::apply(Entry& entry)
     auto* native = entry.window->nativeInterface<QNativeInterface::Private::QWaylandWindow>();
     wl_surface* surface = native ? native->surface() : nullptr;
     if (!surface) {
-        return; // la finestra non è ancora visibile: si applica a surfaceCreated
+        return; // the window isn't visible yet: applied at surfaceCreated
     }
     if (!entry.effect) {
         entry.effect = ext_background_effect_manager_v1_get_background_effect(m_manager, surface);
@@ -175,6 +176,7 @@ void BackgroundEffects::apply(Entry& entry)
         ext_background_effect_surface_v1_set_blur_region(entry.effect, region);
         wl_region_destroy(region);
     }
-    // Stato doppio: vale dal prossimo commit, che chiediamo subito.
+    // Double-buffered state: applies from the next commit, which we ask for at
+    // once.
     entry.window->requestUpdate();
 }

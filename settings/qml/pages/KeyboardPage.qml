@@ -3,8 +3,8 @@
 
 import QtQuick
 
-// Ora e lingua > Tastiera: i layout (Win+Spazio passa dall'uno
-// all'altro), e la ripetizione dei tasti.
+// Time & language > Keyboard: the layouts (Win+Space switches between them),
+// and key repeat.
 Page {
     id: page
     readonly property var layouts: Prefs.keyboardLayouts

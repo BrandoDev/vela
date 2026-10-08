@@ -32,7 +32,7 @@
 
 namespace {
 
-constexpr qreal margin = 6.0; // dal bordo dello schermo, come in Windows
+constexpr qreal margin = 6.0; // from the output edge, like in Windows
 const QString trashPath = QStringLiteral("trash:/");
 
 QString trashFilesDir()
@@ -45,7 +45,7 @@ QString positionKey(const QString& name)
     return QStringLiteral("desktop-positions/") + QString::fromLatin1(QUrl::toPercentEncoding(name));
 }
 
-// Nome e icona di un collegamento .desktop, nella lingua dell'utente.
+// A .desktop shortcut's name and icon, in the user's language.
 void readDesktopFile(const QString& path, QString& name, QString& icon)
 {
     QFile file(path);
@@ -75,8 +75,8 @@ void readDesktopFile(const QString& path, QString& name, QString& icon)
     icon = values.value(QStringLiteral("Icon"), icon);
 }
 
-// Le immagini (la miniatura la fa la shell) e i file di cui un'altra app
-// ha già messo la miniatura nella cache condivisa (video, PDF...).
+// Images (the shell makes the thumbnail) and files whose thumbnail another app
+// already put in the shared cache (videos, PDFs...).
 bool hasThumbnail(const QFileInfo& info, const QMimeType& mime)
 {
     static const QList<QByteArray> readable = QImageReader::supportedMimeTypes();
@@ -117,15 +117,15 @@ DesktopModel::DesktopModel(AppModel* apps, QObject* parent)
     m_alignToGrid = settings.value(QStringLiteral("desktop/alignToGrid"), true).toBool();
     m_showIcons = settings.value(QStringLiteral("desktop/showIcons"), true).toBool();
 
-    // I cambiamenti arrivano a raffiche (una copia, un salvataggio): si
-    // rilegge una volta sola, poco dopo.
+    // Changes come in bursts (a copy, a save): reread only once, shortly
+    // after.
     m_reloadTimer.setSingleShot(true);
     m_reloadTimer.setInterval(100);
     connect(&m_reloadTimer, &QTimer::timeout, this, &DesktopModel::reload);
     connect(&m_watcher, &QFileSystemWatcher::directoryChanged, &m_reloadTimer, qOverload<>(&QTimer::start));
     m_watcher.addPath(m_dir);
     QDir().mkpath(trashFilesDir());
-    m_watcher.addPath(trashFilesDir()); // il Cestino pieno o vuoto
+    m_watcher.addPath(trashFilesDir()); // the Recycle Bin full or empty
 
     connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, &DesktopModel::clipboardChanged);
     reload();
@@ -177,7 +177,7 @@ QHash<int, QByteArray> DesktopModel::roleNames() const
     };
 }
 
-// ------------------------------------------------------------ la vista --
+// ------------------------------------------------------------ the view --
 
 int DesktopModel::iconPixels() const
 {
@@ -217,7 +217,7 @@ void DesktopModel::setAutoArrange(bool on)
     QSettings settings;
     settings.setValue(QStringLiteral("desktop/autoArrange"), on);
     if (on) {
-        settings.remove(QStringLiteral("desktop-positions")); // tutte in fila
+        settings.remove(QStringLiteral("desktop-positions")); // all in a row
         for (Item& item : m_items) {
             item.position = QPointF(-1, -1);
         }
@@ -280,7 +280,7 @@ void DesktopModel::sortBy(int mode)
     m_sortMode = std::clamp(mode, 0, 3);
     QSettings settings;
     settings.setValue(QStringLiteral("desktop/sortMode"), m_sortMode);
-    settings.remove(QStringLiteral("desktop-positions")); // riordinate: tutte in fila
+    settings.remove(QStringLiteral("desktop-positions")); // sorted: all in a row
     emit viewChanged();
     reload();
 }
@@ -295,7 +295,7 @@ void DesktopModel::reload()
     QList<Item> items;
     static const QMimeDatabase mimes;
 
-    // Il Cestino, sempre per primo, come in Windows.
+    // The Recycle Bin, always first, like in Windows.
     Item trash;
     trash.name = QCoreApplication::translate("Desktop", "Recycle Bin");
     trash.path = trashPath;
@@ -327,7 +327,7 @@ void DesktopModel::reload()
         files.append(item);
     }
 
-    // Ordina per: nome, dimensione, tipo, data; le cartelle prima dei file.
+    // Sort by: name, size, type, date; folders before files.
     QCollator collator;
     collator.setCaseSensitivity(Qt::CaseInsensitive);
     collator.setNumericMode(true);
@@ -360,15 +360,15 @@ void DesktopModel::reload()
     items.append(trash);
     items.append(files);
 
-    // Le posizioni scelte a mano (per nome del file).
+    // Positions chosen by hand (by file name).
     QSettings settings;
     for (Item& item : items) {
         const QVariant saved = settings.value(positionKey(item.isTrash ? item.path : QFileInfo(item.path).fileName()));
         item.position = saved.isValid() && !m_autoArrange ? saved.toPointF() : QPointF(-1, -1);
     }
 
-    // Stessi file di prima: si aggiornano i dati senza rifare le icone (una
-    // rinomina in corso non si perde).
+    // Same files as before: data is updated without redoing the icons (a
+    // rename in progress isn't lost).
     const bool sameFiles = items.size() == m_items.size()
         && std::equal(items.cbegin(), items.cend(), m_items.cbegin(),
             [](const Item& a, const Item& b) { return a.path == b.path; });
@@ -399,12 +399,12 @@ void DesktopModel::layout(bool notify)
     const int rowCount = rows();
     const qreal cw = cellWidth();
     const qreal ch = cellHeight();
-    QSet<qint64> used; // celle occupate: colonna * 1000 + riga
+    QSet<qint64> used; // occupied cells: column * 1000 + row
     const auto cellOf = [&](const QPointF& p) {
         return std::pair(std::max(0, int(std::lround((p.x() - margin) / cw))),
             std::clamp(int(std::lround((p.y() - margin) / ch)), 0, rowCount - 1));
     };
-    // La cella libera più vicina a quella voluta.
+    // The free cell closest to the wanted one.
     const auto nearestFree = [&](int column, int row) {
         for (int radius = 0; radius < 200; ++radius) {
             for (int dc = -radius; dc <= radius; ++dc) {
@@ -424,7 +424,7 @@ void DesktopModel::layout(bool notify)
     };
 
     QList<QPointF> positions(m_items.size(), QPointF(-1, -1));
-    // Prima quelle messe a mano, poi le altre in fila per colonne.
+    // Those placed by hand first, then the others in a row by columns.
     for (qsizetype i = 0; i < m_items.size(); ++i) {
         const QPointF saved = m_items.at(i).position;
         if (saved.x() < 0) {
@@ -458,7 +458,7 @@ void DesktopModel::layout(bool notify)
         positions[i] = cellPosition(column, row);
     }
 
-    // Le posizioni da mostrare; quelle salvate restano in m_items come richiesta.
+    // The positions to show; the saved ones stay in m_items as a request.
     m_layout = positions;
     if (notify && m_showIcons) {
         emit dataChanged(index(0), index(int(m_items.size()) - 1), { XRole, YRole });
@@ -473,7 +473,7 @@ void DesktopModel::savePosition(const QString& name, const QPointF& position)
 void DesktopModel::moveTo(const QString& path, qreal x, qreal y)
 {
     if (m_autoArrange) {
-        layout(); // tornano in fila
+        layout(); // back in a row
         return;
     }
     for (Item& item : m_items) {
@@ -484,7 +484,7 @@ void DesktopModel::moveTo(const QString& path, qreal x, qreal y)
         }
     }
     layout();
-    // Con la griglia la posizione salvata diventa quella della cella scelta.
+    // With the grid the saved position becomes the chosen cell's.
     for (qsizetype i = 0; i < m_items.size(); ++i) {
         if (m_items.at(i).path == path && m_alignToGrid) {
             m_items[i].position = m_layout.at(i);
@@ -493,7 +493,7 @@ void DesktopModel::moveTo(const QString& path, qreal x, qreal y)
     }
 }
 
-// ---------------------------------------------------------- i file --
+// ----------------------------------------------------------- files --
 
 void DesktopModel::open(const QStringList& paths)
 {
@@ -519,7 +519,7 @@ QString DesktopModel::uniqueNameIn(const QString& directory, const QString& name
     if (!dir.exists(name)) {
         return name;
     }
-    // "Nuova cartella (2)", "foto (2).jpg", come in Windows.
+    // "New folder (2)", "photo (2).jpg", like in Windows.
     const QFileInfo info(name);
     const bool hasSuffix = !info.suffix().isEmpty() && !info.completeBaseName().isEmpty();
     const QString base = hasSuffix ? info.completeBaseName() : name;
@@ -544,7 +544,7 @@ bool DesktopModel::rename(const QString& path, const QString& newName)
     if (QFileInfo::exists(target) || !QFile::rename(path, target)) {
         return false;
     }
-    // La posizione segue il file.
+    // The position follows the file.
     QSettings settings;
     const QVariant position = settings.value(positionKey(info.fileName()));
     if (position.isValid()) {
@@ -625,7 +625,8 @@ void DesktopModel::undo()
         QFile::moveToTrash(path);
     }
     for (qsizetype i = 0; i < step.trashed.size(); ++i) {
-        // Dal Cestino (…/Trash/files/nome) al suo posto, senza la scheda in …/Trash/info.
+        // From the Recycle Bin (…/Trash/files/name) back to its place, without
+        // the record in …/Trash/info.
         const QString inTrash = step.trashed.at(i);
         if (!QFileInfo::exists(step.originals.at(i)) && QFile::rename(inTrash, step.originals.at(i))) {
             const QFileInfo info(inTrash);
@@ -698,7 +699,7 @@ QVariantList DesktopModel::templates() const
     return out;
 }
 
-// ----------------------------------------------------------- appunti --
+// --------------------------------------------------------- clipboard --
 
 namespace {
 
@@ -719,7 +720,7 @@ void putFiles(const QStringList& paths, bool cut)
     }
     auto* mime = new QMimeData;
     mime->setUrls(urls);
-    // Come Dolphin e Nautilus: dicono se è "taglia" o "copia".
+    // Like Dolphin and Nautilus: they say whether it's "cut" or "copy".
     mime->setData(QStringLiteral("application/x-kde-cutselection"), cut ? "1" : "0");
     mime->setData(QStringLiteral("x-special/gnome-copied-files"), gnome);
     QGuiApplication::clipboard()->setMimeData(mime);
@@ -765,17 +766,18 @@ void DesktopModel::paste()
         const QFileInfo source(url.toLocalFile());
         const bool sameDir = source.absoluteDir() == QDir(m_dir);
         if (cut && sameDir) {
-            continue; // già qui
+            continue; // already here
         }
         QString name = source.fileName();
         if (sameDir) {
-            // Copia qui stesso: "foto - Copia.jpg", come in Windows.
+            // Copy here: "photo - Copy.jpg", like in Windows.
             const bool hasSuffix = !source.suffix().isEmpty() && !source.completeBaseName().isEmpty() && !source.isDir();
             name = hasSuffix ? source.completeBaseName() + QCoreApplication::translate("Desktop", " - Copy.") + source.suffix()
                              : name + QCoreApplication::translate("Desktop", " - Copy");
         }
         const QString target = QDir(m_dir).filePath(uniqueName(name));
-        // cp e mv in un processo a parte: una cartella grande non ferma la shell.
+        // cp and mv in a separate process: a large folder doesn't stall the
+        // shell.
         if (cut) {
             runDetached(QStringLiteral("mv"), { QStringLiteral("--"), source.absoluteFilePath(), target }, m_dir);
             step.moves.append({ target, source.absoluteFilePath() });
@@ -789,7 +791,7 @@ void DesktopModel::paste()
         }
     }
     if (cut) {
-        QGuiApplication::clipboard()->clear(); // spostati: non si incollano due volte
+        QGuiApplication::clipboard()->clear(); // moved: they don't paste twice
     }
     if (!first.isEmpty()) {
         pushUndo(step);
@@ -820,11 +822,11 @@ void DesktopModel::compress(const QStringList& paths, const QString& format)
     if (names.isEmpty()) {
         return;
     }
-    // L'archivio prende il nome del primo elemento, come in Windows.
+    // The archive takes the name of the first item, like in Windows.
     const QFileInfo first(paths.first());
     const QString base = first.isDir() ? first.fileName() : first.completeBaseName();
     const QString archive = uniqueName(base + u'.' + format);
-    // bsdtar sceglie il formato dall'estensione (-a): zip, 7z, tar.
+    // bsdtar picks the format from the extension (-a): zip, 7z, tar.
     QStringList arguments { QStringLiteral("-a"), QStringLiteral("-cf"), archive, QStringLiteral("--") };
     arguments.append(names);
     if (runDetached(QStringLiteral("bsdtar"), arguments, m_dir)) {
@@ -837,7 +839,7 @@ void DesktopModel::compress(const QStringList& paths, const QString& format)
     }
 }
 
-// ------------------------------------------------------ trascinamento --
+// ----------------------------------------------------------- dragging --
 
 namespace {
 
@@ -875,7 +877,7 @@ void DesktopModel::drop(const QStringList& urls, const QString& target, qreal x,
         const QFileInfo info(source);
         if (info.absolutePath() == QDir(dir).absolutePath() || source == dir
             || dir.startsWith(source + u'/')) {
-            continue; // già lì, o una cartella dentro sé stessa
+            continue; // already there, or a folder inside itself
         }
         const QString name = uniqueNameIn(dir, info.fileName());
         const QString destination = QDir(dir).filePath(name);
@@ -888,7 +890,7 @@ void DesktopModel::drop(const QStringList& urls, const QString& target, qreal x,
             step.created.append(destination);
         }
         step.label = move ? QCoreApplication::translate("Desktop", "Move") : QCoreApplication::translate("Desktop", "Copy");
-        // Sul desktop: dove sono stati lasciati, uno sotto l'altro.
+        // On the desktop: where they were dropped, one below the other.
         if (target.isEmpty() && !m_autoArrange) {
             savePosition(name, QPointF(std::max(0.0, x), std::max(0.0, y + placed * cellHeight())));
             ++placed;

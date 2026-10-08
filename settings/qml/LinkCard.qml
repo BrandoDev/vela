@@ -3,7 +3,7 @@
 
 import QtQuick
 
-// Una scheda che porta a un'altra pagina, con la freccia a destra.
+// A card leading to another page, with the arrow on the right.
 Card {
     clickable: true
     chevron: true

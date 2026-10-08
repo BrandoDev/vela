@@ -3,9 +3,9 @@
 
 import QtQuick
 
-// L'icona di un file: la miniatura se c'è (immagini, video, PDF), altrimenti
-// l'icona del tipo. Si caricano senza fermare la vista. Sui collegamenti la
-// freccia in basso a sinistra, come in Windows.
+// A file's icon: the thumbnail if there is one (images, videos, PDFs),
+// otherwise the type's icon. They load without stalling the view. Shortcuts
+// get the arrow at the bottom left, like in Windows.
 Item {
     id: icon
     property string path
@@ -33,7 +33,7 @@ Item {
         id: thumb
         anchors.fill: parent
         visible: status === Image.Ready
-        // Solo dove si vede bene: nelle icone medie e grandi.
+        // Only where it's clearly visible: medium and large icons.
         source: icon.thumbnail && icon.size >= 48
             ? "image://filethumb/" + encodeURIComponent(icon.path) + "/" + (icon.modified ? icon.modified.getTime() : 0) : ""
         sourceSize: Qt.size(icon.size, icon.size)
@@ -41,7 +41,7 @@ Item {
         asynchronous: true
         cache: false
     }
-    // La freccia del collegamento.
+    // The shortcut arrow.
     Image {
         visible: icon.link
         anchors { left: parent.left; bottom: parent.bottom }

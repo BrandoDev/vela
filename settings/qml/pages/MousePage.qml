@@ -3,9 +3,9 @@
 
 import QtQuick
 
-// Bluetooth e dispositivi > Mouse, come Windows 11: pulsante principale,
-// velocità del puntatore, "Migliora precisione puntatore", righe per ogni
-// scatto della rotellina. Le applica il compositor (vela.conf).
+// Bluetooth & devices > Mouse, like Windows 11: primary button, pointer speed,
+// "Enhance pointer precision", lines per wheel notch. The compositor applies
+// them (vela.conf).
 Page {
     CardGroup {
         Card {

@@ -3,8 +3,8 @@
 
 import QtQuick
 
-// Il titolo della pagina con il percorso, come Windows 11:
-// "Sistema  ›  Schermo", dove i pezzi precedenti sono link.
+// The page title with the path, like Windows 11: "System  ›  Display", where
+// the earlier pieces are links.
 Row {
     id: header
     property var crumbs: [] // [{name, title}]

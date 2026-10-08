@@ -38,7 +38,7 @@ namespace {
 
 const QString udisks = QStringLiteral("org.freedesktop.UDisks2");
 
-// Le stringhe di byte di udisks ("ay"), senza lo zero finale.
+// udisks byte strings ("ay"), without the trailing zero.
 QString bytes(const QVariant& value)
 {
     QByteArray data = value.toByteArray();
@@ -137,7 +137,7 @@ void Places::loadQuickAccess()
     if (settings.contains(QStringLiteral("quickAccess"))) {
         m_pinned = settings.value(QStringLiteral("quickAccess")).toStringList();
     } else {
-        // All'inizio le cartelle dell'utente, come Windows.
+        // The user's folders first, like Windows.
         for (const UserDir& dir : userDirs) {
             const QString path = QStandardPaths::writableLocation(dir.location);
             if (!path.isEmpty() && path != QDir::homePath() && !m_pinned.contains(path)) {
@@ -184,8 +184,8 @@ void Places::unpin(const QString& path)
 
 void Places::refreshDrives()
 {
-    // Le unità vere (un dispositivo in /dev), una volta sola anche se
-    // montate in più punti (i sottovolumi btrfs): si tiene il punto più corto.
+    // Real drives (a device in /dev), once even when mounted in several places
+    // (btrfs subvolumes): the shortest mount point is kept.
     static const QStringList skipped { QStringLiteral("/boot"), QStringLiteral("/efi"), QStringLiteral("/boot/efi") };
     QList<QStorageInfo> volumes = QStorageInfo::mountedVolumes();
     std::sort(volumes.begin(), volumes.end(),
@@ -251,7 +251,7 @@ void Places::readVolumes()
         m_readingVolumes = false;
         const QDBusPendingReply<ManagedObjects> reply = *watcher;
         if (reply.isError()) {
-            return; // niente udisks: solo le unità montate
+            return; // no udisks: only mounted drives
         }
         const ManagedObjects objects = reply.value();
         const QString blockIface = QStringLiteral("org.freedesktop.UDisks2.Block");
@@ -274,8 +274,8 @@ void Places::readVolumes()
                 { { QStringLiteral("block"), it.key().path() }, { QStringLiteral("drive"), drivePath },
                     { QStringLiteral("removable"), removable } });
             m_devices.insert(bytes(block.value(QStringLiteral("Device"))), m_devices.value(device));
-            // Le non montate che si possono aprire: file system veri, non
-            // nascosti (la partizione EFI, quelle di ripristino), non la swap.
+            // Unmounted ones that can be opened: real filesystems, not hidden
+            // (the EFI partition, recovery ones), not swap.
             if (!it.value().contains(fsIface) || block.value(QStringLiteral("IdUsage")).toString() != QLatin1String("filesystem")
                 || block.value(QStringLiteral("HintIgnore")).toBool()
                 || hasMountPoints(it.value().value(fsIface).value(QStringLiteral("MountPoints")))) {
@@ -302,7 +302,7 @@ void Places::readVolumes()
             return a.toMap().value(QStringLiteral("device")).toString() < b.toMap().value(QStringLiteral("device")).toString();
         });
         m_volumes = volumes;
-        // Le montate rimovibili lo sanno meglio da udisks.
+        // Mounted removable ones know better from udisks.
         for (QVariant& entry : m_mountedDrives) {
             QVariantMap map = entry.toMap();
             const QVariantMap known = m_devices.value(map.value(QStringLiteral("device")).toString());
@@ -329,7 +329,7 @@ void Places::readVolumes()
 
 void Places::onVolumesChanged()
 {
-    // Arrivano a raffiche: un giro solo.
+    // They come in bursts: a single pass.
     QTimer::singleShot(300, this, [this] { refreshDrives(); });
 }
 
@@ -338,7 +338,7 @@ void Places::mount(const QString& volume)
     QDBusMessage call = QDBusMessage::createMethodCall(udisks, volume, QStringLiteral("org.freedesktop.UDisks2.Filesystem"),
         QStringLiteral("Mount"));
     call << QVariantMap { { QStringLiteral("auth.no_user_interaction"), false } };
-    // La password (polkit) può volerci un po'.
+    // The password (polkit) can take a while.
     auto* watcher = new QDBusPendingCallWatcher(QDBusConnection::systemBus().asyncCall(call, 5 * 60 * 1000), this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, volume] {
         watcher->deleteLater();
@@ -376,7 +376,7 @@ void Places::eject(const QString& device)
             refreshDrives();
             return;
         }
-        // Smontata: ora si può staccare (le chiavette si spengono anche).
+        // Unmounted: it can be removed now (sticks also power off).
         const QString drive = known.value(QStringLiteral("drive")).toString();
         if (!drive.isEmpty() && drive != QLatin1String("/")) {
             QDBusMessage eject = QDBusMessage::createMethodCall(udisks, drive,
@@ -389,7 +389,7 @@ void Places::eject(const QString& device)
     });
 }
 
-// ------------------------------------------------------------ Preferiti --
+// ------------------------------------------------------------ Favorites --
 
 QVariantList Places::favorites() const
 {

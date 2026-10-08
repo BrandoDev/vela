@@ -3,14 +3,13 @@
 
 import QtQuick
 
-// App > App predefinite > un'app, come Windows 11: i tipi di file e di
-// collegamento che sa aprire, con chi li apre oggi, e "Imposta come
-// predefinita" per tutti in una volta.
+// Apps > Default apps > an app, like Windows 11: the file and link types it
+// can open, with who opens them today, and "Set default" for all at once.
 Page {
     id: page
 
     readonly property var types: {
-        DefaultApps.categories // si ricalcola quando una scelta cambia
+        DefaultApps.categories // recomputed when a choice changes
         return DefaultApps.typesOf(DefaultApps.selectedApp)
     }
     readonly property bool allDefault: types.length > 0 && types.every(t => t.isDefault)

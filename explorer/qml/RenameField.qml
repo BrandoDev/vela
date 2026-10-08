@@ -3,8 +3,8 @@
 
 import QtQuick
 
-// Il nome da modificare sul posto (F2, Rinomina), come Windows: si
-// seleziona il nome senza l'estensione; Invio conferma, Esc annulla.
+// The name edited in place (F2, Rename), like Windows: the name without the
+// extension is selected; Enter confirms, Esc cancels.
 Rectangle {
     id: field
     property string path

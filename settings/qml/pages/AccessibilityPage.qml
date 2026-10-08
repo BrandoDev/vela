@@ -3,9 +3,9 @@
 
 import QtQuick
 
-// Accessibilità, come Windows 11: la lente di ingrandimento, i filtri
-// colore (anche con Win+Ctrl+C) e i tasti permanenti. Le applica il
-// compositor (compositor/src/a11y.c).
+// Accessibility, like Windows 11: the magnifier, color filters (also with
+// Win+Ctrl+C) and sticky keys. The compositor applies them
+// (compositor/src/a11y.c).
 Page {
     id: page
     readonly property var steps: [25, 50, 100, 150, 200, 400]

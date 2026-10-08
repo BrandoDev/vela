@@ -3,10 +3,10 @@
 
 import QtQuick
 
-// I layout di snap di Windows 11: passando sul pulsante Ingrandisci (o con
-// Win+Z) si apre sotto un pannello con le disposizioni possibili; un clic
-// su una zona aggancia lì la finestra, e Snap Assist propone le altre
-// finestre per le zone rimaste. Le zone sono in dodicesimi dell'area utile.
+// Windows 11 snap layouts: hovering the Maximize button (or Win+Z) opens a
+// panel below it with the possible arrangements; a click on a zone snaps the
+// window there, and Snap Assist offers the other windows for the remaining
+// zones. Zones are in twelfths of the usable area.
 Window {
     id: root
     objectName: "snapLayouts"
@@ -17,7 +17,7 @@ Window {
     property bool keyboard: false
     property real anchorX: 0
     property real anchorY: 0
-    property int focusIndex: -1 // la zona scelta da tastiera, tra tutte
+    property int focusIndex: -1 // the zone chosen from the keyboard, among all of them
 
     readonly property var layouts: [
         [[0, 0, 6, 12], [6, 0, 12, 12]],
@@ -27,7 +27,7 @@ Window {
         [[0, 0, 6, 6], [6, 0, 12, 6], [0, 6, 6, 12], [6, 6, 12, 12]],
         [[0, 0, 3, 12], [3, 0, 9, 12], [9, 0, 12, 12]]
     ]
-    // Tutte le zone una dopo l'altra (per la tastiera): [layout, zona].
+    // All zones one after the other (for the keyboard): [layout, zone].
     readonly property var flat: {
         const out = []
         for (let l = 0; l < layouts.length; ++l) {
@@ -83,8 +83,8 @@ Window {
     onActiveChanged: if (!active && visible && !Menus.isOpen) close()
 
     readonly property real panelY: Math.min(anchorY + 4, height - panel.height - 8)
-    // Alla prima apertura l'altezza della finestra arriva dopo: la zona
-    // sfocata segue la posizione del pannello, non solo la finestra.
+    // At the first opening the window's height comes later: the blurred zone
+    // follows the panel's position, not only the window.
     onPanelYChanged: updateBlur()
 
     ParallelAnimation {
@@ -93,8 +93,8 @@ Window {
         NumberAnimation { target: panel; property: "y"; to: root.panelY; duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
     }
 
-    // Uscendo dal pannello (e dal pulsante Ingrandisci, che resta sotto) si
-    // chiude, se aperto col mouse; un clic fuori sempre.
+    // Leaving the panel (and the Maximize button, which stays below) closes
+    // it, if opened with the mouse; a click outside always does.
     property point pointer: Qt.point(anchorX, anchorY - 16)
     function overButton(p) {
         return Math.abs(p.x - anchorX) <= 24 && p.y >= anchorY - 34 && p.y <= panelY

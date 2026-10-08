@@ -3,8 +3,8 @@
 
 import QtQuick
 
-// Rete e Internet: com'è collegato il PC, le reti Wi-Fi intorno e le
-// proprietà di ogni collegamento (indirizzi, DNS), come Windows 11.
+// Network & internet: how the PC is connected, the Wi-Fi networks around and
+// the properties of each connection (addresses, DNS), like Windows 11.
 Page {
     id: page
     Component.onCompleted: {
@@ -15,7 +15,7 @@ Page {
     }
     readonly property var wifiDevice: Network.devices.find(d => d.type === "wifi")
     readonly property var ethernetDevices: Network.devices.filter(d => d.type === "ethernet")
-    property string expanded: "" // il dispositivo con le proprietà aperte
+    property string expanded: "" // the device whose properties are open
 
     function stateText(d) {
         if (d.state.indexOf("connected") === 0 && d.state.indexOf("disconnected") < 0) return qsTr("Connected")
@@ -24,7 +24,7 @@ Page {
         return qsTr("Disconnected")
     }
 
-    // In cima: lo stato, grande.
+    // At the top: the status, large.
     Item {
         width: parent.width
         height: 96
@@ -166,7 +166,7 @@ Page {
         bottomPadding: 4
     }
 
-    // --- Ethernet (e le proprietà di ogni collegamento) ---
+    // --- Ethernet (and each connection's properties) ---
     Repeater {
         model: Network.devices
         delegate: Card {

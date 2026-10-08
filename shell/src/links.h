@@ -3,13 +3,12 @@
 
 #pragma once
 
-// Collegamenti e Preferiti, come Windows, in comune tra il desktop della
-// shell ed Esplora.
+// Shortcuts and Favorites, like Windows, shared by the shell's desktop and
+// Explorer.
 //
-// Un collegamento a un file o a una cartella è un collegamento simbolico
-// ("foto - Collegamento.jpg"); uno a un indirizzo web è un file .desktop di
-// tipo Link, come fanno KDE e GNOME. I Preferiti (la sezione della Home di
-// Esplora) stanno nelle impostazioni di Esplora.
+// A shortcut to a file or folder is a symbolic link ("photo - Shortcut.jpg");
+// one to a web address is a .desktop file of type Link, as KDE and GNOME do.
+// Favorites (the section of Explorer's Home) are in Explorer's settings.
 
 #include <QCoreApplication>
 #include <QDir>
@@ -21,7 +20,8 @@
 
 #include <unistd.h>
 
-// "foto.jpg" -> "foto - Collegamento.jpg"; "Documenti" -> "Documenti - Collegamento".
+// "photo.jpg" -> "photo - Shortcut.jpg"; "Documents" -> "Documents -
+// Shortcut".
 inline QString linkNameFor(const QFileInfo& target)
 {
     const bool hasSuffix = !target.isDir() && !target.suffix().isEmpty() && !target.completeBaseName().isEmpty();
@@ -29,7 +29,7 @@ inline QString linkNameFor(const QFileInfo& target)
                      : target.fileName() + QCoreApplication::translate("Desktop", " - Shortcut");
 }
 
-// Un nome libero nella cartella: "nome (2).ext", come Windows.
+// A free name in the folder: "name (2).ext", like Windows.
 inline QString freeNameIn(const QString& directory, const QString& name)
 {
     const QDir dir(directory);
@@ -47,8 +47,8 @@ inline QString freeNameIn(const QString& directory, const QString& name)
     }
 }
 
-// Un collegamento a `target` dentro `directory` (col nome dato, o
-// "X - Collegamento"). Il percorso creato, o vuoto se non si può.
+// A shortcut to `target` inside `directory` (with the given name, or "X -
+// Shortcut"). The path created, or empty if it can't be.
 inline QString createLink(const QString& target, const QString& directory, const QString& name = {})
 {
     const QFileInfo info(target);
@@ -60,8 +60,8 @@ inline QString createLink(const QString& target, const QString& directory, const
     return path;
 }
 
-// Nuovo > Collegamento: `target` è un percorso (anche "~/...") o un
-// indirizzo web. Il percorso creato; altrimenti vuoto e `error` dice perché.
+// New > Shortcut: `target` is a path (also "~/...") or a web address. The path
+// created; otherwise empty and `error` says why.
 inline QString createShortcut(const QString& directory, const QString& target, QString name, QString* error)
 {
     QString text = target.trimmed();
@@ -83,7 +83,7 @@ inline QString createShortcut(const QString& directory, const QString& target, Q
         }
         const QFileInfo info(local);
         if (!name.isEmpty() && !info.isDir() && !info.suffix().isEmpty() && !name.endsWith(u'.' + info.suffix())) {
-            name += u'.' + info.suffix(); // l'estensione resta: il tipo di file si riconosce
+            name += u'.' + info.suffix(); // the extension stays: the file type is recognized
         }
         const QString path = createLink(local, directory, name.isEmpty() ? info.fileName() : name);
         if (path.isEmpty() && error) {
@@ -108,7 +108,7 @@ inline QString createShortcut(const QString& directory, const QString& target, Q
     return path;
 }
 
-// ------------------------------------------------------------ Preferiti --
+// ------------------------------------------------------------ Favorites --
 
 inline QStringList favoriteFiles()
 {

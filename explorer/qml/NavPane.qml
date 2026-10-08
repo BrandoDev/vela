@@ -3,16 +3,16 @@
 
 import QtQuick
 
-// Il riquadro di navigazione a sinistra, come Windows 11: Home, le cartelle
-// di Accesso rapido (con la puntina), Questo PC con le unità (anche quelle
-// non montate, che si montano aprendole), il Cestino.
-// Si possono lasciare file su una voce per spostarli o copiarli lì.
+// The navigation pane on the left, like Windows 11: Home, the Quick access
+// folders (with the pin), This PC with the drives (also unmounted ones,
+// mounted when opened), the Recycle Bin. Files can be dropped on an entry to
+// move or copy them there.
 Flickable {
     id: pane
-    property string current // la posizione aperta, per evidenziarla
+    property string current // the open location, to highlight it
     signal navigate(string location)
     signal openInNewTab(string location)
-    signal openVolume(string volume) // un'unità non montata: si monta e si apre
+    signal openVolume(string volume) // an unmounted drive: mounted and opened
     signal contextMenu(var entries, real x, real y)
 
     contentHeight: column.height + 16
@@ -25,8 +25,8 @@ Flickable {
         property string label
         property string location
         property bool pinned: false
-        property string volume: "" // unità non montata (udisks)
-        property string device: "" // unità rimovibile montata: si può espellere
+        property string volume: "" // unmounted drive (udisks)
+        property string device: "" // mounted removable drive: it can be ejected
         property bool droppable: location.startsWith("/")
         property int indent: 0
         readonly property bool selected: pane.current === location
@@ -97,7 +97,7 @@ Flickable {
         }
     }
 
-    // Il menu di una voce: Apri, Apri in una nuova scheda, la puntina, Proprietà.
+    // An entry's menu: Open, Open in new tab, the pin, Properties.
     function entryMenu(entry) {
         const loc = entry.location
         if (entry.volume !== "") {

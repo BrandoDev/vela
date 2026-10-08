@@ -17,13 +17,13 @@ class AppModel;
 class ForeignToplevel;
 class ForeignToplevelManager;
 
-// I pulsanti della taskbar, come su Windows 11: prima le app fissate (aperte
-// o no), poi le altre app aperte, nell'ordine in cui sono state avviate.
-// Le finestre della stessa app stanno sotto un solo pulsante.
+// The taskbar buttons, like Windows 11: pinned apps first (open or not), then
+// the other open apps, in the order they were started. Windows of the same app
+// are under a single button.
 class TaskbarModel : public QAbstractListModel {
     Q_OBJECT
     Q_PROPERTY(QStringList pinnedIds READ pinnedIds WRITE setPinnedIds NOTIFY pinnedIdsChanged)
-    // Le app fissate sono già state salvate (altrimenti si parte da quelle predefinite).
+    // Pinned apps have already been saved (otherwise the defaults are used).
     Q_PROPERTY(bool pinsSaved READ pinsSaved CONSTANT)
 
 public:
@@ -50,29 +50,29 @@ public:
     Q_INVOKABLE void pin(const QString& desktopId);
     Q_INVOKABLE void unpin(const QString& desktopId);
 
-    // Clic sul pulsante: avvia l'app, oppure porta davanti la sua finestra,
-    // oppure (se è già quella attiva) la riduce a icona.
+    // Click on the button: starts the app, or brings its window to the front,
+    // or (if it's already the active one) minimizes it.
     Q_INVOKABLE void activate(int row);
-    // Il pulsante trascinato in un altro posto: le app fissate restano
-    // davanti a quelle solo aperte, e il loro ordine si ricorda.
+    // The button dragged elsewhere: pinned apps stay before the ones only
+    // open, and their order is remembered.
     Q_INVOKABLE void move(int from, int to);
-    // Clic centrale: una nuova finestra dell'app.
+    // Middle click: a new window of the app.
     Q_INVOKABLE void launchNew(int row);
-    // "Chiudi finestra" / "Chiudi tutte le finestre".
+    // "Close window" / "Close all windows".
     Q_INVOKABLE void closeWindows(int row);
-    // "Termina attività": il compositor chiude i processi delle sue finestre.
+    // "End task": the compositor kills the processes of its windows.
     Q_INVOKABLE void endTask(int row);
-    // Il menu della finestra dal pulsante (Maiusc+clic destro), sulla sua
-    // finestra più recente: {maximized, minimized}; e le sue azioni
-    // (restore, move, resize, minimize, maximize, close).
+    // The window menu from the button (Shift+right click), on its most recent
+    // window: {maximized, minimized}; and its actions (restore, move, resize,
+    // minimize, maximize, close).
     Q_INVOKABLE QVariantMap windowState(int row) const;
     Q_INVOKABLE void windowAction(int row, const QString& action);
-    // Win+D e "Desktop" nel menu Win+X: riduce tutto a icona, e la volta
-    // dopo rimette com'era.
+    // Win+D and "Desktop" in the Win+X menu: minimizes everything, and the
+    // next time puts it back.
     Q_INVOKABLE void toggleDesktop();
-    // Gli app_id delle sue finestre aperte (per trovarle nelle anteprime).
+    // The app_ids of its open windows (to find them in previews).
     Q_INVOKABLE QStringList appIds(int row) const;
-    // Posizione del pulsante nella finestra della taskbar.
+    // The button's position in the taskbar window.
     Q_INVOKABLE void setButtonGeometry(int row, QWindow* panel, const QRectF& rect);
 
 signals:
@@ -80,7 +80,7 @@ signals:
 
 private:
     struct Item {
-        QString key; // id del .desktop, oppure "app:<app_id>" se sconosciuto
+        QString key; // .desktop id, or "app:<app_id>" if unknown
         QString desktopId;
         QString name;
         QString icon;
@@ -96,10 +96,10 @@ private:
     AppModel* m_apps;
     ForeignToplevelManager* m_windows;
     QStringList m_pinnedIds;
-    QStringList m_unpinnedOrder; // chiavi delle app non fissate, in ordine di comparsa
+    QStringList m_unpinnedOrder; // keys of unpinned apps, in order of appearance
     QList<Item> m_items;
     QPointer<QWindow> m_panel;
-    QHash<QString, QRect> m_buttonRects; // per chiave dell'app
+    QHash<QString, QRect> m_buttonRects; // by app key
     bool m_pinsSaved = false;
-    QList<QPointer<ForeignToplevel>> m_hiddenByDesktop; // ridotte a icona da "Mostra desktop"
+    QList<QPointer<ForeignToplevel>> m_hiddenByDesktop; // minimized by "Show desktop"
 };

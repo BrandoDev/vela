@@ -3,8 +3,7 @@
 
 import QtQuick
 
-// Un pulsante delle finestre di dialogo della shell, come Windows 11: quello
-// principale pieno dell'accento.
+// A shell dialog button, like Windows 11: the main one filled with the accent.
 Rectangle {
     id: button
     property string label

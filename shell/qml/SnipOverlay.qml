@@ -3,29 +3,30 @@
 
 import QtQuick
 
-// Lo Strumento di cattura su uno schermo (uno per schermo, li crea
-// snip.cpp): la fotografia dello schermo scurita, e in alto la barra dei
-// modi come Windows 11: Rettangolo, Finestra, Schermo intero. Si trascina
-// un rettangolo, o si clicca una finestra o lo schermo; Esc annulla.
+// The Snipping Tool on one output (one per output, created by snip.cpp): the
+// darkened photo of the output, and at the top the mode bar like Windows 11:
+// Rectangle, Window, Full screen. Drag a rectangle, or click a window or the
+// output; Esc cancels.
 Window {
     id: root
     property string screenName
     visible: false
     color: "black"
 
-    // Il rettangolo scelto (o la finestra sotto il mouse), in coordinate di questo schermo.
+    // The chosen rectangle (or the window under the mouse), in this output's
+    // coordinates.
     property rect selection: Qt.rect(0, 0, 0, 0)
     property point origin
     property bool dragging: false
     readonly property bool hasSelection: selection.width > 0 && selection.height > 0
 
-    // La finestra più in alto sotto il punto (coordinate di questo schermo).
+    // The topmost window under the point (this output's coordinates).
     function windowAt(x, y) {
         const gx = x + Screen.virtualX
         const gy = y + Screen.virtualY
         for (const w of Snip.windows) {
             if (gx >= w.x && gx < w.x + w.w && gy >= w.y && gy < w.y + w.h) {
-                // Solo la parte su questo schermo.
+                // Only the part on this output.
                 const x0 = Math.max(w.x - Screen.virtualX, 0)
                 const y0 = Math.max(w.y - Screen.virtualY, 0)
                 const x1 = Math.min(w.x + w.w - Screen.virtualX, root.width)
@@ -48,7 +49,7 @@ Window {
         smooth: true
     }
 
-    // Il velo, tranne dove si sta scegliendo.
+    // The veil, except where the choice is being made.
     readonly property color veil: Qt.rgba(0, 0, 0, 0.45)
     Rectangle { color: root.veil; x: 0; y: 0; width: parent.width; height: root.hasSelection ? root.selection.y : parent.height }
     Rectangle {
@@ -119,7 +120,7 @@ Window {
         }
     }
 
-    // La barra dei modi, in alto al centro.
+    // The mode bar, at the top center.
     Rectangle {
         id: toolbar
         anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 24 }
@@ -194,7 +195,7 @@ Window {
         focus: true
         Keys.onEscapePressed: Snip.cancel()
         Keys.onPressed: event => {
-            // Come Windows: Invio con il rettangolo scelto lo conferma.
+            // Like Windows: Enter with a rectangle chosen confirms it.
             if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && root.hasSelection) {
                 root.finish(root.selection)
             }

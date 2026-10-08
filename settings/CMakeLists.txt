@@ -1,8 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# L'app Impostazioni di Vela: Qt Quick, come la shell, di cui riusa alcuni
-# pezzi (le app installate, i programmi di sistema, lo stato del sistema).
+# Vela's Settings app: Qt Quick, like the shell, whose pieces it partly reuses
+# (installed apps, system programs, system status).
 set(QT_NO_PRIVATE_MODULE_WARNING ON)
 find_package(Qt6 6.5 REQUIRED COMPONENTS DBus Gui Network Qml Quick QuickControls2 Svg)
 
@@ -96,7 +96,7 @@ qt_add_qml_module(vela-settings
 target_compile_options(vela-settings PRIVATE -Wall -Wextra)
 target_compile_definitions(vela-settings PRIVATE VELA_VERSION="${PROJECT_VERSION}")
 
-# Lo sfondo predefinito della shell, per mostrarlo e calcolarne il colore Mica.
+# The shell's default wallpaper, to show it and compute its Mica color.
 qt_add_resources(vela-settings "images"
     PREFIX "/vela"
     BASE ${PROJECT_SOURCE_DIR}
@@ -113,9 +113,9 @@ target_link_libraries(vela-settings PRIVATE
 install(TARGETS vela-settings RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES vela-settings.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 
-# Traduzione italiana: le stringhe del codice sono in inglese, l'italiano sta
-# in i18n/vela-settings_it.ts e finisce nell'eseguibile (:/i18n/vela-settings_it.qm, vedi
-# shell/src/language.h). Dopo aver cambiato testi:
+# Italian translation: strings in the code are in English, Italian lives
+# in i18n/vela-settings_it.ts and ends up in the executable (:/i18n/vela-settings_it.qm, see
+# shell/src/language.h). After changing texts:
 #   cmake --build build --target update_translations
 find_package(Qt6 6.7 REQUIRED COMPONENTS LinguistTools)
 qt_add_translations(TARGETS vela-settings SOURCE_TARGETS vela-settings

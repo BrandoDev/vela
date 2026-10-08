@@ -3,10 +3,10 @@
 
 import QtQuick
 
-// La barra degli indirizzi di Windows 11: Indietro, Avanti, Su, Aggiorna;
-// il percorso a pezzi (ogni pezzo porta lì, la freccia tra i pezzi apre le
-// sottocartelle); un clic sul vuoto (o Ctrl+L) lo fa scrivere; a destra la
-// casella di ricerca.
+// The Windows 11 address bar: Back, Forward, Up, Refresh; the path in pieces
+// (each piece goes there, the arrow between pieces opens the subfolders); a
+// click on the empty part (or Ctrl+L) makes it editable; the search box on the
+// right.
 Item {
     id: bar
     property var tab
@@ -24,7 +24,7 @@ Item {
     }
     property bool editing: false
 
-    // I pezzi del percorso: [{label, location, icon}].
+    // The path pieces: [{label, location, icon}].
     readonly property var crumbs: {
         const loc = tab.location
         if (loc === "home:") return [{ label: qsTr("Home"), location: "home:", icon: "go-home" }]
@@ -76,7 +76,7 @@ Item {
             onClicked: bar.focusAddress()
         }
 
-        // Il percorso a pezzi, allineato a destra se troppo lungo (come Windows).
+        // The path in pieces, right-aligned when too long (like Windows).
         Flickable {
             visible: !bar.editing
             anchors { fill: parent; leftMargin: 4; rightMargin: 4 }
@@ -137,7 +137,7 @@ Item {
                                 }
                             }
                         }
-                        // La freccia: le sottocartelle di questo pezzo.
+                        // The arrow: this piece's subfolders.
                         Rectangle {
                             visible: crumb.modelData.location.startsWith("/") && crumb.modelData.location !== Places.trash
                             height: 26
@@ -199,7 +199,7 @@ Item {
         }
     }
 
-    // La ricerca: in questa cartella e nelle sottocartelle.
+    // Search: in this folder and its subfolders.
     Rectangle {
         id: searchBox
         anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }

@@ -16,28 +16,28 @@
 
 class AppModel;
 
-// Le icone del desktop, come in Windows 11: i file della cartella Desktop
-// (XDG_DESKTOP_DIR, es. ~/Scrivania) più il Cestino, in una griglia che si
-// riempie per colonne dall'angolo in alto a sinistra. Le icone spostate a
-// mano restano dove sono (salvate), finché non si riordina.
+// Desktop icons, like Windows 11: the files of the Desktop folder
+// (XDG_DESKTOP_DIR, such as ~/Desktop) plus the Recycle Bin, in a grid filled
+// by columns from the top left corner. Icons moved by hand stay where they are
+// (saved), until sorted.
 class DesktopModel : public QAbstractListModel {
     Q_OBJECT
     Q_PROPERTY(QString directory READ directory CONSTANT)
-    // Visualizza: 0 icone grandi, 1 medie, 2 piccole.
+    // View: 0 large icons, 1 medium, 2 small.
     Q_PROPERTY(int iconSize READ iconSize WRITE setIconSize NOTIFY viewChanged)
     Q_PROPERTY(bool autoArrange READ autoArrange WRITE setAutoArrange NOTIFY viewChanged)
     Q_PROPERTY(bool alignToGrid READ alignToGrid WRITE setAlignToGrid NOTIFY viewChanged)
     Q_PROPERTY(bool showIcons READ showIcons WRITE setShowIcons NOTIFY viewChanged)
-    // Ordina per: 0 nome, 1 dimensione, 2 tipo elemento, 3 data ultima modifica.
+    // Sort by: 0 name, 1 size, 2 item type, 3 date modified.
     Q_PROPERTY(int sortMode READ sortMode NOTIFY viewChanged)
-    // Le misure della griglia (logiche), per la dimensione scelta.
+    // The grid's sizes (logical), for the chosen size.
     Q_PROPERTY(int iconPixels READ iconPixels NOTIFY viewChanged)
     Q_PROPERTY(int cellWidth READ cellWidth NOTIFY viewChanged)
     Q_PROPERTY(int cellHeight READ cellHeight NOTIFY viewChanged)
-    // L'area in cui stanno le icone (lo schermo senza la taskbar).
+    // The area holding the icons (the output without the taskbar).
     Q_PROPERTY(qreal areaWidth READ areaWidth WRITE setAreaWidth NOTIFY areaChanged)
     Q_PROPERTY(qreal areaHeight READ areaHeight WRITE setAreaHeight NOTIFY areaChanged)
-    // "Annulla …": il nome dell'ultima azione annullabile (vuoto: nessuna).
+    // "Undo …": the name of the last undoable action (empty: none).
     Q_PROPERTY(QString undoText READ undoText NOTIFY undoChanged)
     Q_PROPERTY(bool canPaste READ canPaste NOTIFY clipboardChanged)
 
@@ -48,12 +48,12 @@ public:
         UrlRole,
         IconRole,
         IsDirRole,
-        IsAppRole, // un collegamento .desktop
+        IsAppRole, // a .desktop shortcut
         IsTrashRole,
         TypeRole,
         ModifiedRole,
-        ThumbnailRole, // c'è (o si può fare) una miniatura
-        XRole, // posizione nella griglia (logica, dentro l'area)
+        ThumbnailRole, // there is (or can be) a thumbnail
+        XRole, // position in the grid (logical, inside the area)
         YRole,
     };
 
@@ -83,11 +83,11 @@ public:
     QString undoText() const;
     bool canPaste() const;
 
-    // Riordina (Ordina per): le icone tornano in fila in quell'ordine.
+    // Sorts (Sort by): icons line up again in that order.
     Q_INVOKABLE void sortBy(int mode);
     Q_INVOKABLE void refresh();
-    // Trascinata lì (coordinate logiche dell'area): si aggancia alla cella
-    // libera più vicina se "Allinea icone alla griglia".
+    // Dragged there (logical coordinates of the area): it snaps to the nearest
+    // free cell with "Align icons to grid".
     Q_INVOKABLE void moveTo(const QString& path, qreal x, qreal y);
 
     Q_INVOKABLE void open(const QStringList& paths);
@@ -96,20 +96,20 @@ public:
     Q_INVOKABLE void emptyTrash();
     Q_INVOKABLE bool trashEmpty() const;
     Q_INVOKABLE void undo();
-    // Nuovo: restituiscono il percorso, per rinominarlo subito.
+    // New: they return the path, to rename it right away.
     Q_INVOKABLE QString createFolder();
-    Q_INVOKABLE QString createFile(const QString& templatePath); // vuoto: documento di testo
-    // I modelli di documento (XDG_TEMPLATES_DIR): [{name, icon, path}].
+    Q_INVOKABLE QString createFile(const QString& templatePath); // empty: text document
+    // Document templates (XDG_TEMPLATES_DIR): [{name, icon, path}].
     Q_INVOKABLE QVariantList templates() const;
     Q_INVOKABLE void copy(const QStringList& paths);
     Q_INVOKABLE void cut(const QStringList& paths);
     Q_INVOKABLE void paste();
     Q_INVOKABLE void copyAsPath(const QStringList& paths);
-    // File lasciati qui da un'app (trascinati): sul desktop nel punto
-    // (x, y), in una cartella, o nel Cestino ("trash:/"). Come Windows:
-    // spostati se sono sullo stesso disco, altrimenti copiati.
+    // Files dropped here by an app (dragged): on the desktop at point (x, y),
+    // in a folder, or in the Recycle Bin ("trash:/"). Like Windows: moved if
+    // on the same disk, otherwise copied.
     Q_INVOKABLE void drop(const QStringList& urls, const QString& target, qreal x, qreal y);
-    // Comprimi in: "zip", "7z" o "tar".
+    // Compress to: "zip", "7z" or "tar".
     Q_INVOKABLE void compress(const QStringList& paths, const QString& format);
 
 signals:
@@ -117,8 +117,8 @@ signals:
     void areaChanged();
     void undoChanged();
     void clipboardChanged();
-    // Un file appena creato (Nuovo, Incolla): la vista lo seleziona e, se
-    // chiesto, lo fa rinominare.
+    // A file just created (New, Paste): the view selects it and, if asked, has
+    // it renamed.
     void created(const QString& path, bool rename);
 
 private:
@@ -126,20 +126,20 @@ private:
         QString name;
         QString path;
         QString icon;
-        QString type; // descrizione del tipo, per ordinare
+        QString type; // type description, for sorting
         bool isDir = false;
         bool isApp = false;
         bool isTrash = false;
         bool hasThumbnail = false;
         qint64 size = 0;
         QDateTime modified;
-        QPointF position; // scelta a mano (salvata); (-1, -1): nessuna
+        QPointF position; // chosen by hand (saved); (-1, -1): none
     };
     struct UndoStep {
-        QString label; // "Rinomina", "Elimina", "Nuovo", "Incolla"
-        QList<QPair<QString, QString>> moves; // da -> a, per tornare indietro
-        QStringList created; // da togliere (nel cestino)
-        QStringList trashed; // percorsi nel cestino, da rimettere al loro posto
+        QString label; // "Rename", "Delete", "New", "Paste"
+        QList<QPair<QString, QString>> moves; // from -> to, to go back
+        QStringList created; // to remove (to the bin)
+        QStringList trashed; // paths in the bin, to put back in place
         QStringList originals;
     };
 
@@ -155,7 +155,7 @@ private:
     AppModel* m_apps;
     QString m_dir;
     QList<Item> m_items;
-    QList<QPointF> m_layout; // dove si vede ogni icona
+    QList<QPointF> m_layout; // where each icon shows
     QFileSystemWatcher m_watcher;
     QTimer m_reloadTimer;
     int m_iconSize = 1;
@@ -166,6 +166,6 @@ private:
     qreal m_areaWidth = 0;
     qreal m_areaHeight = 0;
     QList<UndoStep> m_undo;
-    QString m_pendingSelect; // file appena creato, da annunciare quando compare
+    QString m_pendingSelect; // file just created, to announce when it appears
     bool m_pendingRename = false;
 };

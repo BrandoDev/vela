@@ -3,10 +3,9 @@
 
 import QtQuick
 
-// Una finestra di dialogo di Windows 11 dentro Esplora: sopra il contenuto,
-// che si scurisce; titolo, testo e fino a quattro pulsanti in fondo
-// (`buttons`: [{text, accent, value}]); `chosen(value)` con quello premuto
-// (Esc: "cancel").
+// A Windows 11 dialog inside Explorer: above the content, which darkens;
+// title, text and up to four buttons at the bottom (`buttons`: [{text, accent,
+// value}]); `chosen(value)` with the pressed one (Esc: "cancel").
 Item {
     id: dialog
     property string title

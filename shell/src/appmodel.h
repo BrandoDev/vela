@@ -10,8 +10,8 @@
 #include <QUrl>
 #include <QVariantMap>
 
-// Elenco delle applicazioni installate, letto dai file .desktop standard
-// (gli stessi che usano KDE, GNOME e il resto del mondo Linux).
+// The list of installed applications, read from the standard .desktop files
+// (the same ones KDE, GNOME and the rest of the Linux world use).
 class AppModel : public QAbstractListModel {
     Q_OBJECT
     Q_PROPERTY(QString query READ query WRITE setQuery NOTIFY queryChanged)
@@ -25,29 +25,29 @@ public:
         CommentRole,
     };
 
-    // Un'azione dichiarata dall'app ([Desktop Action ...]): "Nuova finestra"...
+    // An action declared by the app ([Desktop Action ...]): "New window"...
     struct Action {
         QString id;
         QString name;
         QString icon;
-        QString exec; // con i field code
+        QString exec; // with the field codes
     };
 
     struct Entry {
-        QString id; // es. org.kde.dolphin.desktop
-        QString path; // il file .desktop
-        QString rawExec; // con i field code (%f, %u...)
+        QString id; // such as org.kde.dolphin.desktop
+        QString path; // the .desktop file
+        QString rawExec; // with the field codes (%f, %u...)
         QList<Action> actions;
-        QStringList mimeTypes; // i tipi di file che sa aprire
+        QStringList mimeTypes; // the file types it can open
         QString name;
         QString genericName;
         QString comment;
         QString keywords;
         QString icon;
-        QString exec; // senza field code: per la ricerca
-        QString program; // il nome del programma (es. "kate"), dal primo argomento di Exec
-        QString workDir; // Path=: la cartella in cui avviarla (vuota: la home)
-        QString wmClass; // StartupWMClass: l'app_id delle sue finestre, se diverso dall'id
+        QString exec; // without field codes: for searching
+        QString program; // the program name (such as "kate"), from Exec's first argument
+        QString workDir; // Path=: the directory to start it in (empty: home)
+        QString wmClass; // StartupWMClass: its windows' app_id, if different from the id
         bool terminal = false;
     };
 
@@ -64,34 +64,35 @@ public:
     Q_INVOKABLE void reload();
     Q_INVOKABLE bool launch(int row);
     Q_INVOKABLE bool launchId(const QString& id);
-    // Dati di una singola app per id (per le icone fissate sulla taskbar).
+    // A single app's data by id (for the icons pinned to the taskbar).
     Q_INVOKABLE QVariantMap entry(const QString& id) const;
-    // Le azioni dell'app per la jump list: [{id, name, icon}].
+    // The app's actions for the jump list: [{id, name, icon}].
     Q_INVOKABLE QVariantList actions(const QString& id) const;
     Q_INVOKABLE bool launchAction(const QString& id, const QString& actionId);
-    // Apre un file (o un URL) con quell'app.
+    // Opens a file (or a URL) with that app.
     Q_INVOKABLE bool launchWithFile(const QString& id, const QString& url);
     Q_INVOKABLE QString desktopFile(const QString& id) const;
     Q_INVOKABLE QString name(const QString& id) const;
-    // Il programma che l'app avvia (es. "kate"), per riconoscerla altrove.
+    // The program the app starts (such as "kate"), to recognize it elsewhere.
     QString program(const QString& id) const;
     const Entry* find(const QString& id) const;
-    // "Apri con": le app che sanno aprire quel tipo di file (e i suoi
-    // genitori, es. text/plain per il C++), la predefinita per prima:
-    // [{id, name, icon, isDefault}].
+    // "Open with": the apps that can open that file type (and its parents,
+    // such as text/plain for C++), the default first: [{id, name, icon,
+    // isDefault}].
     Q_INVOKABLE QVariantList appsForFile(const QString& path) const;
-    // Tutte le app, per nome: [{id, name, icon}] ("Scegli un'altra app").
+    // All apps, by name: [{id, name, icon}] ("Choose another app").
     Q_INVOKABLE QVariantList allApps() const;
-    // Un collegamento .desktop fuori dal menu (es. sul desktop): lo avvia.
+    // A .desktop shortcut outside the menu (such as on the desktop): starts
+    // it.
     Q_INVOKABLE bool launchDesktopFile(const QString& path) const;
-    // L'id nel menu di un .desktop che sta altrove (es. steam.desktop sul
-    // desktop), se è la stessa app; vuoto altrimenti.
+    // The menu id of a .desktop file found elsewhere (such as steam.desktop on
+    // the desktop), if it's the same app; empty otherwise.
     Q_INVOKABLE QString idForDesktopFile(const QString& path) const;
     const QList<Entry>& all() const { return m_all; }
-    // Il file .desktop di una finestra aperta, a partire dal suo app_id
-    // (es. "org.kde.konsole" -> "org.kde.konsole.desktop"). Vuoto se ignoto.
+    // The .desktop file of an open window, from its app_id (such as
+    // "org.kde.konsole" -> "org.kde.konsole.desktop"). Empty if unknown.
     QString findDesktopId(const QString& appId) const;
-    // L'icona di una finestra aperta, dal suo app_id.
+    // The icon of an open window, from its app_id.
     Q_INVOKABLE QString iconForAppId(const QString& appId) const;
 
 signals:
@@ -100,14 +101,15 @@ signals:
 
 private:
     void applyFilter();
-    // Avvia l'app con i file dati (anche nessuno), secondo Exec (desktopexec.h):
-    // il programma con i suoi argomenti, senza passare dalla shell.
+    // Starts the app with the given files (possibly none), as Exec says
+    // (desktopexec.h): the program with its arguments, without going through
+    // the shell.
     bool launchEntry(const Entry& entry, const QList<QUrl>& files = {}) const;
 
-    QList<Entry> m_all; // ordinate per nome
-    QList<int> m_visible; // indici in m_all che corrispondono alla ricerca
+    QList<Entry> m_all; // sorted by name
+    QList<int> m_visible; // indexes in m_all matching the search
     QString m_query;
 };
 
-// L'app predefinita per un tipo MIME (id del .desktop), da mimeapps.list.
+// The default app for a MIME type (.desktop id), from mimeapps.list.
 QString defaultAppFor(const QString& mime);

@@ -3,29 +3,29 @@
 
 import QtQuick
 
-// Snap Assist di Windows 11: appena una finestra si aggancia, negli spazi
-// rimasti liberi compaiono le altre finestre, in anteprima; un clic aggancia
-// quella scelta lì, e si passa allo spazio successivo. Esc o un clic altrove
-// chiude. Gli spazi sono in dodicesimi dell'area utile dello schermo (la
-// finestra copre proprio quella: la taskbar resta fuori).
+// Windows 11 Snap Assist: as soon as a window snaps, the other windows appear
+// as previews in the spaces left free; a click snaps the chosen one there, and
+// the next space follows. Esc or a click elsewhere closes. Spaces are in
+// twelfths of the output's usable area (the window covers exactly that: the
+// taskbar stays out).
 Window {
     id: root
     objectName: "snapAssist"
     visible: false
     color: "transparent"
 
-    property var zones: [] // gli spazi da riempire, nell'ordine
-    property int current: 0 // quello di cui si scelgono le finestre
+    property var zones: [] // the spaces to fill, in order
+    property int current: 0 // the one whose windows are being chosen
     property var candidates: [] // [{id, title, icon}]
     property int revision: 0
-    property string origin: "" // la finestra agganciata da cui è partito
+    property string origin: "" // the snapped window it started from
 
     function overlaps(a, b) {
         return a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
     }
 
-    // Gli spazi liberi: quelli del layout scelto (se lo snap viene dai
-    // layout), altrimenti il complemento di una metà o di un quarto.
+    // The free spaces: those of the chosen layout (if the snap comes from
+    // layouts), otherwise the complement of a half or a quarter.
     function freeZones(state) {
         const tile = state.tile
         let zones
@@ -80,7 +80,7 @@ Window {
     }
     function pick(id) {
         const z = zones[current]
-        // Accanto alla finestra appena agganciata: insieme fanno un gruppo di snap.
+        // Next to the window just snapped: together they form a snap group.
         Shell.windowAction(id, "snap " + z.join(" ") + " quiet " + origin)
         candidates = candidates.filter(c => c.id !== id)
         if (current + 1 < zones.length && candidates.length > 0) {
@@ -139,14 +139,15 @@ Window {
                 border.width: 1
                 border.color: Theme.stroke
 
-                MouseArea { anchors.fill: parent } // dentro uno spazio non si chiude
+                MouseArea { anchors.fill: parent } // inside a space it doesn't close
 
-                // Le finestre da proporre, in anteprima, nello spazio attivo.
+                // The windows to offer, as previews, in the active space.
                 Item {
                     id: space
                     visible: zone.active
                     anchors { fill: parent; margins: 24 }
-                    // Colonne quante ne servono per riempire lo spazio con schede 16:10.
+                    // As many columns as needed to fill the space with 16:10
+                    // cards.
                     readonly property int columns: Math.max(1, Math.min(root.candidates.length,
                         Math.ceil(Math.sqrt(root.candidates.length * width / Math.max(1, height) / 1.4))))
                     readonly property int rows: Math.ceil(root.candidates.length / columns)

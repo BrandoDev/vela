@@ -4,8 +4,8 @@
 import QtQuick
 import QtQuick.Controls.Basic as C
 
-// Il menu a tendina di Windows 11 (ComboBox). `model` è un elenco di
-// stringhe o di oggetti con `text`; `currentIndex` quello scelto.
+// The Windows 11 drop-down (ComboBox). `model` is a list of strings or of
+// objects with `text`; `currentIndex` the chosen one.
 C.ComboBox {
     id: combo
     property bool usable: true

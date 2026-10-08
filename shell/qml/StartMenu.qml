@@ -5,24 +5,25 @@ import QtQuick
 import QtQuick.Shapes
 import QtQuick.Effects
 
-// Il menu Start: ricerca in alto, tutte le app sotto, utente in fondo.
-// Si apre salendo e sfumando; si chiude al clic fuori o con Esc.
+// The Start menu: search at the top, all apps below, user at the bottom. It
+// opens rising and fading; it closes on a click outside or with Esc.
 Window {
     id: root
     objectName: "startMenu"
 
     visible: false
     width: 660
-    // Su schermi bassi si accorcia: la ricerca in alto deve restare visibile.
+    // On short outputs it gets shorter: the search at the top must stay
+    // visible.
     height: Math.min(732, Screen.height - Theme.taskbarHeight - 12)
     color: "transparent"
 
     property bool closing: false
-    // Chiesto una volta sola a logind: il computer sa sospendersi?
+    // Asked of logind only once: can the computer suspend?
     readonly property bool canSuspend: Shell.canSuspend()
 
-    // Le app aggiunte alla Start, installate, senza doppioni (stessa app
-    // come pacchetto e come Flatpak).
+    // The apps pinned to Start, installed, without duplicates (the same app as
+    // a package and as a Flatpak).
     readonly property var pinned: {
         const seen = {}
         const out = []
@@ -37,15 +38,15 @@ Window {
     }
     readonly property bool showPinned: search.text.length === 0 && pinned.length > 0
 
-    // Il menu Start sta centrato sopra la taskbar: da coordinate sue a
-    // quelle dello schermo, per i menu del tasto destro.
+    // The Start menu is centered above the taskbar: from its coordinates to
+    // the output's, for right-click menus.
     function screenPoint(item, x, y) {
         const p = item.mapToItem(null, x, y)
         return Qt.point((Screen.width - root.width) / 2 + p.x, Screen.height - Theme.taskbarHeight - root.height + p.y)
     }
 
-    // Il menu di un'app (docs/renderer.md §14.7): in cima i file recenti e
-    // le attività, come la jump list; poi le voci della Start.
+    // An app's menu (docs/renderer.md §14.7): recent files and tasks at the
+    // top, like the jump list; then the Start entries.
     function appMenu(id, pinnedTile) {
         const entries = []
         const recent = Jumps.recent(id, 5)
@@ -88,10 +89,10 @@ Window {
         Menus.open(appMenu(id, pinnedTile), p.x, p.y)
     }
 
-    // Una voce del menu di accensione.
+    // An entry of the power menu.
     component PowerEntry: Item {
         id: entry
-        property string icon // del tema; vuoto: il simbolo disegnato dentro
+        property string icon // from the theme; empty: the symbol drawn inside
         property string label
         default property alias glyph: glyphSlot.data
         signal activated()
@@ -135,7 +136,7 @@ Window {
         }
     }
 
-    // Lo sfondo sfocato sotto il pannello (che sale aprendosi).
+    // The blurred background under the panel (which rises while opening).
     function updateBlur() {
         Effects.setBlur(root, [Qt.rect(panel.x, Math.max(0, panel.y), panel.width, Math.max(0, Math.min(panel.height, root.height - panel.y)))])
     }
@@ -155,7 +156,7 @@ Window {
         grid.positionViewAtBeginning()
         panel.opacity = 0
         panel.y = panel.restY + panel.slide
-        Menus.placeOnTargetScreen(root) // lo schermo della taskbar da cui si apre
+        Menus.placeOnTargetScreen(root) // the output of the taskbar it opens from
         visible = true
         Shell.startMenuOpen = true
         openAnimation.restart()
@@ -189,12 +190,11 @@ Window {
         }
     }
 
-    // Clic su una finestra o altrove: il menu perde il focus e si chiude,
-    // come su Windows.
-    // Un menu del tasto destro aperto da qui prende la tastiera: il menu
-    // Start resta aperto, e la riavrà quando il menu si chiude.
-    // Chiuso il menu, la tastiera torna qui; se invece è andata altrove (una
-    // finestra nuova, un clic), si chiude anche questo pannello.
+    // A click on a window or elsewhere: the menu loses focus and closes, like
+    // on Windows. A right-click menu opened from here takes the keyboard: the
+    // Start menu stays open, and gets it back when the menu closes. Once the
+    // menu closes, the keyboard comes back here; if it went elsewhere instead
+    // (a new window, a click), this panel closes too.
     Connections {
         target: Menus
         function onIsOpenChanged() {
@@ -255,7 +255,7 @@ Window {
         }
     }
 
-    // Ombra morbida attorno al pannello (non sotto: è acrylic).
+    // A soft shadow around the panel (not below: it's acrylic).
     PanelShadow {
         target: panel
         opacity: panel.opacity
@@ -268,19 +268,19 @@ Window {
         id: panel
 
         readonly property real restY: 10
-        // Di quanto sale aprendosi. La parte che sporge sotto la finestra
-        // viene tagliata al bordo della taskbar.
+        // How far it rises while opening. The part sticking out below the
+        // window is cut at the taskbar's edge.
         readonly property real slide: 140
         x: 10
         y: restY
         width: root.width - 20
-        height: root.height - 32 // 10 sopra, 22 sotto: 12 di stacco dalla taskbar
+        height: root.height - 32 // 10 above, 22 below: 12 of gap from the taskbar
         radius: Theme.radiusLarge
         color: Theme.surface
         border.width: 1
         border.color: Theme.stroke
 
-        // --- ricerca ---
+        // --- search ---
         Rectangle {
             id: searchBox
             anchors { top: parent.top; left: parent.left; right: parent.right; margins: 24 }
@@ -309,7 +309,7 @@ Window {
                     grid.positionViewAtBeginning()
                 }
 
-                // La tastiera resta nella ricerca; le frecce muovono la griglia.
+                // The keyboard stays in the search; the arrows move the grid.
                 Keys.onEscapePressed: root.close()
                 Keys.onReturnPressed: root.launch(grid.currentIndex)
                 Keys.onEnterPressed: root.launch(grid.currentIndex)
@@ -329,7 +329,7 @@ Window {
             font.weight: Font.DemiBold
         }
 
-        // --- griglia delle app ---
+        // --- app grid ---
         GridView {
             id: grid
             anchors {
@@ -345,7 +345,7 @@ Window {
             boundsBehavior: Flickable.StopAtBounds
             highlightFollowsCurrentItem: false
 
-            // Con le frecce la selezione può uscire dalla vista: la seguiamo.
+            // With the arrows the selection can leave the view: we follow it.
             onCurrentIndexChanged: positionViewAtIndex(currentIndex, GridView.Contain)
 
             delegate: AppTile {
@@ -358,7 +358,7 @@ Window {
                 onContextRequested: (x, y) => root.openAppMenu(tile, x, y, tile.appId, false)
             }
 
-            // Sopra tutte le app, quelle aggiunte alla Start.
+            // Above all apps, those pinned to Start.
             header: Item {
                 width: grid.width
                 height: root.showPinned ? pinnedGrid.height + allTitle.height + 24 : 0
@@ -407,7 +407,7 @@ Window {
             }
         }
 
-        // --- piè di pagina: utente ---
+        // --- footer: user ---
         Rectangle {
             id: footer
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
@@ -445,8 +445,8 @@ Window {
                 }
             }
 
-            // Accensione, dove Windows ha il suo pulsante: sospendi, esci
-            // (chiude Vela, non il computer), riavvia, arresta.
+            // Power, where Windows has its button: sleep, sign out (closes
+            // Vela, not the computer), restart, shut down.
             Item {
                 id: powerButton
                 anchors { right: parent.right; rightMargin: 24; verticalCenter: parent.verticalCenter }
@@ -464,8 +464,7 @@ Window {
                     }
                 }
 
-                // Il simbolo di accensione: un cerchio aperto in alto e una
-                // barra.
+                // The power symbol: a circle open at the top and a bar.
                 Shape {
                     anchors.centerIn: parent
                     width: 20
@@ -530,7 +529,7 @@ Window {
                             label: qsTr("Sign out")
                             onActivated: Shell.logout()
 
-                            // Una porta aperta e una freccia che esce.
+                            // An open door and an arrow going out.
                             Shape {
                                 anchors.fill: parent
                                 preferredRendererType: Shape.CurveRenderer

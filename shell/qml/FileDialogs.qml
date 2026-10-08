@@ -3,12 +3,12 @@
 
 import QtQuick
 
-// Tre finestre di dialogo dei file, per il desktop e per Esplora (che le
-// chiede attraverso il socket della shell), come Windows 11:
-// - Condividi: ai dispositivi vicini (KDE Connect), per posta, via Bluetooth;
-// - "Scegli un'altra app": le app suggerite e tutte le altre, "Solo una
-//   volta" o "Sempre" (diventa l'app predefinita per quel tipo di file);
-// - Nuovo > Collegamento: la procedura in due passi (l'elemento, poi il nome).
+// Three file dialogs, for the desktop and for Explorer (which asks for
+// them through the shell's socket), like Windows 11:
+// - Share: to nearby devices (KDE Connect), by mail, via Bluetooth;
+// - "Choose another app": suggested apps and all the others, "Just once" or
+//   "Always" (it becomes the default app for that file type);
+// - New > Shortcut: the two-step wizard (the item, then the name).
 Window {
     id: root
     objectName: "fileDialogs"
@@ -17,15 +17,15 @@ Window {
     height: panel.height + 64
     color: "transparent"
 
-    property string mode: "" // "share", "openWith" o "shortcut"
-    // Condividi
+    property string mode: "" // "share", "openWith" or "shortcut"
+    // Share
     property var paths: []
-    // Scegli un'altra app
+    // Choose another app
     property string path: ""
     property var suggested: []
     property var others: []
     property string chosen: ""
-    // Nuovo collegamento
+    // New shortcut
     property string folder: ""
     property int step: 0
     property string error: ""
@@ -36,7 +36,7 @@ Window {
         function onOpenWithRequested(path) { root.openWith(path) }
         function onNewShortcutRequested(folder) { root.openShortcut(folder) }
     }
-    // Anche da Esplora.
+    // From Explorer too.
     Connections {
         target: Shell
         function onShareRequested(paths) { root.openShare(paths) }
@@ -107,7 +107,7 @@ Window {
         close()
     }
 
-    // Al centro dello schermo: dalle coordinate della finestra a quelle dello schermo (menu).
+    // In the center of the output: from window to output coordinates (menus).
     function screenPoint(item, x, y) {
         const p = item.mapToItem(null, x, y)
         return Qt.point((Screen.width - root.width) / 2 + p.x, (Screen.height - root.height) / 2 + p.y)
@@ -144,7 +144,7 @@ Window {
         font.pixelSize: Theme.fontNormal
         wrapMode: Text.WordWrap
     }
-    // Una riga cliccabile con icona (destinazioni di Condividi, app).
+    // A clickable row with an icon (Share targets, apps).
     component Choice: Rectangle {
         id: choice
         property string icon
@@ -183,7 +183,7 @@ Window {
             onDoubleClicked: choice.doubleClicked()
         }
     }
-    // Un campo di testo con il bordo che si accende.
+    // A text field whose border lights up.
     component Field: Rectangle {
         property alias input: field
         property alias text: field.text
@@ -219,7 +219,7 @@ Window {
         focus: true
         Keys.onEscapePressed: root.close()
 
-        // Chiudi, in alto a destra.
+        // Close, at the top right.
         Rectangle {
             anchors { right: parent.right; top: parent.top; margins: 8 }
             width: 32
@@ -240,7 +240,7 @@ Window {
             }
         }
 
-        // ------------------------------------------------------ Condividi --
+        // ---------------------------------------------------------- Share --
         Column {
             id: share
             visible: root.mode === "share"
@@ -340,7 +340,7 @@ Window {
             }
         }
 
-        // ------------------------------------------- Scegli un'altra app --
+        // -------------------------------------------- Choose another app --
         Column {
             id: openWith
             visible: root.mode === "openWith"
@@ -399,7 +399,7 @@ Window {
             }
         }
 
-        // ------------------------------------------ Nuovo collegamento --
+        // ------------------------------------------------ New shortcut --
         Column {
             id: shortcut
             visible: root.mode === "shortcut"
@@ -456,7 +456,7 @@ Window {
         }
     }
 
-    // I due campi della procedura, per nome.
+    // The wizard's two fields, by name.
     property alias targetField: targetFieldBox.input
     property alias nameField: nameFieldBox.input
 }

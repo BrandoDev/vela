@@ -14,10 +14,10 @@
 
 namespace {
 
-constexpr int defaultTimeoutMs = 6000; // come Windows (circa sei secondi)
-constexpr int maxVisible = 4; // le più vecchie scadono prima del tempo
+constexpr int defaultTimeoutMs = 6000; // like Windows (about six seconds)
+constexpr int maxVisible = 4; // the oldest expire early
 
-// "image-data" (e i vecchi "image_data" e "icon_data"): (iiibiiay).
+// "image-data" (and the old "image_data" and "icon_data"): (iiibiiay).
 QImage decodeImage(const QVariant& value)
 {
     if (!value.canConvert<QDBusArgument>()) {
@@ -42,7 +42,7 @@ QImage decodeImage(const QVariant& value)
     return QImage(reinterpret_cast<const uchar*>(pixels.constData()), width, height, rowStride, format).copy();
 }
 
-// Un'icona per Image: file (percorso o file://) o nome del tema.
+// An icon for Image: file (path or file://) or theme name.
 QString iconSource(const QString& icon)
 {
     if (icon.isEmpty()) {
@@ -85,7 +85,7 @@ bool NotificationServer::registerService()
     return true;
 }
 
-// -------------------------------------------------------------- modello --
+// ---------------------------------------------------------------- model --
 
 int NotificationServer::rowCount(const QModelIndex& parent) const
 {
@@ -158,13 +158,14 @@ void NotificationServer::collectPopups()
         ids.push_back(n.id);
     }
     for (uint id : ids) {
-        close(id, Reason::Expired); // "scadute": nel centro, ancora vive
+        close(id, Reason::Expired); // "expired": in the center, still alive
     }
 }
 
 void NotificationServer::setHovered(bool hovered)
 {
-    // Mentre le si legge non scadono; uscito il mouse ripartono da capo.
+    // While being read they don't expire; when the mouse leaves they start
+    // over.
     m_hovered = hovered;
     for (Notification& n : m_items) {
         if (n.timer) {
@@ -217,7 +218,7 @@ uint NotificationServer::Notify(const QString& app_name, uint replaces_id, const
     n.critical = hints.value(QStringLiteral("urgency")).toInt() == 2;
     n.transient = hints.value(QStringLiteral("transient")).toBool();
 
-    // Già nel centro notifiche (sostituita): si aggiorna lì.
+    // Already in the notification center (replaced): updated there.
     if (const int old = replaces_id ? historyRow(replaces_id) : -1; old >= 0 && existing < 0) {
         NotificationHistory::Item& item = m_history.m_items[size_t(old)];
         item.icon = n.icon;
@@ -229,7 +230,7 @@ uint NotificationServer::Notify(const QString& app_name, uint replaces_id, const
         Q_EMIT m_history.dataChanged(m_history.index(old), m_history.index(old));
         return id;
     }
-    // Non disturbare: dritta nel centro, senza popup (le critiche passano).
+    // Do not disturb: straight into the center, no popup (critical ones pass).
     if (m_doNotDisturb && !n.critical) {
         if (n.transient) {
             Q_EMIT NotificationClosed(id, uint(Reason::Expired));
@@ -239,7 +240,7 @@ uint NotificationServer::Notify(const QString& app_name, uint replaces_id, const
         return id;
     }
 
-    // Scadenza: quella chiesta, o la nostra; 0 e le critiche restano.
+    // Expiry: the requested one, or ours; 0 and critical ones stay.
     const int timeout = expire_timeout < 0 ? defaultTimeoutMs : expire_timeout;
     if (timeout > 0 && !n.critical) {
         n.timer = std::make_unique<QTimer>();
@@ -275,7 +276,8 @@ void NotificationServer::close(uint id, Reason reason)
 {
     const int row = rowOf(id);
     if (row < 0) {
-        // Forse è nel centro notifiche (l'app la chiude, o la si chiude da lì).
+        // Maybe it's in the notification center (the app closes it, or it's
+        // closed from there).
         if (const int old = historyRow(id); old >= 0) {
             m_history.beginRemoveRows({}, old, old);
             m_history.m_items.erase(m_history.m_items.begin() + old);
@@ -286,8 +288,8 @@ void NotificationServer::close(uint id, Reason reason)
         }
         return;
     }
-    // Scaduta dal popup: come su Windows passa nel centro notifiche, ancora
-    // viva (un clic lì esegue la sua azione).
+    // Expired from the popup: like on Windows it moves into the notification
+    // center, still alive (a click there runs its action).
     const bool keep = reason == Reason::Expired && !m_items[size_t(row)].transient;
     if (keep) {
         toHistory(m_items[size_t(row)]);
@@ -325,7 +327,7 @@ void NotificationServer::setDoNotDisturb(bool on)
 {
     if (on != m_doNotDisturb) {
         m_doNotDisturb = on;
-        // Ricordato, e condiviso con le Impostazioni (vedi config.cpp).
+        // Remembered, and shared with Settings (see config.cpp).
         if (QSettings().value(QStringLiteral("notifications/doNotDisturb"), false).toBool() != on) {
             QSettings().setValue(QStringLiteral("notifications/doNotDisturb"), on);
         }
@@ -399,13 +401,13 @@ QHash<int, QByteArray> NotificationHistory::roleNames() const
 
 QString NotificationServer::iconFor(uint id, const QString& appIcon, const QVariantMap& hints)
 {
-    // In ordine di preferenza (specifica delle notifiche, 1.2).
+    // In order of preference (notification spec, 1.2).
     for (const char* key : { "image-data", "image_data", "icon_data" }) {
         const QImage image = decodeImage(hints.value(QLatin1String(key)));
         if (!image.isNull()) {
             m_images.insert(id, image);
             static uint serial = 0;
-            return QStringLiteral("image://notification/%1/%2").arg(id).arg(++serial); // nuova a ogni sostituzione
+            return QStringLiteral("image://notification/%1/%2").arg(id).arg(++serial); // new at every replacement
         }
     }
     for (const char* key : { "image-path", "image_path" }) {
@@ -421,7 +423,7 @@ QString NotificationServer::iconFor(uint id, const QString& appIcon, const QVari
     return iconSource(entry.isEmpty() ? QStringLiteral("dialog-information") : entry);
 }
 
-// --------------------------------------------------------------- immagini --
+// ----------------------------------------------------------------- images --
 
 QImage NotificationImageProvider::requestImage(const QString& id, QSize* size, const QSize& requestedSize)
 {

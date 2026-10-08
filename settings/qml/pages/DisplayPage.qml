@@ -3,10 +3,10 @@
 
 import QtQuick
 
-// Sistema > Schermo: la disposizione dei monitor (trascinabili), e per
-// quello scelto scala, risoluzione, orientamento e frequenza. Ogni
-// cambiamento chiede "Mantenere queste impostazioni?" e senza risposta
-// torna indietro dopo 15 secondi, come Windows.
+// System > Display: the monitors' arrangement (draggable), and for the chosen
+// one scale, resolution, orientation and refresh rate. Every change asks "Keep
+// these display settings?" and without an answer goes back after 15 seconds,
+// like Windows.
 Page {
     id: page
     property int selected: 0
@@ -16,7 +16,7 @@ Page {
 
     Component.onCompleted: Displays.refresh()
 
-    // --- cambiare e chiedere conferma ---
+    // --- changing and asking for confirmation ---
     function change(changes) {
         if (!output) {
             return
@@ -41,7 +41,7 @@ Page {
         }
     }
 
-    // --- le modalità dello schermo scelto ---
+    // --- the chosen output's modes ---
     readonly property var resolutions: {
         if (!output) return []
         const seen = {}
@@ -65,9 +65,9 @@ Page {
             .filter((r, i, all) => i === 0 || Math.abs(all[i - 1] - r) > 0.01)
     }
     readonly property var scales: [1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 3]
-    // La scala consigliata: quella che porta i punti a circa 96 per pollice
-    // logico. Senza le dimensioni fisiche (wlr-randr non le dà), come
-    // Windows: per altezza della risoluzione nativa.
+    // The recommended scale: the one bringing points to about 96 per logical
+    // inch. Without physical sizes (wlr-randr doesn't give them), like
+    // Windows: by the native resolution's height.
     function recommendedScale(o) {
         const preferred = o.modes.find(m => m.preferred) || o.current
         if (!preferred) return 1
@@ -80,7 +80,7 @@ Page {
         { value: "270", text: qsTr("Portrait (flipped)") }
     ]
 
-    // --- la disposizione ---
+    // --- the arrangement ---
     Rectangle {
         id: arrangement
         visible: page.outputs.length > 1
@@ -91,7 +91,7 @@ Page {
         border.width: 1
         border.color: Theme.cardStroke
 
-        // Tutto lo spazio degli schermi accesi, in scala nel riquadro.
+        // All the space of the outputs that are on, scaled into the box.
         readonly property var bounds: {
             let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9
             for (const o of page.enabledOutputs) {
@@ -151,9 +151,8 @@ Page {
         }
     }
 
-    // Lo schermo trascinato si attacca al lato più vicino di un altro, con
-    // i bordi allineati se sono vicini: come Windows, niente buchi né
-    // sovrapposizioni.
+    // The dragged output sticks to the nearest side of another, with edges
+    // aligned when close: like Windows, no gaps or overlaps.
     function placeNextTo(index, px, py, pw, ph) {
         const moving = outputs[index]
         const zoom = arrangement.zoom
@@ -178,7 +177,7 @@ Page {
             if (Math.abs(dx) / (ow + w) > Math.abs(dy) / (oh + h)) {
                 x = dx > 0 ? o.x + ow : o.x - w
                 y = Math.max(o.y - h + 1, Math.min(o.y + oh - 1, cy - h / 2))
-                if (Math.abs(y - o.y) < oh * 0.1) y = o.y // allineati in alto
+                if (Math.abs(y - o.y) < oh * 0.1) y = o.y // aligned at the top
             } else {
                 y = dy > 0 ? o.y + oh : o.y - h
                 x = Math.max(o.x - w + 1, Math.min(o.x + ow - 1, cx - w / 2))
@@ -269,7 +268,7 @@ Page {
                     ? page.resolutions.findIndex(r => r.width === page.output.current.width && r.height === page.output.current.height) : -1
                 onChosen: index => {
                     const r = page.resolutions[index]
-                    // La frequenza più alta per quella risoluzione.
+                    // The highest refresh rate for that resolution.
                     const modes = page.output.modes.filter(m => m.width === r.width && m.height === r.height)
                     modes.sort((a, b) => b.refresh - a.refresh)
                     page.change({ width: r.width, height: r.height, refresh: modes[0].refresh })

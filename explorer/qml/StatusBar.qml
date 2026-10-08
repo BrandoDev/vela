@@ -3,13 +3,13 @@
 
 import QtQuick
 
-// La riga in fondo, come Windows: quanti elementi, quanti selezionati e
-// quanto pesano; a destra Dettagli e Icone grandi.
+// The bottom line, like Windows: how many items, how many selected and how
+// much they weigh; Details and Large icons on the right.
 Item {
     id: bar
     property var model: null
     property string viewMode: "details"
-    property string message // per le pagine senza file (Home, Questo PC)
+    property string message // for pages without files (Home, This PC)
     signal viewRequested(string mode)
     height: 28
 

@@ -23,7 +23,7 @@ bool has(const QString& program)
     return !QStandardPaths::findExecutable(program).isEmpty();
 }
 
-// Un modulo delle impostazioni di KDE, aperto da solo con kcmshell6.
+// A KDE settings module, opened alone with kcmshell6.
 bool hasKcm(const QString& module)
 {
     return has(QStringLiteral("kcmshell6"))
@@ -43,9 +43,9 @@ bool spawn(const QString& command, const QString& directory = QDir::homePath())
     return QProcess::startDetached(QStringLiteral("/bin/sh"), { QStringLiteral("-c"), command }, directory);
 }
 
-// Un'app di Vela (vela-settings, vela-files): installata, accanto alla
-// shell, o nella cartella di build (settings/, explorer/ accanto a shell/).
-// Vuoto dentro l'app stessa, che non deve rimandare a sé.
+// A Vela app (vela-settings, vela-files): installed, next to the shell, or in
+// the build directory (settings/, explorer/ next to shell/). Empty inside the
+// app itself, which must not point to itself.
 QString velaTool(const QString& name, const QString& buildDir)
 {
     if (QCoreApplication::applicationName() == name) {
@@ -74,7 +74,7 @@ QString velaFiles()
     return velaTool(QStringLiteral("vela-files"), QStringLiteral("explorer"));
 }
 
-// Un comando in un terminale che resta aperto a mostrare com'è andata.
+// A command in a terminal that stays open to show how it went.
 QString inTerminal(const QString& command)
 {
     const QString script = command + QCoreApplication::translate("System", "; echo; read -r -p 'Press Enter to close' _");
@@ -104,7 +104,7 @@ SystemActions::SystemActions(QObject* parent)
 
 QString SystemActions::command(const QString& name) const
 {
-    // Il primo programma installato tra quelli che fanno la stessa cosa.
+    // The first installed program among those doing the same thing.
     const auto first = [](std::initializer_list<std::pair<const char*, const char*>> candidates) {
         for (const auto& [probe, command] : candidates) {
             const QString p = QLatin1String(probe);
@@ -114,7 +114,7 @@ QString SystemActions::command(const QString& name) const
         }
         return QLatin1String("");
     };
-    // Le voci che hanno una pagina nelle Impostazioni di Vela.
+    // The entries that have a page in Vela's Settings.
     static const QHash<QString, QString> settingsPages {
         { QStringLiteral("settings"), QString() },
         { QStringLiteral("display"), QStringLiteral("display") },
@@ -144,7 +144,8 @@ QString SystemActions::command(const QString& name) const
         return terminalProgram();
     }
     if (name == QLatin1String("terminal-admin")) {
-        // Come "Terminale (Admin)": una shell di root, la password la chiede polkit (run0) o sudo.
+        // Like "Terminal (Admin)": a root shell, the password asked by polkit
+        // (run0) or sudo.
         return terminalProgram() + (has(QStringLiteral("run0")) ? QStringLiteral(" -e run0") : QStringLiteral(" -e sudo -i"));
     }
     if (name == QLatin1String("task-manager")) {
@@ -162,7 +163,7 @@ QString SystemActions::command(const QString& name) const
         return !gui.isEmpty() ? gui : terminalProgram() + QStringLiteral(" -e journalctl -b -e");
     }
     if (name == QLatin1String("files")) {
-        // Esplora di Vela, se c'è.
+        // Vela's Explorer, if present.
         if (const QString files = velaFiles(); !files.isEmpty()) {
             return quote(files);
         }
@@ -201,11 +202,11 @@ QString SystemActions::command(const QString& name) const
         return first({ { "kcm_clock", "kcmshell6 kcm_clock" } });
     }
     if (name == QLatin1String("display")) {
-        // Programmi che parlano wlr-output-management, come Vela.
+        // Programs speaking wlr-output-management, like Vela.
         return first({ { "nwg-displays", "nwg-displays" }, { "wdisplays", "wdisplays" } });
     }
-    // Impostazioni di notifica, della taskbar, Personalizza: solo con le
-    // Impostazioni di Vela (sopra).
+    // Notification settings, taskbar settings, Personalize: only with Vela's
+    // Settings (above).
     return {};
 }
 
@@ -228,7 +229,7 @@ bool SystemActions::isLaptop() const
             QFile f(supplies.filePath(entry) + u'/' + QLatin1String(file));
             return f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()).trimmed() : QString();
         };
-        // Le batterie di mouse e tastiere hanno scope "Device".
+        // Mouse and keyboard batteries have scope "Device".
         if (read("type") == QLatin1String("Battery") && read("scope") != QLatin1String("Device")) {
             return true;
         }
@@ -242,8 +243,8 @@ bool SystemActions::run(const QString& input)
     if (text.isEmpty()) {
         return false;
     }
-    // Un URL o un percorso esistente si apre con l'app predefinita; il
-    // resto è una riga di comando.
+    // A URL or an existing path opens with the default app; the rest is a
+    // command line.
     const QString expanded = text.startsWith(u'~') ? QDir::homePath() + text.mid(1) : text;
     bool ok = false;
     if (text.contains(QLatin1String("://")) || QFileInfo::exists(expanded)) {
@@ -269,13 +270,13 @@ QStringList SystemActions::runHistory() const
 void SystemActions::showInFolder(const QString& pathOrUrl) const
 {
     const QUrl url = pathOrUrl.contains(QLatin1String("://")) ? QUrl(pathOrUrl) : QUrl::fromLocalFile(pathOrUrl);
-    // Esplora di Vela apre la cartella con il file selezionato.
+    // Vela's Explorer opens the folder with the file selected.
     if (const QString files = velaFiles(); !files.isEmpty() && url.isLocalFile()) {
         QProcess::startDetached(files, { url.toLocalFile() });
         return;
     }
-    // Lo standard dei file manager (Dolphin, Nautilus...): apre la cartella
-    // e seleziona il file.
+    // The file manager standard (Dolphin, Nautilus...): opens the folder and
+    // selects the file.
     QDBusMessage call = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.FileManager1"),
         QStringLiteral("/org/freedesktop/FileManager1"), QStringLiteral("org.freedesktop.FileManager1"),
         QStringLiteral("ShowItems"));
@@ -294,7 +295,8 @@ void SystemActions::openTerminal(const QString& directory) const
 {
     const QString dir = directory.isEmpty() ? QDir::homePath() : directory;
     const QString terminal = terminalProgram();
-    // Konsole vuole la cartella come opzione; gli altri partono in quella corrente.
+    // Konsole wants the directory as an option; the others start in the
+    // current one.
     spawn(terminal == QLatin1String("konsole") ? terminal + QStringLiteral(" --workdir ") + quote(dir) : terminal, dir);
 }
 
@@ -306,19 +308,19 @@ QString SystemActions::desktopDirectory() const
 
 namespace {
 
-// Il comando che toglie il pacchetto a cui appartiene il file .desktop.
+// The command removing the package the .desktop file belongs to.
 QString uninstallCommand(const QString& desktopFile)
 {
     if (desktopFile.isEmpty()) {
         return {};
     }
-    // Le app Flatpak: .../flatpak/exports/share/applications/<id>.desktop
+    // Flatpak apps: .../flatpak/exports/share/applications/<id>.desktop
     if (desktopFile.contains(QLatin1String("/flatpak/exports/")) && has(QStringLiteral("flatpak"))) {
         const QString id = QFileInfo(desktopFile).completeBaseName();
         return QStringLiteral("flatpak uninstall ") + quote(id);
     }
     if (has(QStringLiteral("plasma-discover"))) {
-        return {}; // si usa Discover, vedi uninstall()
+        return {}; // Discover is used, see uninstall()
     }
     const QString file = quote(desktopFile);
     const QString root = has(QStringLiteral("run0")) ? QStringLiteral("run0 ") : QStringLiteral("sudo ");
@@ -341,7 +343,7 @@ QString uninstallCommand(const QString& desktopFile)
 
 bool SystemActions::canUninstall(const QString& desktopFile) const
 {
-    // Le app dell'utente (~/.local/share/applications) non sono pacchetti.
+    // The user's apps (~/.local/share/applications) aren't packages.
     if (desktopFile.startsWith(QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation))) {
         return false;
     }
@@ -354,7 +356,7 @@ void SystemActions::uninstall(const QString& desktopFile) const
     if (!command.isEmpty()) {
         spawn(inTerminal(command));
     } else if (has(QStringLiteral("plasma-discover"))) {
-        // Come Windows con le app classiche: la pagina dell'app nel negozio.
+        // Like Windows with classic apps: the app's page in the store.
         const QString id = QFileInfo(desktopFile).completeBaseName();
         spawn(QStringLiteral("plasma-discover --application ") + quote(QStringLiteral("appstream://") + id));
     }

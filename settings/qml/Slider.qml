@@ -3,14 +3,14 @@
 
 import QtQuick
 
-// Il cursore di Windows 11: binario sottile, pallino con il centro d'accento.
+// The Windows 11 slider: a thin track, a knob with an accent center.
 Item {
     id: slider
     property real from: 0
     property real to: 1
     property real value: 0
     property real stepSize: 0
-    property bool live: true // `moved` durante il trascinamento, non solo al rilascio
+    property bool live: true // `moved` while dragging, not only on release
     readonly property bool pressed: mouse.pressed
     signal moved(real value)
     signal released(real value)

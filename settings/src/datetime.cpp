@@ -40,7 +40,7 @@ QStringList DateTime::timezones() const
 {
     QStringList out;
     for (const QByteArray& id : QTimeZone::availableTimeZoneIds()) {
-        // Solo i nomi "Continente/Città", come timedatectl list-timezones.
+        // Only "Continent/City" names, like timedatectl list-timezones.
         if (id.contains('/') && !id.startsWith("Etc/") && !id.startsWith("SystemV/") && !id.startsWith("posix/")
             && !id.startsWith("right/")) {
             out << QString::fromUtf8(id);
@@ -73,7 +73,7 @@ void DateTime::call(const QString& method, const QVariantList& arguments)
     auto* watcher = new QDBusPendingCallWatcher(QDBusConnection::systemBus().asyncCall(message, 120000), this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher* w) {
         w->deleteLater();
-        refresh(); // riuscito o no, la pagina mostra com'è davvero
+        refresh(); // whether it worked or not, the page shows how things really are
     });
 }
 

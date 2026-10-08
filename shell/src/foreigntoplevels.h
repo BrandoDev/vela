@@ -13,9 +13,9 @@
 
 class QWindow;
 
-// Le finestre aperte, come le pubblica il compositor con il protocollo
-// wlr-foreign-toplevel-management: titolo, app_id, stato, e le richieste
-// per attivarle, ridurle a icona o chiuderle.
+// Open windows, as the compositor publishes them with the
+// wlr-foreign-toplevel-management protocol: title, app_id, state, and the
+// requests to activate, minimize or close them.
 
 class ForeignToplevel : public QObject, public QtWayland::zwlr_foreign_toplevel_handle_v1 {
     Q_OBJECT
@@ -24,21 +24,21 @@ public:
     explicit ForeignToplevel(::zwlr_foreign_toplevel_handle_v1* handle, QObject* parent = nullptr);
     ~ForeignToplevel() override;
 
-    // Stato applicato: cambia tutto insieme all'evento "done".
+    // Applied state: everything changes together at the "done" event.
     QString title;
     QString appId;
     bool activated = false;
     bool minimized = false;
     bool maximized = false;
     bool fullscreen = false;
-    ForeignToplevel* parentWindow = nullptr; // es. una finestra di dialogo
-    quint64 lastActivated = 0; // per sapere quale finestra di un'app è la più recente
-    bool ready = false; // ha ricevuto il primo "done"
+    ForeignToplevel* parentWindow = nullptr; // such as a dialog
+    quint64 lastActivated = 0; // to know which of an app's windows is the most recent
+    bool ready = false; // received the first "done"
 
     void requestActivate();
     void requestMinimize();
-    // Dove sta il suo pulsante (coordinate di `panel`): il compositor ci fa
-    // volare la finestra quando si riduce a icona.
+    // Where its button is (in `panel`'s coordinates): the compositor flies the
+    // window there when it's minimized.
     void setButtonRect(QWindow* panel, const QRect& rect);
 
 signals:
@@ -73,7 +73,7 @@ class ForeignToplevelManager : public QWaylandClientExtensionTemplate<ForeignTop
 public:
     ForeignToplevelManager();
 
-    // Solo le finestre già descritte per intero, in ordine di apertura.
+    // Only windows fully described, in opening order.
     const QList<ForeignToplevel*>& windows() const { return m_windows; }
 
 signals:

@@ -8,9 +8,9 @@
 #include <QTimer>
 #include <QVariantList>
 
-// Le uscite e gli ingressi audio per Sistema > Audio, da PipeWire o
-// PulseAudio con pactl (lo stesso che usa la taskbar). Si aggiorna da solo
-// quando qualcosa cambia (pactl subscribe).
+// Audio outputs and inputs for System > Sound, from PipeWire or PulseAudio
+// through pactl (the same the taskbar uses). Updates itself when something
+// changes (pactl subscribe).
 class Audio : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool available READ available CONSTANT)
@@ -27,7 +27,7 @@ public:
     QVariantList inputs() const { return m_inputs; }
 
     Q_INVOKABLE void refresh();
-    // kind: "output" o "input"
+    // kind: "output" or "input"
     Q_INVOKABLE void setDefault(const QString& kind, const QString& name);
     Q_INVOKABLE void setVolume(const QString& kind, const QString& name, double volume);
     Q_INVOKABLE void setMuted(const QString& kind, const QString& name, bool muted);

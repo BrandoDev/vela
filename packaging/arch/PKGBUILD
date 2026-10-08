@@ -1,19 +1,19 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Vela come pacchetto di Arch / CachyOS, dal repository git.
+# Vela as an Arch / CachyOS package, from the git repository.
 #
-#   cd packaging/arch && makepkg -si      installa
-#   vela-update                           poi aggiorna (vedi vela-update --help)
+#   cd packaging/arch && makepkg -si      installs
+#   vela-update                           then updates (see vela-update --help)
 #
-# Il sorgente è il repository su GitHub (privato: serve la chiave SSH del
-# proprio account). Per costruire da una copia locale, anche con modifiche
-# non ancora pubblicate ma già nei commit:
+# The source is the repository on GitHub (private: it needs your account's
+# SSH key). To build from a local copy, including changes not yet pushed but
+# already committed:
 #
-#   VELA_GIT_URL=file:///percorso/di/vela makepkg -si
+#   VELA_GIT_URL=file:///path/to/vela makepkg -si
 #
-# La versione viene dal progetto e dai commit (0.1.0.r123.gabcdef0): ogni
-# commit nuovo è un aggiornamento.
+# The version comes from the project and the commits (0.1.0.r123.gabcdef0):
+# every new commit is an update.
 
 pkgname=vela-git
 _name=vela
@@ -63,7 +63,7 @@ pkgver() {
 }
 
 build() {
-    # Le opzioni di compilazione le dà makepkg.conf (CMAKE_BUILD_TYPE=None).
+    # makepkg.conf gives the build options (CMAKE_BUILD_TYPE=None).
     cmake -B build -S "$_name" \
         -DCMAKE_BUILD_TYPE=None \
         -DCMAKE_INSTALL_PREFIX=/usr \

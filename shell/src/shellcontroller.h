@@ -11,51 +11,51 @@
 #include <QString>
 #include <QStringList>
 
-// Punto di contatto tra la shell e il resto del sistema:
-// - riceve comandi dal compositor su un socket Unix (es. "toggle-start"
-//   quando premi Super);
-// - espone al QML piccole informazioni di sessione.
+// The point of contact between the shell and the rest of the system:
+// - receives commands from the compositor on a Unix socket (such as
+//   "toggle-start" when you press Super);
+// - exposes small session details to QML.
 class QWindow;
 
 class ShellController : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString userName READ userName CONSTANT)
     Q_PROPERTY(QString userInitial READ userInitial CONSTANT)
-    // Stato del menu Start, condiviso tra la finestra del menu e la taskbar.
+    // The Start menu state, shared by the menu window and the taskbar.
     Q_PROPERTY(bool startMenuOpen READ startMenuOpen WRITE setStartMenuOpen NOTIFY startMenuOpenChanged)
-    // Le app aggiunte alla Start (id dei .desktop), nell'ordine scelto.
+    // The apps pinned to Start (.desktop ids), in the chosen order.
     Q_PROPERTY(QStringList startPins READ startPins NOTIFY startPinsChanged)
-    // Il nome dello schermo principale (lì si aprono i pannelli chiesti da tastiera).
+    // The main output's name (panels asked for from the keyboard open there).
     Q_PROPERTY(QString primaryScreen READ primaryScreen NOTIFY primaryScreenChanged)
 
 public:
     explicit ShellController(QObject* parent = nullptr);
 
-    // Percorso del socket, legato alla sessione Wayland corrente.
+    // The socket path, tied to the current Wayland session.
     static QString socketPath();
-    // Invia un comando a una shell già in esecuzione. false se non c'è.
+    // Sends a command to an already running shell. false if there is none.
     static bool sendToRunningInstance(const QByteArray& command);
-    // Un comando con risposta (aspetta quanto serve): "choose-source".
+    // A command with an answer (waits as long as needed): "choose-source".
     static QByteArray askRunningInstance(const QByteArray& command);
 
-    // La condivisione dello schermo (xdg-desktop-portal-wlr): la risposta
-    // per il portale, "Monitor: <schermo>", "Window: <identificativo>", o
-    // vuota se l'utente annulla.
+    // Screen sharing (xdg-desktop-portal-wlr): the answer for the portal,
+    // "Monitor: <output>", "Window: <identifier>", or empty if the user
+    // cancels.
     Q_INVOKABLE void chooseSource(const QString& answer);
 
     bool listen();
-    // Un comando al compositor, sul suo socket (es. "lock").
+    // A command to the compositor, on its socket (such as "lock").
     static bool sendToCompositor(const QByteArray& command);
-    // Maiusc premuto adesso (lo sa il compositor: la tastiera può essere di
-    // un'altra app mentre si clicca la taskbar).
+    // Shift held right now (the compositor knows: the keyboard may belong to
+    // another app while the taskbar is clicked).
     Q_INVOKABLE bool shiftHeld() const;
-    // Una finestra della shell ancorata in basso a sinistra (le anteprime
-    // della taskbar): a `left` pixel dal bordo sinistro dello schermo.
+    // A shell window anchored at the bottom left (the taskbar previews):
+    // `left` pixels from the output's left edge.
     Q_INVOKABLE void placeAtLeft(QWindow* window, int left);
-    // Un pannello della shell (nascosto) sullo schermo `name`: alla prossima
-    // apertura compare lì.
+    // A (hidden) shell panel on output `name`: it appears there the next time
+    // it opens.
     Q_INVOKABLE void placeOnScreen(QWindow* window, const QString& name);
-    // Alt+Tab: un clic sull'anteprima `index` (il compositor ci passa).
+    // Alt+Tab: a click on preview `index` (the compositor switches).
     Q_INVOKABLE void pickSwitcher(int index) { sendToCompositor("switcher-pick " + QByteArray::number(index)); }
 
     QString userName() const;
@@ -78,21 +78,20 @@ public:
     Q_INVOKABLE void unpinFromStart(const QString& id);
     Q_INVOKABLE void moveStartPinToFront(const QString& id);
 
-    // Il menu della finestra: un'azione (restore, move, resize, minimize,
-    // maximize, close) sulla finestra con quell'identificativo, o su
-    // "active".
+    // The window menu: an action (restore, move, resize, minimize, maximize,
+    // close) on the window with that identifier, or on "active".
     Q_INVOKABLE void windowAction(const QString& window, const QString& action);
-    // Esce dalla sessione: chiede al compositor di chiudersi (le app si
-    // chiudono con lui). Non spegne né riavvia il computer.
+    // Signs out: asks the compositor to close (apps close with it). Doesn't
+    // shut down or restart the computer.
     Q_INVOKABLE void logout();
-    Q_INVOKABLE void lock(); // Win+L dalla shell
-    // Il colore medio dello sfondo al compositor: la tinta delle barre del
-    // titolo (Mica, docs/renderer.md §9.4).
+    Q_INVOKABLE void lock(); // Win+L from the shell
+    // The wallpaper's average color to the compositor: the title bars' tint
+    // (Mica, docs/renderer.md §9.4).
     void sendWallpaperTint(const QString& wallpaper) const;
-    // Blocca lo schermo prima che il computer si sospenda.
+    // Locks the screen before the computer suspends.
     void watchSleep();
-    // Il computer, tramite systemd-logind (se serve, polkit chiede la
-    // password).
+    // The computer, through systemd-logind (polkit asks for the password if
+    // needed).
     Q_INVOKABLE void suspend();
     Q_INVOKABLE void reboot();
     Q_INVOKABLE void powerOff();
@@ -100,8 +99,8 @@ public:
 
 signals:
     void toggleStartRequested();
-    // Alt+Tab, comandato dal compositor: finestre (identificativi
-    // ext-foreign-toplevel) in ordine di uso recente e quella selezionata.
+    // Alt+Tab, driven by the compositor: windows (ext-foreign-toplevel
+    // identifiers) in order of recent use and the selected one.
     void switcherShown(int selected, const QStringList& windows);
     void switcherSelected(int selected);
     void switcherHidden();
@@ -110,7 +109,7 @@ signals:
     void primaryScreenChanged();
     void chooseSourceRequested();
     void chooseSourceCancelled();
-    // Scorciatoie di Windows che arrivano dal compositor.
+    // Windows shortcuts arriving from the compositor.
     void winXRequested(); // Win+X
     void runRequested(); // Win+R
     void showDesktopRequested(); // Win+D
@@ -119,21 +118,21 @@ signals:
     void settingsRequested(); // Win+I
     void filesRequested(); // Win+E
     void taskViewRequested(); // Win+Tab
-    void workspacesReceived(const QByteArray& json); // lo stato dei desktop virtuali
-    // I layout di snap sotto il pulsante Ingrandisci (Win+Z): x, y nello schermo.
+    void workspacesReceived(const QByteArray& json); // the state of the virtual desktops
+    // Snap layouts below the Maximize button (Win+Z): x, y on the output.
     void snapLayoutsRequested(const QString& window, const QString& output, int x, int y, bool keyboard);
-    // Dopo uno snap: le finestre da proporre per gli spazi liberi (JSON).
+    // After a snap: the windows to offer for the free spaces (JSON).
     void snapAssistRequested(const QString& json);
-    void propertiesRequested(const QStringList& paths); // da Esplora
-    void shareRequested(const QStringList& paths); // "Condividi", da Esplora
-    void openWithRequested(const QString& path); // "Scegli un'altra app", da Esplora
-    void newShortcutRequested(const QString& folder); // "Nuovo > Collegamento", da Esplora
-    void accessibilityReceived(const QByteArray& json); // dal compositor
+    void propertiesRequested(const QStringList& paths); // from Explorer
+    void shareRequested(const QStringList& paths); // "Share", from Explorer
+    void openWithRequested(const QString& path); // "Choose another app", from Explorer
+    void newShortcutRequested(const QString& folder); // "New > Shortcut", from Explorer
+    void accessibilityReceived(const QByteArray& json); // from the compositor
     void clipboardRequested(); // Win+V
-    void snipRequested(); // Win+Maiusc+S, Stamp
-    void clipboardClearRequested(); // dalle Impostazioni
-    // Il menu della finestra (clic destro sulla barra del titolo,
-    // Alt+Spazio): su quale schermo e dove, in coordinate dello schermo.
+    void snipRequested(); // Win+Shift+S, Print
+    void clipboardClearRequested(); // from Settings
+    // The window menu (right click on the title bar, Alt+Space): on which
+    // output and where, in output coordinates.
     void windowMenuRequested(const QString& window, const QString& output, int x, int y, bool maximized,
         bool resizable, bool keyboard);
 
@@ -144,9 +143,9 @@ private:
     void handleCommand(const QByteArray& command);
     void takeSleepDelay();
     void startChooser(QLocalSocket* socket);
-    QPointer<QLocalSocket> m_chooser; // il portale che aspetta la scelta
+    QPointer<QLocalSocket> m_chooser; // the portal waiting for the choice
     void saveStartPins();
-    QDBusUnixFileDescriptor m_sleepDelay; // finché è aperto, logind aspetta a sospendere
+    QDBusUnixFileDescriptor m_sleepDelay; // while it's open, logind waits before suspending
 
     QLocalServer m_server;
     bool m_startMenuOpen = false;

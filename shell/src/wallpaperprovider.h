@@ -10,11 +10,10 @@
 #include <QSvgRenderer>
 #include <QUrl>
 
-// Lo sfondo, già ritagliato alla dimensione esatta dello schermo:
-//   Image { source: "image://wallpaper/" + encodeURIComponent(percorso) }
-// L'immagine riempie lo schermo tagliando i bordi in eccesso (come "Riempi"
-// di Windows). Un SVG viene disegnato direttamente a quella dimensione, così
-// in memoria c'è solo ciò che si vede.
+// The wallpaper, already cropped to the output's exact size:
+//   Image { source: "image://wallpaper/" + encodeURIComponent(path) }
+// The image fills the output cropping the excess edges (like Windows' "Fill").
+// An SVG is drawn directly at that size, so only what's seen is in memory.
 class WallpaperProvider : public QQuickImageProvider {
 public:
     WallpaperProvider()
@@ -25,8 +24,8 @@ public:
     QImage requestImage(const QString& id, QSize* size, const QSize& requestedSize) override
     {
         const QString path = QUrl::fromPercentEncoding(id.toUtf8());
-        // Mentre il compositor configura la finestra una delle due misure
-        // può valere zero per un attimo: niente da disegnare.
+        // While the compositor configures the window one of the two sizes can
+        // be zero for a moment: nothing to draw.
         if (requestedSize.isValid() && requestedSize.isEmpty()) {
             if (size) {
                 *size = {};
@@ -45,7 +44,7 @@ public:
     }
 
 private:
-    // La parte centrale di `source` con le proporzioni di `target`.
+    // The central part of `source` with `target`'s proportions.
     static QRectF cropToFill(const QRectF& source, const QSize& target)
     {
         const qreal aspect = qreal(target.width()) / target.height();
@@ -69,8 +68,8 @@ private:
         renderer.setViewBox(cropToFill(renderer.viewBoxF(), target));
         renderer.setAspectRatioMode(Qt::IgnoreAspectRatio);
         QImage image(target, QImage::Format_RGB32);
-        // Dove il disegno non arriva (bordi): il suo blu più scuro, come
-        // Theme.desktop, invece del nero.
+        // Where the drawing doesn't reach (edges): its darkest blue, like
+        // Theme.desktop, instead of black.
         image.fill(QColor(0x06, 0x18, 0x2d));
         QPainter painter(&image);
         painter.setRenderHint(QPainter::Antialiasing);
@@ -84,8 +83,8 @@ private:
         reader.setAutoTransform(true);
         const QSize original = reader.size();
         if (original.isValid()) {
-            // Si decodifica già ritagliata e ridotta: niente foto da 50
-            // megapixel intere in memoria.
+            // Decoded already cropped and reduced: no whole 50-megapixel
+            // photos in memory.
             const QRect crop = cropToFill(QRectF(QPointF(0, 0), QSizeF(original)), target).toRect();
             reader.setClipRect(crop);
             reader.setScaledSize(target);

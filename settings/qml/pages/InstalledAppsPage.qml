@@ -3,7 +3,7 @@
 
 import QtQuick
 
-// App > App installate: cerca e disinstalla, come Windows 11.
+// Apps > Installed apps: search and uninstall, like Windows 11.
 Page {
     id: page
     Component.onDestruction: Apps.query = ""

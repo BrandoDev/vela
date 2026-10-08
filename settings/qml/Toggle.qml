@@ -3,7 +3,7 @@
 
 import QtQuick
 
-// L'interruttore di Windows 11, con "Attivato"/"Disattivato" a sinistra.
+// The Windows 11 toggle switch, with "On"/"Off" on the left.
 Item {
     id: toggle
     property bool checked: false

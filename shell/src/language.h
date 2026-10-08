@@ -3,18 +3,18 @@
 
 #pragma once
 
-// La lingua dell'interfaccia di Vela: italiano o inglese.
+// Vela's interface language: Italian or English.
 //
-// Si sceglie in Impostazioni > Ora e lingua > Lingua, chiave language= di
-// ~/.config/vela/vela.conf: "it", "en" o niente (come il sistema: italiano
-// se il sistema è in italiano, inglese altrimenti). Le stringhe del codice
-// sono in inglese; l'italiano è una traduzione di Qt (i18n/*_it.ts, compilata
-// nell'eseguibile). Insieme alla lingua cambia il locale predefinito: date,
-// mesi e giorni seguono la scelta.
+// It's chosen in Settings > Time & language > Language, key language= of
+// ~/.config/vela/vela.conf: "it", "en" or nothing (like the system: Italian if
+// the system is in Italian, English otherwise). Strings in the code are in
+// English; Italian is a Qt translation (i18n/*_it.ts, compiled into the
+// executable). The default locale changes with the language: dates, months and
+// days follow the choice.
 //
-// Ogni app guarda vela.conf: quando la lingua cambia, la traduzione si
-// ricarica e `changed` ritraduce l'interfaccia (QQmlEngine::retranslate),
-// senza riavviare nulla.
+// Every app watches vela.conf: when the language changes, the translation is
+// reloaded and `changed` retranslates the interface (QQmlEngine::retranslate),
+// without restarting anything.
 
 #include <QCoreApplication>
 #include <QDir>
@@ -35,7 +35,7 @@ inline QString configPath()
     return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + QStringLiteral("/vela/vela.conf");
 }
 
-// La scelta in vela.conf: "it", "en", o vuota (come il sistema).
+// The choice in vela.conf: "it", "en", or empty (like the system).
 inline QString configured()
 {
     QFile file(configPath());
@@ -45,7 +45,7 @@ inline QString configured()
     QString value;
     while (!file.atEnd()) {
         const QString line = QString::fromUtf8(file.readLine()).trimmed();
-        // "lingua=" è il nome di prima (compositor/src/legacy_names.c).
+        // "lingua=" is the old name (compositor/src/legacy_names.c).
         if (line.startsWith(QLatin1String("language="))) {
             value = line.mid(9).trimmed();
         } else if (line.startsWith(QLatin1String("lingua="))) {
@@ -55,7 +55,7 @@ inline QString configured()
     return value == QLatin1String("it") || value == QLatin1String("en") ? value : QString();
 }
 
-// La lingua da usare: "it" o "en".
+// The language to use: "it" or "en".
 inline QString effective()
 {
     const QString chosen = configured();
@@ -65,8 +65,8 @@ inline QString effective()
     return QLocale::system().language() == QLocale::Italian ? QStringLiteral("it") : QStringLiteral("en");
 }
 
-// Carica la traduzione `name` (la risorsa :/i18n/<name>_it.qm) e la tiene
-// allineata a vela.conf. Da chiamare una volta, dopo aver creato l'app.
+// Loads translation `name` (the :/i18n/<name>_it.qm resource) and keeps it in
+// line with vela.conf. Call once, after creating the app.
 inline void install(const QString& name, std::function<void()> changed = {})
 {
     struct State {
@@ -102,8 +102,8 @@ inline void install(const QString& name, std::function<void()> changed = {})
     };
     apply();
 
-    // vela.conf si sostituisce con una rename: si guarda anche la cartella,
-    // e il file si riaggiunge ogni volta che ricompare.
+    // vela.conf is replaced with a rename: the directory is watched too, and
+    // the file is added again every time it reappears.
     auto* watcher = new QFileSystemWatcher(QCoreApplication::instance());
     const QString path = configPath();
     const QString directory = QFileInfo(path).absolutePath();

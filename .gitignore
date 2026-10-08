@@ -4,11 +4,11 @@ build-*/
 compile_commands.json
 *.user
 
-# Script personali per le prove da TTY
+# Personal scripts for testing from a VT
 /start*.sh
 /logs/
 
-# Ciò che makepkg lascia accanto al PKGBUILD
+# What makepkg leaves next to the PKGBUILD
 /packaging/arch/src/
 /packaging/arch/pkg/
 /packaging/arch/vela/

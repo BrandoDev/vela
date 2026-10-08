@@ -8,29 +8,29 @@
 #include <QStringList>
 #include <QUrl>
 
-// La chiave Exec dei file .desktop, come dice la specifica freedesktop
-// (Desktop Entry, "The Exec key"): non è una riga di comando della shell.
-// Si divide in argomenti (spazi; virgolette doppie, dentro cui \" \` \$ e
-// \\ valgono il carattere), si espandono i field code (%f %F %u %U %i %c %k
-// %%; i deprecati spariscono) e si lancia il programma con i suoi argomenti,
-// senza /bin/sh: niente $VAR, ;, >, *, `...` o $(...), come fa GLib.
+// The Exec key of .desktop files, as the freedesktop spec says (Desktop Entry,
+// "The Exec key"): it isn't a shell command line. It's split into arguments
+// (spaces; double quotes, inside which \" \` \$ and \\ stand for the
+// character), field codes are expanded (%f %F %u %U %i %c %k %%; deprecated
+// ones vanish) and the program is launched with its arguments, without
+// /bin/sh: no $VAR, ;, >, *, `...` or $(...), as GLib does.
 //
-// I valori stringa del file (\s, \n...) vanno già tolti prima (unescape in
-// appmodel.cpp): qui arriva il valore di Exec così come lo intende la specifica.
+// The file's string escapes (\s, \n...) must already be removed (unescape in
+// appmodel.cpp): what arrives here is the Exec value as the spec means it.
 namespace DesktopExec {
 
 struct Context {
-    QString icon; // Icon=, per %i
-    QString name; // Name= tradotto, per %c
-    QString desktopFile; // il percorso del .desktop, per %k
+    QString icon; // Icon=, for %i
+    QString name; // translated Name=, for %c
+    QString desktopFile; // the .desktop path, for %k
 };
 
 struct Parsed {
-    QStringList arguments; // ancora con i field code
-    bool ok = true; // false: virgolette non chiuse, o riga vuota
-    // Caratteri della shell fuori dalle virgolette (| & ; < > ( ) $ ` * ?):
-    // non ammessi dalla specifica. KIO in quel caso passa da /bin/sh, e
-    // alcuni service menu di KDE ci contano (vedi servicemenus.cpp).
+    QStringList arguments; // still with the field codes
+    bool ok = true; // false: unclosed quotes, or an empty line
+    // Shell characters outside quotes (| & ; < > ( ) $ ` * ?): not allowed by
+    // the spec. KIO goes through /bin/sh in that case, and some KDE service
+    // menus rely on it (see servicemenus.cpp).
     bool shellSyntax = false;
 };
 
@@ -65,7 +65,7 @@ inline Parsed split(const QString& exec)
         if (c == u'"') {
             quoted = true;
         } else if (c == u'\\' && i + 1 < exec.size()) {
-            current += exec.at(++i); // fuori dalle virgolette: il carattere dopo, così com'è
+            current += exec.at(++i); // outside quotes: the next character, as it is
         } else {
             if (meta.contains(c)) {
                 parsed.shellSyntax = true;
@@ -80,8 +80,8 @@ inline Parsed split(const QString& exec)
     return parsed;
 }
 
-// Gli argomenti chiedono i file uno per volta (%f, %u) e non tutti insieme
-// (%F, %U): con più file, un processo per file (come KIO e GLib).
+// The arguments ask for files one at a time (%f, %u) rather than all together
+// (%F, %U): with several files, one process per file (like KIO and GLib).
 inline bool onePerFile(const QStringList& arguments)
 {
     bool single = false;
@@ -106,7 +106,7 @@ inline bool takesFiles(const QStringList& arguments)
     return false;
 }
 
-// Il percorso locale di un file (per %f/%F), o l'indirizzo (per %u/%U).
+// A file's local path (for %f/%F), or the address (for %u/%U).
 inline QString asPath(const QUrl& url)
 {
     return url.isLocalFile() ? url.toLocalFile() : url.toString();
@@ -117,9 +117,9 @@ inline QString asUrl(const QUrl& url)
     return url.toString(QUrl::FullyEncoded);
 }
 
-// Espande i field code. Un %F o %U da solo diventa un argomento per file;
-// %f e %u prendono il primo file (vedi onePerFile); %i diventa due argomenti
-// ("--icon", icona) o nessuno. Un argomento che resta vuoto sparisce.
+// Expands field codes. A lone %F or %U becomes one argument per file; %f and
+// %u take the first file (see onePerFile); %i becomes two arguments ("--icon",
+// icon) or none. An argument left empty vanishes.
 inline QStringList expand(const QStringList& arguments, const QList<QUrl>& files, const Context& context)
 {
     QStringList out;
@@ -170,11 +170,11 @@ inline QStringList expand(const QStringList& arguments, const QList<QUrl>& files
             case 'c': expanded += context.name; break;
             case 'k': expanded += context.desktopFile; break;
             case '%': expanded += u'%'; break;
-            default: break; // %d %D %n %N %v %m: deprecati, spariscono
+            default: break; // %d %D %n %N %v %m: deprecated, they vanish
             }
         }
-        // Un argomento fatto solo di field code rimasti vuoti non passa al
-        // programma come stringa vuota: sparisce.
+        // An argument made only of field codes left empty doesn't reach the
+        // program as an empty string: it vanishes.
         if (!expanded.isEmpty() || !hadCode) {
             out.append(expanded);
         }

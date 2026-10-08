@@ -3,9 +3,9 @@
 
 import QtQuick
 
-// La barra dei comandi di Windows 11: Nuovo; Taglia, Copia, Incolla,
-// Rinomina, Condividi, Elimina; Ordina e Visualizza; "…" con il resto. Nel
-// Cestino: Svuota Cestino e Ripristina.
+// The Windows 11 command bar: New; Cut, Copy, Paste, Rename, Share, Delete;
+// Sort and View; "…" with the rest. In the Recycle Bin: Empty Recycle Bin and
+// Restore.
 Item {
     id: bar
     property var tab
@@ -53,7 +53,7 @@ Item {
         }
         ToolButton { visible: !bar.tab.isTrash; icon: "edit-delete"; tooltip: qsTr("Delete (Del)"); usable: bar.hasSelection && bar.writable; onClicked: bar.tab.deleteSelection(false) }
 
-        // Nel Cestino.
+        // In the Recycle Bin.
         ToolButton { visible: bar.tab.isTrash; icon: "trash-empty"; text: qsTr("Empty Recycle Bin"); usable: bar.tab.model && bar.tab.model.count > 0; onClicked: bar.tab.askEmptyTrash() }
         ToolButton { visible: bar.tab.isTrash; icon: "edit-undo"; text: qsTr("Restore the selected items"); usable: bar.hasSelection; onClicked: Ops.restoreFromTrash(bar.tab.model.selectedPaths()) }
 
@@ -89,7 +89,7 @@ Item {
         }
     }
 
-    // A destra, come Windows 11: il riquadro dei dettagli.
+    // On the right, like Windows 11: the details pane.
     ToolButton {
         anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
         icon: "help-about"

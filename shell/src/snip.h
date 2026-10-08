@@ -17,17 +17,17 @@ class QQmlEngine;
 class QQuickWindow;
 class WindowCapture;
 
-// Lo Strumento di cattura (Win+Maiusc+S, Stamp), come Windows 11: lo
-// schermo si ferma (una fotografia di ogni schermo) e si sceglie cosa
-// tenere: un rettangolo, una finestra o uno schermo intero. Il ritaglio va
-// negli appunti (anche nella cronologia) e in Immagini/Screenshot, e una
-// notifica lo dice; un clic sulla notifica lo apre.
+// The Snipping Tool (Win+Shift+S, Print), like Windows 11: the screen freezes
+// (a photo of each output) and you choose what to keep: a rectangle, a window
+// or a whole output. The snip goes to the clipboard (and its history) and to
+// Pictures/Screenshots, and a notification says so; a click on the
+// notification opens it.
 class Snip : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool active READ active NOTIFY activeChanged)
-    // "rect", "window" o "screen"
+    // "rect", "window" or "screen"
     Q_PROPERTY(QString mode READ mode WRITE setMode NOTIFY modeChanged)
-    // Le finestre visibili, dalla più in alto: [{x, y, w, h, title}] nel layout.
+    // The visible windows, topmost first: [{x, y, w, h, title}] in the layout.
     Q_PROPERTY(QVariantList windows READ windows NOTIFY activeChanged)
 
 public:
@@ -41,7 +41,7 @@ public:
 
     void start();
     Q_INVOKABLE void cancel();
-    // Il ritaglio, in coordinate logiche dello schermo `screen`.
+    // The snip, in logical coordinates of output `screen`.
     Q_INVOKABLE void finish(const QString& screen, qreal x, qreal y, qreal width, qreal height);
 
     QImage image(const QString& screen) const;
@@ -63,10 +63,10 @@ private:
     int m_waiting = 0;
     QVariantList m_windows;
     QList<QPointer<QQuickWindow>> m_overlays;
-    QHash<uint, QString> m_saved; // notifica -> file salvato
+    QHash<uint, QString> m_saved; // notification -> saved file
 };
 
-// "image://snip/<schermo>": la fotografia dello schermo da ritagliare.
+// "image://snip/<output>": the photo of the output to snip.
 class SnipImageProvider : public QQuickImageProvider {
 public:
     explicit SnipImageProvider(Snip* snip)

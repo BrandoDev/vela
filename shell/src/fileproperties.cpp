@@ -29,7 +29,7 @@ struct Count {
     int folders = 0;
 };
 
-// Dimensione reale su disco: i blocchi occupati (file sparsi, blocchi pieni).
+// Real size on disk: the blocks taken (sparse files, full blocks).
 qint64 diskUsage(const QString& path)
 {
     struct stat st {};
@@ -127,14 +127,14 @@ QVariantMap FileProperties::describe(const QStringList& paths)
         out.insert(QStringLiteral("accessed"), dateText(first.lastRead()));
         out.insert(QStringLiteral("owner"), first.owner());
         out.insert(QStringLiteral("group"), first.group());
-        // I 9 bit di chmod (proprietario, gruppo, altri × lettura, scrittura, esecuzione).
+        // The 9 chmod bits (owner, group, others × read, write, execute).
         struct stat st {};
         const int bits = ::stat(QFile::encodeName(first.absoluteFilePath()).constData(), &st) == 0
             ? int(st.st_mode & 0777)
             : 0;
         out.insert(QStringLiteral("permissions"), bits);
         out.insert(QStringLiteral("mine"), first.ownerId() == ::getuid());
-        // Dettagli: le immagini dicono quanto sono grandi.
+        // Details: images say how large they are.
         QImageReader reader(first.absoluteFilePath());
         if (!first.isDir() && reader.canRead()) {
             const QSize size = reader.size();
@@ -148,7 +148,7 @@ QVariantMap FileProperties::describe(const QStringList& paths)
         out.insert(QStringLiteral("icon"), QStringLiteral("document-multiple"));
     }
 
-    // Le dimensioni: subito per i file soli, in un thread se ci sono cartelle.
+    // Sizes: at once for files alone, in a thread if there are folders.
     if (!anyDir) {
         Count count;
         for (const QString& path : paths) {
@@ -202,7 +202,7 @@ bool FileProperties::setPermissions(const QString& path, int bits)
     if (::stat(name.constData(), &st) != 0) {
         return false;
     }
-    // Si cambiano solo i 9 bit: setuid, setgid e sticky restano com'erano.
+    // Only the 9 bits change: setuid, setgid and sticky stay as they were.
     return ::chmod(name.constData(), (st.st_mode & ~mode_t(0777)) | mode_t(bits & 0777)) == 0;
 }
 
@@ -210,7 +210,7 @@ void FileProperties::setDefaultApp(const QString& path, const QString& desktopId
 {
     static const QMimeDatabase mimes;
     const QString mime = mimes.mimeTypeForFile(path).name();
-    // mimeapps.list, lo stesso che leggono KDE, GNOME e xdg-open.
+    // mimeapps.list, the same KDE, GNOME and xdg-open read.
     if (!mime.isEmpty()) {
         MimeApps::setDefault({ mime }, desktopId);
     }

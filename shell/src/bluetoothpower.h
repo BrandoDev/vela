@@ -3,14 +3,14 @@
 
 #pragma once
 
-// Accendere e spegnere il Bluetooth (impostazioni rapide e Impostazioni).
+// Turning Bluetooth on and off (quick settings and Settings).
 //
-// BlueZ non accende un adattatore bloccato da rfkill: "Powered" resta
-// falso e PowerState dice "off-blocked". Il blocco lo mette, per esempio,
-// Plasma quando spegne il Bluetooth. Per accenderlo si toglie prima il
-// blocco software scrivendo in /dev/rfkill (l'utente della sessione può:
-// regola uaccess di systemd), poi si chiede a BlueZ di accenderlo; se lo
-// sblocco non è ancora arrivato a BlueZ, si riprova dopo un attimo.
+// BlueZ doesn't power on an adapter blocked by rfkill: "Powered" stays false
+// and PowerState says "off-blocked". Plasma, for example, sets the block when
+// it turns Bluetooth off. To turn it on, the soft block is removed first by
+// writing to /dev/rfkill (the session user can: systemd's uaccess rule), then
+// BlueZ is asked to power it on; if the unblock hasn't reached BlueZ yet, it's
+// retried a moment later.
 
 #include <QDBusConnection>
 #include <QDBusMessage>
@@ -25,7 +25,7 @@
 
 namespace vela::bluetooth {
 
-// Toglie il blocco software di tutti i dispositivi Bluetooth.
+// Removes the soft block from all Bluetooth devices.
 inline bool unblock()
 {
     const int fd = ::open("/dev/rfkill", O_WRONLY | O_CLOEXEC);
@@ -54,8 +54,8 @@ inline void setPowered(const QString& adapter, bool on, int attempt = 0)
     call << QStringLiteral("org.bluez.Adapter1") << QStringLiteral("Powered") << QVariant::fromValue(QDBusVariant(on));
     QDBusConnection::systemBus().callWithCallback(call, nullptr, nullptr, nullptr);
     if (on && attempt < 3) {
-        // BlueZ vede lo sblocco con un po' di ritardo: finché l'adattatore
-        // non è acceso, si richiede (al massimo tre volte).
+        // BlueZ sees the unblock with some delay: until the adapter is on,
+        // it's asked again (at most three times).
         QTimer::singleShot(400, [adapter, attempt] {
             QDBusMessage get = QDBusMessage::createMethodCall(QStringLiteral("org.bluez"), adapter,
                 QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("Get"));

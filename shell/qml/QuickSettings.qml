@@ -4,13 +4,12 @@
 import QtQuick
 import QtQuick.Shapes
 
-// Le impostazioni rapide (Win+A, o clic sulle icone di sistema della
-// taskbar), come Windows 11: riquadri da accendere e spegnere (Wi-Fi,
-// Bluetooth, modalità aereo, risparmio energia, Luce notturna...),
-// luminosità e volume, batteria e Impostazioni in fondo. Pannello acrylic in
-// basso a destra. Alcuni riquadri hanno una pagina loro: la freccia del
-// Wi-Fi elenca le reti per sceglierne una, Accessibilità accende lente,
-// filtri colore e tasti permanenti.
+// Quick settings (Win+A, or a click on the taskbar's system icons), like
+// Windows 11: tiles to turn on and off (Wi-Fi, Bluetooth, airplane mode, power
+// saving, night light...), brightness and volume, battery and Settings at the
+// bottom. An acrylic panel at the bottom right. Some tiles have a page of
+// their own: the Wi-Fi arrow lists the networks to choose one, Accessibility
+// turns on the magnifier, color filters and sticky keys.
 Window {
     id: root
     objectName: "quickSettings"
@@ -19,7 +18,7 @@ Window {
     height: panel.height + 24
     color: "transparent"
 
-    // "" le impostazioni rapide; "wifi" e "accessibility" le loro pagine.
+    // "" the quick settings; "wifi" and "accessibility" their pages.
     property string page: ""
 
     function open() {
@@ -56,7 +55,8 @@ Window {
         }
         panel.forceActiveFocus()
     }
-    // In basso a destra, sopra la taskbar: dal pannello allo schermo.
+    // At the bottom right, above the taskbar: from panel to output
+    // coordinates.
     function screenPoint(item, x, y) {
         const p = item.mapToItem(null, x, y)
         return Qt.point(Screen.width - root.width + p.x, Screen.height - Theme.taskbarHeight - root.height + p.y)
@@ -87,16 +87,16 @@ Window {
         NumberAnimation { target: panel; property: "opacity"; to: 1; duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
         NumberAnimation { target: slide; property: "y"; to: 0; duration: Theme.slow; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
     }
-    // Una pagina entra da destra (indietro: come le altre, è breve).
+    // A page comes in from the right (back: like the others, it's short).
     ParallelAnimation {
         id: pageIn
         NumberAnimation { target: pages; property: "opacity"; from: 0; to: 1; duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
         NumberAnimation { target: pageSlide; property: "x"; from: 24; to: 0; duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
     }
 
-    // Un riquadro: acceso (colore d'accento) o spento, con l'etichetta
-    // sotto. `split`: a destra una freccia che apre la sua pagina (Wi-Fi);
-    // `menu`: tutto il riquadro apre la pagina (Accessibilità).
+    // A tile: on (accent color) or off, with the label below. `split`: an
+    // arrow on the right opening its page (Wi-Fi); `menu`: the whole tile
+    // opens the page (Accessibility).
     component Tile: Item {
         id: tile
         property string icon
@@ -122,7 +122,7 @@ Window {
             border.color: Theme.stroke
             clip: true
 
-            // Le due metà (o il riquadro intero), ognuna col suo hover.
+            // The two halves (or the whole tile), each with its hover.
             Rectangle {
                 x: 0
                 width: tile.split ? parent.width - 36 : parent.width
@@ -156,7 +156,7 @@ Window {
                 source: (tile.checked ? Theme.iconsOnAccent : Theme.icons) + encodeURIComponent(tile.icon)
                 sourceSize: Qt.size(width, height)
             }
-            // La freccia ">".
+            // The ">" arrow.
             Shape {
                 visible: tile.split || tile.menu
                 x: tile.split ? parent.width - 21 : parent.width - 18
@@ -214,7 +214,7 @@ Window {
         }
     }
 
-    // Un cursore (luminosità, volume) con la sua icona a sinistra.
+    // A slider (brightness, volume) with its icon on the left.
     component Slider: Item {
         id: slider
         property string icon
@@ -294,7 +294,7 @@ Window {
         }
     }
 
-    // Un interruttore come quelli di Windows 11.
+    // A toggle switch like Windows 11's.
     component Switch: Item {
         id: toggle
         property bool checked
@@ -325,7 +325,7 @@ Window {
         }
     }
 
-    // L'intestazione di una pagina: indietro, il titolo, e a destra ciò che serve.
+    // A page header: back, the title, and on the right what's needed.
     component PageHeader: Item {
         id: header
         property string title
@@ -372,7 +372,7 @@ Window {
         }
     }
 
-    // Un collegamento in fondo a una pagina ("Altre impostazioni...").
+    // A link at the bottom of a page ("More settings...").
     component Link: Text {
         id: link
         property string target
@@ -416,7 +416,7 @@ Window {
             anchors.fill: parent
             transform: Translate { id: pageSlide }
 
-            // ---------------------------------------------------- principale --
+            // ---------------------------------------------------------- main --
             Column {
                 id: content
                 visible: root.page === ""
@@ -440,7 +440,8 @@ Window {
                         onDetails: root.showPage("wifi")
                         onContextMenu: root.openSettings("network")
                     }
-                    // Senza Wi-Fi (un fisso col cavo): la rete com'è, a titolo informativo.
+                    // Without Wi-Fi (a wired desktop): the network as it is,
+                    // for information.
                     Tile {
                         visible: !Status.wifiAvailable
                         icon: Status.networkIconName
@@ -506,7 +507,7 @@ Window {
                 }
             }
 
-            // ------------------------------------------------- reti Wi-Fi --
+            // --------------------------------------------- Wi-Fi networks --
             Column {
                 id: wifiPage
                 visible: root.page === "wifi"
@@ -514,8 +515,8 @@ Window {
                 y: 16
                 width: parent.width - 32
                 spacing: 8
-                property string expanded: "" // la rete aperta
-                property string connecting: "" // la rete a cui ci si sta connettendo
+                property string expanded: "" // the open network
+                property string connecting: "" // the network being connected to
                 property string password: ""
 
                 PageHeader {
@@ -614,7 +615,8 @@ Window {
                                     width: parent.width - 56
                                     spacing: 8
 
-                                    // La password, per le reti protette che non conosciamo ancora.
+                                    // The password, for secured networks we
+                                    // don't know yet.
                                     Rectangle {
                                         visible: net.needsPassword
                                         width: parent.width
@@ -696,7 +698,7 @@ Window {
                 }
             }
 
-            // ------------------------------------------------ accessibilità --
+            // ------------------------------------------------ accessibility --
             Column {
                 id: accessPage
                 visible: root.page === "accessibility"
@@ -756,7 +758,7 @@ Window {
             }
         }
 
-        // In fondo: batteria a sinistra, Impostazioni a destra.
+        // At the bottom: battery on the left, Settings on the right.
         Rectangle {
             id: footer
             visible: root.page === ""

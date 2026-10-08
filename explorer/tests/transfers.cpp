@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Le prove delle copie e degli spostamenti di Esplora, senza interfaccia:
-// i casi in cui un file manager non deve mai perdere dati. Ogni prova lavora
-// in una cartella temporanea propria.
+// Tests of Explorer's copies and moves, without a UI: the cases where a
+// file manager must never lose data. Each test works in a temporary directory
+// of its own.
 //
-//   ctest --test-dir build -R esplora      (o build/explorer/vela-files-test)
+//   ctest --test-dir build -R files-copies   (or build/explorer/vela-files-test)
 
 #include "appmodel.h"
 #include "fileops.h"
@@ -39,7 +39,7 @@ QByteArray read(const QString& path)
     return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray("<illeggibile>");
 }
 
-// I temporanei della copia (".nome.vela-copy-XXXXXX") rimasti sotto `dir`.
+// The copy temporaries (".name.vela-copy-XXXXXX") left under `dir`.
 QStringList leftovers(const QString& dir)
 {
     QStringList found;
@@ -62,12 +62,12 @@ class Transfers : public QObject {
     AppModel m_apps;
     FileOps* m_ops = nullptr;
     QTemporaryDir* m_dir = nullptr;
-    QString m_policy = QStringLiteral("replace"); // la risposta ai conflitti
+    QString m_policy = QStringLiteral("replace"); // the answer to conflicts
 
     QString path(const QString& relative) const { return m_dir->filePath(relative); }
 
-    // Trascina `sources` in `directory` (2 = sposta, 1 = copia) e aspetta la
-    // fine del lavoro. Restituisce l'errore del lavoro (vuoto se è andato bene).
+    // Drags `sources` into `directory` (2 = move, 1 = copy) and waits for the
+    // job to finish. Returns the job's error (empty if it went fine).
     QString transfer(const QStringList& sources, const QString& directory, int action)
     {
         QStringList urls;
@@ -138,13 +138,14 @@ private slots:
         QVERIFY(leftovers(m_dir->path()).isEmpty());
     }
 
-    // Il caso della review: "Sostituisci" con il disco che si riempie a metà
-    // copia. Il vecchio file deve restare intatto e il temporaneo sparire.
+    // The case from the review: "Replace" with the disk filling up halfway
+    // through the copy. The old file must stay intact and the temporary
+    // disappear.
     void diskFullKeepsOldFile()
     {
         write(path("a/big.bin"), QByteArray(3 << 20, 'n'));
         write(path("b/big.bin"), "old");
-        // Oltre 1 MB le scritture falliscono (EFBIG), come con il disco pieno.
+        // Above 1 MB writes fail (EFBIG), as with a full disk.
         rlimit old {};
         getrlimit(RLIMIT_FSIZE, &old);
         rlimit small = old;
@@ -159,8 +160,8 @@ private slots:
         QVERIFY(leftovers(m_dir->path()).isEmpty());
     }
 
-    // Una cartella nuova che non si riesce a copiare tutta: niente albero a
-    // metà nella destinazione.
+    // A new folder that can't be copied entirely: no half tree in the
+    // destination.
     void failedFolderLeavesNothing()
     {
         write(path("a/folder/small.txt"), "ok");

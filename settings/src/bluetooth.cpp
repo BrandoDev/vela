@@ -31,7 +31,7 @@ const QString deviceInterface = QStringLiteral("org.bluez.Device1");
 const QString batteryInterface = QStringLiteral("org.bluez.Battery1");
 const QString propertiesInterface = QStringLiteral("org.freedesktop.DBus.Properties");
 
-// Gli errori di BlueZ, detti in italiano quando sono quelli comuni.
+// BlueZ errors, in plain words when they're the common ones.
 QString describe(const QDBusError& error)
 {
     const QString name = error.name();
@@ -80,7 +80,7 @@ void Bluetooth::refresh()
             QStringLiteral("InterfacesAdded"), this, SLOT(onInterfacesAdded(QDBusObjectPath, QMap<QString, QVariantMap>)));
         system.connect(bluez, QStringLiteral("/"), QStringLiteral("org.freedesktop.DBus.ObjectManager"),
             QStringLiteral("InterfacesRemoved"), this, SLOT(onInterfacesRemoved(QDBusObjectPath, QStringList)));
-        // Tutti gli oggetti di BlueZ: il percorso vuoto li prende tutti.
+        // All BlueZ objects: the empty path takes them all.
         system.connect(bluez, QString(), propertiesInterface, QStringLiteral("PropertiesChanged"), this,
             SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
     }
@@ -157,7 +157,7 @@ QVariantList Bluetooth::devices(bool paired) const
         }
         const QString address = d[QStringLiteral("Address")].toString();
         QString name = d[QStringLiteral("Alias")].toString();
-        // Senza nome (solo l'indirizzo): nella ricerca non servono a nessuno.
+        // Without a name (address only): useless in the search.
         if (!paired && (!d.contains(QStringLiteral("Name")) || name.isEmpty())) {
             continue;
         }
@@ -173,7 +173,7 @@ QVariantList Bluetooth::devices(bool paired) const
             { QStringLiteral("rssi"), d.value(QStringLiteral("RSSI"), -200).toInt() },
         });
     }
-    // Connessi prima, poi per nome; i trovati dal più vicino.
+    // Connected first, then by name; found ones nearest first.
     std::sort(out.begin(), out.end(), [paired](const QVariant& a, const QVariant& b) {
         const QVariantMap x = a.toMap();
         const QVariantMap y = b.toMap();
@@ -208,7 +208,7 @@ void Bluetooth::fail(const QString& message)
 
 void Bluetooth::setPowered(bool on)
 {
-    vela::bluetooth::setPowered(m_adapter, on); // anche se bloccato da rfkill
+    vela::bluetooth::setPowered(m_adapter, on); // even if blocked by rfkill
 }
 
 void Bluetooth::startDiscovery()
@@ -243,7 +243,7 @@ void Bluetooth::callDevice(const QString& path, const QString& method, std::func
     emit errorChanged();
     setBusy(path, true);
     QDBusMessage call = QDBusMessage::createMethodCall(bluez, path, deviceInterface, method);
-    // Associare può chiedere fino a mezzo minuto (il dispositivo deve rispondere).
+    // Pairing can take up to half a minute (the device must answer).
     auto* watcher = new QDBusPendingCallWatcher(QDBusConnection::systemBus().asyncCall(call, 60000), this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, path, then](QDBusPendingCallWatcher* w) {
         const QDBusPendingReply<> reply = *w;
@@ -265,7 +265,7 @@ void Bluetooth::pairAndConnect(const QString& path)
 {
     stopDiscovery();
     callDevice(path, QStringLiteral("Pair"), [this, path] {
-        // Fidato: si ricollega da solo le volte successive.
+        // Trusted: it reconnects by itself the following times.
         QDBusMessage trust = QDBusMessage::createMethodCall(bluez, path, propertiesInterface, QStringLiteral("Set"));
         trust << deviceInterface << QStringLiteral("Trusted") << QVariant::fromValue(QDBusVariant(true));
         QDBusConnection::systemBus().asyncCall(trust);

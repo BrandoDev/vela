@@ -11,8 +11,8 @@ Config::Config(QObject* parent)
     : QObject(parent)
     , m_path(QSettings().fileName())
 {
-    // Chi scrive il file lo sostituisce (QSaveFile): si osserva anche la
-    // cartella, e il file si riaggancia a ogni cambiamento.
+    // Whoever writes the file replaces it (QSaveFile): the directory is
+    // watched too, and the file is watched again on every change.
     m_debounce.setSingleShot(true);
     m_debounce.setInterval(100);
     connect(&m_debounce, &QTimer::timeout, this, [this] {
@@ -39,9 +39,9 @@ void Config::watch()
 void Config::reload()
 {
     QSettings settings;
-    settings.sync(); // rilegge ciò che hanno scritto gli altri processi
+    settings.sync(); // rereads what other processes wrote
 
-    // VELA_WALLPAPER (per le prove) ha la precedenza sulla scelta salvata.
+    // VELA_WALLPAPER (for tests) takes precedence over the saved choice.
     QString wallpaper = qEnvironmentVariable("VELA_WALLPAPER");
     if (wallpaper.isEmpty()) {
         wallpaper = settings.value(QStringLiteral("appearance/wallpaper")).toString();

@@ -6,9 +6,8 @@
 #include <QObject>
 #include <QVariantList>
 
-// I layout di tastiera che XKB conosce (evdev.xml), per "Aggiungi una
-// tastiera": [{layout, variant, name}], ordinati per nome. Si leggono la
-// prima volta che servono.
+// The keyboard layouts XKB knows (evdev.xml), for "Add a keyboard": [{layout,
+// variant, name}], sorted by name. Read the first time they're needed.
 class KeyboardLayouts : public QObject {
     Q_OBJECT
 
@@ -16,7 +15,7 @@ public:
     using QObject::QObject;
 
     Q_INVOKABLE QVariantList all();
-    // Il nome da mostrare ("Italiano", "Inglese (USA, internazionale)...").
+    // The name to show ("Italian", "English (US, intl.)...").
     Q_INVOKABLE QString name(const QString& layout, const QString& variant);
 
 private:

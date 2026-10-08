@@ -3,10 +3,10 @@
 
 import QtQuick
 
-// La cronologia degli Appunti (Win+V), come Windows 11: ciò che si è
-// copiato, dal più recente (prima i fissati). Un clic, o Invio, lo incolla
-// nell'app a fuoco; "…" per fissarlo o eliminarlo; Canc lo elimina. Se la
-// cronologia è spenta, il pannello propone di accenderla.
+// Clipboard history (Win+V), like Windows 11: what was copied, most recent
+// first (pinned first). A click, or Enter, pastes it into the focused app; "…"
+// to pin or delete it; Del deletes it. If history is off, the panel offers to
+// turn it on.
 Window {
     id: root
     objectName: "clipboardPanel"
@@ -52,7 +52,8 @@ Window {
         Effects.setBlur(root, [Qt.rect(panel.x, panel.y, panel.width, panel.height)])
     }
 
-    // In basso a destra, sopra la taskbar: dal pannello allo schermo (menu).
+    // At the bottom right, above the taskbar: from panel to output coordinates
+    // (menus).
     function screenPoint(item, x, y) {
         const p = item.mapToItem(null, x, y)
         return Qt.point(Screen.width - root.width + p.x, Screen.height - Theme.taskbarHeight - root.height + p.y)
@@ -141,7 +142,7 @@ Window {
                 }
             }
 
-            // Spenta: come Windows, la si accende da qui.
+            // Off: like Windows, it's turned on from here.
             Column {
                 visible: !Clip.enabled
                 width: parent.width
@@ -232,7 +233,7 @@ Window {
                                 fillMode: Image.PreserveAspectFit
                                 horizontalAlignment: Image.AlignLeft
                                 source: visible ? "image://clipboard/" + card.modelData.id : ""
-                                sourceSize: Qt.size(width, height) // logico: Qt lo porta in pixel
+                                sourceSize: Qt.size(width, height) // logical: Qt turns it into pixels
                                 asynchronous: true
                             }
                             MouseArea {
@@ -241,7 +242,7 @@ Window {
                                 hoverEnabled: true
                                 onClicked: root.pasteAt(card.index)
                             }
-                            // Fissato: la puntina; "…" per fissare o eliminare.
+                            // Pinned: the pin; "…" to pin or delete.
                             Text {
                                 visible: card.modelData.pinned
                                 anchors { right: more.left; rightMargin: 2; verticalCenter: more.verticalCenter }

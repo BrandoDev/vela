@@ -4,7 +4,7 @@
 import QtQuick
 import QtQuick.Controls.Basic as C
 
-// La casella di testo di Windows 11: la riga d'accento in basso quando ha il fuoco.
+// The Windows 11 text box: the accent line at the bottom when focused.
 C.TextField {
     id: field
     implicitWidth: 240

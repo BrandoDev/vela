@@ -3,9 +3,9 @@
 
 #pragma once
 
-// Il server delle notifiche del desktop (org.freedesktop.Notifications): le
-// app mandano i messaggi qui, la shell li mostra in basso a destra come
-// Windows 11. Per il QML è un modello: una riga per notifica visibile.
+// The desktop notification server (org.freedesktop.Notifications): apps send
+// messages here, the shell shows them at the bottom right like Windows 11. For
+// QML it's a model: one row per visible notification.
 
 #include <QAbstractListModel>
 #include <QDateTime>
@@ -20,9 +20,9 @@
 #include <memory>
 #include <vector>
 
-// Il centro notifiche (Win+N): le notifiche passate, dalla più recente,
-// finché non le si chiude. Ci finiscono quelle scadute dal popup (non le
-// "transient") e, con "Non disturbare", tutte quelle non critiche.
+// The notification center (Win+N): past notifications, most recent first,
+// until dismissed. Those expired from the popup end up here (not "transient"
+// ones) and, with "Do not disturb", all non-critical ones.
 class NotificationHistory : public QAbstractListModel {
     Q_OBJECT
     Q_PROPERTY(int count READ count NOTIFY countChanged)
@@ -49,7 +49,7 @@ private:
         bool hasDefault;
         QDateTime time;
     };
-    std::vector<Item> m_items; // la più recente in cima
+    std::vector<Item> m_items; // most recent at the top
 };
 
 class NotificationServer : public QAbstractListModel, protected QDBusContext {
@@ -57,17 +57,18 @@ class NotificationServer : public QAbstractListModel, protected QDBusContext {
     Q_CLASSINFO("D-Bus Interface", "org.freedesktop.Notifications")
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(QObject* history READ history CONSTANT)
-    // "Non disturbare": niente popup (tranne le critiche), tutto nel centro.
+    // "Do not disturb": no popups (except critical ones), everything in the
+    // center.
     Q_PROPERTY(bool doNotDisturb READ doNotDisturb WRITE setDoNotDisturb NOTIFY doNotDisturbChanged)
 
 public:
     enum Role {
         IdRole = Qt::UserRole + 1,
         AppNameRole,
-        IconRole, // sorgente per Image: tema, file o immagine della notifica
+        IconRole, // source for Image: theme, file or the notification's image
         SummaryRole,
         BodyRole,
-        ActionsRole, // [{ key, label }], senza l'azione "default"
+        ActionsRole, // [{ key, label }], without the "default" action
         HasDefaultActionRole,
         CriticalRole,
     };
@@ -75,8 +76,8 @@ public:
     explicit NotificationServer(QObject* parent = nullptr);
     ~NotificationServer() override;
 
-    // Si prende il nome sul bus di sessione. false se c'è già un altro
-    // server (Plasma, quando Vela gira annidato o da una console).
+    // Takes the name on the session bus. false if there is another server
+    // already (Plasma, when Vela runs nested or from a console).
     bool registerService();
 
     int count() const { return int(m_items.size()); }
@@ -84,16 +85,16 @@ public:
     QVariant data(const QModelIndex& index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
 
-    // Dal QML.
-    Q_INVOKABLE void invoke(uint id, const QString& action); // "default" per il clic
+    // From QML.
+    Q_INVOKABLE void invoke(uint id, const QString& action); // "default" for the click
     Q_INVOKABLE void dismiss(uint id);
-    // Il mouse è sopra le notifiche: non scadono finché non se ne va.
+    // The mouse is over the notifications: they don't expire until it leaves.
     Q_INVOKABLE void setHovered(bool hovered);
-    // Si apre il centro notifiche: i popup ancora a schermo ci entrano,
-    // come su Windows (prima restavano sopra, a coprire il calendario).
+    // The notification center opens: popups still on screen move into it, like
+    // on Windows (before they stayed on top, covering the calendar).
     Q_INVOKABLE void collectPopups();
 
-    // Il centro notifiche.
+    // The notification center.
     QObject* history() { return &m_history; }
     bool doNotDisturb() const { return m_doNotDisturb; }
     void setDoNotDisturb(bool on);
@@ -128,8 +129,8 @@ private:
         QVariantList actions;
         bool hasDefault;
         bool critical;
-        bool transient; // non va nel centro notifiche
-        std::unique_ptr<QTimer> timer; // scadenza; null: resta finché non la si chiude
+        bool transient; // doesn't go to the notification center
+        std::unique_ptr<QTimer> timer; // expiry; null: stays until dismissed
     };
     void toHistory(const Notification& n);
     int historyRow(uint id) const;
@@ -139,7 +140,7 @@ private:
     int rowOf(uint id) const;
     QString iconFor(uint id, const QString& appIcon, const QVariantMap& hints);
 
-    std::vector<Notification> m_items; // la più recente in fondo
+    std::vector<Notification> m_items; // most recent at the end
     QHash<uint, QImage> m_images;
     uint m_nextId = 1;
     bool m_hovered = false;
@@ -147,7 +148,7 @@ private:
     NotificationHistory m_history;
 };
 
-// "image://notification/<id>": l'immagine allegata a una notifica.
+// "image://notification/<id>": the image attached to a notification.
 class NotificationImageProvider : public QQuickImageProvider {
 public:
     explicit NotificationImageProvider(NotificationServer* server)

@@ -26,7 +26,7 @@
 
 namespace {
 
-// Le cartelle dell'utente hanno la loro icona, come in Windows.
+// The user's folders have their own icon, like in Windows.
 QString folderIcon(const QString& path)
 {
     static const QHash<QString, QString> icons = [] {
@@ -67,11 +67,11 @@ FolderModel::Entry describe(const QFileInfo& info)
         return e;
     }
     e.size = info.size();
-    // Dal nome soltanto: aprire ogni file per capirne il tipo sarebbe lento.
+    // From the name only: opening every file to find its type would be slow.
     const QMimeType mime = mimes.mimeTypeForFile(info, QMimeDatabase::MatchExtension);
     e.type = mime.comment();
-    // Il tema si guarda nel thread principale (QIcon non è da usare qui):
-    // l'icona specifica e, dopo "|", quella generica di ripiego.
+    // The theme is consulted in the main thread (QIcon must not be used here):
+    // the specific icon and, after "|", the generic fallback.
     e.icon = mime.iconName() + u'|' + mime.genericIconName();
     const QString name = mime.name();
     e.thumbnail = name.startsWith(QLatin1String("image/")) || name.startsWith(QLatin1String("video/"))
@@ -94,7 +94,7 @@ QString formatSize(qint64 bytes)
         value /= 1024.0;
         ++unit;
     }
-    // In "Dettagli" Windows scrive i KB senza decimali ("12 KB").
+    // In "Details" Windows writes KB without decimals ("12 KB").
     return locale.toString(value, 'f', unit == 0 ? 0 : 1) + u' ' + QLatin1String(units[unit]);
 }
 
@@ -102,7 +102,7 @@ FolderModel::FolderModel(QObject* parent)
     : QAbstractListModel(parent)
     , m_generation(std::make_shared<std::atomic<quint64>>(0))
 {
-    // "file2" prima di "file10", maiuscole e minuscole insieme: come Windows.
+    // "file2" before "file10", upper and lower case together: like Windows.
     m_collator.setNumericMode(true);
     m_collator.setCaseSensitivity(Qt::CaseInsensitive);
     m_refresh.setSingleShot(true);
@@ -118,7 +118,7 @@ FolderModel::FolderModel(QObject* parent)
 
 FolderModel::~FolderModel()
 {
-    m_generation->fetch_add(1); // il lavoro in corso si ferma
+    m_generation->fetch_add(1); // the job in progress stops
 }
 
 int FolderModel::rowCount(const QModelIndex& parent) const
@@ -167,7 +167,8 @@ QVariant FolderModel::data(const QModelIndex& index, int role) const
     case ModifiedTextRole: return QLocale().toString(e.modified, QStringLiteral("dd/MM/yyyy HH:mm"));
     case TypeRole: return e.type;
     case IconRole: {
-        // "image-png|image-x-generic": la prima che il tema ha (ricordata).
+        // "image-png|image-x-generic": the first one the theme has
+        // (remembered).
         static QHash<QString, QString> resolved;
         auto it = resolved.constFind(e.icon);
         if (it == resolved.cend()) {
@@ -185,7 +186,7 @@ QVariant FolderModel::data(const QModelIndex& index, int role) const
     return {};
 }
 
-// ------------------------------------------------------------ cartella --
+// -------------------------------------------------------------- folder --
 
 void FolderModel::setPath(const QString& path)
 {
@@ -228,9 +229,9 @@ void FolderModel::reload()
     start(!m_items.isEmpty() || !m_filtered.isEmpty());
 }
 
-// Il lavoro in un altro thread. I risultati arrivano al thread principale
-// a blocchi; se nel frattempo si è cambiata cartella (generazione diversa)
-// il lavoro si ferma e i blocchi vecchi si buttano.
+// The job in another thread. Results reach the main thread in batches; if
+// meanwhile the folder changed (a different generation) the job stops and the
+// old batches are thrown away.
 void FolderModel::start(bool refresh)
 {
     const quint64 generation = m_generation->fetch_add(1) + 1;
@@ -283,14 +284,15 @@ void FolderModel::start(bool refresh)
                 }
                 it.next();
                 batch.append(describe(it.fileInfo()));
-                // Una cartella normale arriva in un blocco solo; una enorme
-                // si mostra subito a pezzi.
+                // A normal folder arrives in one batch; a huge one shows up at
+                // once in pieces.
                 if (sinceFlush.elapsed() > (first ? 60 : 150)) {
                     flush(false);
                 }
             }
         } else {
-            // Ricerca: nelle sottocartelle, nome che contiene il testo (o con * e ?).
+            // Search: in the subfolders, names containing the text (or with *
+            // and ?).
             const bool wildcard = search.contains(u'*') || search.contains(u'?');
             const QRegularExpression pattern = wildcard
                 ? QRegularExpression::fromWildcard(search, Qt::CaseInsensitive, QRegularExpression::UnanchoredWildcardConversion)
@@ -304,7 +306,7 @@ void FolderModel::start(bool refresh)
                 it.next();
                 const QString name = it.fileName();
                 if (!hidden && it.filePath().mid(path.size()).contains(QLatin1String("/."))) {
-                    continue; // dentro cartelle nascoste
+                    continue; // inside hidden folders
                 }
                 if (wildcard ? pattern.match(name).hasMatch() : name.contains(search, Qt::CaseInsensitive)) {
                     batch.append(describe(it.fileInfo()));
@@ -341,7 +343,7 @@ void FolderModel::receive(quint64 generation, QList<Entry> entries, bool finishe
 
 bool FolderModel::lessThan(const Entry& a, const Entry& b) const
 {
-    // Le cartelle prima, come Windows (anche all'indietro).
+    // Folders first, like Windows (also when reversed).
     if (a.isDir != b.isDir) {
         return a.isDir;
     }
@@ -355,7 +357,7 @@ bool FolderModel::lessThan(const Entry& a, const Entry& b) const
     if (order == 0) {
         order = m_collator.compare(a.name, b.name);
         if (m_sortColumn != 0) {
-            return order < 0; // a pari valore, per nome in avanti
+            return order < 0; // on equal values, by name ascending
         }
     }
     return m_sortDescending ? order > 0 : order < 0;
@@ -375,7 +377,7 @@ void FolderModel::insertBatch(QList<Entry> entries)
         return;
     }
     if (m_items.isEmpty()) {
-        // Il primo blocco: tutto insieme, già in ordine.
+        // The first batch: all at once, already sorted.
         std::sort(shown.begin(), shown.end(), [this](const Entry& a, const Entry& b) { return lessThan(a, b); });
         beginInsertRows({}, 0, int(shown.size()) - 1);
         m_items = std::move(shown);
@@ -398,7 +400,7 @@ void FolderModel::insertSorted(const Entry& entry)
     const int row = int(it - m_items.begin());
     beginInsertRows({}, row, row);
     m_items.insert(row, entry);
-    // Le righe selezionate dopo questa scendono di uno.
+    // The selected rows after this one move down by one.
     QSet<int> shifted;
     for (int r : std::as_const(m_selected)) {
         shifted.insert(r >= row ? r + 1 : r);
@@ -448,7 +450,7 @@ void FolderModel::merge(QList<Entry> fresh)
     for (Entry& e : fresh) {
         byPath.insert(e.path, std::move(e));
     }
-    // Spariti o cambiati.
+    // Gone or changed.
     for (int row = int(m_items.size()) - 1; row >= 0; --row) {
         const Entry& old = m_items.at(row);
         auto it = byPath.find(old.path);
@@ -459,17 +461,17 @@ void FolderModel::merge(QList<Entry> fresh)
         const bool changed = it->size != old.size || it->modified != old.modified || it->type != old.type
             || it->isDir != old.isDir;
         if (changed) {
-            // Con l'ordine per data o dimensione può dover cambiare posto.
+            // With sorting by date or size it may need to move.
             if (m_sortColumn != 0 || it->isDir != old.isDir) {
                 removeAt(row);
-                continue; // resta in byPath: si rimette al posto giusto
+                continue; // it stays in byPath: put back in the right place
             }
             m_items[row] = *it;
             emit dataChanged(index(row), index(row));
         }
         byPath.erase(it);
     }
-    // Arrivati.
+    // Arrived.
     m_filtered.clear();
     for (const Entry& e : std::as_const(byPath)) {
         if (e.hidden && !m_showHidden) {
@@ -568,7 +570,7 @@ int FolderModel::find(const QString& prefix, int from) const
     return -1;
 }
 
-// ------------------------------------------------------------ selezione --
+// ------------------------------------------------------------ selection --
 
 void FolderModel::emitSelection(const QSet<int>& changed)
 {

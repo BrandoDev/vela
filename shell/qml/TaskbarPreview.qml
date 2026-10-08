@@ -3,12 +3,11 @@
 
 import QtQuick
 
-// Le anteprime di un pulsante della taskbar, come Windows 11: col mouse
-// fermo su un'app aperta compaiono sopra il pulsante le sue finestre (del
-// desktop in uso), con titolo e Chiudi; un clic ci porta, il clic centrale
-// la chiude. Se una finestra fa parte di un gruppo di snap, c'è anche il
-// gruppo: le sue finestre nei loro posti, e un clic le riporta davanti tutte
-// insieme.
+// A taskbar button's previews, like Windows 11: with the mouse resting on an
+// open app its windows (of the current desktop) appear above the button, with
+// title and Close; a click goes there, a middle click closes it. If a window
+// is part of a snap group, the group is there too: its windows in their
+// places, and a click brings them all forward together.
 Window {
     id: root
     objectName: "taskbarPreview"
@@ -19,8 +18,8 @@ Window {
 
     property var windows: [] // [{id, title, icon}]
     property var groups: [] // [{windows: [{id, title, icon, tile}]}]
-    // La versione della miniatura di ogni finestra (identificativo -> n),
-    // da quando è pronta: cambia a ogni cattura, così l'immagine si ricarica.
+    // The thumbnail version of each window (identifier -> n), once ready: it
+    // changes at every capture, so the image reloads.
     property var ready: ({})
 
     readonly property int cardWidth: 208
@@ -46,7 +45,7 @@ Window {
             root.ready = next
         }
     }
-    // Una finestra chiusa (o spostata) mentre le anteprime sono aperte.
+    // A window closed (or moved) while the previews are open.
     Connections {
         target: Desktops
         function onChanged() {
@@ -54,8 +53,8 @@ Window {
         }
     }
 
-    // Il mouse esce da pulsante e anteprime: si chiudono dopo un attimo
-    // (passando dall'uno alle altre non si chiudono).
+    // The mouse leaves button and previews: they close after a moment (moving
+    // from one to the other doesn't close them).
     Timer {
         id: hideTimer
         interval: 300
@@ -96,7 +95,7 @@ Window {
         const ids = windows.map(w => w.id)
         for (const g of groups) g.windows.forEach(m => { if (ids.indexOf(m.id) < 0) ids.push(m.id) })
         Capture.capture(ids)
-        // Sullo schermo della taskbar, centrato sul pulsante.
+        // On the taskbar's output, centered on the button.
         const screen = Qt.application.screens.find(s => s.name === info.screen)
         if (screen && screen !== root.screen) {
             visible = false
@@ -129,7 +128,7 @@ Window {
         NumberAnimation { target: slide; property: "y"; to: 0; duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
     }
 
-    // Una scheda: icona, titolo, Chiudi; sotto la miniatura (o il gruppo).
+    // A card: icon, title, Close; the thumbnail (or the group) below.
     component Card: Rectangle {
         id: card
         property string title
@@ -181,7 +180,7 @@ Window {
                 }
             }
         }
-        // Chiudi, in alto a destra al passaggio del mouse.
+        // Close, at the top right on hover.
         Rectangle {
             visible: card.closable && cardHover.hovered
             anchors { right: parent.right; top: parent.top; margins: 4 }
@@ -267,7 +266,7 @@ Window {
                 }
             }
 
-            // I gruppi di snap: le finestre nei loro posti, in uno schermo in piccolo.
+            // Snap groups: the windows in their places, on a small output.
             Repeater {
                 model: root.groups
                 delegate: Card {
@@ -278,7 +277,7 @@ Window {
                     closable: false
                     onActivated: {
                         const ids = Menus.preview ? root.windows.map(w => w.id) : []
-                        // A fuoco la finestra dell'app del pulsante.
+                        // The button's app window focused.
                         const mine = groupCard.modelData.windows.find(m => ids.indexOf(m.id) >= 0)
                         Shell.windowAction((mine || groupCard.modelData.windows[0]).id, "activate-group")
                         Menus.preview = null
@@ -287,7 +286,7 @@ Window {
                     Item {
                         id: screenShape
                         anchors.centerIn: parent
-                        // La forma dello schermo (16:9), dentro lo spazio della scheda.
+                        // The output's shape (16:9), inside the card's space.
                         width: Math.min(parent.width, parent.height * 16 / 9)
                         height: width * 9 / 16
                         Rectangle {

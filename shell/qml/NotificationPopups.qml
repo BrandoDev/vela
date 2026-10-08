@@ -4,8 +4,8 @@
 import QtQuick
 import QtQuick.Shapes
 
-// Le notifiche, in basso a destra sopra la taskbar come su Windows 11. La
-// finestra è alta quanto i riquadri: il resto dello schermo resta cliccabile.
+// Notifications, at the bottom right above the taskbar like on Windows 11. The
+// window is as tall as the tiles: the rest of the output stays clickable.
 Window {
     id: root
     objectName: "notifications"
@@ -14,8 +14,8 @@ Window {
     visible: Notifications.count > 0
     color: "transparent"
 
-    // Lo sfondo sfocato sotto i riquadri: la finestra intera, la forma la
-    // danno i riquadri (fuori è trasparente).
+    // The blurred background under the tiles: the whole window, the tiles give
+    // the shape (outside is transparent).
     function updateBlur() {
         Effects.setBlur(root, [Qt.rect(0, 0, width, height)])
     }
@@ -23,7 +23,7 @@ Window {
     onHeightChanged: updateBlur()
     Component.onCompleted: updateBlur()
 
-    // Mouse sopra: non scadono mentre le si legge.
+    // Mouse over: they don't expire while being read.
     HoverHandler {
         onHoveredChanged: Notifications.setHovered(hovered)
     }
@@ -57,7 +57,7 @@ Window {
                 border.width: 1
                 border.color: critical ? Qt.rgba(1, 0.35, 0.35, 0.6) : Theme.stroke
 
-                // Entra da destra, come su Windows.
+                // It comes in from the right, like on Windows.
                 transform: Translate { id: slide; x: 60 }
                 opacity: 0
                 Component.onCompleted: appear.start()
@@ -77,7 +77,8 @@ Window {
                     id: toastMouse
                     anchors.fill: parent
                     hoverEnabled: true
-                    // Clic: apre l'app (l'azione "default"), altrimenti chiude.
+                    // Click: opens the app (the "default" action), otherwise
+                    // closes.
                     onClicked: toast.hasDefaultAction ? Notifications.invoke(toast.notificationId, "default")
                                                       : Notifications.dismiss(toast.notificationId)
                 }
@@ -89,7 +90,7 @@ Window {
                     width: parent.width - 28
                     spacing: 6
 
-                    // App: icona e nome, piccoli, come intestazione.
+                    // App: icon and name, small, as a header.
                     Row {
                         spacing: 8
                         Image {
@@ -125,7 +126,7 @@ Window {
                         visible: text !== ""
                         color: Theme.textDim
                         font.pixelSize: Theme.fontNormal
-                        textFormat: Text.StyledText // <b>, <i>, <a> dalla specifica
+                        textFormat: Text.StyledText // <b>, <i>, <a> from the spec
                         wrapMode: Text.Wrap
                         maximumLineCount: 4
                         elide: Text.ElideRight
@@ -133,7 +134,7 @@ Window {
                         onLinkActivated: link => Qt.openUrlExternally(link)
                     }
 
-                    // Le azioni dell'app ("Rispondi", "Segna come letto"...).
+                    // The app's actions ("Reply", "Mark as read"...).
                     Row {
                         visible: toast.actions.length > 0
                         topPadding: 4
@@ -166,7 +167,7 @@ Window {
                     }
                 }
 
-                // Chiudi: compare col mouse sopra, in alto a destra.
+                // Close: appears with the mouse over, at the top right.
                 Rectangle {
                     anchors { right: parent.right; top: parent.top; margins: 8 }
                     width: 24

@@ -1,8 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# GuiPrivate serve per un'unica API privata (la wl_surface della taskbar, vedi
-# foreigntoplevels.cpp): dopo un aggiornamento di Qt la shell va ricompilata.
+# GuiPrivate is needed for a single private API (the taskbar's wl_surface, see
+# foreigntoplevels.cpp): after a Qt update the shell must be rebuilt.
 set(QT_NO_PRIVATE_MODULE_WARNING ON)
 find_package(Qt6 6.5 REQUIRED COMPONENTS DBus Gui GuiPrivate Qml Quick Svg WaylandClient)
 find_package(LayerShellQt REQUIRED)
@@ -61,18 +61,19 @@ qt_add_executable(vela-shell
     src/workspaces.cpp
     src/workspaces.h)
 
-# Lo sfondo predefinito, dentro l'eseguibile: ":/vela/images/vela_splash_169.svg".
+# The default wallpaper, inside the executable:
+# ":/vela/images/vela_splash_169.svg".
 qt_add_resources(vela-shell "images"
     PREFIX "/vela"
     BASE ${PROJECT_SOURCE_DIR}
     FILES ${PROJECT_SOURCE_DIR}/images/vela_splash_169.svg)
 
-# Elenco delle finestre aperte, pubblicato dal compositor.
+# The list of open windows, published by the compositor.
 qt_generate_wayland_protocol_client_sources(vela-shell
     FILES ${PROJECT_SOURCE_DIR}/protocols/wlr-foreign-toplevel-management-unstable-v1.xml)
 
-# Anteprime delle finestre (Alt+Tab): protocolli ext-*, usati con libwayland
-# direttamente (vedi windowcapture.cpp).
+# Window previews (Alt+Tab): ext-* protocols, used through libwayland directly
+# (see windowcapture.cpp).
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SHELL_WAYLAND_PROTOCOLS REQUIRED wayland-protocols>=1.37)
 pkg_get_variable(SHELL_WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
@@ -131,8 +132,8 @@ set(VELA_QML_FILES
     qml/ClipboardPanel.qml
     qml/SnipOverlay.qml)
 
-# I file stanno in qml/ per ordine, ma nel modulo devono stare alla radice:
-# così si vedono tra loro (Theme compreso, che è un singleton) senza import.
+# The files are in qml/ for tidiness, but in the module they must be at the
+# root: so they see each other (Theme included, a singleton) without imports.
 foreach(file IN LISTS VELA_QML_FILES)
     get_filename_component(name ${file} NAME)
     set_source_files_properties(${file} PROPERTIES QT_RESOURCE_ALIAS ${name})
@@ -153,12 +154,12 @@ target_link_libraries(vela-shell PRIVATE
     Qt6::Svg
     Qt6::WaylandClient
     PkgConfig::SHELL_WAYLAND_CLIENT
-    Qt6::GuiPrivate # wl_surface della taskbar (vedi foreigntoplevels.cpp)
+    Qt6::GuiPrivate # the taskbar's wl_surface (see foreigntoplevels.cpp)
     LayerShellQt::Interface)
 
 install(TARGETS vela-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-# Le prove (ctest): la chiave Exec dei file .desktop e le app predefinite.
+# The tests (ctest): the Exec key of .desktop files and default apps.
 if(VELA_BUILD_TOOLS)
     find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
     qt_add_executable(vela-desktopexec-test tests/desktopexec.cpp src/desktopexec.h)
@@ -174,9 +175,9 @@ if(VELA_BUILD_TOOLS)
     add_test(NAME shell-mimeapps COMMAND vela-mimeapps-test)
 endif()
 
-# Traduzione italiana: le stringhe del codice sono in inglese, l'italiano sta
-# in i18n/vela-shell_it.ts e finisce nell'eseguibile (:/i18n/vela-shell_it.qm, vedi
-# shell/src/language.h). Dopo aver cambiato testi:
+# Italian translation: strings in the code are in English, Italian lives
+# in i18n/vela-shell_it.ts and ends up in the executable (:/i18n/vela-shell_it.qm, see
+# shell/src/language.h). After changing texts:
 #   cmake --build build --target update_translations
 find_package(Qt6 6.7 REQUIRED COMPONENTS LinguistTools)
 qt_add_translations(TARGETS vela-shell SOURCE_TARGETS vela-shell

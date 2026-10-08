@@ -10,87 +10,85 @@
 #include <QStringList>
 #include <QVariantList>
 
-// Le scelte dell'utente, nei due file che le contengono:
-// ~/.config/Vela/vela-shell.conf per la shell (sfondo, accento, modalità,
-// taskbar, notifiche), che la shell rilegge appena cambia;
-// ~/.config/vela/vela.conf per il compositor (inattività, tastiera, Luce
-// notturna, accessibilità, tearing), che lo rilegge al comando
-// "reload-config". vela.conf lo scrive anche il compositor (le impostazioni
-// rapide accendono Luce notturna, filtri e tasti permanenti): si riscrivono
-// solo le chiavi cambiate, sul file appena riletto, e lo si osserva. In più
-// la modalità chiara o scura delle app passa a KDE (colori, icone) e a GTK
-// (gsettings).
+// The user's choices, in the two files holding them:
+// ~/.config/Vela/vela-shell.conf for the shell (wallpaper, accent, mode,
+// taskbar, notifications), which the shell rereads as soon as it changes;
+// ~/.config/vela/vela.conf for the compositor (inactivity, keyboard, night
+// light, accessibility, tearing), which rereads it on the "reload-config"
+// command. The compositor writes vela.conf too (quick settings turn on night
+// light, filters and sticky keys): only the changed keys are rewritten, on the
+// file just reread, and it's watched. Also, the apps' light or dark mode goes
+// to KDE (colors, icons) and GTK (gsettings).
 class Preferences : public QObject {
     Q_OBJECT
-    // --- Personalizzazione ---
+    // --- Personalization ---
     Q_PROPERTY(QString wallpaper READ wallpaper NOTIFY wallpaperChanged)
     Q_PROPERTY(QStringList recentWallpapers READ recentWallpapers NOTIFY wallpaperChanged)
     Q_PROPERTY(QStringList systemWallpapers READ systemWallpapers CONSTANT)
     Q_PROPERTY(QColor accent READ accent WRITE setAccent NOTIFY accentChanged)
     Q_PROPERTY(QString appTheme READ appTheme WRITE setAppTheme NOTIFY appThemeChanged)
-    // La modalità di Vela (taskbar, menu, pannelli): "dark" o "light".
+    // Vela's mode (taskbar, menus, panels): "dark" or "light".
     Q_PROPERTY(QString shellTheme READ shellTheme WRITE setShellTheme NOTIFY appThemeChanged)
-    // Le Impostazioni stesse sono chiare (seguono la modalità delle app).
+    // Settings itself is light (it follows the apps' mode).
     Q_PROPERTY(bool light READ light NOTIFY appThemeChanged)
-    // "l/" o "d/" per image://icon, un attimo dopo la modalità (applyIconTheme).
+    // "l/" or "d/" for image://icon, a moment after the mode (applyIconTheme).
     Q_PROPERTY(QString iconMode READ iconMode NOTIFY iconModeChanged)
     Q_PROPERTY(QString taskbarAlignment READ taskbarAlignment WRITE setTaskbarAlignment NOTIFY taskbarChanged)
     Q_PROPERTY(bool endTask READ endTask WRITE setEndTask NOTIFY taskbarChanged)
     Q_PROPERTY(bool taskView READ taskView WRITE setTaskView NOTIFY taskbarChanged)
     Q_PROPERTY(bool taskbarAllScreens READ taskbarAllScreens WRITE setTaskbarAllScreens NOTIFY taskbarChanged)
-    // --- Notifiche ---
+    // --- Notifications ---
     Q_PROPERTY(bool doNotDisturb READ doNotDisturb WRITE setDoNotDisturb NOTIFY doNotDisturbChanged)
-    // --- Alimentazione ---
+    // --- Power ---
     Q_PROPERTY(int screenOffMinutes READ screenOffMinutes WRITE setScreenOffMinutes NOTIFY idleChanged)
     Q_PROPERTY(bool lockOnIdle READ lockOnIdle WRITE setLockOnIdle NOTIFY idleChanged)
-    // Lingua di Vela (lingua= in vela.conf): "", "it" o "en". Vuota: come
-    // il sistema. Le app la applicano da sole (shell/src/language.h).
+    // Vela's language (language= in vela.conf): "", "it" or "en". Empty: like
+    // the system. The apps apply it themselves (shell/src/language.h).
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
-    // --- Tastiera ---
-    // [{layout, variant}] nell'ordine scelto; il primo è quello di partenza.
+    // --- Keyboard ---
+    // [{layout, variant}] in the chosen order; the first is the starting one.
     Q_PROPERTY(QVariantList keyboardLayouts READ keyboardLayouts NOTIFY keyboardChanged)
     Q_PROPERTY(int repeatDelay READ repeatDelay WRITE setRepeatDelay NOTIFY keyboardChanged)
     Q_PROPERTY(int repeatRate READ repeatRate WRITE setRepeatRate NOTIFY keyboardChanged)
-    // --- Schermo: Luce notturna e giochi ---
+    // --- Display: night light and games ---
     Q_PROPERTY(bool nightLight READ nightLight WRITE setNightLight NOTIFY nightLightChanged)
     Q_PROPERTY(int nightStrength READ nightStrength WRITE setNightStrength NOTIFY nightLightChanged)
-    // "no", "sunset" (dal tramonto all'alba) o "hours"
+    // "no", "sunset" (from sunset to sunrise) or "hours"
     Q_PROPERTY(QString nightSchedule READ nightSchedule WRITE setNightSchedule NOTIFY nightLightChanged)
     Q_PROPERTY(QString nightFrom READ nightFrom WRITE setNightFrom NOTIFY nightLightChanged) // "21:00"
     Q_PROPERTY(QString nightTo READ nightTo WRITE setNightTo NOTIFY nightLightChanged)
-    // Le ore del sole di oggi (le calcola il compositor), vuote se non si sanno.
+    // Today's sun times (computed by the compositor), empty if unknown.
     Q_PROPERTY(QString sunset READ sunset NOTIFY nightLightChanged)
     Q_PROPERTY(QString sunrise READ sunrise NOTIFY nightLightChanged)
     Q_PROPERTY(bool tearing READ tearing WRITE setTearing NOTIFY accessibilityChanged)
-    // Frequenza di aggiornamento variabile: "no", "games" (app a schermo intero), "always".
+    // Variable refresh rate: "no", "games" (fullscreen apps), "always".
     Q_PROPERTY(QString vrr READ vrr WRITE setVrr NOTIFY accessibilityChanged)
-    // --- Mouse e touchpad (vela.conf) ---
+    // --- Mouse and touchpad (vela.conf) ---
     Q_PROPERTY(int mouseSpeed READ mouseSpeed WRITE setMouseSpeed NOTIFY inputChanged) // 1-20
     Q_PROPERTY(bool mousePrecision READ mousePrecision WRITE setMousePrecision NOTIFY inputChanged)
     Q_PROPERTY(bool mouseLeftHanded READ mouseLeftHanded WRITE setMouseLeftHanded NOTIFY inputChanged)
     Q_PROPERTY(int wheelLines READ wheelLines WRITE setWheelLines NOTIFY inputChanged)
-    Q_PROPERTY(bool hasTouchpad READ hasTouchpad NOTIFY inputChanged) // lo dice il compositor
+    Q_PROPERTY(bool hasTouchpad READ hasTouchpad NOTIFY inputChanged) // the compositor says so
     Q_PROPERTY(bool touchpad READ touchpad WRITE setTouchpad NOTIFY inputChanged)
     Q_PROPERTY(bool touchpadWithMouse READ touchpadWithMouse WRITE setTouchpadWithMouse NOTIFY inputChanged)
     Q_PROPERTY(int touchpadSpeed READ touchpadSpeed WRITE setTouchpadSpeed NOTIFY inputChanged)
     Q_PROPERTY(bool touchpadTap READ touchpadTap WRITE setTouchpadTap NOTIFY inputChanged)
     Q_PROPERTY(bool touchpadNatural READ touchpadNatural WRITE setTouchpadNatural NOTIFY inputChanged)
-    // "app", "desktop" o "no"
+    // "app", "desktop" or "no"
     Q_PROPERTY(QString threeFingers READ threeFingers WRITE setThreeFingers NOTIFY inputChanged)
     Q_PROPERTY(QString fourFingers READ fourFingers WRITE setFourFingers NOTIFY inputChanged)
-    // --- Appunti (vela-shell.conf) ---
+    // --- Clipboard (vela-shell.conf) ---
     Q_PROPERTY(bool clipboardHistory READ clipboardHistory WRITE setClipboardHistory NOTIFY clipboardChanged)
-    // --- Accessibilità ---
+    // --- Accessibility ---
     Q_PROPERTY(bool magnifier READ magnifier WRITE setMagnifier NOTIFY accessibilityChanged)
     Q_PROPERTY(int magnifierStep READ magnifierStep WRITE setMagnifierStep NOTIFY accessibilityChanged)
     Q_PROPERTY(bool colorFilter READ colorFilter WRITE setColorFilter NOTIFY accessibilityChanged)
-    // grigi, deuteranopia, protanopia, tritanopia
+    // grayscale, deuteranopia, protanopia, tritanopia
     Q_PROPERTY(QString colorFilterKind READ colorFilterKind WRITE setColorFilterKind NOTIFY accessibilityChanged)
     Q_PROPERTY(bool colorFilterShortcut READ colorFilterShortcut WRITE setColorFilterShortcut NOTIFY accessibilityChanged)
     Q_PROPERTY(bool stickyKeys READ stickyKeys WRITE setStickyKeys NOTIFY accessibilityChanged)
-    // Il colore Mica della barra del titolo (lo stesso calcolo del
-    // compositor, decoration.c): così il contenuto della finestra continua
-    // la barra senza stacchi.
+    // The Mica color of the title bar (the same computation as the compositor,
+    // decoration.c): so the window content continues the bar seamlessly.
     Q_PROPERTY(QColor mica READ mica NOTIFY wallpaperChanged)
     Q_PROPERTY(QColor micaInactive READ micaInactive NOTIFY wallpaperChanged)
 
@@ -203,13 +201,14 @@ public:
 
     bool clipboardHistory() const { return m_clipboardHistory; }
     void setClipboardHistory(bool on);
-    // "Cancella dati degli Appunti": la cronologia (tranne i fissati), nella shell.
+    // "Clear clipboard data": the history (except pinned items), in the shell.
     Q_INVOKABLE void clearClipboard();
 
     QColor mica() const { return m_mica; }
     QColor micaInactive() const { return m_micaInactive; }
 
-    // Rilegge tutto (la shell o un altro programma possono aver cambiato qualcosa).
+    // Rereads everything (the shell or another program may have changed
+    // something).
     Q_INVOKABLE void reload();
 
 signals:
@@ -229,12 +228,12 @@ signals:
 
 private:
     void setShell(const QString& key, const QVariant& value);
-    // vela.conf: riletto, cambiate solo queste chiavi, poi "reload-config".
+    // vela.conf: reread, only these keys changed, then "reload-config".
     void saveCompositor(const QList<QPair<QString, QString>>& changes);
-    void saveCompositorKeys(const QStringList& keys); // i valori di ora di queste chiavi
+    void saveCompositorKeys(const QStringList& keys); // the current values of these keys
     QString compositorValue(const QString& key) const;
-    void reloadCompositor(); // vela.conf e lo stato del compositor
-    void queryCompositor(); // Luce notturna, lente...: lo stato di adesso
+    void reloadCompositor(); // vela.conf and the compositor's state
+    void queryCompositor(); // night light, magnifier...: the current state
     void watchConfig();
     void saveLayouts();
     void computeMica();
@@ -256,7 +255,7 @@ private:
     QVariantList m_layouts;
     int m_repeatDelay = 400;
     int m_repeatRate = 30;
-    QColor m_tint; // il colore medio dello sfondo
+    QColor m_tint; // the wallpaper's average color
     QColor m_mica;
     QColor m_micaInactive;
     bool m_nightLight = false;
@@ -287,10 +286,10 @@ private:
     QString m_threeFingers = QStringLiteral("app");
     QString m_fourFingers = QStringLiteral("desktop");
     bool m_clipboardHistory = false;
-    QList<QPair<QString, QString>> m_compositor; // vela.conf, nell'ordine del file
+    QList<QPair<QString, QString>> m_compositor; // vela.conf, in file order
     QFileSystemWatcher m_watcher;
     QTimer m_debounce;
 };
 
-// Manda un comando al compositor (vela-<display>.sock).
+// Sends a command to the compositor (vela-<display>.sock).
 void sendToCompositor(const QByteArray& command);

@@ -4,7 +4,7 @@
 import QtQuick
 import QtQuick.Shapes
 
-// Il simbolo di Vela: una piccola vela stilizzata. È il pulsante Start.
+// Vela's symbol: a small stylized sail. It's the Start button.
 Item {
     id: root
     width: 22
@@ -12,11 +12,11 @@ Item {
 
     Shape {
         anchors.fill: parent
-        // Antialiasing morbido anche sui bordi obliqui.
+        // Soft antialiasing on the slanted edges too.
         layer.enabled: true
         layer.samples: 4
 
-        // Vela grande
+        // Big sail
         ShapePath {
             strokeWidth: 0
             strokeColor: "transparent"
@@ -32,7 +32,7 @@ Item {
             PathLine { x: 12; y: 1 }
         }
 
-        // Vela piccola
+        // Small sail
         ShapePath {
             strokeWidth: 0
             strokeColor: "transparent"
@@ -43,7 +43,7 @@ Item {
             PathLine { x: 10; y: 5 }
         }
 
-        // Scafo
+        // Hull
         ShapePath {
             strokeWidth: 0
             strokeColor: "transparent"

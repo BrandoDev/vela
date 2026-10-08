@@ -4,10 +4,10 @@
 import QtQuick
 import QtQuick.Effects
 
-// L'ombra morbida di un pannello, disegnata solo *fuori* dal pannello: i
-// pannelli acrylic sono semitrasparenti e sotto devono mostrare lo sfondo
-// sfocato, non un'ombra. RectangularShadow (analitica, come quella del
-// compositor) ritagliata in quattro strisce attorno al pannello.
+// A panel's soft shadow, drawn only *outside* the panel: acrylic panels are
+// semi-transparent and must show the blurred background below, not a shadow.
+// RectangularShadow (analytic, like the compositor's) clipped into four strips
+// around the panel.
 Item {
     id: root
 

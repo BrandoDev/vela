@@ -7,10 +7,10 @@
 #include <QVariantList>
 #include <QVariantMap>
 
-// Gli schermi, per la pagina Sistema > Schermo: li legge e li cambia con
-// wlr-randr (protocollo wlr-output-management, che Vela implementa e
-// ricorda). Ogni modifica si può annullare: come Windows, la pagina chiede
-// "Mantenere queste impostazioni?" e senza risposta torna indietro.
+// Outputs, for the System > Display page: read and changed with wlr-randr (the
+// wlr-output-management protocol, which Vela implements and remembers). Every
+// change can be undone: like Windows, the page asks "Keep these display
+// settings?" and without an answer goes back.
 class Displays : public QObject {
     Q_OBJECT
     Q_PROPERTY(QVariantList outputs READ outputs NOTIFY outputsChanged)
@@ -25,10 +25,10 @@ public:
     QVariantList outputs() const { return m_outputs; }
 
     Q_INVOKABLE void refresh();
-    // Cambia uno schermo: chiavi facoltative enabled, width/height/refresh,
-    // scale, transform, x/y. Ricorda com'era, per revert().
+    // Changes one output: optional keys enabled, width/height/refresh, scale,
+    // transform, x/y. Remembers how it was, for revert().
     Q_INVOKABLE bool apply(const QString& name, const QVariantMap& changes);
-    // Torna com'era prima dell'ultimo apply().
+    // Goes back to how it was before the last apply().
     Q_INVOKABLE void revert();
 
 signals:
@@ -40,5 +40,5 @@ private:
 
     bool m_available = false;
     QVariantList m_outputs;
-    QVariantList m_before; // prima dell'ultima modifica
+    QVariantList m_before; // before the last change
 };

@@ -62,7 +62,8 @@ QString memory()
 
 QStringList graphics()
 {
-    // lspci: "03:00.0 VGA compatible controller: Advanced Micro Devices, Inc. [AMD/ATI] Navi 48 [Radeon RX 9070...]"
+    // lspci: "03:00.0 VGA compatible controller: Advanced Micro Devices, Inc.
+    // [AMD/ATI] Navi 48 [Radeon RX 9070...]"
     QProcess lspci;
     lspci.start(QStringLiteral("lspci"), QStringList {});
     lspci.waitForFinished(2000);
@@ -73,7 +74,7 @@ QStringList graphics()
             continue;
         }
         QString name = line.section(QStringLiteral(": "), 1).remove(QRegularExpression(QStringLiteral("\\s*\\(rev [0-9a-f]+\\)$")));
-        // Il nome commerciale tra parentesi quadre, quando c'è, dice di più.
+        // The marketing name in square brackets, when present, says more.
         const QRegularExpressionMatch bracket = QRegularExpression(QStringLiteral("\\[([^\\]]+)\\]$")).match(name);
         if (name.startsWith(QLatin1String("Advanced Micro Devices"))) {
             name = QStringLiteral("AMD ") + (bracket.hasMatch() ? bracket.captured(1) : name.section(u']', 1).trimmed());
@@ -137,7 +138,7 @@ About::About(QObject* parent)
     m_system << row(QCoreApplication::translate("About", "Operating system"), os);
     m_system << row(QStringLiteral("Desktop"), QStringLiteral("Vela ") + QStringLiteral(VELA_VERSION));
     m_system << row(QStringLiteral("Kernel"), QStringLiteral("Linux ") + QSysInfo::kernelVersion());
-    // "Data installazione": quando è nata la radice del file system.
+    // "Installed on": when the filesystem root was created.
     struct statx info {};
     if (statx(AT_FDCWD, "/", 0, STATX_BTIME, &info) == 0 && (info.stx_mask & STATX_BTIME)) {
         const QDateTime born = QDateTime::fromSecsSinceEpoch(info.stx_btime.tv_sec);
@@ -162,7 +163,7 @@ void About::rename(const QString& name)
         return;
     }
     QDBusMessage call = QDBusMessage::createMethodCall(hostnamed, hostnamedPath, hostnamed, QStringLiteral("SetStaticHostname"));
-    call << clean << true; // interattivo: polkit chiede la password
+    call << clean << true; // interactive: polkit asks for the password
     call.setInteractiveAuthorizationAllowed(true);
     auto* watcher = new QDBusPendingCallWatcher(QDBusConnection::systemBus().asyncCall(call, 120000), this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, clean](QDBusPendingCallWatcher* w) {

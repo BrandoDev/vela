@@ -5,8 +5,8 @@ import QtQuick
 import QtQuick.Dialogs
 import QtCore
 
-// Personalizzazione > Sfondo: le immagini recenti, "Sfoglia foto" e gli
-// sfondi installati nel sistema.
+// Personalization > Background: recent images, "Browse photos" and the
+// wallpapers installed on the system.
 Page {
     id: page
 

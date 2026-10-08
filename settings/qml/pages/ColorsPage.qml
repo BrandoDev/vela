@@ -3,12 +3,11 @@
 
 import QtQuick
 
-// Personalizzazione > Colori: la modalità (chiara, scura, o personalizzata:
-// una per Vela e una per le app) e il colore principale, con la tavolozza
-// di Windows 11.
+// Personalization > Colors: the mode (light, dark, or custom: one for Vela and
+// one for apps) and the accent color, with the Windows 11 palette.
 Page {
     id: page
-    property bool custom: false // "Personalizzato" scelto anche con le due modalità uguali
+    property bool custom: false // "Custom" chosen even with the two modes equal
     readonly property var accents: [
         "#5b8cff", "#ffb900", "#ff8c00", "#f7630c", "#ca5010", "#da3b01", "#ef6950", "#d13438",
         "#ff4343", "#e74856", "#e81123", "#ea005e", "#c30052", "#e3008c", "#bf0077", "#c239b3",

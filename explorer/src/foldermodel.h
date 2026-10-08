@@ -13,12 +13,11 @@
 #include <atomic>
 #include <memory>
 
-// Il contenuto di una cartella per la vista di Esplora: si legge in un
-// altro thread (una cartella con migliaia di file non ferma la finestra) e
-// arriva a blocchi; poi si ordina, si filtra, si seleziona qui. Con
-// `search` diventa la ricerca nelle sottocartelle (i risultati arrivano man
-// mano). La cartella si osserva: i cambiamenti fatti da altri compaiono da
-// soli.
+// A folder's content for Explorer's view: read in another thread (a folder
+// with thousands of files doesn't stall the window) and delivered in batches;
+// then sorted, filtered and selected here. With `search` it becomes a search
+// through subfolders (results arrive as they're found). The folder is watched:
+// changes made by others show up by themselves.
 class FolderModel : public QAbstractListModel {
     Q_OBJECT
     Q_PROPERTY(QString path READ path WRITE setPath NOTIFY pathChanged)
@@ -27,13 +26,13 @@ class FolderModel : public QAbstractListModel {
     Q_PROPERTY(bool exists READ exists NOTIFY pathChanged)
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(bool showHidden READ showHidden WRITE setShowHidden NOTIFY viewChanged)
-    // 0 nome, 1 data di modifica, 2 tipo, 3 dimensione
+    // 0 name, 1 modification date, 2 type, 3 size
     Q_PROPERTY(int sortColumn READ sortColumn NOTIFY viewChanged)
     Q_PROPERTY(bool sortDescending READ sortDescending NOTIFY viewChanged)
     Q_PROPERTY(int selectionCount READ selectionCount NOTIFY selectionChanged)
     Q_PROPERTY(qint64 selectionSize READ selectionSize NOTIFY selectionChanged)
     Q_PROPERTY(int currentIndex READ currentIndex WRITE setCurrentIndex NOTIFY currentIndexChanged)
-    // Cresce a ogni cambio di selezione: per i binding che devono rileggerla.
+    // Grows on every selection change: for bindings that must read it again.
     Q_PROPERTY(int selectionVersion READ selectionVersion NOTIFY selectionChanged)
 
 public:
@@ -50,10 +49,10 @@ public:
         ModifiedTextRole,
         TypeRole,
         IconRole,
-        ThumbnailRole, // un'immagine o un video: c'è una miniatura
+        ThumbnailRole, // an image or a video: there is a thumbnail
         SelectedRole,
-        LocationRole, // la cartella che lo contiene (risultati della ricerca)
-        CutRole, // tagliato (negli appunti): si mostra sbiadito
+        LocationRole, // the folder containing it (search results)
+        CutRole, // cut (on the clipboard): shown faded
     };
 
     struct Entry {
@@ -93,24 +92,25 @@ public:
     Q_INVOKABLE QString pathAt(int row) const;
     Q_INVOKABLE bool isDirAt(int row) const;
     Q_INVOKABLE int indexOf(const QString& path) const;
-    // La prima voce dopo `from` il cui nome comincia per `prefix` (digitando nella vista).
+    // The first entry after `from` whose name starts with `prefix` (typing in
+    // the view).
     Q_INVOKABLE int find(const QString& prefix, int from) const;
 
-    // --- selezione ---
+    // --- selection ---
     int selectionCount() const { return int(m_selected.size()); }
     qint64 selectionSize() const;
     int currentIndex() const { return m_current; }
     int selectionVersion() const { return m_selectionVersion; }
     void setCurrentIndex(int row);
     Q_INVOKABLE bool isSelected(int row) const;
-    Q_INVOKABLE void select(int row); // solo questa
+    Q_INVOKABLE void select(int row); // only this one
     Q_INVOKABLE void toggle(int row);
     Q_INVOKABLE void selectRange(int from, int to, bool add);
     Q_INVOKABLE void selectRows(const QList<int>& rows, bool add);
     Q_INVOKABLE void selectAll();
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE void invertSelection();
-    Q_INVOKABLE void selectPath(const QString& path); // appena compare (nuovo, incollato)
+    Q_INVOKABLE void selectPath(const QString& path); // as soon as it appears (new, pasted)
     Q_INVOKABLE QStringList selectedPaths() const;
     Q_INVOKABLE QStringList selectedUrls() const;
     Q_INVOKABLE QString urlAt(int row) const;
@@ -123,20 +123,20 @@ signals:
     void viewChanged();
     void selectionChanged();
     void currentIndexChanged();
-    // La voce aspettata (selectPath) è comparsa: la vista ci va e, se
-    // chiesto, la fa rinominare.
+    // The awaited entry (selectPath) appeared: the view goes there and, if
+    // asked, has it renamed.
     void pathAppeared(int row);
 
 private:
     void start(bool refresh);
     void receive(quint64 generation, QList<Entry> entries, bool finished);
-    void merge(QList<Entry> fresh); // aggiornamento: confronta e cambia solo ciò che serve
+    void merge(QList<Entry> fresh); // update: compares and changes only what's needed
     void insertSorted(const Entry& entry);
     void insertBatch(QList<Entry> entries);
     void removeAt(int row);
-    void resort(); // ordine o filtro cambiati: si rifà tutto, tenendo la selezione
+    void resort(); // order or filter changed: everything is redone, keeping the selection
     void checkPending(int row);
-    void readClipboard(); // i file tagliati si vedono sbiaditi
+    void readClipboard(); // cut files are shown faded
     bool lessThan(const Entry& a, const Entry& b) const;
     void emitSelection(const QSet<int>& changed);
 
@@ -148,11 +148,11 @@ private:
     int m_sortColumn = 0;
     bool m_sortDescending = false;
 
-    QList<Entry> m_items; // quelle mostrate, nell'ordine
-    QList<Entry> m_filtered; // quelle nascoste (file che iniziano con il punto)
-    QList<Entry> m_incoming; // un aggiornamento che sta arrivando
+    QList<Entry> m_items; // those shown, in order
+    QList<Entry> m_filtered; // those hidden (files starting with a dot)
+    QList<Entry> m_incoming; // an update on its way
     bool m_refreshing = false;
-    QSet<int> m_selected; // righe
+    QSet<int> m_selected; // rows
     int m_current = -1;
     QSet<QString> m_cut;
     int m_selectionVersion = 0;
@@ -164,5 +164,5 @@ private:
     QTimer m_refresh;
 };
 
-// "1,2 MB", come Windows (unità da 1024, una cifra decimale).
+// "1.2 MB", like Windows (1024 units, one decimal).
 QString formatSize(qint64 bytes);

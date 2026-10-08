@@ -1,14 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// vela-files: Esplora file di Vela, come quello di Windows 11.
+// vela-files: Vela's File Explorer, like Windows 11's.
 //
-//   vela-files [cartella o file...]   (un file: si apre la sua cartella, con il file selezionato)
+//   vela-files [folder or file...]   (a file: its folder opens, with the file selected)
 //
-// Obiettivo: avvio a freddo sotto i 150 ms (README, "Obiettivi
-// misurabili"). Per questo niente Qt Quick Controls, e ciò che non serve al
-// primo fotogramma (le app per "Apri con", i service menu) si prepara dopo.
-// Con VELA_FILES_TIMING=1 stampa quanto ci ha messo.
+// Goal: a cold start under 150 ms (README, "Measurable goals"). That's why
+// there are no Qt Quick Controls, and what the first frame doesn't need (apps
+// for "Open with", service menus) is prepared afterwards. With
+// VELA_FILES_TIMING=1 it prints how long it took.
 
 #include "appearance.h"
 #include "appmodel.h"
@@ -38,7 +38,7 @@
 
 namespace {
 
-// Da quanto è partito il processo (ms), da /proc/self/stat.
+// How long since the process started (ms), from /proc/self/stat.
 double sinceProcessStart()
 {
     QFile stat(QStringLiteral("/proc/self/stat"));
@@ -50,7 +50,7 @@ double sinceProcessStart()
     if (fields.size() < 20) {
         return -1;
     }
-    const double startTicks = fields.at(19).toDouble(); // campo 22 di stat
+    const double startTicks = fields.at(19).toDouble(); // field 22 of stat
     timespec now {};
     clock_gettime(CLOCK_BOOTTIME, &now);
     const double ticks = double(sysconf(_SC_CLK_TCK));
@@ -65,9 +65,9 @@ int main(int argc, char* argv[])
     sinceMain.start();
     const bool timing = qEnvironmentVariableIntValue("VELA_FILES_TIMING") > 0;
 
-    // Testo con FreeType e l'hinting dei font, come Plasma e come Windows:
-    // più netto del testo predefinito di Qt Quick (campi di distanza, senza
-    // hinting), ai pixel veri dello schermo anche a scala frazionaria.
+    // Text with FreeType and font hinting, like Plasma and Windows: crisper
+    // than Qt Quick's default text (distance fields, no hinting), on the
+    // output's real pixels even at fractional scales.
     if (qEnvironmentVariableIsEmpty("QT_QUICK_DEFAULT_TEXT_RENDER_TYPE")) {
         QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering);
     }
@@ -86,11 +86,11 @@ int main(int argc, char* argv[])
     QGuiApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("system-file-manager")));
 
     QIcon::setFallbackThemeName(QStringLiteral("hicolor"));
-    // La modalità delle app, l'accento e Mica dalla shell; le icone del
-    // tema adatto (breeze o breeze-dark).
+    // The apps' mode, the accent and Mica from the shell; icons from the
+    // matching theme (breeze or breeze-dark).
     Appearance appearance;
 
-    // Dove aprirsi: la cartella data, o la cartella del file dato (selezionato).
+    // Where to open: the given folder, or the given file's folder (selected).
     QString start = QStringLiteral("home:");
     QString select;
     const QStringList args = app.arguments().mid(1);
@@ -144,7 +144,7 @@ int main(int argc, char* argv[])
                 std::fprintf(stderr, "vela-files: first frame %.0f ms after main, %.0f ms after process start\n",
                     double(sinceMain.nsecsElapsed()) / 1e6, sinceProcessStart());
             }
-            // Ciò che non serve al primo fotogramma.
+            // What the first frame doesn't need.
             QTimer::singleShot(0, &app, [&apps, &appearance] {
                 apps.reload();
                 appearance.watch();

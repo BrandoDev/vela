@@ -3,8 +3,8 @@
 
 import QtQuick
 
-// La finestra di dialogo di Windows 11 (ContentDialog): sopra la pagina,
-// che si scurisce; titolo, contenuto, e i pulsanti in una fascia in fondo.
+// The Windows 11 dialog (ContentDialog): above the page, which darkens; title,
+// content, and the buttons in a band at the bottom.
 Item {
     id: dialog
     property string title
@@ -37,7 +37,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: Theme.smoke
-        MouseArea { anchors.fill: parent; hoverEnabled: true; onWheel: {} } // la pagina sotto non si tocca
+        MouseArea { anchors.fill: parent; hoverEnabled: true; onWheel: {} } // the page below can't be touched
     }
 
     Rectangle {

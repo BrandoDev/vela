@@ -52,11 +52,11 @@ SystemStatus::SystemStatus(QObject* parent)
     connect(this, &SystemStatus::networkChanged, this, &SystemStatus::airplaneChanged);
     connect(this, &SystemStatus::bluetoothChanged, this, &SystemStatus::airplaneChanged);
 
-    // --- Volume: wpctl per leggere e scrivere, pactl subscribe per sapere quando.
+    // --- Volume: wpctl to read and write, pactl subscribe to know when.
     m_volumeAvailable = !QStandardPaths::findExecutable(QStringLiteral("wpctl")).isEmpty();
     if (m_volumeAvailable) {
         m_volumeTimer.setSingleShot(true);
-        m_volumeTimer.setInterval(50); // gli eventi arrivano a raffiche
+        m_volumeTimer.setInterval(50); // events come in bursts
         connect(&m_volumeTimer, &QTimer::timeout, this, &SystemStatus::refreshVolume);
         if (!QStandardPaths::findExecutable(QStringLiteral("pactl")).isEmpty()) {
             connect(&m_subscribe, &QProcess::readyReadStandardOutput, this, [this] {
@@ -65,33 +65,33 @@ SystemStatus::SystemStatus(QObject* parent)
                     m_volumeTimer.start();
                 }
             });
-            // Se usciamo di colpo (crash), pactl non deve restare orfano.
+            // If we exit abruptly (crash), pactl must not be left orphaned.
             m_subscribe.setChildProcessModifier([] { prctl(PR_SET_PDEATHSIG, SIGTERM); });
             m_subscribe.start(QStringLiteral("pactl"), { QStringLiteral("subscribe") });
         }
         refreshVolume();
     }
 
-    // --- Rete: NetworkManager.
+    // --- Network: NetworkManager.
     system.connect(nm, nmPath, propertiesInterface, QStringLiteral("PropertiesChanged"), this,
         SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
     refreshNetwork();
 
-    // --- Bluetooth: il primo adattatore di BlueZ.
+    // --- Bluetooth: BlueZ's first adapter.
     qDBusRegisterMetaType<ManagedObjects>();
     refreshBluetooth();
 
-    // --- Batteria: il dispositivo "di sintesi" di UPower.
+    // --- Battery: UPower's "display" device.
     system.connect(QStringLiteral("org.freedesktop.UPower"), QStringLiteral("/org/freedesktop/UPower/devices/DisplayDevice"),
         propertiesInterface, QStringLiteral("PropertiesChanged"), this, SLOT(refreshBattery()));
     refreshBattery();
 
-    // --- Profili energetici.
+    // --- Power profiles.
     system.connect(QStringLiteral("org.freedesktop.UPower.PowerProfiles"), QStringLiteral("/org/freedesktop/UPower/PowerProfiles"),
         propertiesInterface, QStringLiteral("PropertiesChanged"), this, SLOT(refreshPowerProfile()));
     refreshPowerProfile();
 
-    // --- Luminosità: la prima retroilluminazione (portatili).
+    // --- Brightness: the first backlight (laptops).
     const QStringList backlights = QDir(QStringLiteral("/sys/class/backlight")).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
     if (!backlights.isEmpty()) {
         m_backlight = backlights.first();
@@ -116,7 +116,7 @@ void SystemStatus::refreshVolume()
     if (!process.waitForFinished(500)) {
         return;
     }
-    // "Volume: 0.80" oppure "Volume: 0.80 [MUTED]"
+    // "Volume: 0.80" or "Volume: 0.80 [MUTED]"
     const QString out = QString::fromUtf8(process.readAllStandardOutput());
     static const QRegularExpression pattern(QStringLiteral("Volume:\\s*([0-9.]+)"));
     const QRegularExpressionMatch match = pattern.match(out);
@@ -137,7 +137,7 @@ void SystemStatus::setVolume(double value)
     value = std::clamp(value, 0.0, 1.0);
     QProcess::startDetached(QStringLiteral("wpctl"),
         { QStringLiteral("set-volume"), QStringLiteral("@DEFAULT_AUDIO_SINK@"), QString::number(value, 'f', 2) });
-    m_volume = value; // subito, senza aspettare l'evento (il cursore non salta)
+    m_volume = value; // at once, without waiting for the event (the slider doesn't jump)
     emit volumeChanged();
 }
 
@@ -159,7 +159,7 @@ QString SystemStatus::volumeIcon() const
                            : QStringLiteral("audio-volume-high");
 }
 
-// ------------------------------------------------------------------- rete --
+// ---------------------------------------------------------------- network --
 
 void SystemStatus::onPropertiesChanged(const QString& interface, const QVariantMap&, const QStringList&)
 {
@@ -172,7 +172,7 @@ void SystemStatus::refreshNetwork()
 {
     QDBusConnection system = QDBusConnection::systemBus();
     const uint state = dbusGet(system, nm, nmPath, nm, QStringLiteral("State")).toUInt();
-    m_networkConnected = state >= 60; // NM_STATE_CONNECTED_SITE e oltre
+    m_networkConnected = state >= 60; // NM_STATE_CONNECTED_SITE and above
     m_wifiEnabled = dbusGet(system, nm, nmPath, nm, QStringLiteral("WirelessEnabled")).toBool();
     m_wifiAvailable = dbusGet(system, nm, nmPath, nm, QStringLiteral("WirelessHardwareEnabled")).toBool();
     m_networkName.clear();
@@ -241,7 +241,7 @@ void SystemStatus::refreshBluetooth()
 
 void SystemStatus::setBluetoothEnabled(bool on)
 {
-    vela::bluetooth::setPowered(m_adapter, on); // anche se bloccato da rfkill
+    vela::bluetooth::setPowered(m_adapter, on); // even if blocked by rfkill
 }
 
 bool SystemStatus::airplaneMode() const
@@ -258,7 +258,7 @@ void SystemStatus::setAirplaneMode(bool on)
     setBluetoothEnabled(!on);
 }
 
-// ---------------------------------------------------------------- batteria --
+// ----------------------------------------------------------------- battery --
 
 void SystemStatus::refreshBattery()
 {
@@ -266,16 +266,16 @@ void SystemStatus::refreshBattery()
     const QString service = QStringLiteral("org.freedesktop.UPower");
     const QString path = QStringLiteral("/org/freedesktop/UPower/devices/DisplayDevice");
     const QString device = QStringLiteral("org.freedesktop.UPower.Device");
-    // Type 2: batteria (il DisplayDevice di un fisso dice "presente" no).
+    // Type 2: battery (a desktop's DisplayDevice says "not present").
     m_batteryPresent = dbusGet(system, service, path, device, QStringLiteral("IsPresent")).toBool()
         && dbusGet(system, service, path, device, QStringLiteral("Type")).toUInt() == 2;
     m_batteryPercent = int(std::lround(dbusGet(system, service, path, device, QStringLiteral("Percentage")).toDouble()));
     const uint state = dbusGet(system, service, path, device, QStringLiteral("State")).toUInt();
-    m_batteryCharging = state == 1 || state == 4; // in carica, carica
+    m_batteryCharging = state == 1 || state == 4; // charging, charged
     emit batteryChanged();
 }
 
-// ------------------------------------------------------ profili energetici --
+// ---------------------------------------------------------- power profiles --
 
 void SystemStatus::refreshPowerProfile()
 {
@@ -284,7 +284,7 @@ void SystemStatus::refreshPowerProfile()
         QStringLiteral("ActiveProfile"));
     m_powerProfilesAvailable = profile.isValid();
     m_powerProfile = profile.toString();
-    // I profili offerti: aa{sv}, ognuno con la chiave "Profile".
+    // The offered profiles: aa{sv}, each with the "Profile" key.
     m_powerProfiles.clear();
     if (m_powerProfilesAvailable) {
         const QVariant profiles = dbusGet(QDBusConnection::systemBus(), QStringLiteral("org.freedesktop.UPower.PowerProfiles"),
@@ -316,7 +316,7 @@ void SystemStatus::setPowerProfile(const QString& profile)
         QStringLiteral("ActiveProfile"), profile);
 }
 
-// -------------------------------------------------------------- luminosità --
+// -------------------------------------------------------------- brightness --
 
 void SystemStatus::readBacklight()
 {
@@ -335,8 +335,8 @@ void SystemStatus::setBrightness(double value)
     if (m_backlight.isEmpty() || m_maxBrightness <= 0) {
         return;
     }
-    value = std::clamp(value, 0.01, 1.0); // mai del tutto spento
-    // logind lascia cambiare la retroilluminazione alla sessione, senza root.
+    value = std::clamp(value, 0.01, 1.0); // never entirely off
+    // logind lets the session change the backlight, without root.
     QDBusInterface session(QStringLiteral("org.freedesktop.login1"), QStringLiteral("/org/freedesktop/login1/session/auto"),
         QStringLiteral("org.freedesktop.login1.Session"), QDBusConnection::systemBus());
     session.asyncCall(QStringLiteral("SetBrightness"), QStringLiteral("backlight"), m_backlight,

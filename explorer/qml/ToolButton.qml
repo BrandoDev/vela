@@ -3,15 +3,14 @@
 
 import QtQuick
 
-// Un pulsante della barra dei comandi o della barra degli indirizzi, come
-// Windows 11: senza fondo finché non ci si passa sopra; icona, testo
-// facoltativo, freccia se apre un menu.
+// A command bar or address bar button, like Windows 11: no background until
+// hovered; icon, optional text, an arrow if it opens a menu.
 Rectangle {
     id: button
     property string icon
     property string text
     property bool usable: true
-    property bool menu: false // con la freccetta: apre un menu
+    property bool menu: false // with the little arrow: opens a menu
     property bool checked: false
     property string tooltip
     signal clicked()
@@ -68,7 +67,8 @@ Rectangle {
         }
     }
 
-    // Il suggerimento, come Windows: dopo un attimo fermo sopra, sotto il pulsante.
+    // The tooltip, like Windows: after resting on it a moment, below the
+    // button.
     Timer {
         id: tipTimer
         interval: 600

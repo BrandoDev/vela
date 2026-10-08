@@ -3,9 +3,8 @@
 
 import QtQuick
 
-// La barra di scorrimento sottile di Windows 11 per una Flickable non
-// trascinabile (le viste dei file: il trascinamento serve a selezionare):
-// si allarga al passaggio del mouse; la rotellina scorre la vista.
+// The thin Windows 11 scroll bar for a non-draggable Flickable (file views:
+// dragging is for selecting): it widens on hover; the wheel scrolls the view.
 Item {
     id: bar
     property Flickable flickable

@@ -3,9 +3,9 @@
 
 import QtQuick
 
-// La vista Dettagli di Windows 11: Nome, Data ultima modifica, Tipo,
-// Dimensione (e Percorso nei risultati della ricerca); un clic
-// sull'intestazione ordina, il bordo tra due colonne si trascina.
+// The Windows 11 Details view: Name, Date modified, Type, Size (and Location
+// in search results); a click on the header sorts, the border between two
+// columns can be dragged.
 Item {
     id: view
     property var tab
@@ -13,7 +13,7 @@ Item {
     readonly property int rowHeight: 32
     readonly property bool searching: model.search !== ""
 
-    // Le colonne: larghezze modificabili.
+    // The columns: resizable widths.
     property real nameWidth: Math.max(220, width * 0.38)
     property real dateWidth: 160
     property real typeWidth: 170
@@ -42,7 +42,7 @@ Item {
         else pathWidth = w
     }
 
-    // --- per la tastiera e la selezione a rettangolo (TabPage) ---
+    // --- for the keyboard and rubber-band selection (TabPage) ---
     function step(key, page) {
         const c = model.currentIndex
         const visible = Math.max(1, Math.floor(list.height / rowHeight) - 1)
@@ -58,7 +58,7 @@ Item {
         return Qt.rect(p.x, p.y, list.width, rowHeight)
     }
 
-    // L'intestazione.
+    // The header.
     Item {
         id: header
         width: parent.width
@@ -102,7 +102,7 @@ Item {
                     onClicked: view.model.sortBy(column.modelData.key,
                         view.model.sortColumn === column.modelData.key ? !view.model.sortDescending : false)
                 }
-                // Il bordo destro: si trascina per allargare.
+                // The right border: drag to widen.
                 Rectangle {
                     anchors { right: parent.right; top: parent.top; bottom: parent.bottom; topMargin: 8; bottomMargin: 8 }
                     width: 1
@@ -133,9 +133,9 @@ Item {
         highlightFollowsCurrentItem: false
         rightMargin: 8
         bottomMargin: 24
-        interactive: false // trascinando si seleziona; si scorre con la rotellina e la barra
+        interactive: false // dragging selects; scrolling is by wheel and scroll bar
 
-        // Lo spazio vuoto: clic, tasto destro, rettangolo di selezione, file lasciati.
+        // The empty space: click, right button, rubber band, dropped files.
         MouseArea {
             id: background
             parent: list
@@ -264,7 +264,8 @@ Item {
                 }
             }
 
-            // Trascinare verso altre app (o un'altra cartella): i file selezionati.
+            // Dragging toward other apps (or another folder): the selected
+            // files.
             Item {
                 id: proxy
                 Drag.active: rowMouse.drag.active
@@ -294,7 +295,7 @@ Item {
                     }
                 }
             }
-            // Le cartelle accolgono file trascinati.
+            // Folders accept dragged files.
             DropArea {
                 id: rowDrop
                 anchors.fill: parent
@@ -343,14 +344,14 @@ Item {
         }
     }
 
-    // Con Ctrl: la selezione di prima più quella del rettangolo.
+    // With Ctrl: the previous selection plus the rubber band's.
     function base(rows, extra) {
         const all = rows.slice()
         for (const r of extra) if (all.indexOf(r) < 0 && r >= 0) all.push(r)
         return all
     }
 
-    // File lasciati nello spazio della cartella.
+    // Files dropped in the folder's space.
     DropArea {
         anchors.fill: list
         z: -2

@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// vela-shell: taskbar e menu Start di Vela.
+// vela-shell: Vela's taskbar and Start menu.
 //
-// Ogni pezzo della shell è una finestra "layer-shell": il compositor sa che
-// è parte del desktop (non un'app), la tiene sopra o sotto le finestre e le
-// riserva spazio sullo schermo.
+// Every shell piece is a "layer-shell" window: the compositor knows it's part
+// of the desktop (not an app), keeps it above or below the windows and
+// reserves space for it on the output.
 
 #include "accessibility.h"
 #include "appmodel.h"
@@ -66,32 +66,32 @@ QQuickWindow* findWindow(QQmlApplicationEngine& engine, const char* objectName)
 void setupTaskbar(QQuickWindow* window, QScreen* screen)
 {
     LayerWindow* layer = LayerWindow::get(window);
-    layer->setScreen(screen); // una per schermo (ScreenWindows)
+    layer->setScreen(screen); // one per output (ScreenWindows)
     layer->setScope(QStringLiteral("vela-taskbar"));
     layer->setLayer(LayerWindow::LayerTop);
     layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorBottom) | LayerWindow::AnchorLeft
         | LayerWindow::AnchorRight);
-    layer->setExclusiveZone(window->height()); // le finestre massimizzate non la coprono
+    layer->setExclusiveZone(window->height()); // maximized windows don't cover it
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityNone);
 }
 
 void setupWallpaper(QQuickWindow* window, QScreen* screen)
 {
     LayerWindow* layer = LayerWindow::get(window);
-    layer->setScreen(screen); // proprio questo schermo, non quello che sceglierebbe il compositor
+    layer->setScreen(screen); // this very output, not the one the compositor would choose
     layer->setScope(QStringLiteral("vela-wallpaper"));
     layer->setLayer(LayerWindow::LayerBackground);
     layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorTop) | LayerWindow::AnchorBottom
         | LayerWindow::AnchorLeft | LayerWindow::AnchorRight);
-    layer->setExclusiveZone(-1); // tutto lo schermo, anche sotto la taskbar
-    // Le icone del desktop prendono la tastiera quando le clicchi (F2, Canc, Ctrl+C...).
+    layer->setExclusiveZone(-1); // the whole output, also below the taskbar
+    // Desktop icons take the keyboard when clicked (F2, Del, Ctrl+C...).
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
 }
 
 void setupSwitcher(QQuickWindow* window)
 {
-    // A tutto schermo e trasparente: il pannello sta al centro. Non prende
-    // la tastiera, che resta al compositor (è lui a gestire Alt+Tab).
+    // Fullscreen and transparent: the panel sits in the center. It doesn't
+    // take the keyboard, which stays with the compositor (it handles Alt+Tab).
     LayerWindow* layer = LayerWindow::get(window);
     layer->setScope(QStringLiteral("vela-switcher"));
     layer->setLayer(LayerWindow::LayerOverlay);
@@ -106,15 +106,15 @@ void setupStartMenu(QQuickWindow* window)
     LayerWindow* layer = LayerWindow::get(window);
     layer->setScope(QStringLiteral("vela-start-menu"));
     layer->setLayer(LayerWindow::LayerTop);
-    // Ancorato solo in basso: il compositor lo centra orizzontalmente e lo
-    // mette sopra la taskbar (che ha riservato il suo spazio). Niente
-    // margine: la finestra tocca la taskbar, così il pannello che sale viene
-    // tagliato lì e sembra uscire da dietro la taskbar, come su Windows 11.
+    // Anchored only at the bottom: the compositor centers it horizontally and
+    // puts it above the taskbar (which reserved its space). No margin: the
+    // window touches the taskbar, so the rising panel is cut there and seems
+    // to come out from behind the taskbar, like on Windows 11.
     layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorBottom));
     layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityOnDemand);
 }
 
-// Con la taskbar allineata a sinistra la Start si apre in basso a sinistra.
+// With the taskbar aligned left, Start opens at the bottom left.
 void placeStartMenu(QQuickWindow* window, const QString& alignment)
 {
     LayerWindow* layer = LayerWindow::get(window);
@@ -126,8 +126,8 @@ void placeStartMenu(QQuickWindow* window, const QString& alignment)
 
 void setupNotifications(QQuickWindow* window)
 {
-    // In basso a destra, sopra la taskbar (che ha riservato il suo spazio)
-    // e sopra le finestre. Non prende la tastiera.
+    // At the bottom right, above the taskbar (which reserved its space) and
+    // above the windows. It doesn't take the keyboard.
     LayerWindow* layer = LayerWindow::get(window);
     layer->setScope(QStringLiteral("vela-notifications"));
     layer->setLayer(LayerWindow::LayerOverlay);
@@ -137,9 +137,9 @@ void setupNotifications(QQuickWindow* window)
 
 void setupContextMenu(QQuickWindow* window)
 {
-    // I menu del tasto destro: tutto lo schermo, trasparente, sopra a tutto.
-    // I menu stanno dentro, e un clic fuori li chiude. Prende la tastiera
-    // (frecce, Invio, Esc) e la perde cliccando altrove.
+    // Right-click menus: the whole output, transparent, above everything. The
+    // menus sit inside, and a click outside closes them. It takes the keyboard
+    // (arrows, Enter, Esc) and loses it when clicking elsewhere.
     LayerWindow* layer = LayerWindow::get(window);
     layer->setScope(QStringLiteral("vela-context-menu"));
     layer->setLayer(LayerWindow::LayerOverlay);
@@ -151,7 +151,7 @@ void setupContextMenu(QQuickWindow* window)
 
 void setupRunDialog(QQuickWindow* window)
 {
-    // "Esegui", in basso a sinistra sopra la taskbar, come in Windows.
+    // "Run", at the bottom left above the taskbar, like in Windows.
     LayerWindow* layer = LayerWindow::get(window);
     layer->setScope(QStringLiteral("vela-run"));
     layer->setLayer(LayerWindow::LayerTop);
@@ -162,7 +162,8 @@ void setupRunDialog(QQuickWindow* window)
 
 void setupConfirmDialog(QQuickWindow* window)
 {
-    // Le domande (es. "Svuota Cestino"): al centro dello schermo, sopra le finestre.
+    // Questions (such as "Empty Recycle Bin"): in the center of the output,
+    // above the windows.
     LayerWindow* layer = LayerWindow::get(window);
     layer->setScope(QStringLiteral("vela-confirm"));
     layer->setLayer(LayerWindow::LayerOverlay);
@@ -172,7 +173,7 @@ void setupConfirmDialog(QQuickWindow* window)
 
 void setupSourceChooser(QQuickWindow* window)
 {
-    // Cosa condividere: al centro dello schermo principale, sopra a tutto.
+    // What to share: in the center of the main output, above everything.
     LayerWindow* layer = LayerWindow::get(window);
     layer->setScope(QStringLiteral("vela-share"));
     layer->setLayer(LayerWindow::LayerOverlay);
@@ -182,7 +183,8 @@ void setupSourceChooser(QQuickWindow* window)
 
 void setupPropertiesDialog(QQuickWindow* window)
 {
-    // Proprietà: al centro dello schermo, sopra le finestre come una finestra di dialogo.
+    // Properties: in the center of the output, above the windows like a
+    // dialog.
     LayerWindow* layer = LayerWindow::get(window);
     layer->setScope(QStringLiteral("vela-properties"));
     layer->setLayer(LayerWindow::LayerTop);
@@ -192,8 +194,8 @@ void setupPropertiesDialog(QQuickWindow* window)
 
 void setupTaskView(QQuickWindow* window)
 {
-    // Visualizzazione attività: tutto lo spazio sopra la taskbar (che resta
-    // visibile e cliccabile, come in Windows), con la tastiera.
+    // Task View: all the space above the taskbar (which stays visible and
+    // clickable, like in Windows), with the keyboard.
     LayerWindow* layer = LayerWindow::get(window);
     layer->setScope(QStringLiteral("vela-task-view"));
     layer->setLayer(LayerWindow::LayerTop);
@@ -205,8 +207,8 @@ void setupTaskView(QQuickWindow* window)
 
 void setupDesktopOsd(QQuickWindow* window)
 {
-    // Il nome del desktop al centro dello schermo: senza ancore il
-    // compositor lo centra. Non prende né tastiera né clic.
+    // The desktop name in the center of the output: without anchors the
+    // compositor centers it. It takes neither keyboard nor clicks.
     LayerWindow* layer = LayerWindow::get(window);
     layer->setScope(QStringLiteral("vela-desktop-osd"));
     layer->setLayer(LayerWindow::LayerOverlay);
@@ -218,9 +220,9 @@ void setupDesktopOsd(QQuickWindow* window)
 
 void setupTaskbarPreview(QQuickWindow* window)
 {
-    // Le anteprime dei pulsanti: in basso, appena sopra la taskbar (che ha
-    // riservato il suo spazio); la distanza dal bordo sinistro la decide il
-    // pulsante (ShellController::placeAtLeft). Senza tastiera.
+    // Button previews: at the bottom, just above the taskbar (which reserved
+    // its space); the distance from the left edge is decided by the button
+    // (ShellController::placeAtLeft). No keyboard.
     LayerWindow* layer = LayerWindow::get(window);
     layer->setScope(QStringLiteral("vela-taskbar-preview"));
     layer->setLayer(LayerWindow::LayerTop);
@@ -230,8 +232,8 @@ void setupTaskbarPreview(QQuickWindow* window)
 
 void setupSnapLayouts(QQuickWindow* window)
 {
-    // I layout di snap: tutto lo schermo, trasparente, sopra a tutto (un
-    // clic fuori dal pannello lo chiude), con la tastiera per Win+Z.
+    // Snap layouts: the whole output, transparent, above everything (a click
+    // outside the panel closes it), with the keyboard for Win+Z.
     LayerWindow* layer = LayerWindow::get(window);
     layer->setScope(QStringLiteral("vela-snap-layouts"));
     layer->setLayer(LayerWindow::LayerOverlay);
@@ -243,8 +245,8 @@ void setupSnapLayouts(QQuickWindow* window)
 
 void setupSnapAssist(QQuickWindow* window)
 {
-    // Snap Assist: l'area utile dello schermo (la taskbar resta fuori), così
-    // gli spazi in dodicesimi coincidono con quelli delle finestre.
+    // Snap Assist: the output's usable area (the taskbar stays out), so the
+    // spaces in twelfths match the windows'.
     LayerWindow* layer = LayerWindow::get(window);
     layer->setScope(QStringLiteral("vela-snap-assist"));
     layer->setLayer(LayerWindow::LayerTop);
@@ -256,8 +258,8 @@ void setupSnapAssist(QQuickWindow* window)
 
 void setupSidePanel(QQuickWindow* window, const QString& scope)
 {
-    // Impostazioni rapide e centro notifiche: in basso a destra, sopra la
-    // taskbar (che ha riservato il suo spazio), sopra le finestre.
+    // Quick settings and notification center: at the bottom right, above the
+    // taskbar (which reserved its space), above the windows.
     LayerWindow* layer = LayerWindow::get(window);
     layer->setScope(scope);
     layer->setLayer(LayerWindow::LayerTop);
@@ -269,9 +271,9 @@ void setupSidePanel(QQuickWindow* window, const QString& scope)
 
 int main(int argc, char* argv[])
 {
-    // "vela-shell --choose-source": il selettore che xdg-desktop-portal-wlr
-    // lancia quando un'app vuole condividere lo schermo. Chiede alla shell
-    // già aperta, che mostra la scelta, e stampa la risposta per il portale.
+    // "vela-shell --choose-source": the chooser xdg-desktop-portal-wlr
+    // launches when an app wants to share the screen. It asks the already open
+    // shell, which shows the choice, and prints the answer for the portal.
     if (argc > 1 && QByteArray(argv[1]) == "--choose-source") {
         QCoreApplication app(argc, argv);
         const QByteArray answer = ShellController::askRunningInstance("choose-source");
@@ -281,9 +283,9 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    // Testo con FreeType e l'hinting dei font, come Plasma e come Windows:
-    // più netto del testo predefinito di Qt Quick (campi di distanza, senza
-    // hinting), ai pixel veri dello schermo anche a scala frazionaria.
+    // Text with FreeType and font hinting, like Plasma and Windows: crisper
+    // than Qt Quick's default text (distance fields, no hinting), on the
+    // output's real pixels even at fractional scales.
     if (qEnvironmentVariableIsEmpty("QT_QUICK_DEFAULT_TEXT_RENDER_TYPE")) {
         QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering);
     }
@@ -291,23 +293,23 @@ int main(int argc, char* argv[])
     QGuiApplication::setApplicationName(QStringLiteral("vela-shell"));
     QGuiApplication::setOrganizationName(QStringLiteral("Vela"));
     QGuiApplication::setQuitOnLastWindowClosed(false);
-    // Prima di tutto il resto: anche i modelli in C++ nascono già tradotti.
+    // Before anything else: the C++ models are born already translated too.
     QQmlApplicationEngine* qmlEngine = nullptr;
     AppModel* appModel = nullptr;
     DesktopModel* desktopModel = nullptr;
     vela::language::install(QStringLiteral("vela-shell"), [&qmlEngine, &appModel, &desktopModel] {
         if (appModel) {
-            appModel->reload(); // i nomi delle app nella lingua nuova (Name[en], Name[it])
+            appModel->reload(); // app names in the new language (Name[en], Name[it])
         }
         if (desktopModel) {
-            desktopModel->refresh(); // il Cestino
+            desktopModel->refresh(); // the Recycle Bin
         }
         if (qmlEngine) {
             qmlEngine->retranslate();
         }
     });
 
-    // "vela-shell --toggle-start": comodo per scorciatoie e script.
+    // "vela-shell --toggle-start": handy for shortcuts and scripts.
     const QStringList args = QGuiApplication::arguments();
     if (args.contains(QStringLiteral("--toggle-start"))) {
         return ShellController::sendToRunningInstance("toggle-start") ? 0 : 1;
@@ -326,8 +328,8 @@ int main(int argc, char* argv[])
     QIcon::setFallbackThemeName(QStringLiteral("hicolor"));
 
     Config config;
-    // Le icone del tema adatto alla modalità della shell (breeze o
-    // breeze-dark); fuori da Plasma Qt potrebbe non conoscere quello scelto.
+    // Icons from the theme matching the shell's mode (breeze or breeze-dark);
+    // outside Plasma Qt might not know the chosen one.
     applyIconTheme(config.shellTheme() == QLatin1String("light"));
     config.setIconMode(config.shellTheme() == QLatin1String("light") ? QStringLiteral("l/") : QStringLiteral("d/"));
 
@@ -346,8 +348,8 @@ int main(int argc, char* argv[])
     shell.listen();
     shell.sendWallpaperTint(config.wallpaper());
     QObject::connect(&config, &Config::wallpaperChanged, &shell, [&] { shell.sendWallpaperTint(config.wallpaper()); });
-    // La modalità al compositor (tinta acrylic, barre del titolo). Le icone
-    // cambiano prima che il QML le richieda (questa connessione viene prima).
+    // The mode to the compositor (acrylic tint, title bars). Icons change
+    // before QML asks for them (this connection comes first).
     auto sendTheme = [&config] {
         ShellController::sendToCompositor("theme " + config.shellTheme().toLatin1() + ' ' + config.appTheme().toLatin1());
     };
@@ -356,8 +358,8 @@ int main(int argc, char* argv[])
         const bool light = config.shellTheme() == QLatin1String("light");
         applyIconTheme(light);
         sendTheme();
-        // Le icone si richiedono quando le cache (anche quella di KIconLoader,
-        // che riceve il segnale D-Bus) sono vuote.
+        // Icons are asked for once the caches (KIconLoader's too, which gets
+        // the D-Bus signal) are empty.
         QTimer::singleShot(300, &config, [&config, light] {
             config.setIconMode(light ? QStringLiteral("l/") : QStringLiteral("d/"));
         });
@@ -384,7 +386,7 @@ int main(int argc, char* argv[])
     FileActions fileActions;
     Clipboard clipboard;
     QObject::connect(&shell, &ShellController::clipboardClearRequested, &clipboard, &Clipboard::clear);
-    // La cronologia accesa o spenta dalle Impostazioni (vela-shell.conf).
+    // History turned on or off from Settings (vela-shell.conf).
     QObject::connect(&config, &Config::clipboardChanged, &clipboard,
         [&config, &clipboard] { clipboard.setEnabled(config.clipboardHistory()); });
     BackgroundEffects effects;
@@ -424,8 +426,8 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("Access"), &accessibility);
     engine.rootContext()->setContextProperty(QStringLiteral("Network"), &network);
 
-    // Le finestre QML partono invisibili: le trasformiamo in superfici
-    // layer-shell PRIMA che vengano mostrate.
+    // QML windows start invisible: we turn them into layer-shell surfaces
+    // BEFORE they're shown.
     engine.loadFromModule("Vela.Shell", "StartMenu");
     engine.loadFromModule("Vela.Shell", "Switcher");
     engine.loadFromModule("Vela.Shell", "NotificationPopups");
@@ -487,10 +489,10 @@ int main(int argc, char* argv[])
     setupSnapLayouts(snapLayouts);
     setupSnapAssist(snapAssist);
     setupTaskbarPreview(taskbarPreview);
-    setupPropertiesDialog(fileDialogs); // come Proprietà: al centro, sopra le finestre
+    setupPropertiesDialog(fileDialogs); // like Properties: in the center, above the windows
     LayerWindow::get(fileDialogs)->setScope(QStringLiteral("vela-file-dialogs"));
-    // Gli sfondi su ogni schermo; la taskbar anche, come in Windows (o
-    // solo sul principale, se l'utente la vuole così).
+    // Wallpapers on every output; the taskbar too, like in Windows (or only on
+    // the main one, if the user wants that).
     ScreenWindows wallpapers(&engine, "Wallpaper", setupWallpaper);
     ScreenWindows taskbars(&engine, "Taskbar", setupTaskbar);
     taskbars.setPrimaryOnly(!config.taskbarAllScreens());

@@ -3,8 +3,8 @@
 
 import QtQuick
 
-// La Home di Esplora, come Windows 11: le cartelle di Accesso rapido in
-// riquadri, poi i file Preferiti e quelli usati di recente.
+// Explorer's Home, like Windows 11: the Quick access folders as tiles, then
+// Favorite files and recently used ones.
 Flickable {
     id: page
     property var tab
@@ -18,7 +18,7 @@ Flickable {
         function onFavoritesChanged() { page.favorites = Places.favorites }
     }
 
-    // Una riga di file (Preferiti e Recenti): nome, data, cartella.
+    // A file row (Favorites and Recent): name, date, folder.
     component FileRow: Rectangle {
         id: row
         required property var modelData

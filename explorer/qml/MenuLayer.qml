@@ -3,10 +3,10 @@
 
 import QtQuick
 
-// I menu del tasto destro dentro la finestra di Esplora, con lo stesso
-// pannello del desktop (MenuPanel.qml, docs/renderer.md §14): copre la
-// finestra, i menu e i sottomenu sono pannelli al suo interno, e un clic
-// fuori li chiude. open(voci, x, y) con x e y nella finestra.
+// The right-click menus inside Explorer's window, with the same panel as the
+// desktop (MenuPanel.qml, docs/renderer.md §14): it covers the window, menus
+// and submenus are panels inside it, and a click outside closes them.
+// open(items, x, y) with x and y in the window.
 Item {
     id: root
     visible: false
@@ -80,7 +80,7 @@ Item {
         parentPanel.currentIndex = index
     }
 
-    // Come Windows: i sottomenu si aprono (e chiudono) dopo una breve pausa.
+    // Like Windows: submenus open (and close) after a short pause.
     function onHovered(panel, index, rowY) {
         const entry = panel.entries[index]
         const child = panels[panel.level + 1]
@@ -140,7 +140,7 @@ Item {
         }
     }
 
-    // Un clic fuori dai menu li chiude.
+    // A click outside the menus closes them.
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.AllButtons

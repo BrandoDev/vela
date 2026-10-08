@@ -8,33 +8,33 @@
 #include <QObject>
 #include <QTimer>
 
-// Le scelte dell'utente che la shell segue dal vivo: stanno in
-// ~/.config/Vela/vela-shell.conf, le scrive l'app Impostazioni (o la shell
-// stessa) e qui si rileggono appena il file cambia. Dal QML: Config.accent,
-// Config.wallpaper...
+// The user's choices the shell follows live: they're in
+// ~/.config/Vela/vela-shell.conf, written by the Settings app (or the shell
+// itself) and reread here as soon as the file changes. From QML:
+// Config.accent, Config.wallpaper...
 class Config : public QObject {
     Q_OBJECT
-    // Lo sfondo: un'immagine scelta, altrimenti quello di Vela.
+    // The wallpaper: a chosen image, otherwise Vela's.
     Q_PROPERTY(QString wallpaper READ wallpaper NOTIFY wallpaperChanged)
-    // Il colore d'accento (pulsanti, selezioni, riquadri accesi).
+    // The accent color (buttons, selections, lit tiles).
     Q_PROPERTY(QColor accent READ accent NOTIFY accentChanged)
-    // "center" o "left", come "Allineamento della barra delle applicazioni".
+    // "center" or "left", like "Taskbar alignment".
     Q_PROPERTY(QString taskbarAlignment READ taskbarAlignment NOTIFY taskbarChanged)
-    // "Termina attività" nel menu dei pulsanti della taskbar.
+    // "End task" in the taskbar buttons' menu.
     Q_PROPERTY(bool endTask READ endTask NOTIFY taskbarChanged)
-    // Il pulsante della Visualizzazione attività sulla taskbar.
+    // The Task View button on the taskbar.
     Q_PROPERTY(bool taskView READ taskView NOTIFY taskbarChanged)
-    // La taskbar su tutti gli schermi (come Windows) o solo sul principale.
+    // The taskbar on all outputs (like Windows) or only on the main one.
     Q_PROPERTY(bool taskbarAllScreens READ taskbarAllScreens NOTIFY taskbarChanged)
-    // La cronologia degli Appunti (Win+V).
+    // Clipboard history (Win+V).
     Q_PROPERTY(bool clipboardHistory READ clipboardHistory NOTIFY clipboardChanged)
-    // "Scegli la modalità": "dark" o "light", per la shell (taskbar, menu,
-    // pannelli) e per le app (le loro finestre e le barre del titolo).
+    // "Choose your mode": "dark" or "light", for the shell (taskbar, menus,
+    // panels) and for apps (their windows and title bars).
     Q_PROPERTY(QString shellTheme READ shellTheme NOTIFY themeChanged)
     Q_PROPERTY(QString appTheme READ appTheme NOTIFY themeChanged)
-    // Le icone della modalità della shell ("l/" o "d/" per image://icon):
-    // cambiano un attimo dopo la modalità, quando le cache delle icone sono
-    // state svuotate (vedi applyIconTheme).
+    // Icons for the shell's mode ("l/" or "d/" for image://icon): they change
+    // a moment after the mode, once the icon caches have been emptied (see
+    // applyIconTheme).
     Q_PROPERTY(QString iconMode READ iconMode NOTIFY iconModeChanged)
 
 public:

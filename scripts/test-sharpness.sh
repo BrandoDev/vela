@@ -2,12 +2,12 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Test della nitidezza (docs/renderer.md §3.10): a ogni scala, la finestra di
-# vela-pattern deve arrivare sullo schermo bit per bit, appena aperta,
-# agganciata a sinistra e a destra, massimizzata e ripristinata.
+# Sharpness test (docs/renderer.md §3.10): at every scale, the vela-pattern
+# window must reach the screen bit for bit, just opened, snapped left and
+# right, maximized and restored.
 #
-# Uso: scripts/test-sharpness.sh [SCALE...]   (predefinite: 1 1.25 1.5 1.75 2)
-# Serve Python 3 con numpy e Pillow.
+# Usage: scripts/test-sharpness.sh [SCALES...]   (default: 1 1.25 1.5 1.75 2)
+# Needs Python 3 with numpy and Pillow.
 
 set -u
 cd "$(dirname "$0")/.."
@@ -15,13 +15,13 @@ BUILD=build
 SCALES="${*:-1 1.25 1.5 1.75 2}"
 TMP=$(mktemp -d)
 FAILED=0
-# Configurazione vuota: la luce notturna o un filtro colore di chi lancia la
-# prova cambierebbero tutti i pixel.
+# Empty configuration: the night light or a color filter of whoever runs the
+# test would change every pixel.
 export XDG_CONFIG_HOME="$TMP/config" XDG_DATA_HOME="$TMP/data" XDG_CACHE_HOME="$TMP/cache"
 
 for scale in $SCALES; do
     echo "== scale $scale"
-    # Gli angoli arrotondati (raggio 8 logici) toccano solo quei quadrati.
+    # Rounded corners (radius 8 logical) touch only those squares.
     CORNER=$(python3 -c "import math; print(math.ceil(8 * $scale) + 1)")
     WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 VELA_DEBUG_INPUT=1 VELA_SCALE=$scale \
         VELA_OUTPUT_SIZE=2560x1440@60 $BUILD/compositor/vela-compositor > "$TMP/log" 2>&1 &

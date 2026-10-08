@@ -3,8 +3,8 @@
 
 import QtQuick
 
-// Sistema > Alimentazione: quando spegnere lo schermo, il blocco, la
-// modalità di risparmio energia (power-profiles-daemon), la batteria.
+// System > Power: when to turn off the screen, locking, the power saving mode
+// (power-profiles-daemon), the battery.
 Page {
     id: page
     readonly property var minutes: [1, 2, 3, 5, 10, 15, 20, 25, 30, 45, 60, 120, 180, 240, 300, 0]

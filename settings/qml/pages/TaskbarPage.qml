@@ -3,7 +3,7 @@
 
 import QtQuick
 
-// Personalizzazione > Barra delle applicazioni.
+// Personalization > Taskbar.
 Page {
     PersonalizationPage.DesktopPreview {}
 

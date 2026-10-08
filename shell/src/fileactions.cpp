@@ -51,7 +51,7 @@ void FileActions::findDevices()
     }
     m_searching = true;
     emit devicesChanged();
-    // kdeconnect-cli -a --id-name-only: "<id> <nome>", uno per riga.
+    // kdeconnect-cli -a --id-name-only: "<id> <name>", one per line.
     auto* process = new QProcess(this);
     connect(process, &QProcess::finished, this, [this, process] {
         QVariantList devices;
@@ -140,7 +140,7 @@ QString FileActions::shortcutName(const QString& target, const QString& director
         return url.host();
     }
     const QFileInfo info(url.isLocalFile() ? url.toLocalFile() : text);
-    // Accanto all'originale il nome dice che è un collegamento.
+    // Next to the original the name says it's a shortcut.
     if (info.absolutePath() == QDir(directory).absolutePath()) {
         const QString name = linkNameFor(info);
         return info.isDir() || info.suffix().isEmpty() ? name : name.chopped(info.suffix().size() + 1);

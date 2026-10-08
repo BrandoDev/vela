@@ -15,7 +15,7 @@ namespace {
 
 bool realScreen(const QScreen* screen)
 {
-    return screen && !screen->name().isEmpty(); // senza nome: il segnaposto di Qt
+    return screen && !screen->name().isEmpty(); // no name: Qt's placeholder
 }
 
 } // namespace
@@ -27,7 +27,7 @@ ScreenWindows::ScreenWindows(QQmlEngine* engine, const char* component, Setup se
     , m_setup(std::move(setup))
 {
     m_syncTimer.setSingleShot(true);
-    m_syncTimer.setInterval(100); // gli schermi arrivano uno alla volta
+    m_syncTimer.setInterval(100); // outputs arrive one at a time
     connect(&m_syncTimer, &QTimer::timeout, this, &ScreenWindows::sync);
     connect(qGuiApp, &QGuiApplication::screenAdded, this, [this] {
         m_retries = 0;
@@ -87,13 +87,13 @@ void ScreenWindows::sync()
                 m_windows.remove(screen);
                 continue;
             }
-            static_cast<QObject*>(window)->setParent(this); // proprietà, non finestra madre
+            static_cast<QObject*>(window)->setParent(this); // ownership, not parent window
             qInfo("vela-shell: %s on %s%s", qPrintable(m_name), qPrintable(screen->name()),
                 screen == primary ? " (principale)" : "");
             window->setScreen(screen);
             m_setup(window, screen);
-            // Chiuso dal compositor: lo si rimette, ma senza insistere se
-            // continua a chiuderlo.
+            // Closed by the compositor: put back, but without insisting if it
+            // keeps closing it.
             connect(window, &QWindow::visibleChanged, this, [this](bool visible) {
                 if (!visible && m_retries < 5) {
                     ++m_retries;

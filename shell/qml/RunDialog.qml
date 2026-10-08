@@ -4,8 +4,8 @@
 import QtQuick
 import QtQuick.Dialogs
 
-// "Esegui" (Win+R, o dal menu Win+X), come in Windows: in basso a sinistra,
-// apre un programma, una cartella, un documento o un indirizzo.
+// "Run" (Win+R, or from the Win+X menu), like in Windows: at the bottom left,
+// opens a program, a folder, a document or an address.
 Window {
     id: root
     objectName: "runDialog"
@@ -14,7 +14,7 @@ Window {
     height: 196
     color: "transparent"
 
-    property bool browsing: false // la finestra "Sfoglia" ha la tastiera: non si chiude
+    property bool browsing: false // the "Browse" window has the keyboard: it doesn't close
     property int historyIndex: -1
 
     function open() {
@@ -33,7 +33,8 @@ Window {
         }
     }
 
-    // In basso a sinistra, sopra la taskbar: da coordinate sue a quelle dello schermo.
+    // At the bottom left, above the taskbar: from its coordinates to the
+    // output's.
     function screenPoint(item, x, y) {
         const p = item.mapToItem(null, x, y)
         return Qt.point(12 + p.x, Screen.height - Theme.taskbarHeight - 12 - root.height + p.y)
@@ -46,8 +47,8 @@ Window {
         }
     }
 
-    // Chiuso il menu, la tastiera torna qui; se invece è andata altrove (una
-    // finestra nuova, un clic), si chiude anche questo pannello.
+    // Once the menu closes, the keyboard comes back here; if it went elsewhere
+    // instead (a new window, a click), this panel closes too.
     Connections {
         target: Menus
         function onIsOpenChanged() {
@@ -133,11 +134,12 @@ Window {
                 Keys.onEscapePressed: root.close()
                 Keys.onReturnPressed: root.accept()
                 Keys.onEnterPressed: root.accept()
-                // Su e giù scorrono i comandi già usati, come l'elenco di Windows.
+                // Up and down go through commands already used, like Windows'
+                // list.
                 Keys.onUpPressed: root.step(-1)
                 Keys.onDownPressed: root.step(1)
             }
-            // L'elenco dei comandi usati.
+            // The list of used commands.
             Item {
                 id: historyButton
                 anchors { right: parent.right; top: parent.top; bottom: parent.bottom }

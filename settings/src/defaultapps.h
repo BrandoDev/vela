@@ -9,18 +9,19 @@
 
 class AppModel;
 
-// App > App predefinite, come Windows 11:
-// - gli usi comuni (browser, posta, musica, video, foto, PDF, archivi,
-//   documenti...): l'app che li apre, tra quelle che lo sanno fare;
-// - un tipo di file o di collegamento preciso (".mkv", "mp3", "mailto");
-// - per app: i tipi che sa aprire, e "Imposta come predefinita" per tutti.
-// Le scelte vanno in ~/.config/mimeapps.list (mimeapps.h), che leggono KDE,
-// GNOME, i browser e xdg-open.
+// Apps > Default apps, like Windows 11:
+// - common uses (browser, mail, music, video, photos, PDF, archives,
+//   documents...): the app opening them, among those that can;
+// - a specific file or link type (".mkv", "mp3", "mailto");
+// - per app: the types it can open, and "Set default" for all of them.
+// The choices go into ~/.config/mimeapps.list (mimeapps.h), read by KDE,
+// GNOME, browsers and xdg-open.
 class DefaultApps : public QObject {
     Q_OBJECT
-    // [{key, label, icon, current: {id, name, icon} o vuoto, candidates: [...]}]
+    // [{key, label, icon, current: {id, name, icon} or empty, candidates:
+    // [...]}]
     Q_PROPERTY(QVariantList categories READ categories NOTIFY changed)
-    // L'app aperta nella sottopagina (per app).
+    // The app open in the subpage (per app).
     Q_PROPERTY(QString selectedApp READ selectedApp WRITE setSelectedApp NOTIFY selectedAppChanged)
     Q_PROPERTY(QString selectedName READ selectedName NOTIFY selectedAppChanged)
     Q_PROPERTY(QString selectedIcon READ selectedIcon NOTIFY selectedAppChanged)
@@ -31,17 +32,18 @@ public:
     QVariantList categories() const;
     Q_INVOKABLE void setDefault(const QString& key, const QString& appId);
 
-    // Un tipo dal testo scritto: estensione (".pdf", "pdf"), tipo MIME
-    // ("audio/mpeg") o protocollo ("mailto", "https"). {found, mime, label,
+    // A type from typed text: extension (".pdf", "pdf"), MIME type
+    // ("audio/mpeg") or protocol ("mailto", "https"). {found, mime, label,
     // patterns, icon, current, candidates}.
     Q_INVOKABLE QVariantMap lookup(const QString& text) const;
     Q_INVOKABLE void setDefaultForType(const QString& mime, const QString& appId);
 
-    // Le app che aprono qualche tipo: [{id, name, icon, count}], filtrate.
+    // The apps opening some type: [{id, name, icon, count}], filtered.
     Q_INVOKABLE QVariantList apps(const QString& filter) const;
-    // I tipi che l'app sa aprire: [{mime, label, patterns, icon, isDefault, current}].
+    // The types the app can open: [{mime, label, patterns, icon, isDefault,
+    // current}].
     Q_INVOKABLE QVariantList typesOf(const QString& appId) const;
-    // L'app diventa la predefinita per tutti i tipi che dichiara.
+    // The app becomes the default for all the types it declares.
     Q_INVOKABLE void setDefaultForAll(const QString& appId);
 
     QString selectedApp() const { return m_selected; }

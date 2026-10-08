@@ -3,15 +3,15 @@
 
 import QtQuick
 
-// Bluetooth e dispositivi: l'interruttore, "Aggiungi dispositivo" e i
-// dispositivi associati, come Windows 11.
+// Bluetooth & devices: the switch, "Add device" and the paired devices, like
+// Windows 11.
 Page {
     id: page
     Component.onCompleted: Bluetooth.refresh()
     Component.onDestruction: Bluetooth.stopDiscovery()
 
     function deviceIcon(icon) {
-        // Le icone di BlueZ (audio-headset, input-mouse...) sono già nomi del tema.
+        // BlueZ icons (audio-headset, input-mouse...) are already theme names.
         return icon !== "" ? icon : "preferences-system-bluetooth"
     }
     function status(d) {
@@ -134,7 +134,7 @@ Page {
         }
     }
 
-    // "Aggiungi un dispositivo": la ricerca, e un clic per associare.
+    // "Add a device": the search, and a click to pair.
     Dialog {
         id: addDialog
         parent: root.contentItem
@@ -212,7 +212,7 @@ Page {
             }
         }
     }
-    // Associato: il dispositivo passa dai "trovati" agli associati e la finestra si chiude.
+    // Paired: the device moves from "found" to paired and the dialog closes.
     Connections {
         target: Bluetooth
         property int pairedCount: Bluetooth.paired.length

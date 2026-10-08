@@ -3,18 +3,18 @@
 
 import QtQuick
 
-// Il riquadro a destra di Esplora, come Windows 11. Due modi:
-// - "preview" (Alt+P), il riquadro di anteprima: l'immagine, l'inizio di un
-//   file di testo, la miniatura di video e PDF;
-// - "details" (Alt+Maiusc+P), il riquadro dei dettagli: icona, nome, tipo e
-//   proprietà dell'elemento scelto (o della cartella aperta).
+// Explorer's right pane, like Windows 11. Two modes:
+// - "preview" (Alt+P), the preview pane: the image, the beginning of a text
+//   file, the thumbnail of videos and PDFs;
+// - "details" (Alt+Shift+P), the details pane: icon, name, type and
+//   properties of the chosen item (or of the open folder).
 Item {
     id: pane
     property var tab
     property string mode: "preview"
     readonly property var model: tab.model
 
-    // L'elemento scelto: uno solo; con più elementi se ne dice il numero.
+    // The chosen item: only one; with several items their number is given.
     readonly property int count: model ? model.selectionCount : 0
     readonly property string path: model && count === 1 ? (model.selectionVersion, model.selectedPaths()[0] || "") : ""
     readonly property var info: path !== "" ? Ops.details(path)
@@ -27,7 +27,7 @@ Item {
 
     function dateText(d) { return d ? Qt.formatDateTime(d, "dd/MM/yyyy HH:mm") : "" }
 
-    // ------------------------------------------------------ anteprima --
+    // -------------------------------------------------------- preview --
     Item {
         anchors { fill: parent; margins: 16 }
         visible: pane.mode === "preview"
@@ -44,19 +44,19 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
         }
-        // Un'immagine, intera.
+        // An image, whole.
         Image {
             anchors.fill: parent
             visible: pane.image
             source: pane.image ? "file://" + encodeURI(pane.path).replace(/#/g, "%23").replace(/\?/g, "%3F") : ""
-            sourceSize: Qt.size(width, height) // logico: Qt lo porta in pixel
+            sourceSize: Qt.size(width, height) // logical: Qt turns it into pixels
             fillMode: Image.PreserveAspectFit
             asynchronous: true
             autoTransform: true
             smooth: true
             mipmap: true
         }
-        // Un file di testo: l'inizio, com'è.
+        // A text file: the beginning, as it is.
         Flickable {
             anchors.fill: parent
             visible: pane.text !== ""
@@ -74,7 +74,7 @@ Item {
                 wrapMode: Text.WrapAnywhere
             }
         }
-        // Gli altri: la miniatura (video, PDF...) o l'icona grande.
+        // The others: the thumbnail (video, PDF...) or the large icon.
         Column {
             anchors.centerIn: parent
             width: parent.width
@@ -114,7 +114,7 @@ Item {
         }
     }
 
-    // -------------------------------------------------------- dettagli --
+    // --------------------------------------------------------- details --
     Flickable {
         anchors { fill: parent; margins: 16 }
         visible: pane.mode === "details"
@@ -143,7 +143,7 @@ Item {
                 font.pixelSize: Theme.fontNormal
             }
 
-            // Un elemento (o la cartella aperta).
+            // One item (or the open folder).
             Item {
                 visible: !!pane.info && pane.count <= 1
                 width: parent.width

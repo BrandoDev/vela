@@ -2,18 +2,17 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Aggiorna Vela installata come pacchetto (vela-git): scarica i commit
-# nuovi, mostra cosa cambia, costruisce il pacchetto con makepkg e lo
-# installa con pacman (chiede la password). La versione nuova parte alla
-# prossima sessione.
+# Updates Vela installed as a package (vela-git): fetches the new commits,
+# shows what changes, builds the package with makepkg and installs it with
+# pacman (asks for the password). The new version starts at the next session.
 #
-# Se GitHub Actions ha già costruito il pacchetto di quel commit (e c'è gh,
-# collegato all'account), chiede se scaricarlo invece di compilare: niente
-# minuti di compilazione, e niente crash del compilatore.
+# If GitHub Actions has already built that commit's package (and gh is there,
+# logged into the account), it asks whether to download it instead of building:
+# no minutes of compiling, and no compiler crashes.
 #
-# Il repository si tiene in ~/.cache/vela-update, così ogni volta si
-# scaricano solo i commit nuovi; lì restano anche gli ultimi pacchetti, per
-# tornare indietro: sudo pacman -U ~/.cache/vela-update/packages/<file>.
+# The repository is kept in ~/.cache/vela-update, so each time only new commits
+# are fetched; the last packages stay there too, to go back: sudo pacman -U
+# ~/.cache/vela-update/packages/<file>.
 
 set -eu
 
@@ -22,7 +21,7 @@ CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/vela-update"
 MIRROR="$CACHE/vela.git"
 PACKAGES="$CACHE/packages"
 DEFAULT_SOURCE="ssh://git@github.com/BrandoDev/vela.git"
-KEEP=3 # pacchetti vecchi da tenere
+KEEP=3 # old packages to keep
 
 usage() {
     cat << EOF
@@ -70,8 +69,8 @@ if [ -n "$jobs" ]; then
     esac
 fi
 
-# Da dove: quella data adesso (e la si ricorda), quella ricordata, GitHub.
-# Il file di prima si chiamava aggiornamenti.conf (chiave sorgente=).
+# From where: the one given now (and remembered), the remembered one, GitHub.
+# The old file was called aggiornamenti.conf (key sorgente=).
 OLD_CONFIG="$(dirname "$CONFIG")/aggiornamenti.conf"
 if [ ! -f "$CONFIG" ] && [ -f "$OLD_CONFIG" ]; then
     sed 's/^sorgente=/source=/' "$OLD_CONFIG" > "$CONFIG" && rm -f "$OLD_CONFIG"
@@ -87,7 +86,7 @@ elif [ -f "$CONFIG" ]; then
 fi
 source="${source:-$DEFAULT_SOURCE}"
 
-# Il repository: scaricato la prima volta, poi solo i commit nuovi.
+# The repository: cloned the first time, then only new commits.
 mkdir -p "$CACHE"
 if [ -d "$MIRROR" ] && [ "$(git -C "$MIRROR" config remote.origin.url)" != "$source" ]; then
     rm -rf "$MIRROR"
@@ -121,7 +120,7 @@ if [ -n "$installed" ] && [ "${latest#"$installed"}" != "$latest" ] && [ "$force
     exit 0
 fi
 
-# Le novità: i commit dopo quello installato (se è tra questi).
+# What's new: the commits after the installed one (if it's among them).
 if [ -n "$installed" ] && git -C "$MIRROR" cat-file -e "$installed^{commit}" 2> /dev/null \
     && git -C "$MIRROR" merge-base --is-ancestor "$installed" HEAD 2> /dev/null; then
     count=$(git -C "$MIRROR" rev-list --count "$installed..HEAD")
@@ -135,8 +134,8 @@ else
     echo ":: Vela isn't installed as a package: installing it ($latest)."
 fi
 
-# Il repository su GitHub ("proprietario/nome"): dalla sorgente, o dal suo
-# origin se è una cartella. Vuoto se non è su GitHub.
+# The repository on GitHub ("owner/name"): from the source, or from its origin
+# if it's a directory. Empty if it isn't on GitHub.
 githubRepo() {
     url="$source"
     if [ -d "$source" ]; then
@@ -145,8 +144,8 @@ githubRepo() {
     printf '%s\n' "$url" | sed -n -E 's#^(ssh://git@github\.com/|git@github\.com:|https://github\.com/)([^/]+/[^/]+)$#\2#p' | sed 's/\.git$//'
 }
 
-# Il pacchetto di questo commit costruito da GitHub Actions, se c'è ancora
-# (gli artifact durano 14 giorni): l'id dell'esecuzione, o vuoto.
+# This commit's package built by GitHub Actions, if it's still there (artifacts
+# last 14 days): the run id, or empty.
 ciRun=""
 repo=$(githubRepo)
 if [ "$prefer" != build ] && [ -n "$repo" ] && command -v gh > /dev/null && gh auth status > /dev/null 2>&1; then
@@ -171,15 +170,15 @@ if [ -d "$CACHE/pacchetti" ]; then
     rm -rf "$CACHE/pacchetti" "$CACHE/scaricato" "$CACHE/costruzione" "$CACHE/sorgenti"
 fi
 
-# Solo gli ultimi pacchetti, per poter tornare indietro.
+# Only the last packages, to be able to go back.
 prune() {
     ls -t "$PACKAGES"/vela-git-*.pkg.tar.* 2> /dev/null | tail -n +$((KEEP + 1)) | while read -r old; do
         rm -f "$old"
     done
 }
 
-# Pacchetto pronto su GitHub: scaricarlo o compilare? Senza terminale (o con
-# --download) si scarica.
+# Package ready on GitHub: download it or build? Without a terminal (or with
+# --download) it's downloaded.
 if [ -n "$ciRun" ]; then
     answer=d
     if [ "$prefer" != download ] && [ -t 0 ]; then
@@ -215,7 +214,7 @@ if [ -n "$ciRun" ]; then
     echo ":: The GitHub package can't be downloaded: building it here." >&2
 fi
 
-# La costruzione, con il PKGBUILD della versione nuova.
+# The build, with the new version's PKGBUILD.
 WORK="$CACHE/build"
 rm -rf "$WORK"
 mkdir -p "$WORK"
@@ -229,7 +228,7 @@ echo ":: Building the package (a few minutes)"
 if ! BUILDDIR="$WORK" PKGDEST="$PACKAGES" SRCDEST="$CACHE/sources" \
     makepkg --syncdeps --install --clean --force; then
     echo >&2
-    # Costruito, ma pacman non l'ha installato (annullato, password sbagliata).
+    # Built, but pacman didn't install it (cancelled, wrong password).
     built=$(ls -t "$PACKAGES"/vela-git-*."g$latest"-*.pkg.tar.* 2> /dev/null | head -n 1)
     if [ -n "$built" ]; then
         echo "vela-update: the package is ready but wasn't installed. To install it:" >&2

@@ -4,8 +4,8 @@
 import QtQuick
 import QtQuick.Window
 
-// La finestra delle Impostazioni, come Windows 11: a sinistra l'account,
-// la ricerca e le sezioni; a destra la pagina, con il percorso nel titolo.
+// The Settings window, like Windows 11: account, search and sections on the
+// left; the page on the right, with its path in the title.
 Window {
     id: root
     width: 1100
@@ -19,11 +19,11 @@ Window {
     onActiveChanged: {
         Theme.windowActive = active
         if (active) {
-            Prefs.reload() // la shell può aver cambiato qualcosa (Non disturbare...)
+            Prefs.reload() // the shell may have changed something (Do not disturb...)
         }
     }
 
-    // --- le pagine ---
+    // --- the pages ---
     readonly property var pages: ({
         "home": { title: qsTr("Home"), parent: "", file: "HomePage.qml", icon: "go-home" },
         "system": { title: qsTr("System"), parent: "", file: "SystemPage.qml", icon: "computer" },
@@ -52,7 +52,7 @@ Window {
         "accessibility": { title: qsTr("Accessibility"), parent: "", file: "AccessibilityPage.qml", icon: "preferences-desktop-accessibility" }
     })
     readonly property var sections: ["home", "system", "bluetooth", "network", "personalization", "apps", "time-language", "accessibility"]
-    // I nomi che usa la shell (systemactions.cpp) per le voci dei menu.
+    // The names the shell uses (systemactions.cpp) for the menu entries.
     readonly property var aliases: ({
         "settings": "home", "personalize": "personalization", "taskbar-settings": "taskbar",
         "notification-settings": "notifications", "sound-settings": "sound", "devices": "bluetooth",
@@ -73,12 +73,12 @@ Window {
         const list = []
         let name = current
         while (name !== "" && pages[name]) {
-            // L'app di App predefinite ha il suo nome nel percorso.
+            // The app in Default apps has its name in the path.
             const title = name === "default-app" && DefaultApps.selectedName !== "" ? DefaultApps.selectedName : pages[name].title
             list.unshift({ name: name, title: title })
             name = pages[name].parent
         }
-        // Home non fa da genitore nel percorso, come su Windows.
+        // Home isn't a parent in the path, like on Windows.
         return list
     }
 
@@ -106,7 +106,7 @@ Window {
         }
     }
 
-    // --- la ricerca: "Trova un'impostazione" ---
+    // --- search: "Find a setting" ---
     readonly property var searchIndex: [
         { page: "display", text: qsTr("Display"), keys: qsTr("resolution scale refresh rate hz orientation monitor multiple displays arrangement") },
         { page: "display", text: qsTr("Change the screen resolution"), keys: qsTr("resolution") },
@@ -159,7 +159,7 @@ Window {
         return searchIndex.filter(e => e.text.toLowerCase().indexOf(q) >= 0 || e.keys.indexOf(q) >= 0).slice(0, 8)
     }
 
-    // --- navigazione a sinistra ---
+    // --- navigation on the left ---
     Item {
         id: nav
         x: 0
@@ -167,7 +167,7 @@ Window {
         width: 296
         height: parent.height
 
-        // L'account
+        // The account
         Row {
             id: account
             x: 16
@@ -279,7 +279,7 @@ Window {
             }
         }
 
-        // I risultati della ricerca, sotto la casella.
+        // Search results, below the box.
         Rectangle {
             visible: root.searchResults.length > 0 && search.activeFocus
             x: search.x
@@ -335,7 +335,7 @@ Window {
         }
     }
 
-    // --- la pagina ---
+    // --- the page ---
     Item {
         id: content
         anchors { left: nav.right; top: parent.top; bottom: parent.bottom; right: parent.right; leftMargin: 20 }

@@ -33,7 +33,7 @@ void Displays::refresh()
         const QJsonObject head = value.toObject();
         QVariantMap output;
         output[QStringLiteral("name")] = head[QStringLiteral("name")].toString();
-        // Il nome che vede l'utente: marca e modello, se ci sono.
+        // The name the user sees: make and model, if present.
         QString description = (head[QStringLiteral("make")].toString() + u' ' + head[QStringLiteral("model")].toString()).trimmed();
         output[QStringLiteral("description")] = description.isEmpty() ? head[QStringLiteral("description")].toString() : description;
         output[QStringLiteral("enabled")] = head[QStringLiteral("enabled")].toBool();
@@ -72,7 +72,7 @@ QStringList Displays::argumentsFor(const QVariantMap& o)
     }
     args << QStringLiteral("--on");
     if (o.contains(QStringLiteral("width"))) {
-        // Senza frequenza nota (uscite virtuali): solo la risoluzione.
+        // Without a known refresh rate (virtual outputs): resolution only.
         const double refresh = o[QStringLiteral("refresh")].toDouble();
         QString mode = QStringLiteral("%1x%2").arg(o[QStringLiteral("width")].toInt()).arg(o[QStringLiteral("height")].toInt());
         if (refresh > 0) {
@@ -122,7 +122,7 @@ void Displays::revert()
     if (m_before.isEmpty()) {
         return;
     }
-    // Tutti gli schermi com'erano, in un solo comando.
+    // All outputs as they were, in a single command.
     QStringList args;
     for (const QVariant& value : std::as_const(m_before)) {
         QVariantMap o = value.toMap();

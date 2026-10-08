@@ -3,12 +3,12 @@
 
 import QtQuick
 
-// Sistema > Schermo > Luce notturna, come Windows 11: accenderla ora,
-// quanto deve essere calda, e la pianificazione (dal tramonto all'alba,
-// con le ore del sole del fuso orario, oppure dalle-alle).
+// System > Display > Night light, like Windows 11: turn it on now, how warm it
+// should be, and the schedule (sunset to sunrise, with the time zone's sun
+// times, or between two times).
 Page {
     id: page
-    // Le ore ogni quarto d'ora, per scegliere quando accenderla e spegnerla.
+    // Times every quarter hour, to choose when to turn it on and off.
     readonly property var times: {
         const list = []
         for (let m = 0; m < 24 * 60; m += 15) {
@@ -17,7 +17,7 @@ Page {
         return list
     }
 
-    // Un'opzione a scelta singola (pallino).
+    // A single-choice option (radio button).
     component Radio: Item {
         id: radio
         property string text

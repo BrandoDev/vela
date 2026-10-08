@@ -1,11 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Le prove della chiave Exec dei file .desktop (desktopexec.h): come si
-// divide in argomenti e come si espandono i field code, secondo la
-// specifica freedesktop.
+// Tests of the .desktop Exec key (desktopexec.h): how it's split into
+// arguments and how field codes are expanded, per the freedesktop spec.
 //
-//   ctest --test-dir build -R exec      (o build/shell/vela-desktopexec-test)
+//   ctest --test-dir build -R exec      (or build/shell/vela-desktopexec-test)
 
 #include "desktopexec.h"
 
@@ -31,19 +30,19 @@ private slots:
     {
         QCOMPARE(run(QStringLiteral("\"/opt/My App/app\" \"one argument\"")),
             (QStringList { "/opt/My App/app", "one argument" }));
-        // Dentro le virgolette \" \` \$ \\ valgono il carattere.
+        // Inside quotes \" \` \$ \\ stand for the character.
         QCOMPARE(run(QStringLiteral("echo \"a \\\"b\\\" \\$HOME \\`x\\` c\\\\d\"")),
             (QStringList { "echo", "a \"b\" $HOME `x` c\\d" }));
     }
 
     void noShellSemantics()
     {
-        // Nessuna espansione: $HOME, ; e > restano lettere.
+        // No expansion: $HOME, ; and > stay letters.
         const DesktopExec::Parsed parsed = DesktopExec::split(QStringLiteral("app $HOME ; rm > x"));
         QVERIFY(parsed.ok);
         QVERIFY(parsed.shellSyntax);
         QCOMPARE(parsed.arguments, (QStringList { "app", "$HOME", ";", "rm", ">", "x" }));
-        // Gli stessi caratteri tra virgolette sono testo e basta.
+        // The same characters inside quotes are just text.
         QVERIFY(!DesktopExec::split(QStringLiteral("sh -c \"echo $HOME | wc\"")).shellSyntax);
     }
 
@@ -62,7 +61,7 @@ private slots:
             (QStringList { "firefox", "file:///home/alex/My%20Pictures/beach.jpg" }));
         QCOMPARE(run(QStringLiteral("app --file=%f"), { file }),
             (QStringList { "app", "--file=/home/alex/My Pictures/beach.jpg" }));
-        // Senza file il field code sparisce.
+        // Without files the field code vanishes.
         QCOMPARE(run(QStringLiteral("gwenview %f")), (QStringList { "gwenview" }));
     }
 
@@ -83,7 +82,7 @@ private slots:
         QCOMPARE(run(QStringLiteral("kate %i --title=%c %k 100%%"), {}, context),
             (QStringList { "kate", "--icon", "kate", "--title=Kate", "/usr/share/applications/org.kde.kate.desktop",
                 "100%" }));
-        // %i senza icona: nessone argument. Deprecati: spariscono.
+        // %i without an icon: no argument. Deprecated ones vanish.
         QCOMPARE(run(QStringLiteral("app %i %d %m")), (QStringList { "app" }));
     }
 };

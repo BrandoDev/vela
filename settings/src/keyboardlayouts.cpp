@@ -18,9 +18,9 @@ void KeyboardLayouts::load()
     }
     // <layout><configItem><name>it</name><description>Italian</description>
     // </configItem><variantList><variant><configItem>...</configItem></variant>...
-    // Le descrizioni sono in inglese: libxkbcommon non ha traduzioni, le
-    // prende xkeyboard-config dal suo dominio gettext. Qui le si lascia così,
-    // come fa KDE quando manca la traduzione.
+    // The descriptions are in English: libxkbcommon has no translations,
+    // xkeyboard-config takes them from its gettext domain. They're left as
+    // they are here, as KDE does when a translation is missing.
     QXmlStreamReader xml(&file);
     QString layout;
     QString layoutName;

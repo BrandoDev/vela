@@ -3,10 +3,10 @@
 
 import QtQuick
 
-// Pulsante della taskbar: sfondo che sfuma al passaggio del mouse e un
-// leggero "rimbalzo" quando lo premi. Sotto l'icona, come su Windows 11, un
-// trattino grigio se l'app è aperta, più lungo e colorato se è quella attiva.
-// Con `draggable` lo si trascina di lato per spostarlo (dropped dice di quanto).
+// A taskbar button: the background fades on hover and a slight "bounce" when
+// pressed. Under the icon, like on Windows 11, a gray dash if the app is open,
+// longer and colored if it's the active one. With `draggable` it can be
+// dragged sideways to move it (dropped says by how much).
 Item {
     id: root
 
@@ -20,10 +20,10 @@ Item {
 
     signal clicked()
     signal middleClicked()
-    signal rightClicked(bool shift) // Maiusc+clic destro: il menu della finestra
+    signal rightClicked(bool shift) // Shift+right click: the window menu
     signal dropped(real dx)
 
-    // Mentre lo si trascina segue il mouse, sopra gli altri pulsanti.
+    // While dragged it follows the mouse, above the other buttons.
     z: mouse.dragging ? 10 : 0
     transform: Translate { x: mouse.dragging ? mouse.dragX : 0 }
 
@@ -53,7 +53,7 @@ Item {
         }
     }
 
-    // Indicatore sotto l'icona: app aperta / attiva (o menu Start aperto)
+    // Indicator under the icon: app open / active (or Start menu open)
     Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
@@ -83,8 +83,8 @@ Item {
         property real pressX: 0
         property real dragX: 0
         property bool dragging: false
-        property bool dragged: false // il rilascio di un trascinamento non è un clic
-        // In coordinate della finestra: il pulsante si sposta col mouse, le sue no.
+        property bool dragged: false // releasing a drag isn't a click
+        // In window coordinates: the button moves with the mouse, they don't.
         onPressed: mouse => {
             pressX = mapToItem(null, mouse.x, mouse.y).x
             dragX = 0

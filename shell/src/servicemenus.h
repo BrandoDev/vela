@@ -9,17 +9,17 @@
 #include <QStringList>
 #include <QVariantList>
 
-// I "service menu" di KDE (kio/servicemenus/*.desktop): le voci che le app
-// aggiungono al menu dei file (es. "Visualizza le statistiche di utilizzo
-// del disco" di Filelight). In Vela stanno in "Mostra altre opzioni", come
-// le estensioni classiche nel menu di Windows 11 (docs/renderer.md §14.9).
+// KDE "service menus" (kio/servicemenus/*.desktop): the entries apps add to
+// the file menu (such as Filelight's "Show disk usage statistics"). In Vela
+// they're under "Show more options", like classic extensions in the Windows 11
+// menu (docs/renderer.md §14.9).
 class ServiceMenus : public QObject {
     Q_OBJECT
 
 public:
     explicit ServiceMenus(QObject* parent = nullptr);
 
-    // Le voci che valgono per questi file: [{id, text, icon, submenu}].
+    // The entries that apply to these files: [{id, text, icon, submenu}].
     Q_INVOKABLE QVariantList actionsFor(const QStringList& paths);
     Q_INVOKABLE void run(int id, const QStringList& paths) const;
 

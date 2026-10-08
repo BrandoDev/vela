@@ -3,9 +3,9 @@
 
 import QtQuick
 
-// Le viste a icone di Windows 11: icone grandi (con le miniature), medie e
-// piccole (icona e nome su una riga). Stessa selezione, trascinamento e
-// rinomina della vista Dettagli.
+// The Windows 11 icon views: large icons (with thumbnails), medium and small
+// (icon and name on one line). Same selection, dragging and renaming as the
+// Details view.
 Item {
     id: view
     property var tab
@@ -43,7 +43,7 @@ Item {
         cellHeight: view.cellHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-        interactive: false // trascinando si seleziona
+        interactive: false // dragging selects
         reuseItems: true
         cacheBuffer: 400
         currentIndex: view.model.currentIndex
@@ -76,7 +76,7 @@ Item {
                 band.y = Math.min(start.y, y) - grid.contentY
                 band.width = Math.abs(mouse.x - start.x)
                 band.height = Math.abs(y - start.y)
-                // Le celle toccate dal rettangolo.
+                // The cells the rubber band touches.
                 const x0 = Math.min(start.x, mouse.x) - grid.leftMargin
                 const x1 = Math.max(start.x, mouse.x) - grid.leftMargin
                 const r0 = Math.max(0, Math.floor(Math.min(start.y, y) / view.cellHeight))

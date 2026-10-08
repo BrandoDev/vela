@@ -3,8 +3,8 @@
 
 import QtQuick
 
-// Il nome del desktop, al centro dello schermo per un attimo, quando si
-// cambia desktop (Win+Ctrl+frecce), come Windows 11.
+// The desktop name, in the center of the output for a moment, when switching
+// desktops (Win+Ctrl+arrows), like Windows 11.
 Window {
     id: root
     objectName: "desktopOsd"
@@ -13,7 +13,7 @@ Window {
     height: 64
     color: "transparent"
 
-    property int last: -1 // non un binding: va confrontato con quello nuovo
+    property int last: -1 // not a binding: it's compared with the new one
     Component.onCompleted: last = Desktops.current
 
     Connections {
@@ -21,7 +21,7 @@ Window {
         function onChanged() {
             if (Desktops.current !== root.last) {
                 root.last = Desktops.current
-                // La Visualizzazione attività mostra già i desktop.
+                // Task View already shows the desktops.
                 if (!Menus.isOpen && !Menus.taskViewOpen) {
                     root.show()
                 }

@@ -48,7 +48,8 @@ void Accessibility::update(const QByteArray& json)
     emit changed();
 }
 
-// Si aggiorna subito (il riquadro risponde al clic), poi conferma il compositor.
+// Updated at once (the tile responds to the click), then the compositor
+// confirms.
 void Accessibility::setNightLight(bool on)
 {
     m_nightLight = on;

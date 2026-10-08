@@ -3,9 +3,9 @@
 
 import QtQuick
 
-// La Home di Windows 11: il dispositivo in cima, poi le schede più usate.
+// The Windows 11 Home: the device at the top, then the most used cards.
 Page {
-    // Il dispositivo: sfondo in miniatura, nome, Rinomina.
+    // The device: wallpaper thumbnail, name, Rename.
     Item {
         width: parent.width
         height: 140

@@ -1,18 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// vela-lock: la schermata di blocco di Vela.
+// vela-lock: Vela's lock screen.
 //
-// Usa ext-session-lock-v1: il compositor mostra solo le nostre superfici
-// (una per schermo) finché non sblocchiamo, e se questo programma si chiude
-// male lo schermo resta bloccato. Come Windows 11: prima l'ora e la data
-// grandi sullo sfondo; un tasto o un clic mostrano l'utente e la password.
+// It uses ext-session-lock-v1: the compositor shows only our surfaces (one per
+// output) until we unlock, and if this program fails the screen stays locked.
+// Like Windows 11: first the big time and date over the wallpaper; a key or a
+// click shows the user and the password.
 //
-// Disegna con QPainter su buffer wl_shm, alla scala esatta di ogni schermo
-// (fractional-scale-v1 + viewporter). Qt serve solo per font e immagini
-// (piattaforma "offscreen"); la connessione Wayland è nostra. La password
-// si verifica con PAM (servizio "vela-lock", o "login" se non installato)
-// in un thread a parte: un errore fa aspettare qualche secondo.
+// It draws with QPainter into wl_shm buffers, at each output's exact scale
+// (fractional-scale-v1 + viewporter). Qt is used only for fonts and images
+// ("offscreen" platform); the Wayland connection is ours. The password is
+// checked with PAM (the "vela-lock" service, or "login" if not installed) in a
+// separate thread: a failure makes you wait a few seconds.
 
 #include "ext-session-lock-v1-client-protocol.h"
 #include "fractional-scale-v1-client-protocol.h"
@@ -52,7 +52,7 @@
 
 namespace {
 
-// ------------------------------------------------------------- stato --
+// ------------------------------------------------------------- state --
 
 struct Screen {
     uint32_t name = 0;
@@ -61,11 +61,11 @@ struct Screen {
     ext_session_lock_surface_v1* lockSurface = nullptr;
     wp_viewport* viewport = nullptr;
     wp_fractional_scale_v1* fractional = nullptr;
-    int width = 0; // logici, dal configure
+    int width = 0; // logical, from the configure
     int height = 0;
     uint32_t scale120 = 120;
     bool configured = false;
-    QImage background; // sfondo già scalato e scurito, per questa dimensione
+    QImage background; // wallpaper already scaled and darkened, for this size
     QImage backgroundBlurred;
 };
 
@@ -98,7 +98,7 @@ QString displayName;
 
 void redrawAll();
 
-// ------------------------------------------------------------ sfondo --
+// --------------------------------------------------------- wallpaper --
 
 QImage wallpaperFor(int width, int height)
 {
@@ -110,7 +110,7 @@ QImage wallpaperFor(int width, int height)
     if (path.endsWith(QLatin1String(".svg"), Qt::CaseInsensitive)) {
         QSvgRenderer svg(path);
         if (svg.isValid()) {
-            // Riempie tagliando i bordi, come lo sfondo della shell.
+            // Fills by cropping the edges, like the shell's wallpaper.
             const QSizeF size = svg.defaultSize().scaled(width, height, Qt::KeepAspectRatioByExpanding);
             svg.render(&p, QRectF((width - size.width()) / 2, (height - size.height()) / 2, size.width(), size.height()));
         }
@@ -124,10 +124,10 @@ QImage wallpaperFor(int width, int height)
     return image;
 }
 
-// Lo sfondo sfocato dietro la password, come il dual Kawase del compositor:
-// si dimezza più volte e si raddoppia più volte, sempre con filtro. Un solo
-// salto (1/24 e ritorno) lasciava blocchi e gradini ben visibili. Alla fine
-// un velo di rumore leggero, che sotto lo scurimento evita le bande.
+// The blurred wallpaper behind the password, like the compositor's dual
+// Kawase: halved several times and doubled several times, always filtered. A
+// single jump (1/24 and back) left clearly visible blocks and steps. At the
+// end a light veil of noise, which under the darkening avoids banding.
 QImage blurred(const QImage& image)
 {
     QList<QSize> sizes;
@@ -148,7 +148,7 @@ QImage blurred(const QImage& image)
             seed ^= seed << 13;
             seed ^= seed >> 17;
             seed ^= seed << 5;
-            const int n = int(seed % 5) - 2; // da -2 a +2
+            const int n = int(seed % 5) - 2; // from -2 to +2
             const QRgb c = line[x];
             line[x] = qRgb(std::clamp(qRed(c) + n, 0, 255), std::clamp(qGreen(c) + n, 0, 255),
                 std::clamp(qBlue(c) + n, 0, 255));
@@ -157,7 +157,7 @@ QImage blurred(const QImage& image)
     return current;
 }
 
-// ------------------------------------------------------------ disegno --
+// ------------------------------------------------------------ drawing --
 
 void onBufferRelease(void*, wl_buffer* buffer)
 {
@@ -196,7 +196,7 @@ void draw(Screen& screen)
         p.drawImage(0, 0, login ? screen.backgroundBlurred : screen.background);
         p.fillRect(QRect(0, 0, w, h), QColor(0, 0, 0, login ? 110 : 60));
 
-        // Da qui in coordinate logiche.
+        // From here on in logical coordinates.
         const double scale = double(screen.scale120) / 120.0;
         p.scale(scale, scale);
         const double lw = screen.width;
@@ -217,7 +217,7 @@ void draw(Screen& screen)
             const QString date = QLocale().toString(now.date(), QStringLiteral("dddd d MMMM"));
             p.drawText(QRectF(0, timeBox.bottom() + 4, lw, 40), Qt::AlignHCenter | Qt::AlignTop, date);
         } else {
-            // Utente al centro, password sotto.
+            // User in the center, password below.
             const double cx = lw / 2;
             const double top = lh * 0.30;
             const double avatar = 150;
@@ -241,7 +241,7 @@ void draw(Screen& screen)
             p.fillPath(fieldPath, QColor(255, 255, 255, 36));
             p.setPen(QPen(QColor(255, 255, 255, 50), 1));
             p.drawPath(fieldPath);
-            // La riga accentata in basso, come nei campi di Windows 11.
+            // The accent line at the bottom, as in Windows 11 fields.
             p.fillRect(QRectF(field.left() + 2, field.bottom() - 2, field.width() - 4, 2), QColor(91, 140, 255));
 
             font.setPixelSize(15);
@@ -255,7 +255,8 @@ void draw(Screen& screen)
                 p.setPen(QColor(255, 255, 255, 140));
                 p.drawText(textBox, Qt::AlignVCenter | Qt::AlignLeft, QCoreApplication::translate("Lock", "Password"));
             } else {
-                // Un pallino per carattere (i caratteri UTF-8 multibyte contano uno).
+                // One dot per character (multibyte UTF-8 characters count as
+                // one).
                 const auto chars = std::count_if(password.begin(), password.end(),
                     [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; });
                 p.setPen(Qt::white);
@@ -313,7 +314,7 @@ int pamConversation(int count, const pam_message** messages, pam_response** resp
     return PAM_SUCCESS;
 }
 
-// Nel thread di PAM; il risultato torna al thread principale.
+// In PAM's thread; the result goes back to the main thread.
 void authenticate(std::string secret)
 {
     const char* service = access("/etc/pam.d/vela-lock", F_OK) == 0 ? "vela-lock" : "login";
@@ -411,7 +412,7 @@ void onKey(void*, wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t state
     if (mode == Mode::Clock) {
         showLogin();
         if (sym == XKB_KEY_Return || sym == XKB_KEY_KP_Enter || sym == XKB_KEY_Escape || sym == XKB_KEY_space) {
-            return; // solo per far comparire la password
+            return; // only to make the password appear
         }
     }
     switch (sym) {
@@ -427,7 +428,7 @@ void onKey(void*, wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t state
         redrawAll();
         return;
     case XKB_KEY_BackSpace:
-        // Toglie l'ultimo carattere UTF-8 intero.
+        // Removes the last whole UTF-8 character.
         while (!password.empty()) {
             const unsigned char last = static_cast<unsigned char>(password.back());
             password.pop_back();
@@ -488,7 +489,7 @@ void onSeatCapabilities(void*, wl_seat*, uint32_t capabilities)
 void onSeatName(void*, wl_seat*, const char*) { }
 const wl_seat_listener seatListener { onSeatCapabilities, onSeatName };
 
-// ----------------------------------------------------------- superfici --
+// ------------------------------------------------------------ surfaces --
 
 void onLockSurfaceConfigure(void* data, ext_session_lock_surface_v1* surface, uint32_t serial, uint32_t width,
     uint32_t height)
@@ -549,7 +550,7 @@ void destroyScreen(Screen& screen)
 void onLocked(void*, ext_session_lock_v1*) { }
 void onFinished(void*, ext_session_lock_v1*)
 {
-    // Il compositor non ci ha dato il blocco (c'è già un altro programma).
+    // The compositor didn't give us the lock (another program already has it).
     if (!unlocked) {
         fprintf(stderr, "vela-lock: the compositor refused the lock\n");
         QGuiApplication::exit(1);
@@ -557,7 +558,7 @@ void onFinished(void*, ext_session_lock_v1*)
 }
 const ext_session_lock_v1_listener lockListener { onLocked, onFinished };
 
-// ------------------------------------------------------------ registro --
+// ------------------------------------------------------------ registry --
 
 void onGlobal(void*, wl_registry* registry, uint32_t name, const char* interface, uint32_t version)
 {
@@ -580,7 +581,7 @@ void onGlobal(void*, wl_registry* registry, uint32_t name, const char* interface
         auto screen = std::make_unique<Screen>();
         screen->name = name;
         screen->output = static_cast<wl_output*>(wl_registry_bind(registry, name, &wl_output_interface, 1));
-        createLockSurface(*screen); // schermo collegato mentre è bloccato
+        createLockSurface(*screen); // output plugged in while locked
         screens.push_back(std::move(screen));
     }
 }
@@ -601,10 +602,10 @@ const wl_registry_listener registryListener { onGlobal, onGlobalRemove };
 
 int main(int argc, char* argv[])
 {
-    // Qt solo per font e immagini: nessuna finestra Qt.
+    // Qt only for fonts and images: no Qt window.
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
-    vela::language::install(QStringLiteral("vela-lock")); // disegna a ogni frame: niente da ritradurre
+    vela::language::install(QStringLiteral("vela-lock")); // draws every frame: nothing to retranslate
 
     if (const passwd* pw = getpwuid(getuid())) {
         userName = QString::fromLocal8Bit(pw->pw_name);
@@ -635,7 +636,7 @@ int main(int argc, char* argv[])
     }
     wl_display_roundtrip(display);
 
-    // Gli eventi Wayland dentro il ciclo di Qt.
+    // Wayland events inside Qt's loop.
     QSocketNotifier notifier(wl_display_get_fd(display), QSocketNotifier::Read);
     QObject::connect(&notifier, &QSocketNotifier::activated, [] {
         if (wl_display_dispatch(display) < 0) {
@@ -647,7 +648,8 @@ int main(int argc, char* argv[])
         wl_display_flush(display);
     });
 
-    // L'orologio cambia al minuto; la password sparisce dopo 30 s di nulla.
+    // The clock changes every minute; the password disappears after 30 s of
+    // nothing.
     QTimer tick;
     QString shownMinute;
     QObject::connect(&tick, &QTimer::timeout, [&shownMinute] {

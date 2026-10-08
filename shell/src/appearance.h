@@ -8,18 +8,18 @@
 #include <QObject>
 #include <QTimer>
 
-// L'aspetto delle app di Vela (Esplora), preso dalla shell: modalità chiara
-// o scura delle app ("Scegli la modalità"), colore d'accento e Mica (vedi
-// mica.h). Si aggiorna da solo quando le Impostazioni cambiano qualcosa o
-// cambia lo sfondo. Le icone seguono la modalità (applyIconTheme).
+// The look of Vela's apps (Explorer), taken from the shell: the apps' light or
+// dark mode ("Choose your mode"), accent color and Mica (see mica.h). Updates
+// itself when Settings change something or the wallpaper changes. Icons follow
+// the mode (applyIconTheme).
 class Appearance : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool light READ light NOTIFY changed)
     Q_PROPERTY(QColor accent READ accent NOTIFY changed)
     Q_PROPERTY(QColor mica READ mica NOTIFY changed)
     Q_PROPERTY(QColor micaInactive READ micaInactive NOTIFY changed)
-    // "l/" o "d/" per image://icon: cambia un attimo dopo la modalità, a
-    // cache delle icone svuotate (applyIconTheme).
+    // "l/" or "d/" for image://icon: changes a moment after the mode, once the
+    // icon caches are emptied (applyIconTheme).
     Q_PROPERTY(QString iconMode READ iconMode NOTIFY iconModeChanged)
 
 public:
@@ -31,7 +31,7 @@ public:
     QColor micaInactive() const { return m_micaInactive; }
     QString iconMode() const { return m_iconMode; }
 
-    // Comincia a osservare i file (dopo il primo fotogramma: l'avvio resta veloce).
+    // Starts watching the files (after the first frame: startup stays fast).
     void watch();
 
 signals:

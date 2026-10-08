@@ -2,10 +2,10 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Avvia Vela dentro una finestra della tua sessione attuale (es. KDE),
-# con la shell già caricata. Chiudi con Alt+Shift+Esc o chiudendo la finestra.
+# Starts Vela inside a window of your current session (such as KDE), with the
+# shell already loaded. Close with Alt+Shift+Esc or by closing the window.
 #
-# Uso: scripts/run-nested.sh [cartella-di-build]
+# Usage: scripts/run-nested.sh [build-directory]
 
 set -eu
 
@@ -18,7 +18,7 @@ if [ ! -x "$COMPOSITOR" ]; then
     exit 1
 fi
 
-# Layout della tastiera: quello italiano se non ne hai scelto un altro.
+# Keyboard layout: Italian unless you chose another one.
 export XKB_DEFAULT_LAYOUT="${XKB_DEFAULT_LAYOUT:-it}"
 
 if [ -x "$SHELL_BIN" ]; then

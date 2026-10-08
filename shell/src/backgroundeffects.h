@@ -15,15 +15,15 @@ struct wl_compositor;
 struct ext_background_effect_manager_v1;
 struct ext_background_effect_surface_v1;
 
-// La sfocatura dietro i pannelli della shell (taskbar, menu Start, menu,
-// notifiche, Alt+Tab), chiesta al compositor con il protocollo standard
-// ext-background-effect-v1 (docs/renderer.md §8.3). Il compositor sfoca ciò
-// che sta dietro la regione e la ritaglia con l'alfa del pannello: gli
-// angoli arrotondati restano tali.
+// The blur behind the shell's panels (taskbar, Start menu, menus,
+// notifications, Alt+Tab), asked of the compositor with the standard
+// ext-background-effect-v1 protocol (docs/renderer.md §8.3). The compositor
+// blurs what's behind the region and clips it with the panel's alpha: rounded
+// corners stay rounded.
 //
-// Dal QML: Effects.setBlur(finestra, [Qt.rect(...), ...]) ogni volta che la
-// zona cambia; Effects.blurAvailable dice se il compositor lo sa fare (se
-// no, i pannelli tornano opachi).
+// From QML: Effects.setBlur(window, [Qt.rect(...), ...]) whenever the area
+// changes; Effects.blurAvailable tells whether the compositor can do it (if
+// not, panels go back to opaque).
 class BackgroundEffects : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool blurAvailable READ blurAvailable NOTIFY blurAvailableChanged)
@@ -33,7 +33,7 @@ public:
     ~BackgroundEffects() override;
 
     bool blurAvailable() const { return m_blurAvailable; }
-    // Rettangoli in coordinate della finestra; lista vuota: niente sfocatura.
+    // Rectangles in window coordinates; empty list: no blur.
     Q_INVOKABLE void setBlur(QWindow* window, const QVariantList& rects);
 
 signals:
@@ -49,7 +49,7 @@ private:
         QRegion region;
         ext_background_effect_surface_v1* effect = nullptr;
         bool connected = false;
-        bool following = false; // collegati ai segnali della wl_surface
+        bool following = false; // connected to the wl_surface signals
     };
     void follow(Entry& entry);
     void apply(Entry& entry);

@@ -3,10 +3,10 @@
 
 import QtQuick
 
-// Cosa condividere, quando un'app (videochiamata, registrazione) chiede lo
-// schermo attraverso il portale: uno schermo intero o una finestra, con le
-// anteprime. La risposta torna a xdg-desktop-portal-wlr (vedi
-// "vela-shell --choose-source" e session/xdpw-vela.conf.in).
+// What to share, when an app (video call, recording) asks for the screen
+// through the portal: a whole output or a window, with previews. The answer
+// goes back to xdg-desktop-portal-wlr (see "vela-shell --choose-source" and
+// session/xdpw-vela.conf.in).
 Window {
     id: root
     objectName: "sourceChooser"
@@ -15,8 +15,8 @@ Window {
     height: 540
     color: "transparent"
 
-    property int tab: 0 // 0 schermi, 1 finestre
-    property string selected: "" // la risposta per il portale
+    property int tab: 0 // 0 outputs, 1 windows
+    property string selected: "" // the answer for the portal
     readonly property var current: tab === 0 ? screens : windows
 
     ListModel { id: screens }
@@ -31,8 +31,9 @@ Window {
                     screens.append({
                         identifier: "screen:" + screen.name,
                         answer: "Monitor: " + screen.name,
-                        // Il modello del monitor: la risoluzione qui non si sa (a
-                        // scala frazionaria devicePixelRatio è quella intera).
+                        // The monitor's model: the resolution isn't known here
+                        // (at fractional scales devicePixelRatio is the
+                        // integer one).
                         title: screen.model !== "" ? screen.name + " (" + screen.model + ")" : screen.name,
                         icon: "video-display",
                         revision: 0
@@ -51,8 +52,8 @@ Window {
                 })
                 ids.push(w.id)
             }
-            // Prima le fotografie degli schermi, poi la finestra: altrimenti
-            // nelle anteprime ci sarebbe lei stessa.
+            // First the photos of the outputs, then the window: otherwise it
+            // would be in the previews itself.
             Capture.captureScreens()
             Capture.capture(ids)
             root.tab = 0
@@ -67,7 +68,7 @@ Window {
 
     Timer {
         id: showTimer
-        interval: 300 // al più: se una cattura non arriva, si apre lo stesso
+        interval: 300 // at most: if a capture doesn't arrive, it opens anyway
         onTriggered: {
             root.visible = true
             panel.forceActiveFocus()
@@ -84,7 +85,7 @@ Window {
                     }
                 }
             }
-            // Tutti gli schermi fotografati: si può aprire.
+            // All outputs photographed: it can open.
             if (showTimer.running) {
                 let ready = true
                 for (let i = 0; i < screens.count; ++i) {
@@ -132,7 +133,7 @@ Window {
             font.pixelSize: Theme.fontNormal
         }
 
-        // Le due schede, sottolineate come in Windows 11.
+        // The two tabs, underlined like in Windows 11.
         Row {
             x: 24
             y: 84

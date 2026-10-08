@@ -3,10 +3,10 @@
 
 import QtQuick
 
-// Una riga di impostazione, come le "settings card" di Windows 11: icona,
-// titolo e descrizione a sinistra, il controllo a destra (i figli). Con
-// `clickable` tutta la scheda è un pulsante (e mostra la freccia se porta
-// a un'altra pagina).
+// A settings row, like Windows 11 "settings cards": icon, title and
+// description on the left, the control on the right (the children). With
+// `clickable` the whole card is a button (and shows the arrow if it leads to
+// another page).
 Rectangle {
     id: card
     property string icon
@@ -14,15 +14,15 @@ Rectangle {
     property string description
     property bool clickable: false
     property bool chevron: false
-    property bool first: true // angoli arrotondati in alto
-    property bool last: true // e in basso (nei gruppi solo il primo e l'ultimo)
+    property bool first: true // rounded corners at the top
+    property bool last: true // and at the bottom (in groups only the first and the last)
     property alias trailing: trailingRow.data
-    property alias contentItem: extra.data // contenuto sotto, a tutta larghezza
+    property alias contentItem: extra.data // content below, full width
     property int minimumHeight: description !== "" ? 69 : 48
     signal clicked()
 
     width: parent ? parent.width : 0
-    // Il contenuto sotto conta solo se visibile (le schede che si aprono).
+    // The content below counts only when visible (cards that expand).
     readonly property bool hasExtra: {
         for (let i = 0; i < extra.children.length; ++i) {
             if (extra.children[i].visible) return true

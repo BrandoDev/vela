@@ -4,9 +4,8 @@
 import QtQuick
 import QtCore
 
-// La finestra di Esplora: le schede in alto (Ctrl+T, Ctrl+W, clic centrale
-// su una cartella), sotto la scheda aperta. Qui stanno anche i menu, le
-// finestre di dialogo e l'avanzamento delle copie.
+// Explorer's window: tabs at the top (Ctrl+T, Ctrl+W, middle click on a
+// folder), the open tab below. Menus, dialogs and copy progress live here too.
 Window {
     id: root
     width: 1180
@@ -19,25 +18,25 @@ Window {
 
     onActiveChanged: Theme.windowActive = active
 
-    // --- preferenze, ricordate tra un avvio e l'altro ---
+    // --- preferences, remembered across launches ---
     Settings {
         id: settings
-        property string viewModes: "{}" // cartella -> vista
+        property string viewModes: "{}" // folder -> view
         property bool showHidden: false
         property real navWidth: 240
-        property string pane: "" // a destra: "", "preview" o "details"
+        property string pane: "" // on the right: "", "preview" or "details"
         property real paneWidth: 320
     }
     property alias showHidden: settings.showHidden
     property alias navWidth: settings.navWidth
     property alias pane: settings.pane
     property alias paneWidth: settings.paneWidth
-    // Alt+P e Alt+Maiusc+P: il riquadro di anteprima o dei dettagli, o niente.
+    // Alt+P and Alt+Shift+P: the preview or details pane, or nothing.
     function togglePane(mode) { pane = pane === mode ? "" : mode }
     property var viewModes: JSON.parse(settings.viewModes)
     function viewModeFor(location) {
         if (viewModes[location]) return viewModes[location]
-        // Immagini e video si guardano meglio a icone grandi, come in Windows.
+        // Images and videos look better as large icons, like in Windows.
         if (/\/(Immagini|Pictures|Video|Videos)$/.test(location)) return "large"
         return "details"
     }
@@ -48,7 +47,7 @@ Window {
         settings.viewModes = JSON.stringify(copy)
     }
 
-    // --- schede ---
+    // --- tabs ---
     property var tabs: []
     property int currentIndex: 0
     readonly property var current: tabs[currentIndex] || null
@@ -84,7 +83,7 @@ Window {
         }
     }
 
-    // Espelli (da qualunque scheda): l'errore una volta sola.
+    // Eject (from any tab): the error only once.
     Connections {
         target: Places
         function onEjected(error) { if (error !== "") root.showError(error) }
@@ -97,7 +96,7 @@ Window {
     Shortcut { sequence: "Ctrl+N"; onActivated: Ops.newWindow(root.current ? root.current.location : "") }
     Shortcut { sequences: ["Ctrl+L", "Alt+D", "F4"]; onActivated: root.focusChild("address") }
     Shortcut { sequences: ["Ctrl+F", "Ctrl+E", "F3"]; onActivated: root.focusChild("search") }
-    // La barra degli indirizzi e la ricerca della scheda aperta.
+    // The open tab's address bar and search.
     function focusChild(what) {
         if (!current) return
         for (let i = 0; i < current.children.length; ++i) {
@@ -109,7 +108,7 @@ Window {
         }
     }
 
-    // --- le schede, in alto ---
+    // --- the tabs, at the top ---
     Item {
         id: strip
         anchors { left: parent.left; right: parent.right; top: parent.top }
@@ -185,7 +184,7 @@ Window {
                         property bool hovered: false
                         onClicked: root.closeTab(tabButton.index)
                     }
-                    // Trascinando file sulla scheda si apre lei.
+                    // Dragging files onto a tab opens it.
                     DropArea {
                         anchors.fill: parent
                         onEntered: root.currentIndex = tabButton.index
@@ -207,8 +206,8 @@ Window {
         anchors { left: parent.left; right: parent.right; top: strip.bottom; bottom: parent.bottom }
     }
 
-    // I tasti laterali del mouse: Indietro e Avanti, come in Windows. Gli
-    // altri tasti, la rotellina e i file trascinati passano a ciò che sta sotto.
+    // The mouse side buttons: Back and Forward, like in Windows. Other
+    // buttons, the wheel and dragged files pass to what's below.
     MouseArea {
         anchors.fill: pages
         z: 90
@@ -225,7 +224,7 @@ Window {
         z: 50
     }
 
-    // --- finestre di dialogo ---
+    // --- dialogs ---
     function showError(message) {
         errorDialog.text = message
         errorDialog.open()
@@ -241,7 +240,7 @@ Window {
     Connections {
         target: Ops
         function onFailed(message) { root.showError(message) }
-        // Nella destinazione ci sono già file con lo stesso nome: come Windows.
+        // The destination already has files with the same name: like Windows.
         function onConflict(count, firstName, directory) {
             conflictDialog.title = qsTr("Replace or skip files")
             conflictDialog.text = count === 1

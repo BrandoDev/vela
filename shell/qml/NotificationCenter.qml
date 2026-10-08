@@ -3,10 +3,10 @@
 
 import QtQuick
 
-// Il centro notifiche e il calendario (Win+N, o clic sull'orologio), come
-// Windows 11: sopra le notifiche passate, raggruppate per app, con "Non
-// disturbare" e "Cancella tutto"; sotto il calendario del mese. Due
-// pannelli acrylic in basso a destra.
+// The notification center and calendar (Win+N, or a click on the clock), like
+// Windows 11: past notifications on top, grouped by app, with "Do not disturb"
+// and "Clear all"; the month's calendar below. Two acrylic panels at the
+// bottom right.
 Window {
     id: root
     objectName: "notificationCenter"
@@ -16,7 +16,7 @@ Window {
     color: "transparent"
 
     readonly property var history: Notifications.history
-    property date month: new Date() // il mese mostrato dal calendario
+    property date month: new Date() // the month the calendar shows
 
     function open() {
         Menus.quickSettingsOpen = false
@@ -108,7 +108,7 @@ Window {
         Keys.onEscapePressed: root.close()
         onHeightChanged: root.updateBlur()
 
-        // --- le notifiche ---
+        // --- notifications ---
         Rectangle {
             id: notifications
             width: parent.width
@@ -256,7 +256,7 @@ Window {
                             }
                         }
                     }
-                    // Chiudi (al passaggio del mouse), come su Windows.
+                    // Close (on hover), like on Windows.
                     SmallButton {
                         anchors { right: parent.right; top: parent.top; margins: 6 }
                         visible: itemHover.hovered
@@ -275,7 +275,7 @@ Window {
             }
         }
 
-        // --- il calendario ---
+        // --- calendar ---
         Rectangle {
             id: calendar
             width: parent.width
@@ -292,7 +292,7 @@ Window {
                 width: parent.width - 32
                 spacing: 12
 
-                // Oggi, per intero ("sabato 4 ottobre"), come Windows.
+                // Today, in full ("Saturday, October 4"), like Windows.
                 Text {
                     text: {
                         const s = Qt.locale().toString(new Date(), "dddd d MMMM")
@@ -329,7 +329,7 @@ Window {
                     }
                 }
 
-                // La griglia: la settimana comincia di lunedì.
+                // The grid: the week starts on Monday.
                 Grid {
                     id: days
                     columns: 7

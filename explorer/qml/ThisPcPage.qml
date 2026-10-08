@@ -3,8 +3,8 @@
 
 import QtQuick
 
-// Questo PC, come Windows 11: le cartelle dell'utente e le unità con la
-// barra dello spazio usato (rossa quando è quasi piena).
+// This PC, like Windows 11: the user's folders and the drives with a
+// used-space bar (red when almost full).
 Flickable {
     id: page
     property var tab

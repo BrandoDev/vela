@@ -4,11 +4,11 @@
 import QtQuick
 import QtQuick.Effects
 
-// Lo sfondo del desktop: una superficie layer-shell sotto a tutto, anche
-// sotto la taskbar, una per schermo (vedi wallpapers.cpp). La dimensione la
-// decide il compositor (ancorata ai quattro lati). Sullo schermo principale
-// ci sono le icone del desktop: i file della cartella Desktop (Scrivania)
-// e il Cestino, come in Windows 11.
+// The desktop wallpaper: a layer-shell surface below everything, even below
+// the taskbar, one per output (see screenwindows.cpp). The compositor decides
+// the size (anchored to all four sides). The main output has the desktop
+// icons: the files of the Desktop folder and the Recycle Bin, like in Windows
+// 11.
 Window {
     id: root
     objectName: "wallpaper"
@@ -16,24 +16,24 @@ Window {
     visible: false
     width: Screen.width
     height: Screen.height
-    color: Theme.desktop // mentre l'immagine si prepara
+    color: Theme.desktop // while the image is being prepared
 
-    property bool primary: false // lo imposta wallpapers.cpp
+    property bool primary: false // set by screenwindows.cpp
 
     Image {
         anchors.fill: parent
-        // Disegnata già alla dimensione esatta dello schermo, in pixel veri:
-        // sourceSize è in unità logiche, e Qt lo moltiplica da sé per la
-        // scala della finestra (anche frazionaria). Screen.devicePixelRatio
-        // invece è la scala intera dello schermo (2 al 125%): usarlo qui
-        // chiedeva un'immagine doppia, poi dimezzata senza filtro.
+        // Drawn already at the output's exact size, in real pixels: sourceSize
+        // is in logical units, and Qt multiplies it by the window's scale
+        // (fractional too) itself. Screen.devicePixelRatio instead is the
+        // output's integer scale (2 at 125%): using it here asked for a
+        // double-size image, then halved without filtering.
         sourceSize: Qt.size(width, height)
         source: width > 0 && height > 0
             ? "image://wallpaper/" + encodeURIComponent(Config.wallpaper)
             : ""
         asynchronous: true
         cache: false
-        smooth: false // è già della dimensione giusta
+        smooth: false // it's already the right size
 
         opacity: status === Image.Ready ? 1 : 0
         Behavior on opacity {
@@ -41,16 +41,16 @@ Window {
         }
     }
 
-    // --- menu (docs/renderer.md §14.9) ---
+    // --- menus (docs/renderer.md §14.9) ---
 
-    property point menuPoint // dove si è aperto l'ultimo menu: lì si apre "Mostra altre opzioni"
+    property point menuPoint // where the last menu opened: "Show more options" opens there
 
     function openMenu(entries, x, y, keyboard) {
         menuPoint = Qt.point(x, y)
         Menus.open(entries, x, y, { screen: root.screen ? root.screen.name : "", keyboard: !!keyboard })
     }
 
-    // Le voci dei service menu di KDE per questi file, nei loro sottomenu.
+    // The KDE service menu entries for these files, in their submenus.
     function serviceEntries(paths) {
         const out = []
         const submenus = {}
@@ -69,9 +69,9 @@ Window {
         return out
     }
 
-    // "Mostra altre opzioni" (Maiusc+F10, Maiusc+clic destro): il menu
-    // completo, con le voci aggiunte dalle app (service menu di KDE), come
-    // il menu classico di Windows.
+    // "Show more options" (Shift+F10, Shift+right click): the full menu, with
+    // the entries apps added (KDE service menus), like the classic Windows
+    // menu.
     function showMoreOptions(paths) {
         const x = menuPoint.x
         const y = menuPoint.y
@@ -129,7 +129,7 @@ Window {
         return entries
     }
 
-    // Lo sfondo: Visualizza, Ordina per, Aggiorna, Annulla, Nuovo...
+    // The background: View, Sort by, Refresh, Undo, New...
     function desktopEntries() {
         const system = (text, icon, name) => ({ text: text, icon: icon, enabled: System.available(name), action: () => System.trigger(name) })
         const size = (text, value, shortcut) => ({ text: text, radio: true, checked: Desktop.iconSize === value, shortcut: shortcut, action: () => Desktop.iconSize = value })
@@ -177,7 +177,7 @@ Window {
         return entries
     }
 
-    // "Aggiungi a Preferiti" (la Home di Esplora): solo per i file.
+    // "Add to Favorites" (Explorer's Home): only for files.
     function favoriteEntry(files) {
         const all = files.length > 0 && files.every(p => FileActions.isFavorite(p))
         return all
@@ -185,7 +185,7 @@ Window {
             : { text: qsTr("Add to &Favorites"), icon: "starred-symbolic", enabled: files.length > 0, action: () => files.forEach(p => FileActions.setFavorite(p, true)) }
     }
 
-    // Uno o più file: la riga di icone, poi Apri, Apri con...
+    // One or more files: the icon row, then Open, Open with...
     function fileEntries(paths) {
         const items = paths.map(p => icons.itemFor(p)).filter(i => i)
         if (items.length === 0) {
@@ -245,25 +245,25 @@ Window {
         return entries
     }
 
-    // --- le icone del desktop ---
+    // --- desktop icons ---
 
     Item {
         id: icons
         anchors { fill: parent; bottomMargin: Theme.taskbarHeight }
         focus: true
 
-        // Le misure le usa il modello per disporre le icone.
+        // The model uses the sizes to lay out the icons.
         Binding { target: Desktop; property: "areaWidth"; value: icons.width; when: root.primary }
         Binding { target: Desktop; property: "areaHeight"; value: icons.height; when: root.primary }
 
-        property var selection: ({}) // percorso -> true
-        property string anchorPath: "" // per Maiusc+clic
+        property var selection: ({}) // path -> true
+        property string anchorPath: "" // for Shift+click
         property string renamingPath: ""
-        property point dragPress // dove è iniziato il trascinamento di icone del desktop
+        property point dragPress // where the drag of desktop icons started
         property var dragUrls: []
 
-        // File lasciati sul desktop: da un'app si copiano o spostano qui;
-        // le icone del desktop stesso si spostano dove sono state lasciate.
+        // Files dropped on the desktop: from an app they're copied or moved
+        // here; the desktop's own icons move where they were dropped.
         DropArea {
             anchors.fill: parent
             enabled: root.primary
@@ -345,8 +345,8 @@ Window {
             Menus.confirm(qsTr("Delete multiple items"), qsTr("Permanently delete all the items in the Recycle Bin?"), qsTr("Yes"),
                 () => Desktop.emptyTrash())
         }
-        // Il menu per la selezione o per lo sfondo: col tasto Menu quello
-        // moderno, con Maiusc+F10 quello completo (come Windows 11).
+        // The menu for the selection or the background: the modern one with
+        // the Menu key, the full one with Shift+F10 (like Windows 11).
         function keyboardMenu(classic) {
             const paths = selectedPaths()
             const item = paths.length > 0 ? itemFor(paths[0]) : null
@@ -357,7 +357,7 @@ Window {
                 root.openMenu(classic ? root.classicDesktopEntries() : root.desktopEntries(), 40, 40, true)
             }
         }
-        // Frecce: l'icona più vicina in quella direzione.
+        // Arrows: the nearest icon in that direction.
         function moveSelection(dx, dy) {
             const current = itemFor(anchorPath)
             if (!current) {
@@ -450,8 +450,8 @@ Window {
             event.accepted = true
         }
 
-        // Lo sfondo: clic per togliere la selezione, trascinamento per il
-        // riquadro di selezione, tasto destro per il menu del desktop.
+        // The background: click to clear the selection, drag for the selection
+        // box, right button for the desktop menu.
         MouseArea {
             id: background
             anchors.fill: parent
@@ -503,7 +503,7 @@ Window {
             }
         }
 
-        // Il riquadro di selezione, azzurro come in Windows.
+        // The selection box, light blue like in Windows.
         Rectangle {
             id: band
             visible: background.banding && width > 2 && height > 2
@@ -528,13 +528,13 @@ Window {
                 required property bool isApp
                 required property bool isTrash
                 required property bool hasThumbnail
-                required property double modified // secondi: una miniatura nuova se il file cambia
+                required property double modified // seconds: a new thumbnail if the file changes
                 required property real cellX
                 required property real cellY
 
                 readonly property bool selected: icons.isSelected(path)
                 readonly property bool renaming: icons.renamingPath === path
-                readonly property bool isDesktopIcon: true // per riconoscerle quando tornano sul desktop
+                readonly property bool isDesktopIcon: true // to recognize them when they come back to the desktop
 
                 Drag.active: iconDrag.active && icons.dragUrls.length > 0
                 Drag.dragType: Drag.Automatic
@@ -545,13 +545,13 @@ Window {
                 Drag.imageSourceSize: Qt.size(Desktop.iconPixels, Desktop.iconPixels)
                 Drag.hotSpot: Qt.point(Desktop.iconPixels / 2, Desktop.iconPixels / 2)
 
-                // Una cartella o il Cestino: ci si possono lasciare file.
+                // A folder or the Recycle Bin: files can be dropped on it.
                 DropArea {
                     id: iconDrop
                     anchors.fill: parent
                     enabled: (icon.isDir || icon.isTrash) && root.primary
                     onEntered: drag => {
-                        // Non dentro sé stessa (è tra quelle trascinate).
+                        // Not into itself (it's among those dragged).
                         if (!drag.hasUrls || (drag.source && drag.source.isDesktopIcon && icon.selected)) {
                             drag.accepted = false
                         }
@@ -575,7 +575,7 @@ Window {
                 y: cellY
                 z: selected ? 1 : 0
 
-                // Evidenziazione: al passaggio del mouse, e più forte se scelta.
+                // Highlight: on hover, and stronger if selected.
                 Rectangle {
                     anchors.fill: content
                     anchors.margins: -2
@@ -593,8 +593,8 @@ Window {
                     width: parent.width - 4
                     spacing: 4
 
-                    // L'icona del tipo di file, o la miniatura (immagini, e ciò
-                    // che altre app hanno già messo nella cache: video, PDF).
+                    // The file type's icon, or the thumbnail (images, and what
+                    // other apps already put in the cache: videos, PDFs).
                     Item {
                         anchors.horizontalCenter: parent.horizontalCenter
                         width: Desktop.iconPixels
@@ -619,7 +619,7 @@ Window {
                             sourceSize: Qt.size(Desktop.iconPixels, Desktop.iconPixels)
                             smooth: true
                             mipmap: true
-                            // Il contorno sottile delle foto in Windows.
+                            // The thin outline of photos in Windows.
                             Rectangle {
                                 anchors.centerIn: parent
                                 width: preview.paintedWidth
@@ -632,7 +632,8 @@ Window {
                         }
                     }
 
-                    // Il nome: bianco con un'ombra, su due righe (tutto se scelta).
+                    // The name: white with a shadow, on two lines (all of it
+                    // if selected).
                     Item {
                         width: parent.width
                         height: icon.renaming ? editor.height + 4 : label.height
@@ -659,7 +660,8 @@ Window {
                             }
                         }
 
-                        // Rinomina sul posto: si sceglie il nome senza l'estensione.
+                        // Rename in place: the name without the extension is
+                        // selected.
                         Rectangle {
                             visible: icon.renaming
                             width: parent.width
@@ -750,9 +752,10 @@ Window {
                         }
                     }
 
-                    // Trascinare le icone scelte: è un trascinamento vero tra
-                    // app (file), che può finire in Dolphin, in un'email, nel
-                    // Cestino o di nuovo sul desktop (lì le icone si spostano).
+                    // Dragging the selected icons: a real drag between apps
+                    // (files), which can end in Dolphin, in an email, in the
+                    // Recycle Bin or back on the desktop (where the icons
+                    // move).
                     DragHandler {
                         id: iconDrag
                         target: null

@@ -15,20 +15,20 @@ class QQmlEngine;
 class QQuickWindow;
 class QScreen;
 
-// Una finestra della shell per ogni schermo, che nasce e sparisce con lo
-// schermo: lo sfondo (Wallpaper.qml) e la taskbar (Taskbar.qml), come in
-// Windows. Ogni finestra ha la proprietà `primary` (lo schermo principale:
-// lì le icone del desktop, l'area di notifica). Se il compositor la chiude
-// (schermo spento e riacceso, cambio di console) la si rimette.
+// One shell window per output, born and gone with the output: the wallpaper
+// (Wallpaper.qml) and the taskbar (Taskbar.qml), like in Windows. Each window
+// has the `primary` property (the main output: desktop icons and the
+// notification area go there). If the compositor closes it (output turned off
+// and on, VT switch) it's put back.
 class ScreenWindows : public QObject {
     Q_OBJECT
 
 public:
     using Setup = std::function<void(QQuickWindow*, QScreen*)>;
     ScreenWindows(QQmlEngine* engine, const char* component, Setup setup, QObject* parent = nullptr);
-    bool start(); // false se il QML non si carica
+    bool start(); // false if the QML doesn't load
 
-    // Solo sullo schermo principale (la taskbar, se l'utente la vuole lì sola).
+    // Only on the main output (the taskbar, if the user wants it there alone).
     void setPrimaryOnly(bool on);
 
 private:
@@ -42,5 +42,5 @@ private:
     bool m_primaryOnly = false;
     QHash<QScreen*, QPointer<QQuickWindow>> m_windows;
     QTimer m_syncTimer;
-    int m_retries = 0; // riaperture senza uno schermo nuovo
+    int m_retries = 0; // reopenings without a new output
 };

@@ -3,8 +3,8 @@
 
 import QtQuick
 
-// Sistema > Audio: dove va il suono e da dove arriva, con il volume di
-// ciascuno, come Windows 11.
+// System > Sound: where sound goes and where it comes from, with the volume of
+// each, like Windows 11.
 Page {
     id: page
     Component.onCompleted: Audio.refresh()
@@ -22,7 +22,7 @@ Page {
         clickable: !modelData.isDefault
         onClicked: Audio.setDefault(kind, modelData.name)
         trailing: Rectangle {
-            // Il pallino di scelta, come i RadioButton di Windows.
+            // The choice dot, like Windows RadioButtons.
             width: 20
             height: 20
             radius: 10

@@ -2,15 +2,15 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# La sessione di Vela, avviata da SDDM (vela.desktop) o da una console.
-# Il log di ogni sessione resta in ~/.local/state/vela/ (l'ultimo e il
-# precedente), per capire cosa è successo se qualcosa va storto.
+# The Vela session, started by SDDM (vela.desktop) or from a console. Each
+# session's log stays in ~/.local/state/vela/ (the last and the previous one),
+# to understand what happened if something goes wrong.
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/vela"
 mkdir -p "$STATE_DIR"
 [ -f "$STATE_DIR/vela.log" ] && mv -f "$STATE_DIR/vela.log" "$STATE_DIR/vela.log.old"
 
-# --supervise: se il compositor va in crash si riavvia, e le app Qt e KDE
-# si ricollegano (vedi compositor/src/supervisor.c).
+# --supervise: if the compositor crashes it's restarted, and Qt and KDE apps
+# reconnect (see compositor/src/supervisor.c).
 exec "@CMAKE_INSTALL_FULL_BINDIR@/vela-compositor" --supervise -s "@CMAKE_INSTALL_FULL_BINDIR@/vela-shell" "$@" \
     2> "$STATE_DIR/vela.log"

@@ -6,8 +6,8 @@
 #include <QGuiApplication>
 #include <QWindow>
 #include <QtGui/qguiapplication_platform.h>
-// API privata di Qt (la usa anche KDE): l'unico modo per avere la
-// wl_surface di una finestra. Può cambiare tra versioni minori di Qt.
+// Qt private API (KDE uses it too): the only way to get a window's wl_surface.
+// It can change between minor Qt versions.
 #include <QtGui/qpa/qplatformwindow_p.h>
 
 namespace {
@@ -125,12 +125,12 @@ void ForeignToplevelManager::zwlr_foreign_toplevel_manager_v1_toplevel(::zwlr_fo
 
     connect(window, &ForeignToplevel::changed, this, [this, window] {
         if (!m_windows.contains(window)) {
-            m_windows.append(window); // al primo "done": ora sappiamo chi è
+            m_windows.append(window); // at the first "done": now we know who it is
         }
         emit windowsChanged();
     });
     connect(window, &ForeignToplevel::closed, this, [this, window] {
-        // Chi punta a questa finestra come genitore non deve restare appeso.
+        // Whoever points at this window as parent must not be left dangling.
         for (ForeignToplevel* other : std::as_const(m_windows)) {
             if (other->parentWindow == window) {
                 other->parentWindow = nullptr;

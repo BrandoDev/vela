@@ -3,7 +3,7 @@
 
 import QtQuick
 
-// Sistema > Notifiche.
+// System > Notifications.
 Page {
     CardGroup {
         Card {

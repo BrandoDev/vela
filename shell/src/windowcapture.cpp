@@ -19,7 +19,7 @@
 #include "ext-image-capture-source-v1-client-protocol.h"
 #include "ext-image-copy-capture-v1-client-protocol.h"
 
-// ------------------------------------------------------------------ stato --
+// ------------------------------------------------------------------ state --
 
 struct WindowCapture::Window {
     ext_foreign_toplevel_handle_v1* handle = nullptr;
@@ -28,8 +28,8 @@ struct WindowCapture::Window {
     QString appId;
 };
 
-// Una cattura in corso: sorgente -> sessione (ci dice dimensione e formati)
-// -> frame con un nostro buffer in memoria condivisa -> "ready".
+// A capture in progress: source -> session (it tells size and formats)
+// -> frame with a shared-memory buffer of ours -> "ready".
 struct WindowCapture::Job {
     WindowCapture* owner = nullptr;
     QString identifier;
@@ -43,13 +43,13 @@ struct WindowCapture::Job {
     size_t size = 0;
     uint32_t width = 0;
     uint32_t height = 0;
-    int format = -1; // formato wl_shm scelto, -1 = nessuno utilizzabile
-    bool full = false; // l'immagine intera, non la miniatura
+    int format = -1; // chosen wl_shm format, -1 = none usable
+    bool full = false; // the whole image, not the thumbnail
 };
 
 namespace {
 
-// Formati wl_shm che sappiamo leggere, e il QImage corrispondente.
+// wl_shm formats we can read, and the matching QImage.
 QImage::Format imageFormat(uint32_t shmFormat)
 {
     switch (shmFormat) {
@@ -63,7 +63,7 @@ QImage::Format imageFormat(uint32_t shmFormat)
 
 } // namespace
 
-// I listener C di libwayland: rimandano alla classe.
+// libwayland's C listeners: they forward to the class.
 struct CaptureCallbacks {
     using Window = WindowCapture::Window;
     using Job = WindowCapture::Job;
@@ -92,7 +92,7 @@ struct CaptureCallbacks {
     static void globalRemove(void*, wl_registry*, uint32_t) { }
     static constexpr wl_registry_listener registryListener { global, globalRemove };
 
-    // --- elenco finestre ---
+    // --- window list ---
     static void toplevel(void* data, ext_foreign_toplevel_list_v1*, ext_foreign_toplevel_handle_v1* handle)
     {
         auto* self = static_cast<WindowCapture*>(data);
@@ -136,7 +136,7 @@ struct CaptureCallbacks {
         closed, done, title, appId, identifier
     };
 
-    // --- sessione di cattura ---
+    // --- capture session ---
     static void bufferSize(void* data, ext_image_copy_capture_session_v1*, uint32_t width, uint32_t height)
     {
         auto* job = static_cast<Job*>(data);
@@ -146,7 +146,7 @@ struct CaptureCallbacks {
     static void shmFormat(void* data, ext_image_copy_capture_session_v1*, uint32_t format)
     {
         auto* job = static_cast<Job*>(data);
-        // Il primo formato leggibile va bene; XRGB/ARGB sono i più comuni.
+        // The first readable format is fine; XRGB/ARGB are the most common.
         if (job->format < 0 && imageFormat(format) != QImage::Format_Invalid) {
             job->format = static_cast<int>(format);
         }
@@ -157,7 +157,7 @@ struct CaptureCallbacks {
     {
         auto* job = static_cast<Job*>(data);
         if (job->frame) {
-            return; // arriva di nuovo se la finestra cambia dimensione
+            return; // it comes again if the window changes size
         }
         if (job->format < 0 || job->width == 0 || job->height == 0) {
             job->owner->finishJob(job, false);
@@ -230,7 +230,7 @@ WindowCapture::WindowCapture(QObject* parent)
 
 WindowCapture::~WindowCapture()
 {
-    const QList<Job*> jobs = m_jobs; // finishJob li toglie dalla lista
+    const QList<Job*> jobs = m_jobs; // finishJob removes them from the list
     for (Job* job : jobs) {
         finishJob(job, false);
     }
@@ -350,13 +350,14 @@ void WindowCapture::finishJob(Job* job, bool ok)
         const QImage full(static_cast<const uchar*>(job->pixels), int(job->width), int(job->height),
             int(job->width * 4), imageFormat(uint32_t(job->format)));
         if (job->full) {
-            // Una copia vera: i pixel della cattura si liberano qui sotto
-            // (convertToFormat non copierebbe, se il formato è già quello).
+            // A real copy: the capture's pixels are freed below
+            // (convertToFormat wouldn't copy if the format is already the
+            // right one).
             QImage copy = full.copy();
             m_full.insert(job->identifier, copy.convertToFormat(QImage::Format_RGB32));
         } else {
-            // Si tiene solo la miniatura: la cattura intera può essere
-            // grande quanto lo schermo.
+            // Only the thumbnail is kept: the whole capture can be as large as
+            // the output.
             m_thumbnails.insert(job->identifier,
                 full.scaled(thumbnailSize, thumbnailSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         }

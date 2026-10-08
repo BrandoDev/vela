@@ -3,18 +3,18 @@
 
 import QtQuick
 
-// La finestra dei menu del tasto destro (docs/renderer.md §14): copre lo
-// schermo ed è trasparente; i menu e i sottomenu sono pannelli al suo
-// interno, e un clic fuori li chiude. Si apre con Menus.open().
+// The right-click menu window (docs/renderer.md §14): it covers the output and
+// is transparent; menus and submenus are panels inside it, and a click outside
+// closes them. Opened with Menus.open().
 Window {
     id: root
     objectName: "contextMenu"
     visible: false
     color: "transparent"
 
-    property var panels: [] // un MenuPanel per livello, dal menu ai sottomenu
+    property var panels: [] // one MenuPanel per level, from the menu to the submenus
     property var options: ({})
-    // Un sottomenu da aprire (o da chiudere) quando il mouse si ferma.
+    // A submenu to open (or close) when the mouse rests.
     property var pending: null
 
     Component {
@@ -27,13 +27,13 @@ Window {
         function onOpenRequested(entries, x, y, options) {
             root.closeAll(false, true)
             root.options = options
-            // Lo schermo chiesto, o il principale (lo schermo resta quello
-            // dell'ultima volta finché non lo si cambia).
+            // The requested output, or the main one (the output stays the last
+            // one until changed).
             {
                 const name = options.screen || Shell.primaryScreen
                 const screen = Qt.application.screens.find(s => s.name === name)
                 if (screen && screen !== root.screen) {
-                    root.visible = false // su un altro schermo: una superficie nuova
+                    root.visible = false // on another output: a new surface
                     Shell.placeOnScreen(root, screen.name)
                 }
             }
@@ -51,8 +51,8 @@ Window {
         }
     }
 
-    // Il menu della finestra chiesto dal compositor: clic destro sulla
-    // barra del titolo, Alt+Spazio, app che lo chiedono (show_window_menu).
+    // The window menu asked for by the compositor: right click on the title
+    // bar, Alt+Space, apps that ask for it (show_window_menu).
     Connections {
         target: Shell
         function onWindowMenuRequested(window, output, x, y, maximized, resizable, keyboard) {
@@ -67,7 +67,7 @@ Window {
         panel.activated.connect(entry => {
             root.closeAll(true)
             if (entry.action) {
-                Qt.callLater(entry.action) // a menu chiuso: l'azione può aprire finestre
+                Qt.callLater(entry.action) // with the menu closed: the action may open windows
             }
         })
         panel.hovered.connect((index, rowY) => root.onHovered(panel, index, rowY))
@@ -105,7 +105,8 @@ Window {
         return panel
     }
 
-    // Lo sfondo sfocato sotto i menu aperti (la finestra copre lo schermo).
+    // The blurred background under the open menus (the window covers the
+    // output).
     function updateBlur() {
         Effects.setBlur(root, panels.map(p => Qt.rect(p.x, p.y, p.width, p.height)))
     }
@@ -114,7 +115,7 @@ Window {
         pending = null
         const child = panels[parentPanel.level + 1]
         if (child && child.parentIndex === index) {
-            return // già aperto
+            return // already open
         }
         const panel = openLevel(parentPanel.level + 1, parentPanel.entries[index].children, {
             anchorX: parentPanel.x + parentPanel.width - 4,
@@ -126,9 +127,8 @@ Window {
         parentPanel.currentIndex = index
     }
 
-    // Come Windows: i sottomenu si aprono (e si chiudono) dopo una breve
-    // pausa del mouse, così attraversare in diagonale altre voci per
-    // raggiungerli non li chiude.
+    // Like Windows: submenus open (and close) after a short mouse pause, so
+    // crossing other entries diagonally to reach them doesn't close them.
     function onHovered(panel, index, rowY) {
         const entry = panel.entries[index]
         const child = panels[panel.level + 1]
@@ -143,7 +143,7 @@ Window {
         } else {
             pending = null
         }
-        // Entrare in un sottomenu annulla ciò che il padre aveva in sospeso.
+        // Entering a submenu cancels what the parent had pending.
         if (panel.level > 0) {
             const parent = panels[panel.level - 1]
             parent.currentIndex = panel.parentIndex
@@ -183,7 +183,7 @@ Window {
         pending = null
         closeFrom(0)
         if (reopening) {
-            return // un altro menu prende subito il posto di questo
+            return // another menu takes this one's place at once
         }
         visible = false
         Menus.isOpen = false
@@ -198,7 +198,7 @@ Window {
         }
     }
 
-    // Un clic fuori dai menu li chiude.
+    // A click outside the menus closes them.
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.AllButtons

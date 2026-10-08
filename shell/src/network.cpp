@@ -11,7 +11,7 @@
 
 namespace {
 
-// nmcli -t separa i campi con ':' e scrive "\:" quelli dentro i valori.
+// nmcli -t separates fields with ':' and writes "\:" for those inside values.
 QStringList splitTerse(const QString& line)
 {
     QStringList fields;
@@ -38,7 +38,7 @@ QByteArray nmcli(const QStringList& arguments, int timeout = 3000)
     return process.readAllStandardOutput();
 }
 
-// Il processo che gira in sottofondo, e quando finisce chiama `done`.
+// The process running in the background, which calls `done` when it ends.
 template<typename Done>
 void runAsync(QObject* owner, const QStringList& arguments, Done done)
 {
@@ -56,7 +56,7 @@ Network::Network(QObject* parent)
     : QObject(parent)
     , m_available(!QStandardPaths::findExecutable(QStringLiteral("nmcli")).isEmpty())
 {
-    // Si legge quando la pagina si apre (refresh()), non all'avvio.
+    // Read when the page opens (refresh()), not at startup.
 }
 
 void Network::refresh()
@@ -75,7 +75,7 @@ void Network::refresh()
         }
         QVariantMap device { { QStringLiteral("device"), f[0] }, { QStringLiteral("type"), f[1] },
             { QStringLiteral("state"), f[2] }, { QStringLiteral("connection"), f[3] } };
-        // I dettagli: "Proprietà" di Windows.
+        // The details: Windows' "Properties".
         const QStringList details = QString::fromUtf8(nmcli({ QStringLiteral("-t"), QStringLiteral("-f"),
                                                           QStringLiteral("GENERAL.HWADDR,IP4.ADDRESS,IP4.GATEWAY,IP4.DNS,IP6.ADDRESS"),
                                                           QStringLiteral("device"), QStringLiteral("show"), f[0] }))
@@ -148,10 +148,11 @@ void Network::readWifi(const QByteArray& output)
     for (const QString& line : QString::fromUtf8(output).split(u'\n', Qt::SkipEmptyParts)) {
         const QStringList f = splitTerse(line);
         if (f.size() < 4 || f[1].isEmpty()) {
-            continue; // le reti nascoste
+            continue; // hidden networks
         }
         const bool active = f[0] == QLatin1String("*");
-        // La stessa rete da più antenne: una voce sola (la più forte viene prima).
+        // The same network from several access points: a single entry (the
+        // strongest first).
         const qsizetype index = seen.indexOf(f[1]);
         if (index >= 0) {
             if (active) {
@@ -170,7 +171,7 @@ void Network::readWifi(const QByteArray& output)
             { QStringLiteral("known"), m_known.contains(f[1]) },
         });
     }
-    // Quella connessa in cima, poi dalla più forte.
+    // The connected one on top, then strongest first.
     std::stable_sort(networks.begin(), networks.end(), [](const QVariant& a, const QVariant& b) {
         const QVariantMap x = a.toMap();
         const QVariantMap y = b.toMap();
@@ -215,7 +216,7 @@ void Network::connectWifi(const QString& ssid, const QString& password)
             m_connectResult = QCoreApplication::translate("Network", "Couldn't connect to this network");
         }
         emit connectResultChanged();
-        // La shell non ha bisogno dei dettagli dei collegamenti (e non deve fermarsi).
+        // The shell doesn't need connection details (and must not stall).
         if (m_devices.isEmpty()) {
             refreshWifi();
         } else {

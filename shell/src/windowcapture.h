@@ -19,13 +19,13 @@ struct ext_foreign_toplevel_image_capture_source_manager_v1;
 struct ext_output_image_capture_source_manager_v1;
 struct ext_image_copy_capture_manager_v1;
 
-// Anteprime delle finestre (per Alt+Tab), con i protocolli standard
-// ext-foreign-toplevel-list (ogni finestra ha un identificativo) ed
-// ext-image-copy-capture. Ogni cattura è una fotografia: si fa quando il
-// selettore si apre, poi si tiene solo la miniatura.
+// Window previews (for Alt+Tab), with the standard ext-foreign-toplevel-list
+// (every window has an identifier) and ext-image-copy-capture protocols. Each
+// capture is a photo: taken when the switcher opens, then only the thumbnail
+// is kept.
 //
-// Usa libwayland direttamente, sulla stessa connessione di Qt: gli eventi
-// arrivano nella coda predefinita, che Qt smista nel thread principale.
+// It uses libwayland directly, on Qt's connection: events arrive on the
+// default queue, which Qt dispatches in the main thread.
 class WindowCapture : public QObject {
     Q_OBJECT
 
@@ -34,20 +34,20 @@ public:
     ~WindowCapture() override;
 
     Q_INVOKABLE void capture(const QStringList& identifiers);
-    // Una fotografia di ogni schermo: le miniature si chiamano "screen:<nome>".
+    // A photo of each output: the thumbnails are called "screen:<name>".
     Q_INVOKABLE void captureScreens();
-    // Lo stesso a piena risoluzione (lo Strumento di cattura): poi
-    // screenCaptured e fullImage(nome). Il numero di schermi catturati.
+    // The same at full resolution (the Snipping Tool): then screenCaptured and
+    // fullImage(name). The number of outputs captured.
     int captureScreensFull();
     QImage fullImage(const QString& screen) const { return m_full.value(screen); }
     void clearFull() { m_full.clear(); }
-    // Le finestre aperte: [{id, title, appId}], nell'ordine di apertura.
+    // The open windows: [{id, title, appId}], in opening order.
     Q_INVOKABLE QVariantList windowList() const;
     Q_INVOKABLE QString title(const QString& identifier) const;
     Q_INVOKABLE QString appId(const QString& identifier) const;
     QImage thumbnail(const QString& identifier) const { return m_thumbnails.value(identifier); }
 
-    // Lato più lungo delle miniature, in pixel.
+    // Longest side of the thumbnails, in pixels.
     static constexpr int thumbnailSize = 400;
 
 signals:
@@ -70,12 +70,12 @@ private:
 
     QHash<ext_foreign_toplevel_handle_v1*, Window*> m_windows;
     QHash<QString, QImage> m_thumbnails;
-    QHash<QString, QImage> m_full; // schermo -> immagine intera
+    QHash<QString, QImage> m_full; // output -> whole image
     QList<Job*> m_jobs;
 };
 
-// Le miniature per il QML: "image://thumbnail/<identificativo>/<versione>"
-// (la versione cambia a ogni nuova cattura, così Qt non usa quella vecchia).
+// Thumbnails for QML: "image://thumbnail/<identifier>/<version>" (the version
+// changes at every new capture, so Qt doesn't use the old one).
 class ThumbnailProvider : public QQuickImageProvider {
 public:
     explicit ThumbnailProvider(WindowCapture* capture)

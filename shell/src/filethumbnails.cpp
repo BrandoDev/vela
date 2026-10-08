@@ -17,14 +17,14 @@
 
 namespace {
 
-// Specifica freedesktop: normal 128, large 256, x-large 512.
+// freedesktop spec: normal 128, large 256, x-large 512.
 struct CacheSize {
     const char* dir;
     int pixels;
 };
 constexpr CacheSize cacheSizes[] { { "normal", 128 }, { "large", 256 }, { "x-large", 512 } };
 
-constexpr qint64 maxImageBytes = 64 * 1024 * 1024; // oltre, niente miniatura (troppo lenta)
+constexpr qint64 maxImageBytes = 64 * 1024 * 1024; // beyond this, no thumbnail (too slow)
 
 QImage thumbnailFor(const QString& path, int wanted)
 {
@@ -38,7 +38,7 @@ QImage thumbnailFor(const QString& path, int wanted)
     const QString cacheRoot = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
         + QStringLiteral("/thumbnails/");
 
-    // La cartella giusta per la dimensione chiesta (la più piccola che basta).
+    // The right directory for the requested size (the smallest large enough).
     const CacheSize* size = &cacheSizes[2];
     for (const CacheSize& s : cacheSizes) {
         if (wanted <= s.pixels) {
@@ -47,8 +47,8 @@ QImage thumbnailFor(const QString& path, int wanted)
         }
     }
 
-    // Già fatta (da noi o da un'altra app), e ancora valida: da qualunque
-    // cartella grande abbastanza.
+    // Already made (by us or another app), and still valid: from any directory
+    // large enough.
     for (const CacheSize& s : cacheSizes) {
         if (s.pixels < size->pixels) {
             continue;
@@ -63,9 +63,10 @@ QImage thumbnailFor(const QString& path, int wanted)
         }
     }
 
-    // Le immagini le facciamo noi; il resto (video, PDF) solo se c'è già.
+    // We make images ourselves; the rest (videos, PDFs) only if it already
+    // exists.
     QImageReader reader(path);
-    reader.setAutoTransform(true); // foto ruotate (EXIF)
+    reader.setAutoTransform(true); // rotated photos (EXIF)
     if (!reader.canRead() || info.size() > maxImageBytes) {
         return {};
     }
@@ -81,7 +82,7 @@ QImage thumbnailFor(const QString& path, int wanted)
         image = image.scaled(size->pixels, size->pixels, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
 
-    // Nella cache per tutti, con i dati che la specifica chiede.
+    // In the cache for everyone, with the data the spec asks for.
     const QString dir = cacheRoot + QLatin1String(size->dir);
     if (QDir().mkpath(dir)) {
         QFile::setPermissions(cacheRoot, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
@@ -106,8 +107,8 @@ QImage thumbnailFor(const QString& path, int wanted)
     return image;
 }
 
-// Il lavoro nel thread: consegna l'immagine con un segnale (in coda), così
-// se Qt annulla la richiesta e cancella la risposta non resta nulla appeso.
+// The job in the thread: delivers the image with a (queued) signal, so if Qt
+// cancels the request and deletes the response nothing is left hanging.
 class ThumbnailJob : public QObject, public QRunnable {
     Q_OBJECT
 
@@ -155,15 +156,15 @@ private:
 
 FileThumbnailProvider::FileThumbnailProvider()
 {
-    m_pool.setMaxThreadCount(2); // non deve rubare la CPU al resto
+    m_pool.setMaxThreadCount(2); // it must not steal CPU from the rest
 }
 
 QQuickImageResponse* FileThumbnailProvider::requestImageResponse(const QString& id, const QSize& requestedSize)
 {
-    // "<percorso codificato>/<versione>": la versione cambia col file.
+    // "<encoded path>/<version>": the version changes with the file.
     const QString path = QUrl::fromPercentEncoding(id.section(u'/', 0, 0).toUtf8());
     const int size = requestedSize.isValid() ? std::max(requestedSize.width(), requestedSize.height()) : 128;
-    auto* job = new ThumbnailJob(path, size); // lo cancella il pool a fine lavoro
+    auto* job = new ThumbnailJob(path, size); // the pool deletes it when done
     auto* response = new ThumbnailResponse(job);
     m_pool.start(job);
     return response;

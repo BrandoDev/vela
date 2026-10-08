@@ -6,17 +6,17 @@
 #include <QObject>
 #include <QVariantList>
 
-// Sistema > Informazioni, come Windows: le specifiche del dispositivo
-// (nome, processore, RAM, scheda video...) e del sistema operativo, e
-// "Rinomina questo PC" (systemd-hostnamed, la password la chiede polkit).
+// System > About, like Windows: the device specifications (name, processor,
+// RAM, graphics card...) and the operating system's, and "Rename this PC"
+// (systemd-hostnamed, polkit asks for the password).
 class About : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString hostname READ hostname NOTIFY hostnameChanged)
-    Q_PROPERTY(QString userName READ userName CONSTANT) // il nome completo, altrimenti il login
+    Q_PROPERTY(QString userName READ userName CONSTANT) // the full name, otherwise the login
     // [{label, value}]
     Q_PROPERTY(QVariantList device READ device CONSTANT)
     Q_PROPERTY(QVariantList system READ system CONSTANT)
-    Q_PROPERTY(QString model READ model CONSTANT) // "Micro-Star MS-7E49", se lo dice il firmware
+    Q_PROPERTY(QString model READ model CONSTANT) // "Micro-Star MS-7E49", if the firmware says so
     Q_PROPERTY(QString chassisIcon READ chassisIcon CONSTANT)
 
 public:
@@ -30,7 +30,7 @@ public:
     QString chassisIcon() const { return m_chassisIcon; }
 
     Q_INVOKABLE void rename(const QString& name);
-    // Le specifiche come testo, per "Copia".
+    // The specifications as text, for "Copy".
     Q_INVOKABLE QString asText() const;
 
 signals:

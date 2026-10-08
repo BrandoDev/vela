@@ -2,34 +2,33 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Collega Vela alla sessione dell'utente (systemd --user e D-Bus), così le app
-# avviate da loro (portali, agente polkit, app all'avvio) trovano questo
-# display. Lo chiama il compositor: "start" appena il display è pronto,
-# "stop" alla chiusura.
+# Ties Vela to the user's session (systemd --user and D-Bus), so the apps they
+# start (portals, polkit agent, autostart apps) find this display. The
+# compositor calls it: "start" as soon as the display is ready, "stop" on exit.
 #
-# Il gestore systemd dell'utente è uno solo per tutte le sue sessioni: se
-# un'altra sessione grafica è già attiva (Plasma su un'altra console, mentre
-# si prova Vela da una TTY), non si tocca nulla, per non rompere quella.
+# The user's systemd manager is one for all their sessions: if another
+# graphical session is already active (Plasma on another console, while trying
+# Vela from a VT), nothing is touched, so as not to break it.
 
 VARS="WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP KDE_SESSION_VERSION QT_WAYLAND_RECONNECT XDG_SESSION_TYPE XDG_SESSION_DESKTOP QT_QPA_PLATFORMTHEME XDG_MENU_PREFIX"
 STATE="${XDG_RUNTIME_DIR:-/tmp}/vela-session-${WAYLAND_DISPLAY:-none}"
-# Vela si dichiara anche KDE (per il portachiavi), ma il ripristino delle app
-# dell'ultima sessione di Plasma è compito di ksmserver, che qui non c'è: la
-# sua voce di avvio automatico si spegne per la durata della sessione.
+# Vela also declares itself KDE (for the keyring), but restoring the apps of
+# the last Plasma session is ksmserver's job, which isn't here: its autostart
+# entry is turned off for the duration of the session.
 RESTORE='app-org.kde.plasma\x2dfallback\x2dsession\x2drestore@autostart.service'
 
 command -v systemctl > /dev/null || exit 0
 
 case "$1" in
 start)
-    # La sessione attiva può essere la nostra, se il compositor è stato
-    # riavviato dopo un crash (stesso display): allora si aggiornano solo le
-    # variabili (DISPLAY può cambiare).
+    # The active session may be ours, if the compositor was restarted after a
+    # crash (same display): then only the variables are updated (DISPLAY can
+    # change).
     if [ ! -e "$STATE" ] && systemctl --user -q is-active graphical-session.target; then
         echo "vela-session-env: another graphical session is already running, leaving it alone" >&2
         exit 0
     fi
-    # Solo le variabili che hanno un valore.
+    # Only the variables that have a value.
     SET=""
     for var in $VARS; do
         eval "value=\${$var-}"

@@ -58,7 +58,8 @@ bool runDetached(const QString& program, const QStringList& arguments, const QSt
     return QProcess::startDetached(program, arguments, directory);
 }
 
-// "foto.jpg" -> "foto - Copia.jpg", come Windows quando si incolla nella stessa cartella.
+// "photo.jpg" -> "photo - Copy.jpg", like Windows when pasting into the same
+// folder.
 QString copyName(const QFileInfo& source)
 {
     const bool hasSuffix = !source.isDir() && !source.suffix().isEmpty() && !source.completeBaseName().isEmpty();
@@ -66,15 +67,15 @@ QString copyName(const QFileInfo& source)
                      : source.fileName() + QCoreApplication::translate("Files", " - Copy");
 }
 
-// Un nome nascosto e libero accanto a `destination`, sullo stesso disco:
-// lì si scrive la copia, che diventa `destination` con una rename atomica
-// solo quando è completa. "foto.jpg" -> ".foto.jpg.vela-copy-XXXXXX".
-// Con `directory` crea una cartella vuota, altrimenti un file vuoto (0600).
+// A hidden free name next to `destination`, on the same disk: the copy is
+// written there and becomes `destination` with an atomic rename only once
+// complete. "photo.jpg" -> ".photo.jpg.vela-copy-XXXXXX". With `directory` it
+// creates an empty folder, otherwise an empty file (0600).
 QString makeTemporary(const QString& destination, bool directory)
 {
     const QFileInfo info(destination);
     QByteArray name = QFile::encodeName(info.fileName());
-    name.truncate(200); // il nome intero non deve superare NAME_MAX
+    name.truncate(200); // the whole name must not exceed NAME_MAX
     QByteArray pattern = QFile::encodeName(info.absolutePath()) + "/." + name + ".vela-copy-XXXXXX";
     if (directory) {
         return ::mkdtemp(pattern.data()) ? QFile::decodeName(pattern) : QString();
@@ -93,7 +94,7 @@ void removeAny(const QString& path)
     info.isDir() && !info.isSymLink() ? QDir(path).removeRecursively() : QFile::remove(path);
 }
 
-// Scrive su disco tutto ciò che è in sospeso sul filesystem di `directory`.
+// Writes to disk everything pending on `directory`'s filesystem.
 void syncDirectory(const QString& directory)
 {
     const int fd = ::open(QFile::encodeName(directory).constData(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
@@ -141,12 +142,12 @@ QString uniqueNameIn(const QString& directory, const QString& name)
     }
 }
 
-// --------------------------------------------------------- lavori lunghi --
+// ------------------------------------------------------------- long jobs --
 
 struct FileOps::Job {
     int id = 0;
     QString title;
-    QString doneTitle; // a trasferimento finito
+    QString doneTitle; // when the transfer is over
     qint64 done = 0;
     qint64 total = 0;
     QString current;
@@ -216,7 +217,7 @@ void FileOps::dismissJob(int id)
     emit jobsChanged();
 }
 
-// Prima di copiare o spostare: c'è già qualcosa con lo stesso nome?
+// Before copying or moving: is there already something with the same name?
 void FileOps::requestTransfer(const Transfer& transfer)
 {
     int conflicts = 0;
@@ -224,7 +225,7 @@ void FileOps::requestTransfer(const Transfer& transfer)
     for (const QString& source : transfer.sources) {
         const QFileInfo info(source);
         if (info.absolutePath() == QDir(transfer.directory).absolutePath()) {
-            continue; // nella stessa cartella: "- Copia" (o niente, se si sposta)
+            continue; // in the same folder: "- Copy" (or nothing, when moving)
         }
         if (QFileInfo::exists(QDir(transfer.directory).filePath(info.fileName()))) {
             if (++conflicts == 1) {
@@ -255,7 +256,8 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
     const int count = int(transfer.sources.size());
     const QString where = QFileInfo(transfer.directory).fileName().isEmpty() ? transfer.directory
                                                                               : QFileInfo(transfer.directory).fileName();
-    // Il titolo frase per frase, così ogni lingua mette le parti in ordine.
+    // The title sentence by sentence, so each language puts the parts in
+    // order.
     const QString items = count == 1 ? QCoreApplication::translate("Files", "1 item")
                                      : QCoreApplication::translate("Files", "%1 items").arg(count);
     job->title = (transfer.move ? QCoreApplication::translate("Files", "Moving %1 to %2")
@@ -277,7 +279,7 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
             Qt::QueuedConnection);
     };
     QThreadPool::globalInstance()->start([self, job, transfer, policy, post] {
-        // Quanto c'è da fare (solo ciò che va davvero copiato).
+        // How much there is to do (only what really has to be copied).
         qint64 total = 0;
         for (const QString& source : transfer.sources) {
             const QFileInfo info(source);
@@ -303,12 +305,12 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
         step.label = transfer.move ? QCoreApplication::translate("Files", "Move") : QCoreApplication::translate("Files", "Copy");
         QString firstArrived;
 
-        // Copia `from` in `to` senza mai lasciare `to` a metà. Un file si
-        // scrive in un temporaneo nascosto accanto a `to` e diventa `to` con
-        // una rename atomica solo a copia finita: se c'era già un file con
-        // quel nome, resta intatto fino a quell'istante. Errori, disco pieno
-        // e annullamento tolgono il temporaneo. Le cartelle si creano (o, se
-        // ci sono già, si uniscono) e si copiano file per file.
+        // Copies `from` to `to` without ever leaving `to` half-written. A file
+        // is written to a hidden temporary next to `to` and becomes `to` with
+        // an atomic rename only once the copy is done: if a file with that
+        // name existed, it stays intact until that moment. Errors, a full disk
+        // and cancelling remove the temporary. Folders are created (or, if
+        // they exist, merged) and copied file by file.
         std::function<bool(const QString&, const QString&)> copyOne = [&](const QString& from, const QString& to) {
             const QFileInfo info(from);
             if (job->cancelled) {
@@ -316,9 +318,9 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
             }
             if (info.isSymLink()) {
                 const QString temporary = makeTemporary(to, false);
-                QFile::remove(temporary); // al suo posto il collegamento
-                // La destinazione così com'è scritta: un collegamento relativo
-                // resta relativo e punta al file accanto, nella copia.
+                QFile::remove(temporary); // the link in its place
+                // The target as written: a relative link stays relative and
+                // points to the file next to it, in the copy.
                 if (temporary.isEmpty() || !QFile::link(info.readSymLink(), temporary) || !renameOver(temporary, to)) {
                     QFile::remove(temporary);
                     error = QCoreApplication::translate("Files", "Couldn't create the link %1").arg(to);
@@ -383,12 +385,12 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
             if (!out.flush()) {
                 return fail(QCoreApplication::translate("Files", "Out of space or error writing %1").arg(info.fileName()));
             }
-            // Gli attributi dopo l'ultima scrittura (che cambierebbe la data) e
-            // prima della rename: chi vede `to` lo vede già completo.
+            // Attributes after the last write (which would change the date)
+            // and before the rename: whoever sees `to` sees it complete.
             out.setPermissions(info.permissions());
             out.setFileTime(info.lastModified(), QFileDevice::FileModificationTime);
-            // Si sostituisce un file che c'era: i dati nuovi su disco prima
-            // che il vecchio sparisca (gli altri li scrive syncfs alla fine).
+            // Replacing an existing file: the new data on disk before the old
+            // one disappears (syncfs writes the rest at the end).
             if (QFileInfo::exists(to) && ::fdatasync(out.handle()) != 0) {
                 return fail(QCoreApplication::translate("Files", "Out of space or error writing %1").arg(info.fileName()));
             }
@@ -429,8 +431,8 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                 if (policy == QLatin1String("keep")) {
                     name = uniqueNameIn(transfer.directory, name);
                 } else {
-                    // Sostituisci: il vecchio resta finché il nuovo non è pronto
-                    // (due cartelle invece si uniscono).
+                    // Replace: the old one stays until the new one is ready
+                    // (two folders are merged instead).
                     replacing = true;
                 }
             }
@@ -440,9 +442,9 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
             const bool merging = replacing && sourceIsDir && existing.isDir() && !existing.isSymLink();
             post(done, total, info.fileName(), false, QString());
 
-            // Spostamento sullo stesso disco: una rename, che sostituisce un
-            // file esistente in modo atomico (cartelle e tipi diversi no:
-            // passano dalla copia).
+            // Move on the same disk: a rename, which replaces an existing file
+            // atomically (folders and different types don't: they go through
+            // the copy).
             const bool sameKind = !existing.exists() || (!existing.isDir() && !sourceIsDir);
             if (transfer.move && !merging && sameKind && sameDevice(source, transfer.directory)
                 && renameOver(source, destination)) {
@@ -456,13 +458,13 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
 
             bool copied = false;
             if (merging || (!sourceIsDir && (!replacing || sameKind))) {
-                // Unione di cartelle, o un file (anche al posto di un altro
-                // file): atomico file per file.
+                // Merging folders, or a file (also replacing another file):
+                // atomic file by file.
                 copied = copyOne(source, destination);
             } else {
-                // Una cartella nuova, o un tipo al posto di un altro: tutto in
-                // un temporaneo accanto, poi via il vecchio e rename. Un errore
-                // non lascia mai un albero a metà.
+                // A new folder, or one type replacing another: everything in a
+                // temporary next to it, then the old one goes and a rename. An
+                // error never leaves a half tree.
                 const QString temporary = makeTemporary(destination, sourceIsDir);
                 if (temporary.isEmpty()) {
                     error = QCoreApplication::translate("Files", "Couldn't write to %1").arg(transfer.directory);
@@ -495,8 +497,8 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                 break;
             }
             if (transfer.move) {
-                // Da un disco all'altro: la sorgente si cancella solo quando
-                // la copia è davvero su disco.
+                // From one disk to another: the source is deleted only when
+                // the copy is really on disk.
                 syncDirectory(transfer.directory);
                 removeAny(source);
                 step.moves.append({ destination, source });
@@ -507,8 +509,8 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                 firstArrived = destination;
             }
         }
-        // "Finito" vuol dire scritto su disco: un syncfs per tutto il lavoro,
-        // invece di un fsync per ogni file.
+        // "Done" means written to disk: one syncfs for the whole job, instead
+        // of an fsync per file.
         if (!step.created.isEmpty()) {
             syncDirectory(transfer.directory);
         }
@@ -526,7 +528,8 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                 if (!firstArrived.isEmpty()) {
                     emit self->created(firstArrived, false);
                 }
-                // Finito bene: il riquadro sparisce da solo dopo un attimo.
+                // Finished fine: the panel disappears by itself after a
+                // moment.
                 if (ok) {
                     QTimer::singleShot(1500, self, [self, id] {
                         if (self) {
@@ -539,13 +542,13 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
     });
 }
 
-// ------------------------------------------------------------- aprire --
+// ------------------------------------------------------------ opening --
 
 namespace {
 
-// Un programma Linux (ELF, AppImage compresi), non una libreria: si avvia
-// con un doppio clic, come un .exe su Windows. Gli script restano
-// documenti: si aprono con l'app del loro tipo.
+// A Linux program (ELF, AppImages included), not a library: it starts with a
+// double click, like an .exe on Windows. Scripts stay documents: they open
+// with the app for their type.
 bool isProgram(const QFileInfo& info)
 {
     if (!info.isFile() || info.fileName().contains(QLatin1String(".so"))) {
@@ -591,7 +594,7 @@ QVariantList FileOps::appsFor(const QString& path) const
     return m_apps->appsForFile(path);
 }
 
-// ------------------------------------------------------------- appunti --
+// ----------------------------------------------------------- clipboard --
 
 namespace {
 
@@ -609,7 +612,7 @@ void putFiles(const QStringList& paths, bool cut)
     }
     auto* mime = new QMimeData;
     mime->setUrls(urls);
-    // Come Dolphin e Nautilus: dicono se è "taglia" o "copia".
+    // Like Dolphin and Nautilus: they say whether it's "cut" or "copy".
     mime->setData(QStringLiteral("application/x-kde-cutselection"), cut ? "1" : "0");
     mime->setData(QStringLiteral("x-special/gnome-copied-files"), gnome);
     QGuiApplication::clipboard()->setMimeData(mime);
@@ -675,7 +678,7 @@ void FileOps::paste(const QString& directory)
         return;
     }
     if (transfer.move) {
-        QGuiApplication::clipboard()->clear(); // spostati: non si incollano due volte
+        QGuiApplication::clipboard()->clear(); // moved: they don't paste twice
     }
     requestTransfer(transfer);
 }
@@ -709,7 +712,7 @@ void FileOps::drop(const QStringList& urls, const QString& directory, int action
     transfer.directory = directory;
     transfer.move = action == 2 || (action == 0 && sameDevice(paths.first(), directory));
     for (const QString& path : std::as_const(paths)) {
-        // Lasciati nella cartella dove sono già: niente da fare.
+        // Dropped in the folder they're already in: nothing to do.
         if (QFileInfo(path).absolutePath() != QDir(directory).absolutePath() || !transfer.move) {
             transfer.sources.append(path);
         }
@@ -719,7 +722,7 @@ void FileOps::drop(const QStringList& urls, const QString& directory, int action
     }
 }
 
-// --------------------------------------------------------------- nuovo --
+// ----------------------------------------------------------------- new --
 
 QString FileOps::createFolder(const QString& directory)
 {
@@ -801,7 +804,7 @@ QString FileOps::rename(const QString& path, const QString& newName)
     return clean;
 }
 
-// ------------------------------------------------------------- Cestino --
+// --------------------------------------------------------- Recycle Bin --
 
 void FileOps::trash(const QStringList& paths)
 {
@@ -829,7 +832,7 @@ void FileOps::deletePermanently(const QStringList& paths)
         if (!ok) {
             emit failed(QCoreApplication::translate("Files", "Couldn't delete \"%1\".").arg(info.fileName()));
         }
-        // Dal Cestino: via anche la sua scheda.
+        // From the Recycle Bin: its info record goes too.
         if (path.startsWith(trashDir() + QStringLiteral("/files/"))) {
             QFile::remove(trashDir() + QStringLiteral("/info/") + info.fileName() + QStringLiteral(".trashinfo"));
         }
@@ -875,7 +878,7 @@ void FileOps::restoreFromTrash(const QStringList& paths)
     }
 }
 
-// --------------------------------------------------------- comprimere --
+// -------------------------------------------------------- compressing --
 
 void FileOps::compress(const QStringList& paths, const QString& format)
 {
@@ -888,7 +891,7 @@ void FileOps::compress(const QStringList& paths, const QString& format)
     for (const QString& path : paths) {
         names.append(QFileInfo(path).fileName());
     }
-    // L'archivio prende il nome del primo elemento, come in Windows.
+    // The archive takes the name of the first item, like Windows.
     const QString base = first.isDir() ? first.fileName() : first.completeBaseName();
     const QString archive = uniqueNameIn(directory, base + u'.' + format);
     QStringList arguments { QStringLiteral("-a"), QStringLiteral("-cf"), archive, QStringLiteral("--") };
@@ -913,7 +916,7 @@ bool FileOps::isArchive(const QString& path) const
 
 void FileOps::extractAll(const QString& path)
 {
-    // "Estrai tutto": in una cartella col nome dell'archivio, accanto.
+    // "Extract all": into a folder named after the archive, next to it.
     const QFileInfo info(path);
     QString base = info.fileName();
     for (const QString& s : { QStringLiteral(".tar.gz"), QStringLiteral(".tar.xz"), QStringLiteral(".tar.zst"),
@@ -936,7 +939,7 @@ void FileOps::extractAll(const QString& path)
     emit created(target, false);
 }
 
-// ------------------------------------------------------------- annulla --
+// ---------------------------------------------------------------- undo --
 
 void FileOps::pushUndo(UndoStep step)
 {
@@ -963,7 +966,7 @@ void FileOps::undo()
         if (!QFileInfo::exists(original)) {
             QDir().mkpath(QFileInfo(original).absolutePath());
             if (!QFile::rename(current, original)) {
-                // Tra dischi diversi: si riporta indietro copiando.
+                // Between different disks: brought back by copying.
                 startTransfer({ { current }, QFileInfo(original).absolutePath(), true }, QStringLiteral("keep"));
             }
         }
@@ -972,7 +975,8 @@ void FileOps::undo()
         QFile::moveToTrash(path);
     }
     for (qsizetype i = 0; i < step.trashed.size(); ++i) {
-        // Dal Cestino (…/Trash/files/nome) al suo posto, senza la scheda in …/Trash/info.
+        // From the Recycle Bin (…/Trash/files/name) back to its place, without
+        // the record in …/Trash/info.
         const QString inTrash = step.trashed.at(i);
         if (!QFileInfo::exists(step.originals.at(i)) && QFile::rename(inTrash, step.originals.at(i))) {
             const QFileInfo info(inTrash);
@@ -1002,7 +1006,7 @@ void FileOps::newShortcut(const QString& directory)
     sendToShell("new-shortcut " + QJsonDocument(QJsonArray::fromStringList({ directory })).toJson(QJsonDocument::Compact));
 }
 
-// ------------------------------------------------------- collegamenti --
+// ---------------------------------------------------------- shortcuts --
 
 void FileOps::createLinks(const QStringList& paths)
 {
@@ -1012,7 +1016,7 @@ void FileOps::createLinks(const QStringList& paths)
     for (const QString& path : paths) {
         QString directory = QFileInfo(path).absolutePath();
         if (!QFileInfo(directory).isWritable()) {
-            // Come Windows: qui non si può, va sul desktop.
+            // Like Windows: not possible here, it goes on the desktop.
             directory = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
         }
         const QString link = createLink(path, directory);
@@ -1043,7 +1047,7 @@ void FileOps::pasteLinks(const QString& directory)
             continue;
         }
         const QFileInfo info(url.toLocalFile());
-        // Nella stessa cartella dell'originale il nome dice che è un collegamento.
+        // In the original's own folder the name says it's a shortcut.
         const QString link = createLink(info.absoluteFilePath(), directory,
             info.absolutePath() == QDir(directory).absolutePath() ? QString() : info.fileName());
         if (!link.isEmpty()) {
@@ -1069,7 +1073,7 @@ QString FileOps::linkTarget(const QString& path) const
     return QFileInfo(path).symLinkTarget();
 }
 
-// ------------------------------------------- anteprima e dettagli --
+// -------------------------------------------- preview and details --
 
 QVariantMap FileOps::details(const QString& path) const
 {
@@ -1122,7 +1126,7 @@ QString FileOps::previewText(const QString& path) const
     if (!file.open(QIODevice::ReadOnly)) {
         return {};
     }
-    // Basta l'inizio: il riquadro ne mostra poche decine di righe.
+    // The beginning is enough: the pane shows a few dozen lines.
     QString text = QString::fromUtf8(file.read(32 * 1024));
     text.replace(u'\t', QStringLiteral("    "));
     return text.isEmpty() ? QStringLiteral(" ") : text;
@@ -1133,7 +1137,7 @@ bool FileOps::isImage(const QString& path) const
     return QImageReader(path).canRead();
 }
 
-// ------------------------------------------------------------ varie --
+// ------------------------------------------------------------- misc --
 
 QString FileOps::formatSize(double bytes) const
 {

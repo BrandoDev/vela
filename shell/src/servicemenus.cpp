@@ -62,7 +62,7 @@ QString quote(QString text)
     return u'\'' + text + u'\'';
 }
 
-// Un file è di un tipo (o dei suoi genitori), con i jolly di KDE.
+// A file is of a type (or its parents), with KDE's wildcards.
 bool matches(const QString& pattern, const QMimeType& type, bool isDir)
 {
     if (pattern == QLatin1String("all/all")) {
@@ -92,7 +92,7 @@ ServiceMenus::ServiceMenus(QObject* parent)
 void ServiceMenus::load()
 {
     m_loaded = true;
-    // Prima quelli dell'utente: lo stesso nome nasconde quello di sistema.
+    // The user's first: the same name hides the system one.
     QSet<QString> seen;
     QStringList dirs;
     for (const QString& data : QStandardPaths::standardLocations(QStandardPaths::GenericDataLocation)) {
@@ -106,10 +106,10 @@ void ServiceMenus::load()
             seen.insert(info.fileName());
             const QHash<QString, Group> groups = readGroups(info.absoluteFilePath());
             const Group main = groups.value(QStringLiteral("Desktop Entry"));
-            // Condizioni che Vela non sa valutare (una chiamata D-Bus che dice
-            // se mostrarla): meglio non mostrare una voce che potrebbe non
-            // funzionare. X-KDE-AuthorizeAction invece è per i sistemi
-            // bloccati (kiosk): di norma è concesso, come in KDE.
+            // Conditions Vela can't evaluate (a D-Bus call saying whether to
+            // show it): better not to show an entry that might not work.
+            // X-KDE-AuthorizeAction instead is for locked-down systems
+            // (kiosk): normally granted, as in KDE.
             if (main.contains(QStringLiteral("X-KDE-ShowIfDBusCall"))
                 || main.value(QStringLiteral("Hidden")) == QLatin1String("true")) {
                 continue;
@@ -169,7 +169,7 @@ QVariantList ServiceMenus::actionsFor(const QStringList& paths)
             || (!a.requiredUrls.isEmpty() && !a.requiredUrls.contains(count))) {
             continue;
         }
-        // Deve valere per tutti i file scelti.
+        // It must apply to all the chosen files.
         const bool fits = std::all_of(types.cbegin(), types.cend(), [&](const QPair<QMimeType, bool>& t) {
             return std::any_of(a.mimeTypes.cbegin(), a.mimeTypes.cend(),
                 [&](const QString& pattern) { return matches(pattern, t.first, t.second); });
@@ -199,8 +199,8 @@ void ServiceMenus::run(int id, const QStringList& paths) const
         files.append(QUrl::fromLocalFile(path));
     }
 
-    // Come la specifica (desktopexec.h): il programma con i suoi argomenti,
-    // un processo per file se chiede %f o %u.
+    // Like the spec (desktopexec.h): the program with its arguments, one
+    // process per file if it asks for %f or %u.
     if (!parsed.shellSyntax) {
         const DesktopExec::Context context { a.icon, a.name, QString() };
         QList<QList<QUrl>> runs { files };
@@ -218,9 +218,9 @@ void ServiceMenus::run(int id, const QStringList& paths) const
         return;
     }
 
-    // Una riga con la sintassi della shell (pipe, $VAR...): non ammessa
-    // dalla specifica, ma KIO la esegue con /bin/sh e alcuni service menu di
-    // KDE ci contano. Si fa lo stesso, con i file sempre tra apici.
+    // A line with shell syntax (pipes, $VAR...): not allowed by the spec, but
+    // KIO runs it with /bin/sh and some KDE service menus rely on it. Done the
+    // same way, with the files always quoted.
     QStringList quotedFiles;
     QStringList quotedUrls;
     for (const QString& path : paths) {
@@ -242,7 +242,7 @@ void ServiceMenus::run(int id, const QStringList& paths) const
         case 'i': command += a.icon.isEmpty() ? QString() : QStringLiteral("--icon ") + quote(a.icon); break;
         case 'c': command += quote(a.name); break;
         case '%': command += u'%'; break;
-        default: break; // %k, %d...: deprecati o senza senso qui
+        default: break; // %k, %d...: deprecated or meaningless here
         }
     }
     qInfo("vela-shell: service menu (shell): %s", qPrintable(command));

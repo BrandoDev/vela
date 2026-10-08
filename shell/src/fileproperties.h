@@ -9,27 +9,28 @@
 #include <QThreadPool>
 #include <QVariantMap>
 
-// I dati della finestra Proprietà (Alt+Invio sul desktop), come in Windows:
-// tipo, percorso, dimensioni, date, attributi, autorizzazioni. La
-// dimensione delle cartelle si conta in un thread e arriva dopo
-// (sizeCounted), così la finestra si apre subito.
+// The data of the Properties window (Alt+Enter on the desktop), like Windows:
+// type, location, size, dates, attributes, permissions. Folder sizes are
+// counted in a thread and arrive later (sizeCounted), so the window opens at
+// once.
 class FileProperties : public QObject {
     Q_OBJECT
 
 public:
     explicit FileProperties(QObject* parent = nullptr);
 
-    // Per uno o più file. Restituisce anche "token": lo stesso di
-    // sizeCounted, per non mescolare conteggi di finestre diverse.
+    // For one or more files. Also returns "token": the same as sizeCounted's,
+    // so counts from different windows don't mix.
     Q_INVOKABLE QVariantMap describe(const QStringList& paths);
 
-    // Attributo "Sola lettura": toglie (o ridà al proprietario) la scrittura.
+    // The "Read-only" attribute: removes (or gives back to the owner) write
+    // permission.
     Q_INVOKABLE bool setReadOnly(const QStringList& paths, bool readOnly);
-    // Autorizzazioni: 9 bit come chmod (proprietario, gruppo, altri × rwx).
+    // Permissions: 9 bits like chmod (owner, group, others × rwx).
     Q_INVOKABLE bool setPermissions(const QString& path, int bits);
-    // "Apri con" → Cambia: l'app predefinita per quel tipo di file.
+    // "Opens with" → Change: the default app for that file type.
     Q_INVOKABLE void setDefaultApp(const QString& path, const QString& desktopId);
-    // Dimensioni nel formato di Windows: "1,23 MB (1.290.240 byte)".
+    // Sizes in Windows' format: "1.23 MB (1,290,240 bytes)".
     Q_INVOKABLE QString formatSize(double bytes) const;
 
 signals:

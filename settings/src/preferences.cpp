@@ -32,7 +32,7 @@ extern "C" {
 
 namespace {
 
-constexpr auto defaultWallpaper = ":/vela/images/vela_splash_169.svg"; // quello della shell
+constexpr auto defaultWallpaper = ":/vela/images/vela_splash_169.svg"; // the shell's
 const QColor defaultAccent(0x5b, 0x8c, 0xff);
 
 QSettings shellSettings()
@@ -63,7 +63,7 @@ Preferences::Preferences(QObject* parent)
     : QObject(parent)
 {
     reload();
-    // vela.conf cambia anche fuori di qui (le impostazioni rapide della shell).
+    // vela.conf changes outside of here too (the shell's quick settings).
     m_debounce.setSingleShot(true);
     m_debounce.setInterval(150);
     connect(&m_debounce, &QTimer::timeout, this, [this] {
@@ -126,8 +126,8 @@ void Preferences::reload()
     m_clipboardHistory = settings.value(QStringLiteral("clipboard/history"), false).toBool();
     emit clipboardChanged();
 
-    // La modalità: quella scelta qui (vela-shell.conf); per le app, se non
-    // c'è ancora, quella che GTK e il portale conoscono già.
+    // The mode: the one chosen here (vela-shell.conf); for apps, if not set
+    // yet, the one GTK and the portal already know.
     QString appTheme = settings.value(QStringLiteral("appearance/appTheme")).toString();
     if (appTheme.isEmpty()) {
         QProcess gsettings;
@@ -150,7 +150,7 @@ void Preferences::reload()
 
 namespace {
 
-// Una riga di vela.conf con i nomi di adesso (compositor/src/legacy_names.h).
+// A vela.conf line with the current names (compositor/src/legacy_names.h).
 QString modernLine(const QString& line)
 {
     const qsizetype eq = line.indexOf(u'=');
@@ -252,7 +252,8 @@ QString Preferences::compositorValue(const QString& key) const
 
 void Preferences::queryCompositor()
 {
-    // Ciò che non sta nel file: la lente (si apre e si chiude) e le ore del sole.
+    // What isn't in the file: the magnifier (it opens and closes) and sun
+    // times.
     const QString runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
     const QString display = qEnvironmentVariable("WAYLAND_DISPLAY", QStringLiteral("wayland-0"));
     QLocalSocket socket;
@@ -283,13 +284,13 @@ void Preferences::setShell(const QString& key, const QVariant& value)
     settings.sync();
 }
 
-// ------------------------------------------------------------- sfondo --
+// ---------------------------------------------------------- wallpaper --
 
 QStringList Preferences::systemWallpapers() const
 {
-    // Gli sfondi installati: i pacchetti di KDE (una cartella con
-    // contents/images/<risoluzione>.<ext>, di cui si prende la più grande)
-    // e le immagini sciolte di GNOME e simili.
+    // Installed wallpapers: KDE packages (a folder with
+    // contents/images/<resolution>.<ext>, of which the largest is taken) and
+    // loose images from GNOME and the like.
     QStringList out;
     const QStringList roots = QStandardPaths::locateAll(QStandardPaths::GenericDataLocation, QStringLiteral("wallpapers"),
         QStandardPaths::LocateDirectory)
@@ -306,7 +307,7 @@ QStringList Preferences::systemWallpapers() const
                 if (candidates.isEmpty()) {
                     continue;
                 }
-                // La più grande per area (i nomi sono "3840x2160.png").
+                // The largest by area (names are "3840x2160.png").
                 auto area = [](const QFileInfo& f) {
                     const QStringList wh = f.completeBaseName().split(u'x');
                     return wh.size() == 2 ? wh[0].toLongLong() * wh[1].toLongLong() : 0LL;
@@ -329,7 +330,7 @@ void Preferences::setWallpaper(const QString& pathOrUrl)
     if (path.isEmpty()) {
         return;
     }
-    // Le immagini recenti, come Windows: le ultime cinque, senza quella di Vela.
+    // Recent images, like Windows: the last five, without Vela's.
     QStringList recent = m_recentWallpapers;
     recent.removeAll(path);
     if (!path.startsWith(u':')) {
@@ -350,7 +351,8 @@ void Preferences::setWallpaper(const QString& pathOrUrl)
 
 void Preferences::computeMica()
 {
-    // Il colore medio dello sfondo, come lo calcola la shell per il compositor.
+    // The wallpaper's average color, as the shell computes it for the
+    // compositor.
     QImageReader reader(m_wallpaper);
     reader.setScaledSize(QSize(32, 18));
     const QImage image = reader.read().convertToFormat(QImage::Format_RGB32);
@@ -370,14 +372,14 @@ void Preferences::computeMica()
         }
     }
     const qint64 count = qint64(image.width()) * image.height();
-    // Arrotondato a 0-255 come nel comando "wallpaper-tint".
+    // Rounded to 0-255 as in the "wallpaper-tint" command.
     const QColor tint(int(sum[0] / count), int(sum[1] / count), int(sum[2] / count));
     m_tint = tint;
     m_mica = micaFromTint(tint, true, light());
     m_micaInactive = micaFromTint(tint, false, light());
 }
 
-// ------------------------------------------------------ colori e tema --
+// --------------------------------------------------- colors and theme --
 
 void Preferences::setAccent(const QColor& color)
 {
@@ -396,19 +398,20 @@ void Preferences::setAppTheme(const QString& theme)
     }
     m_appTheme = theme;
     const bool light = theme == QLatin1String("light");
-    // La shell e il compositor (barre del titolo), Esplora.
+    // The shell and the compositor (title bars), Explorer.
     setShell(QStringLiteral("appearance/appTheme"), theme);
-    // GTK, il portale e chi segue org.freedesktop.appearance.
+    // GTK, the portal and whoever follows org.freedesktop.appearance.
     QProcess::startDetached(QStringLiteral("gsettings"),
         { QStringLiteral("set"), QStringLiteral("org.gnome.desktop.interface"), QStringLiteral("color-scheme"),
             light ? QStringLiteral("prefer-light") : QStringLiteral("prefer-dark") });
-    // Le app KDE e Qt: lo schema di colori Breeze chiaro o scuro, e le icone adatte.
+    // KDE and Qt apps: the light or dark Breeze color scheme, and matching
+    // icons.
     if (!QStandardPaths::findExecutable(QStringLiteral("plasma-apply-colorscheme")).isEmpty()) {
         QProcess::startDetached(QStringLiteral("plasma-apply-colorscheme"),
             { light ? QStringLiteral("BreezeLight") : QStringLiteral("BreezeDark") });
     }
     const QString icons = QIcon::themeName();
-    applyIconTheme(light); // anche le nostre
+    applyIconTheme(light); // ours too
     if (QIcon::themeName() != icons) {
         const QString changer = QStringLiteral("/usr/lib/plasma-changeicons");
         if (QFileInfo(changer).isExecutable()) {
@@ -510,7 +513,8 @@ void Preferences::saveCompositorKeys(const QStringList& keys)
 
 void Preferences::saveCompositor(const QList<QPair<QString, QString>>& changes)
 {
-    // Il file com'è adesso (il compositor può averlo cambiato), con queste chiavi nuove.
+    // The file as it is now (the compositor may have changed it), with these
+    // new keys.
     const QString path = compositorConfigPath();
     QStringList lines;
     {
@@ -518,7 +522,7 @@ void Preferences::saveCompositor(const QList<QPair<QString, QString>>& changes)
         if (in.open(QIODevice::ReadOnly | QIODevice::Text)) {
             lines = QString::fromUtf8(in.readAll()).split(u'\n');
             for (QString& line : lines) {
-                line = modernLine(line); // i nomi italiani di prima, se il compositor non li ha già cambiati
+                line = modernLine(line); // the old Italian names, if the compositor hasn't changed them already
             }
             while (!lines.isEmpty() && lines.last().isEmpty()) {
                 lines.removeLast();
@@ -548,7 +552,8 @@ void Preferences::saveCompositor(const QList<QPair<QString, QString>>& changes)
     }
     file.write((lines.join(u'\n') + u'\n').toUtf8());
     if (file.commit()) {
-        // Il compositor rilegge (e la nostra copia del file si aggiorna dal watcher).
+        // The compositor rereads (and our copy of the file updates from the
+        // watcher).
         sendToCompositor("reload-config");
     }
 }
@@ -632,7 +637,7 @@ void Preferences::setRepeatRate(int perSecond)
     }
 }
 
-// ------------------------------------------- Luce notturna e accessibilità --
+// ------------------------------------------- night light and accessibility --
 
 namespace {
 
@@ -761,7 +766,7 @@ void Preferences::setStickyKeys(bool on)
     }
 }
 
-// ------------------------------------------------------ mouse e touchpad --
+// ---------------------------------------------------- mouse and touchpad --
 
 void Preferences::setMouseSpeed(int value)
 {
@@ -865,7 +870,7 @@ void Preferences::setFourFingers(const QString& action)
     }
 }
 
-// ----------------------------------------------------------------- appunti --
+// --------------------------------------------------------------- clipboard --
 
 void Preferences::setClipboardHistory(bool on)
 {
@@ -878,7 +883,7 @@ void Preferences::setClipboardHistory(bool on)
 
 void Preferences::clearClipboard()
 {
-    // Alla shell, sul suo socket.
+    // To the shell, on its socket.
     const QString runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
     const QString display = qEnvironmentVariable("WAYLAND_DISPLAY", QStringLiteral("wayland-0"));
     QLocalSocket socket;

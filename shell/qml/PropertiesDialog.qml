@@ -3,11 +3,11 @@
 
 import QtQuick
 
-// La finestra Proprietà di un file, una cartella o più elementi, come in
-// Windows: Generale (nome, tipo, apri con, percorso, dimensioni, date,
-// attributi), Autorizzazioni (al posto di "Sicurezza": lettura, scrittura,
-// esecuzione per proprietario, gruppo e altri) e Dettagli. OK applica e
-// chiude, Applica applica e resta, Annulla chiude.
+// The Properties window of a file, a folder or several items, like in Windows:
+// General (name, type, opens with, location, size, dates, attributes),
+// Permissions (in place of "Security": read, write, execute for owner, group
+// and others) and Details. OK applies and closes, Apply applies and stays,
+// Cancel closes.
 Window {
     id: root
     objectName: "propertiesDialog"
@@ -19,7 +19,7 @@ Window {
     property var paths: []
     property var info: ({})
     property int tab: 0
-    // Le modifiche non ancora applicate.
+    // Changes not applied yet.
     property string newName: ""
     property bool readOnly: false
     property int permissions: 0
@@ -42,7 +42,7 @@ Window {
             panel.forceActiveFocus()
         }
     }
-    // Anche da Esplora (vela-files), attraverso il socket della shell.
+    // From Explorer too (vela-files), through the shell's socket.
     Connections {
         target: Shell
         function onPropertiesRequested(paths) { Menus.showProperties(paths) }
@@ -101,7 +101,7 @@ Window {
         load(paths)
     }
 
-    // Dove sta la finestra (al centro dello schermo): per i menu.
+    // Where the window is (in the center of the output): for menus.
     function screenPoint(item, x, y) {
         const p = item.mapToItem(null, x, y)
         return Qt.point((Screen.width - root.width) / 2 + p.x, (Screen.height - root.height) / 2 + p.y)
@@ -191,7 +191,7 @@ Window {
             elide: Text.ElideMiddle
         }
 
-        // Schede
+        // Tabs
         Row {
             x: 20
             y: 44
@@ -227,7 +227,7 @@ Window {
             }
         }
 
-        // --- Generale ---
+        // --- General ---
         Column {
             visible: root.tab === 0
             x: 24
@@ -332,16 +332,16 @@ Window {
                     checked: root.readOnly
                     onToggled: root.readOnly = !root.readOnly
                 }
-                // Su Linux "nascosto" è il punto all'inizio del nome.
+                // On Linux "hidden" is the dot at the start of the name.
                 Check {
                     label: qsTr("Hidden")
                     checked: !!root.info.hidden
                     usable: false
                 }
             }
-            // Un programma o uno script si avvia con un doppio clic solo se
-            // è eseguibile: lo stesso bit "Esecuzione" delle Autorizzazioni,
-            // per chi può già leggerlo.
+            // A program or script starts with a double click only if it's
+            // executable: the same "Execute" bit as in Permissions, for those
+            // who can already read it.
             Row {
                 visible: root.single && !root.info.isDir
                 spacing: 16
@@ -360,7 +360,7 @@ Window {
             }
         }
 
-        // --- Autorizzazioni ---
+        // --- Permissions ---
         Column {
             visible: root.tab === 1
             x: 24
@@ -396,7 +396,7 @@ Window {
             }
         }
 
-        // --- Dettagli ---
+        // --- Details ---
         Column {
             visible: root.tab === 2
             x: 24

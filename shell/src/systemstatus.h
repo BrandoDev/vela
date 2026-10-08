@@ -10,19 +10,19 @@
 #include <QTimer>
 #include <QVariantMap>
 
-// Lo stato del sistema per le icone della taskbar e le impostazioni rapide
-// (Win+A), come Windows 11: volume (PipeWire con wpctl), rete
-// (NetworkManager), Bluetooth (BlueZ), batteria (UPower), profilo di
-// risparmio energetico (power-profiles-daemon), luminosità dello schermo
-// del portatile (logind). Tutto si aggiorna da solo quando cambia; ciò che
-// manca sul sistema risulta "non disponibile" e il pannello non lo mostra.
+// System status for the taskbar icons and quick settings (Win+A), like Windows
+// 11: volume (PipeWire with wpctl), network (NetworkManager), Bluetooth
+// (BlueZ), battery (UPower), power saving profile (power-profiles-daemon),
+// laptop screen brightness (logind). Everything updates itself when it
+// changes; what the system lacks is "unavailable" and the panel doesn't show
+// it.
 class SystemStatus : public QObject {
     Q_OBJECT
     // Volume
     Q_PROPERTY(bool volumeAvailable READ volumeAvailable CONSTANT)
     Q_PROPERTY(double volume READ volume NOTIFY volumeChanged)
     Q_PROPERTY(bool muted READ muted NOTIFY volumeChanged)
-    // Rete
+    // Network
     Q_PROPERTY(bool networkConnected READ networkConnected NOTIFY networkChanged)
     Q_PROPERTY(bool networkWireless READ networkWireless NOTIFY networkChanged)
     Q_PROPERTY(QString networkName READ networkName NOTIFY networkChanged)
@@ -32,21 +32,21 @@ class SystemStatus : public QObject {
     // Bluetooth
     Q_PROPERTY(bool bluetoothAvailable READ bluetoothAvailable NOTIFY bluetoothChanged)
     Q_PROPERTY(bool bluetoothEnabled READ bluetoothEnabled NOTIFY bluetoothChanged)
-    // Batteria
+    // Battery
     Q_PROPERTY(bool batteryPresent READ batteryPresent NOTIFY batteryChanged)
     Q_PROPERTY(int batteryPercent READ batteryPercent NOTIFY batteryChanged)
     Q_PROPERTY(bool batteryCharging READ batteryCharging NOTIFY batteryChanged)
-    // Risparmio energia
+    // Power saving
     Q_PROPERTY(bool powerSaverAvailable READ powerSaverAvailable NOTIFY powerProfileChanged)
     Q_PROPERTY(bool powerSaver READ powerSaver NOTIFY powerProfileChanged)
-    // "power-saver", "balanced" o "performance" (se il sistema lo offre)
+    // "power-saver", "balanced" or "performance" (if the system offers it)
     Q_PROPERTY(QString powerProfile READ powerProfile WRITE setPowerProfile NOTIFY powerProfileChanged)
     Q_PROPERTY(QStringList powerProfiles READ powerProfiles NOTIFY powerProfileChanged)
-    // Le icone del tema per rete e volume, e la modalità aereo.
+    // Theme icons for network and volume, and airplane mode.
     Q_PROPERTY(QString networkIconName READ networkIcon NOTIFY networkChanged)
     Q_PROPERTY(QString volumeIconName READ volumeIcon NOTIFY volumeChanged)
     Q_PROPERTY(bool airplane READ airplaneMode NOTIFY airplaneChanged)
-    // Luminosità (solo schermi con retroilluminazione: portatili)
+    // Brightness (only backlit screens: laptops)
     Q_PROPERTY(bool brightnessAvailable READ brightnessAvailable CONSTANT)
     Q_PROPERTY(double brightness READ brightness NOTIFY brightnessChanged)
 
@@ -72,7 +72,7 @@ public:
     bool bluetoothEnabled() const { return m_bluetoothEnabled; }
     Q_INVOKABLE void setBluetoothEnabled(bool on);
 
-    // Modalità aereo: niente Wi-Fi né Bluetooth.
+    // Airplane mode: no Wi-Fi or Bluetooth.
     Q_INVOKABLE bool airplaneMode() const;
     Q_INVOKABLE void setAirplaneMode(bool on);
 
@@ -91,7 +91,7 @@ public:
     double brightness() const { return m_brightness; }
     Q_INVOKABLE void setBrightness(double value);
 
-    // Il nome dell'icona del tema per rete e volume, come le icone di sistema di Windows.
+    // The theme icon name for network and volume, like Windows' system icons.
     Q_INVOKABLE QString networkIcon() const;
     Q_INVOKABLE QString volumeIcon() const;
 
@@ -118,7 +118,7 @@ private:
     bool m_volumeAvailable = false;
     double m_volume = 0.0;
     bool m_muted = false;
-    QProcess m_subscribe; // pactl subscribe: i cambiamenti dell'audio
+    QProcess m_subscribe; // pactl subscribe: audio changes
     QTimer m_volumeTimer;
 
     bool m_networkConnected = false;
@@ -128,7 +128,7 @@ private:
     bool m_wifiAvailable = false;
     bool m_wifiEnabled = false;
 
-    QString m_adapter; // percorso dell'adattatore BlueZ
+    QString m_adapter; // BlueZ adapter path
     bool m_bluetoothEnabled = false;
 
     bool m_batteryPresent = false;
@@ -139,7 +139,7 @@ private:
     QString m_powerProfile;
     QStringList m_powerProfiles;
 
-    QString m_backlight; // nome in /sys/class/backlight
+    QString m_backlight; // name in /sys/class/backlight
     double m_brightness = 0.0;
     int m_maxBrightness = 0;
 };

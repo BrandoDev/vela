@@ -3,23 +3,23 @@
 
 import QtQuick
 
-// La Visualizzazione attività (Win+Tab, o il pulsante sulla taskbar), come
-// Windows 11: in alto le finestre del desktop in uso, con anteprima; in
-// basso i desktop e "Nuovo desktop". Passando su un desktop se ne vedono le
-// finestre; una finestra trascinata su un desktop ci si sposta. Tasto
-// destro: i menu di docs/renderer.md §14.10.
+// Task View (Win+Tab, or the taskbar button), like Windows 11: the current
+// desktop's windows on top, with previews; the desktops and "New desktop" at
+// the bottom. Hovering a desktop shows its windows; a window dragged onto a
+// desktop moves there. Right button: the menus of docs/renderer.md §14.10.
 Window {
     id: root
     objectName: "taskView"
     visible: false
     color: "transparent"
 
-    // Il desktop di cui si vedono le finestre: quello in uso, o quello sotto il mouse.
+    // The desktop whose windows are shown: the current one, or the one under
+    // the mouse.
     property int shown: Desktops.current
     property var windows: [] // [{id, title, icon, workspace}]
-    property int revision: 0 // cresce a ogni anteprima pronta
-    property var aspects: ({}) // id -> larghezza/altezza dell'anteprima
-    property string dragging: "" // la finestra che si sta trascinando
+    property int revision: 0 // grows at every preview ready
+    property var aspects: ({}) // id -> preview width/height
+    property string dragging: "" // the window being dragged
 
     function open() {
         if (visible) {
@@ -38,7 +38,8 @@ Window {
         content.forceActiveFocus()
         updateBlur()
     }
-    // Tutto lo sfondo sfocato; la misura arriva dal compositor dopo la prima apertura.
+    // The whole background blurred; the size comes from the compositor after
+    // the first opening.
     function updateBlur() {
         if (visible) {
             Effects.setBlur(root, [Qt.rect(0, 0, width, height)])
@@ -49,7 +50,8 @@ Window {
     function close() {
         visible = false
         renaming = -1
-        // Il desktop scelto qui arriva un attimo dopo: niente nome a metà schermo.
+        // The desktop chosen here arrives a moment later: no name in the
+        // middle of the output.
         releaseFlag.restart()
     }
     Timer { id: releaseFlag; interval: 600; onTriggered: if (!root.visible) Menus.taskViewOpen = false }
@@ -59,7 +61,7 @@ Window {
             workspace: Desktops.workspaceOf(w.id)
         })).filter(w => w.workspace !== -2)
     }
-    // Le finestre del desktop mostrato (più quelle su tutti i desktop).
+    // The shown desktop's windows (plus those on all desktops).
     readonly property var shownWindows: windows.filter(w => w.workspace === shown || w.workspace === -1)
 
     function activate(id) {
@@ -98,7 +100,8 @@ Window {
         NumberAnimation { target: content; property: "scale"; to: 1; duration: Theme.slow; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate }
     }
 
-    // Il fondo: lo sfondo sfocato, scurito. Un clic sul vuoto chiude.
+    // The backdrop: the blurred wallpaper, darkened. A click on the empty area
+    // closes.
     Rectangle {
         anchors.fill: parent
         color: Theme.backdrop
@@ -109,7 +112,7 @@ Window {
         }
     }
 
-    // Il menu del tasto destro, in coordinate dello schermo.
+    // The right-click menu, in output coordinates.
     function openMenu(entries, item, x, y) {
         const p = item.mapToItem(null, x, y)
         Menus.open(entries, p.x, p.y, { screen: root.screen ? root.screen.name : "" })
@@ -155,18 +158,18 @@ Window {
         focus: true
         Keys.onEscapePressed: root.close()
 
-        // --- le finestre ---
+        // --- windows ---
         Item {
             id: grid
             anchors { left: parent.left; right: parent.right; top: parent.top; bottom: strip.top; margins: 48; bottomMargin: 24 }
-            z: root.dragging !== "" ? 2 : 0 // la finestra trascinata passa sopra i desktop
+            z: root.dragging !== "" ? 2 : 0 // the dragged window goes above the desktops
 
             readonly property int titleHeight: 36
             readonly property int gap: 24
-            // Righe di anteprime della stessa altezza, la più grande che ci sta.
+            // Rows of previews of the same height, the largest that fits.
             readonly property var placement: {
                 const items = root.shownWindows
-                root.revision // le proporzioni cambiano quando arrivano le anteprime
+                root.revision // proportions change when previews arrive
                 const aspect = items.map(w => Math.max(0.5, Math.min(2.6, root.aspects[w.id] || 1.6)))
                 const maxHeight = 340
                 for (let rows = 1; rows <= Math.max(1, items.length); ++rows) {
@@ -183,7 +186,7 @@ Window {
                         w += (w > 0 ? gap : 0) + iw
                     }
                     if (lines.length <= rows || rows === items.length) {
-                        // Una riga troppo larga (una finestra molto larga): si rimpicciolisce.
+                        // A row too wide (a very wide window): it shrinks.
                         let widest = 0
                         for (const line of lines) {
                             widest = Math.max(widest, line.reduce((s, i) => s + h * aspect[i], 0) + gap * (line.length - 1))
@@ -229,7 +232,7 @@ Window {
                     Behavior on x { enabled: root.dragging === ""; NumberAnimation { duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate } }
                     Behavior on y { enabled: root.dragging === ""; NumberAnimation { duration: Theme.normal; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate } }
 
-                    // Quello che si trascina: una copia che segue il mouse.
+                    // The one being dragged: a copy following the mouse.
                     Rectangle {
                         id: frame
                         width: card.width
@@ -286,7 +289,7 @@ Window {
                                 }
                             }
                         }
-                        // Chiudi, al passaggio del mouse.
+                        // Close, on hover.
                         Rectangle {
                             visible: hover.hovered && !cardMouse.drag.active
                             anchors { right: parent.right; top: parent.top; margins: 6 }
@@ -343,7 +346,7 @@ Window {
             }
         }
 
-        // --- i desktop ---
+        // --- desktops ---
         Item {
             id: strip
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
@@ -378,12 +381,13 @@ Window {
                             Image {
                                 anchors { fill: parent; margins: 3 }
                                 source: "image://wallpaper/" + encodeURIComponent(Config.wallpaper)
-                                sourceSize: Qt.size(width, height) // logico: Qt lo porta in pixel
+                                sourceSize: Qt.size(width, height) // logical: Qt turns it into pixels
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                                 opacity: drop.containsDrag ? 0.6 : 1
                             }
-                            // Le finestre del desktop, in piccolo: quante sono.
+                            // The desktop's windows, small: how many there
+                            // are.
                             Row {
                                 anchors { left: parent.left; bottom: parent.bottom; margins: 8 }
                                 spacing: 4
@@ -392,7 +396,7 @@ Window {
                                     Rectangle { width: 14; height: 10; radius: 2; color: Qt.rgba(1, 1, 1, 0.75) }
                                 }
                             }
-                            // Chiudi il desktop, al passaggio del mouse.
+                            // Close the desktop, on hover.
                             Rectangle {
                                 visible: deskHover.hovered && Desktops.count > 1
                                 anchors { right: parent.right; top: parent.top; margins: 6 }
@@ -444,7 +448,8 @@ Window {
                                 onDropped: drag => Desktops.moveWindow(drag.source.windowId, desk.index)
                             }
                         }
-                        // Il nome; con "Rinomina" (o un doppio clic) si cambia.
+                        // The name; with "Rename" (or a double click) it
+                        // changes.
                         Item {
                             width: desktops.cardWidth
                             height: 24
@@ -497,7 +502,8 @@ Window {
                     }
                 }
 
-                // "Nuovo desktop" (anche come bersaglio: la finestra va su un desktop nuovo).
+                // "New desktop" (also as a target: the window goes to a new
+                // desktop).
                 Column {
                     spacing: 8
                     Rectangle {
@@ -541,7 +547,7 @@ Window {
         }
     }
 
-    // Passando su un desktop, dopo un attimo se ne vedono le finestre.
+    // Hovering a desktop, after a moment its windows show.
     Timer {
         id: peek
         property int target: 0

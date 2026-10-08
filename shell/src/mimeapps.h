@@ -15,15 +15,15 @@
 #include <QStringList>
 #include <QTextStream>
 
-// Le app predefinite, come dice la specifica freedesktop "Association
-// between MIME types and applications": i file mimeapps.list. Li leggono
-// KDE, GNOME, Firefox, Chromium, xdg-open: una scelta fatta qui vale ovunque.
+// Default apps, as the freedesktop "Association between MIME types and
+// applications" spec says: the mimeapps.list files. KDE, GNOME, Firefox,
+// Chromium and xdg-open read them: a choice made here applies everywhere.
 //
-// Ordine di lettura: per ogni cartella di configurazione (prima quella
-// dell'utente, poi quelle di sistema) il file del desktop in uso
-// ("vela-mimeapps.list", "kde-mimeapps.list", da XDG_CURRENT_DESKTOP) e poi
-// "mimeapps.list"; infine applications/mimeapps.list nelle cartelle dati.
-// Un'app indicata ma non installata si salta.
+// Reading order: for each configuration directory (the user's first, then the
+// system ones) the current desktop's file ("vela-mimeapps.list",
+// "kde-mimeapps.list", from XDG_CURRENT_DESKTOP) and then "mimeapps.list";
+// finally applications/mimeapps.list in the data directories. An app listed
+// but not installed is skipped.
 namespace MimeApps {
 
 inline QStringList desktops()
@@ -59,7 +59,7 @@ inline QStringList files()
     return out;
 }
 
-// I valori di `key` nel gruppo `group` di un file ("a.desktop;b.desktop;").
+// The values of `key` in group `group` of a file ("a.desktop;b.desktop;").
 inline QStringList values(const QString& path, const QString& group, const QString& key)
 {
     QFile file(path);
@@ -84,9 +84,9 @@ inline QStringList values(const QString& path, const QString& group, const QStri
     return {};
 }
 
-// Tutti i nomi di un tipo: quello dato, quello canonico e gli alias
-// ("video/x-matroska" e "video/matroska" sono lo stesso tipo, e i file
-// mimeapps.list usano ora l'uno ora l'altro).
+// All the names of a type: the given one, the canonical one and the aliases
+// ("video/x-matroska" and "video/matroska" are the same type, and
+// mimeapps.list files use one or the other).
 inline QStringList names(const QString& mime)
 {
     QStringList out { mime };
@@ -105,7 +105,7 @@ inline bool installed(const QString& desktopId)
         && !QStandardPaths::locate(QStandardPaths::ApplicationsLocation, desktopId).isEmpty();
 }
 
-// L'app predefinita per un tipo (id del .desktop), o vuoto.
+// The default app for a type (.desktop id), or empty.
 inline QString defaultFor(const QString& mime)
 {
     const QStringList keys = names(mime);
@@ -121,8 +121,8 @@ inline QString defaultFor(const QString& mime)
     return {};
 }
 
-// Le app associate a mano a un tipo (gruppo "Added Associations"), anche se
-// il loro .desktop non lo dichiara.
+// Apps associated with a type by hand ("Added Associations" group), even if
+// their .desktop doesn't declare it.
 inline QStringList addedFor(const QString& mime)
 {
     QStringList out;
@@ -138,9 +138,9 @@ inline QStringList addedFor(const QString& mime)
     return out;
 }
 
-// Scrive in `path` le chiavi di `group` (chiave -> valore), lasciando il
-// resto del file com'era. Con `onlyExisting` cambia solo le chiavi già
-// presenti. In modo atomico (QSaveFile).
+// Writes `group`'s keys (key -> value) to `path`, leaving the rest of the file
+// as it was. With `onlyExisting` only keys already present change. Atomically
+// (QSaveFile).
 inline bool writeKeys(const QString& path, const QString& group, const QList<QPair<QString, QString>>& keys,
     bool onlyExisting)
 {
@@ -159,7 +159,7 @@ inline bool writeKeys(const QString& path, const QString& group, const QList<QPa
     }
     QList<QPair<QString, QString>> pending = keys;
     qsizetype groupStart = -1;
-    qsizetype groupEnd = lines.size(); // la riga dopo l'ultima del gruppo
+    qsizetype groupEnd = lines.size(); // the line after the group's last one
     bool changed = false;
     for (qsizetype i = 0; i < lines.size(); ++i) {
         const QString trimmed = lines.at(i).trimmed();
@@ -197,7 +197,7 @@ inline bool writeKeys(const QString& path, const QString& group, const QList<QPa
             lines.append(u'[' + group + u']');
             lines.append(added);
         } else {
-            // Prima delle righe vuote in fondo al gruppo.
+            // Before the empty lines at the end of the group.
             qsizetype at = groupEnd;
             while (at > groupStart + 1 && lines.at(at - 1).trimmed().isEmpty()) {
                 --at;
@@ -220,11 +220,11 @@ inline bool writeKeys(const QString& path, const QString& group, const QList<QPa
     return file.commit();
 }
 
-// `appId` diventa l'app predefinita per i tipi dati: in mimeapps.list
-// dell'utente (Default Applications, e in testa alle Added Associations, così
-// resta proposta anche se il suo .desktop non dichiara il tipo). Se il file
-// del desktop in uso (es. kde-mimeapps.list, scritto da Plasma) ha già una
-// scelta per quei tipi, la si aggiorna: altrimenti vincerebbe la vecchia.
+// `appId` becomes the default app for the given types: in the user's
+// mimeapps.list (Default Applications, and first in Added Associations, so it
+// stays offered even if its .desktop doesn't declare the type). If the current
+// desktop's file (such as kde-mimeapps.list, written by Plasma) already has a
+// choice for those types, it's updated: otherwise the old one would win.
 inline bool setDefault(const QStringList& mimes, const QString& appId)
 {
     if (mimes.isEmpty() || appId.isEmpty()) {
@@ -232,7 +232,7 @@ inline bool setDefault(const QStringList& mimes, const QString& appId)
     }
     QStringList all;
     for (const QString& mime : mimes) {
-        all << names(mime); // ogni nome del tipo, così la trova chi usa l'uno o l'altro
+        all << names(mime); // every name of the type, so whoever uses either finds it
     }
     all.removeDuplicates();
     QList<QPair<QString, QString>> defaults;

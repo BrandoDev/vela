@@ -1,17 +1,17 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Esplora file (vela-files): Qt Quick senza Qt Quick Controls, per partire
-# in fretta. Riusa pezzi della shell: le app installate ("Apri con"), le
-# miniature, i service menu di KDE, le azioni di sistema e il componente
-# dei menu del tasto destro (MenuPanel.qml).
+# File Explorer (vela-files): Qt Quick without Qt Quick Controls, to start
+# fast. It reuses shell pieces: installed apps ("Open with"), thumbnails, KDE
+# service menus, system actions and the right-click menu component
+# (MenuPanel.qml).
 find_package(Qt6 6.5 REQUIRED COMPONENTS DBus Gui Network Qml Quick Svg)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
 set(SHELL_SRC ${PROJECT_SOURCE_DIR}/shell/src)
 
-# Il codice C++ di Esplora, condiviso dall'app e dalle sue prove.
+# The Explorer's C++ code, shared by the app and its tests.
 add_library(vela-files-core OBJECT
     src/fileops.cpp
     src/fileops.h
@@ -81,8 +81,8 @@ qt_add_qml_module(vela-files
 target_compile_options(vela-files PRIVATE -Wall -Wextra)
 target_link_libraries(vela-files PRIVATE vela-files-core)
 
-# Le prove (ctest): copie e spostamenti senza interfaccia, con i casi che
-# non devono mai perdere dati (sostituzione, disco pieno, cambio di tipo).
+# The tests (ctest): copies and moves without a UI, with the cases that must
+# never lose data (replace, disk full, type change).
 if(VELA_BUILD_TOOLS)
     find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
     qt_add_executable(vela-files-test tests/transfers.cpp)
@@ -95,9 +95,9 @@ endif()
 install(TARGETS vela-files RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES vela-files.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 
-# Traduzione italiana: le stringhe del codice sono in inglese, l'italiano sta
-# in i18n/vela-files_it.ts e finisce nell'eseguibile (:/i18n/vela-files_it.qm, vedi
-# shell/src/language.h). Dopo aver cambiato testi:
+# Italian translation: strings in the code are in English, Italian lives
+# in i18n/vela-files_it.ts and ends up in the executable (:/i18n/vela-files_it.qm, see
+# shell/src/language.h). After changing texts:
 #   cmake --build build --target update_translations
 find_package(Qt6 6.7 REQUIRED COMPONENTS LinguistTools)
 qt_add_translations(TARGETS vela-files SOURCE_TARGETS vela-files vela-files-core

@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# xdg-desktop-portal-wlr dentro Vela (condivisione dello schermo).
-# Quando un'app chiede di condividere, la shell di Vela mostra cosa si può
-# scegliere: uno schermo intero o una finestra, con le anteprime. Risponde
-# "Monitor: <schermo>" o "Window: <identificativo>", o niente se si annulla.
+# xdg-desktop-portal-wlr inside Vela (screen sharing). When an app asks to
+# share, Vela's shell shows what can be chosen: a whole output or a window,
+# with previews. It answers "Monitor: <output>" or "Window: <identifier>", or
+# nothing when cancelled.
 [screencast]
 chooser_type=simple
 chooser_cmd=@CMAKE_INSTALL_FULL_BINDIR@/vela-shell --choose-source

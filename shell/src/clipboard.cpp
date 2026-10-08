@@ -31,7 +31,7 @@
 
 namespace {
 
-constexpr int maxItems = 25; // come Windows
+constexpr int maxItems = 25; // like Windows
 constexpr qsizetype maxText = 1024 * 1024;
 constexpr qsizetype maxImage = 32 * 1024 * 1024;
 
@@ -50,7 +50,7 @@ QString storageDir()
 
 } // namespace
 
-// Un'offerta degli appunti e i suoi formati (vive nel thread degli appunti).
+// A clipboard offer and its formats (lives in the clipboard thread).
 struct Clipboard::Offer {
     ext_data_control_offer_v1* offer = nullptr;
     QStringList types;
@@ -88,7 +88,7 @@ struct ClipboardCallbacks {
     {
         auto* self = static_cast<Clipboard*>(data);
         Offer* offer = id ? self->m_offers.value(id) : nullptr;
-        // Le offerte vecchie non servono più.
+        // Old offers are no longer needed.
         for (auto it = self->m_offers.begin(); it != self->m_offers.end();) {
             if (it.value() != offer) {
                 ext_data_control_offer_v1_destroy(it.value()->offer);
@@ -102,7 +102,7 @@ struct ClipboardCallbacks {
             return;
         }
         if (self->m_ignoreNext.exchange(false)) {
-            return; // l'abbiamo messa noi
+            return; // we set it ourselves
         }
         self->readOffer(offer);
         self->m_offers.remove(offer->offer);
@@ -117,7 +117,8 @@ struct ClipboardCallbacks {
     }
     static void primarySelection(void* data, ext_data_control_device_v1*, ext_data_control_offer_v1* id)
     {
-        // La selezione primaria (il testo evidenziato) non va nella cronologia.
+        // The primary selection (highlighted text) doesn't go into the
+        // history.
         auto* self = static_cast<Clipboard*>(data);
         if (Offer* offer = id ? self->m_offers.take(id) : nullptr) {
             ext_data_control_offer_v1_destroy(offer->offer);
@@ -128,14 +129,14 @@ struct ClipboardCallbacks {
         dataOffer, selection, finished, primarySelection
     };
 
-    // --- offerta ---
+    // --- offer ---
     static void offerType(void* data, ext_data_control_offer_v1*, const char* mimeType)
     {
         static_cast<Offer*>(data)->types << QString::fromUtf8(mimeType);
     }
     static constexpr ext_data_control_offer_v1_listener offerListener { offerType };
 
-    // --- la nostra sorgente ---
+    // --- our source ---
     static void send(void* data, ext_data_control_source_v1*, const char* mimeType, int32_t fd)
     {
         auto* self = static_cast<Clipboard*>(data);
@@ -144,8 +145,8 @@ struct ClipboardCallbacks {
             QMutexLocker lock(&self->m_mutex);
             payload = QByteArray(mimeType) == "image/png" ? self->m_sourcePng : self->m_sourceText;
         }
-        // In un altro thread: un'immagine grande non ferma la shell mentre
-        // l'app la legge.
+        // In another thread: a large image doesn't stall the shell while the
+        // app reads it.
         std::thread([fd, payload] {
             qsizetype written = 0;
             while (written < payload.size()) {
@@ -160,7 +161,7 @@ struct ClipboardCallbacks {
     }
     static void cancelled(void*, ext_data_control_source_v1* source)
     {
-        ext_data_control_source_v1_destroy(source); // un'altra app ha copiato qualcosa
+        ext_data_control_source_v1_destroy(source); // another app copied something
     }
     static constexpr ext_data_control_source_v1_listener sourceListener { send, cancelled };
 };
@@ -176,7 +177,7 @@ Clipboard::Clipboard(QObject* parent)
     if (!display || pipe2(m_wake, O_CLOEXEC | O_NONBLOCK) != 0) {
         return;
     }
-    // Una coda nostra: i suoi eventi li serve il thread degli appunti.
+    // A queue of our own: the clipboard thread serves its events.
     m_queue = wl_display_create_queue(display);
     auto* wrapper = static_cast<wl_display*>(wl_proxy_create_wrapper(display));
     wl_proxy_set_queue(reinterpret_cast<wl_proxy*>(wrapper), m_queue);
@@ -208,8 +209,8 @@ Clipboard::~Clipboard()
 
 void Clipboard::run()
 {
-    // Il modo corretto di leggere da più thread la stessa connessione:
-    // prepare_read, poll, read_events, poi gli eventi della nostra coda.
+    // The correct way to read the same connection from several threads:
+    // prepare_read, poll, read_events, then our queue's events.
     wl_display* display = waylandDisplay();
     while (!m_stop) {
         while (wl_display_prepare_read_queue(display, m_queue) != 0) {
@@ -250,7 +251,7 @@ void Clipboard::setEnabled(bool on)
 QVariantList Clipboard::items() const
 {
     QVariantList out;
-    // Prima i fissati, poi gli altri; ognuno dal più recente.
+    // Pinned first, then the others; each most recent first.
     for (const bool pinned : { true, false }) {
         for (const Item& item : m_items) {
             if (item.pinned != pinned) {
@@ -280,11 +281,11 @@ QImage Clipboard::image(int id) const
 
 void Clipboard::readOffer(Offer* offer)
 {
-    // Nel thread degli appunti: si legge fino in fondo, poi l'elemento va
-    // al thread principale.
+    // In the clipboard thread: read to the end, then the item goes to the main
+    // thread.
     const QStringList& types = offer->types;
-    // I gestori di password chiedono di non ricordare; i file copiati
-    // (Esplora, Dolphin) non sono "contenuto" e restano agli appunti normali.
+    // Password managers ask not to be remembered; copied files (Explorer,
+    // Dolphin) aren't "content" and stay on the normal clipboard.
     if (types.contains(QStringLiteral("x-kde-passwordManagerHint")) || types.contains(QStringLiteral("text/uri-list"))
         || types.contains(QStringLiteral("x-special/gnome-copied-files")) || !m_enabled) {
         return;
@@ -319,7 +320,7 @@ void Clipboard::readOffer(Offer* offer)
     for (;;) {
         pollfd p { fds[0], POLLIN, 0 };
         if (poll(&p, 1, 2000) <= 0) {
-            break; // l'app non risponde: si lascia perdere
+            break; // the app doesn't answer: give up
         }
         const ssize_t n = ::read(fds[0], chunk, sizeof(chunk));
         if (n <= 0) {
@@ -358,7 +359,7 @@ void Clipboard::add(Item item)
         return;
     }
     item.time = QDateTime::currentDateTime();
-    // Già nell'elenco: torna in cima (fissato se lo era).
+    // Already in the list: back to the top (pinned if it was).
     for (qsizetype i = 0; i < m_items.size(); ++i) {
         const Item& old = m_items[i];
         if ((!item.text.isEmpty() && old.text == item.text) || (!item.image.isNull() && old.image == item.image)) {
@@ -372,7 +373,7 @@ void Clipboard::add(Item item)
         item.id = m_nextId++;
     }
     m_items.prepend(item);
-    // Oltre il limite si perdono i più vecchi non fissati.
+    // Past the limit the oldest unpinned items are lost.
     int unpinned = 0;
     for (qsizetype i = 0; i < m_items.size();) {
         if (!m_items[i].pinned && ++unpinned > maxItems) {
@@ -419,7 +420,7 @@ void Clipboard::paste(int id)
     for (Item& item : m_items) {
         if (item.id == id) {
             setSelection(item);
-            // Come Windows: torna in cima.
+            // Like Windows: back to the top.
             Item copy = item;
             add(copy);
             ShellController::sendToCompositor("paste");
@@ -481,13 +482,13 @@ void Clipboard::copyImage(const QImage& image)
     add(item);
 }
 
-// ---------------------------------------------------- elementi fissati --
+// -------------------------------------------------------- pinned items --
 
 void Clipboard::savePinned() const
 {
     const QDir dir(storageDir());
     dir.mkpath(QStringLiteral("."));
-    // Le immagini di prima si riscrivono da capo.
+    // The old images are rewritten from scratch.
     for (const QString& old : dir.entryList({ QStringLiteral("*.png") }, QDir::Files)) {
         QFile::remove(dir.filePath(old));
     }

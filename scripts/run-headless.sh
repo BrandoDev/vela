@@ -2,13 +2,13 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Avvia Vela senza finestra (backend "headless" di wlroots): nulla compare
-# sullo schermo, ma le app si aprono e si può guardare e comandare tutto con
-# gli strumenti in tools/ (vela-shot, vela-windows, vela-input).
-# Serve per i test automatici, anche mentre usi il computer.
+# Starts Vela without a window (the wlroots "headless" backend): nothing
+# appears on screen, but apps open and everything can be watched and driven
+# with the tools in tools/ (vela-shot, vela-windows, vela-input). For automated
+# tests, even while you use the computer.
 #
-# Uso: scripts/run-headless.sh [cartella-di-build]
-# Il log dice su quale WAYLAND_DISPLAY gira; chiudi con Ctrl+C o SIGTERM.
+# Usage: scripts/run-headless.sh [build-directory] The log says which
+# WAYLAND_DISPLAY it runs on; close with Ctrl+C or SIGTERM.
 
 set -eu
 
@@ -24,9 +24,9 @@ fi
 export WLR_BACKENDS=headless
 export WLR_LIBINPUT_NO_DEVICES=1
 export VELA_OUTPUT_SIZE="${VELA_OUTPUT_SIZE:-1920x1080}"
-# Mouse e tastiera virtuali per vela-input.
+# Virtual mouse and keyboard for vela-input.
 export VELA_DEBUG_INPUT=1
-# Le app avviate da qui non devono provare a riconnettersi altrove.
+# Apps started from here must not try to reconnect elsewhere.
 unset QT_WAYLAND_RECONNECT
 
 if [ -x "$SHELL_BIN" ]; then
