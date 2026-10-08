@@ -278,12 +278,33 @@ bool SystemActions::run(const QString& input)
     if (text.isEmpty()) {
         return false;
     }
-    // A URL or an existing path opens with the default app; the rest is a
-    // command line.
+    // Handle folders locally; xdg-open must never choose a browser for them.
     const QString expanded = text.startsWith(u'~') ? QDir::homePath() + text.mid(1) : text;
+    const QFileInfo info(expanded);
     bool ok = false;
-    if (text.contains(QLatin1String("://")) || QFileInfo::exists(expanded)) {
-        ok = QProcess::startDetached(QStringLiteral("xdg-open"), { expanded });
+    if (info.isDir()) {
+        const QString files = velaFilesExecutable();
+        ok = !files.isEmpty() && QProcess::startDetached(files, { info.absoluteFilePath() });
+    } else if (info.isFile()) {
+        const QString mime = QMimeDatabase().mimeTypeForFile(info).name();
+        const QString id = MimeApps::defaultFor(mime);
+        if (m_apps && !id.isEmpty() && m_apps->launchWithFile(id, QUrl::fromLocalFile(info.absoluteFilePath()).toString())) {
+            ok = true;
+        } else {
+            emit chooseAppRequested(info.absoluteFilePath());
+            ok = true;
+        }
+    } else if (text.contains(QLatin1String("://"))) {
+        const QUrl url(text);
+        if (url.scheme() == QLatin1String("http") || url.scheme() == QLatin1String("https"))
+            ok = QProcess::startDetached(QStringLiteral("xdg-open"), { text });
+        else if (url.isLocalFile()) {
+            const QFileInfo local(url.toLocalFile());
+            if (local.isDir()) {
+                const QString files = velaFilesExecutable();
+                ok = !files.isEmpty() && QProcess::startDetached(files, { local.absoluteFilePath() });
+            }
+        }
     } else {
         ok = spawn(text);
     }
