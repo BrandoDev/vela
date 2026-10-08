@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Vela Report
+Comment=Create a diagnostic report to share with the Vela maintainer
+Exec=vela-report --gui
+Icon=tools-report-bug
+Terminal=false
+Categories=System;Utility;

@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+from pathlib import Path
+import sys
+
+here = Path(__file__).resolve().parent
+helpers = here.parent / "@CMAKE_INSTALL_LIBEXECDIR@"
+module = here / "vela_report"
+if not module.is_dir():
+    sys.path.insert(0, str(helpers / "report"))
+else:
+    sys.path.insert(0, str(here))
+from vela_report.cli import main
+
+gui = here / "vela-report-gui"
+if not gui.is_file():
+    gui = helpers / "vela-report-gui"
+raise SystemExit(main(gui_path=str(gui), build={"version": "@PROJECT_VERSION@",
+                                              "source_commit": "@VELA_REPORT_COMMIT@",
+                                              "dirty": "@VELA_REPORT_DIRTY@" == "true"}))

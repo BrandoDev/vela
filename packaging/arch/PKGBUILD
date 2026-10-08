@@ -27,7 +27,7 @@ depends=(
     'wlroots0.20' 'wayland' 'libxkbcommon' 'pixman' 'libinput' 'libdrm' 'mesa' 'vulkan-icd-loader'
     'freetype2' 'harfbuzz' 'fontconfig' 'librsvg' 'cairo'
     'qt6-base' 'qt6-declarative' 'qt6-svg' 'qt6-wayland' 'layer-shell-qt'
-    'pam' 'polkit' 'hicolor-icon-theme'
+    'pam' 'polkit' 'hicolor-icon-theme' 'python'
 )
 makedepends=('git' 'cmake' 'shaderc' 'vulkan-headers' 'wayland-protocols' 'qt6-tools')
 optdepends=(

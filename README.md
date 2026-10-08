@@ -308,12 +308,20 @@ If the session doesn't show up, your display manager may not look in `/usr/local
 sudo ln -s /usr/local/share/wayland-sessions/vela.desktop /usr/share/wayland-sessions/
 ```
 
+## Reporting a problem
+
+Run `vela-report` to create a diagnostic ZIP with a description and the evidence
+you choose. It explains each collection, lets you review or remove files, and
+asks before exporting. Nothing is uploaded. Use `vela-report --cli` from a TTY
+or SSH session; the graphical interface also works in other desktop environments.
+See [Vela Report](docs/reporting.md) for privacy details, options and limits.
+
 ## Build from source
 
 You need CMake ≥ 3.22, Ninja, a C17 and C++20 compiler, **wlroots 0.20**, Qt ≥ 6.7 with its Linguist tools, LayerShellQt,
 the Vulkan headers and loader, `glslc`, GBM, libdrm, FreeType, HarfBuzz, Fontconfig and
-PAM. librsvg is optional (app icons in the title bar). The tests also use GoogleTest and
-Python 3.
+PAM. librsvg is optional (app icons in the title bar). The diagnostic reporter needs
+Python 3.10 or newer; the tests also use GoogleTest.
 
 <details>
 <summary><b>Arch / CachyOS / EndeavourOS</b></summary>
@@ -464,6 +472,7 @@ see the documentation below.
 |---|---|
 | **[Renderer](docs/renderer.md)** | Scene graph, Vulkan renderer, scaling, damage, frame scheduling and direct scanout. |
 | **[Polkit agent](docs/polkit-agent.md)** | The User Account Control dialog: agent, dialog, protocol, security notes and tests. |
+| **[Vela Report](docs/reporting.md)** | Guided diagnostic ZIPs, CLI and GUI, collection choices, privacy and validation. |
 | **[Development](docs/development.md)** | Build options, nested/headless workflows, development tools and repository layout. |
 | **[Testing](docs/testing.md)** | Unit, functional and sharpness suites; GPU requirements; local and CI coverage. |
 | **[Configuration](docs/configuration.md)** | `vela.conf`, display persistence, runtime overrides and renderer/debug environment variables. |

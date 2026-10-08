@@ -6,11 +6,13 @@ set -euo pipefail
 fail() { printf '::error::%s\n' "$*" >&2; exit 1; }
 pacman -Q vela-git
 pacman -Qk vela-git
-for program in vela-compositor vela-shell vela-files vela-settings vela-lock vela-session vela-update; do
+for program in vela-compositor vela-shell vela-files vela-settings vela-lock vela-session vela-update vela-report; do
     command -v "$program" >/dev/null || fail "Missing executable: $program"
 done
 for path in \
     /usr/share/wayland-sessions/vela.desktop \
+    /usr/share/applications/vela-report.desktop \
+    /usr/lib/vela/report/vela_report/cli.py \
     /usr/share/xdg-desktop-portal/vela-portals.conf \
     /usr/lib/systemd/user/vela-session.target \
     /etc/xdg/xdg-desktop-portal-wlr/Vela \
@@ -19,11 +21,12 @@ for path in \
 done
 grep -Fq 'Exec=/usr/bin/vela-session' /usr/share/wayland-sessions/vela.desktop \
     || fail "Session entry does not launch /usr/bin/vela-session"
-for helper in vela-polkit-agent vela-polkit-prompt; do
+vela-report --help >/dev/null || fail "The reporting CLI cannot load its Python modules"
+for helper in vela-polkit-agent vela-polkit-prompt vela-report-gui; do
     test -x "/usr/lib/vela/$helper" || fail "Missing helper: /usr/lib/vela/$helper"
 done
 for program in vela-compositor vela-shell vela-files vela-settings vela-lock \
-    /usr/lib/vela/vela-polkit-agent /usr/lib/vela/vela-polkit-prompt; do
+    /usr/lib/vela/vela-polkit-agent /usr/lib/vela/vela-polkit-prompt /usr/lib/vela/vela-report-gui; do
     path=$(command -v "$program")
     if ldd "$path" | grep -q 'not found'; then
         ldd "$path" >&2

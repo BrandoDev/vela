@@ -24,6 +24,8 @@ Useful CMake options:
 | `VELA_BUILD_COMPOSITOR` | `ON` | Build the Wayland compositor and session integration. |
 | `VELA_BUILD_SHELL` | `ON` | Build the Qt Quick shell, Settings, Files and lock screen. |
 | `VELA_BUILD_TOOLS` | `ON` | Build development tools and enable the CTest suites. |
+| `VELA_BUILD_REPORT` | `ON` | Install the standalone diagnostic reporter; requires Python 3.10 or newer. |
+| `VELA_REPORT_GUI` | Same as `VELA_BUILD_SHELL` | Build the ordinary Qt Widgets reporting window, also usable in other desktops. |
 | `VELA_WLROOTS` | `wlroots-0.20` | pkg-config name used for wlroots. Only wlroots 0.20 is supported. |
 
 For example:
@@ -149,6 +151,7 @@ polkit/             vela-polkit-agent and vela-polkit-prompt (docs/polkit-agent.
 common/             Vela.Controls: theme, controls and blur shared by the Qt Quick apps
 session/            login entry, systemd target and portal integration
 packaging/arch/     PKGBUILD and vela-update
+report/             vela-report: shared Python core/CLI and standalone Qt Widgets GUI
 tools/              development and test clients
 tests/functional/   headless functional scenarios
 scripts/            nested/headless launchers, sharpness and measurements

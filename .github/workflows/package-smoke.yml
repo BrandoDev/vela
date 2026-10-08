@@ -19,7 +19,7 @@ jobs:
       - name: Build dependencies
         run: >-
           pacman -Syu --noconfirm --needed
-          base-devel git cmake shaderc vulkan-headers wayland-protocols
+          base-devel git cmake python shaderc vulkan-headers wayland-protocols
           qt6-tools wlroots0.20 wayland libxkbcommon pixman libinput
           libdrm mesa vulkan-icd-loader freetype2 harfbuzz fontconfig
           librsvg cairo qt6-base qt6-declarative qt6-svg qt6-wayland

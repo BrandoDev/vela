@@ -26,6 +26,11 @@ if(VELA_BUILD_TOOLS)
     enable_testing()
 endif()
 
+option(VELA_BUILD_REPORT "Build the standalone diagnostic reporter (needs Python 3)" ON)
+if(VELA_BUILD_REPORT)
+    add_subdirectory(report)
+endif()
+
 if(VELA_BUILD_COMPOSITOR)
     add_subdirectory(compositor)
     add_subdirectory(session)
