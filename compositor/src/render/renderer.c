@@ -6,12 +6,12 @@
 // times and the wlr_renderer wlroots sees.
 
 #include "render/render.h"
+#include "sync.h"
 
 #include "util.h"
 
 #include <drm_fourcc.h>
 #include <inttypes.h>
-#include <poll.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -680,8 +680,19 @@ uint64_t vela_renderer_submit(struct vela_renderer *r, VkCommandBuffer cmd, cons
         r->wait_capacity = wait_count;
     }
     uint32_t waits = 0;
+    bool inputs_ready = true;
     for (int i = 0; i < wait_count; ++i) {
         int fd = wait_fds[i];
+        // Most app commits have already been held until ready by scene/ready.
+        // Avoid importing a completed fence into the driver for every draw.
+        if (vela_sync_ready(fd)) {
+            close(fd);
+            continue;
+        }
+        if (!vk->sync_file) {
+            inputs_ready = vela_sync_wait_close(fd) && inputs_ready;
+            continue;
+        }
         VkSemaphore semaphore = take_semaphore(r, false);
         const VkImportSemaphoreFdInfoKHR import_info = {
             .sType = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR,
@@ -692,9 +703,7 @@ uint64_t vela_renderer_submit(struct vela_renderer *r, VkCommandBuffer cmd, cons
         };
         if (!semaphore || vk->import_semaphore_fd(vk->device, &import_info) != VK_SUCCESS) {
             // Fallback: the CPU waits.
-            struct pollfd pfd = { .fd = fd, .events = POLLIN };
-            poll(&pfd, 1, -1);
-            close(fd);
+            inputs_ready = vela_sync_wait_close(fd) && inputs_ready;
             if (semaphore) {
                 give_back_semaphore(r, semaphore, false);
             }
@@ -740,7 +749,7 @@ uint64_t vela_renderer_submit(struct vela_renderer *r, VkCommandBuffer cmd, cons
         .signalSemaphoreInfoCount = signal_count,
         .pSignalSemaphoreInfos = signals,
     };
-    bool ok = vkQueueSubmit2(vk->queue, 1, &submit_info, VK_NULL_HANDLE) == VK_SUCCESS;
+    bool ok = inputs_ready && vkQueueSubmit2(vk->queue, 1, &submit_info, VK_NULL_HANDLE) == VK_SUCCESS;
 
     // Command buffers become available again once the GPU has executed them.
     VkCommandBuffer upload = r->upload;

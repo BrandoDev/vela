@@ -27,7 +27,7 @@ CTest includes both CPU-only and GPU-dependent suites.
 | **Polkit agent / GoogleTest** (`polkit.*`) | The agent's queue, cancellations by polkit and by the user, a crashed dialog counting as "No", retries after a wrong password, sessions that fail by themselves, identity order and choice, the dialog protocol. | No |
 | **Sharpness** (`sharpness`) | Pixel-level checks that windows reach the expected physical pixels across fractional scales and common window states. | Yes |
 
-The compositor currently contains 52 GoogleTest cases and the polkit agent 23; the functional harness runs 79 end-to-end scenarios. Every scenario also checks that the compositor exits with status 0 when asked to stop: a crash on the way out would look like a real one to the supervisor.
+The compositor currently contains 59 GoogleTest cases and the polkit agent 23; the functional harness runs 83 end-to-end scenarios. Every scenario also checks that the compositor exits with status 0 when asked to stop: a crash on the way out would look like a real one to the supervisor.
 
 ## Run a subset
 
@@ -218,7 +218,27 @@ from `state` the missed vblanks, the frames shown and the commits held back:
 |---|---|
 | explicit sync | at most 2 missed vblanks, commits held back |
 | implicit sync | at most 2 missed vblanks, commits held back |
+| CPU synchronization (`VELA_SYNC_FILE=0`) | implicit producer fences still respected, at most 2 missed vblanks |
 | `VELA_READY_WAIT=0` | at least 20 missed vblanks: proves the test really detects a stall |
+
+`tests/functional/test_resources.py` runs both GPU and CPU synchronization
+under a 1024-descriptor limit, renders 1200 frames after warm-up, and checks
+the compositor's actual FD and sync_file counts for bounded growth. Its
+supervisor test stops the compositor with SIGSTOP and verifies that resource
+records continue in the session log before resuming it. The CPU-only tests
+also check interrupted fence waits, closing ownership, 2048 wait/close cycles,
+driver policy and read-only process sampling. Hosted CI cannot establish
+NVIDIA driver correctness; the GPU scenarios must also run on affected hardware.
+
+Reporter fixtures cover complete logs above the former 2 MiB cap, preserving
+startup and final errors in oversized logs, refreshing evidence after live
+recording, rotation, historical descriptor records and matching retained logs
+to their incident boot. An unknown boot must never become current-boot evidence.
+
+`sharpness-cpu` repeats the pixel comparison at all five scales with
+`VELA_SYNC_FILE=0`, so CPU compatibility must preserve exactly the same pixels.
+Both sharpness suites honor `VELA_BUILD`, including build paths with spaces,
+and fail immediately if an executable is missing.
 
 ## Vulkan validation and renderer diagnosis
 
@@ -233,6 +253,9 @@ Additional rendering switches such as `VELA_DEBUG_DAMAGE`, `VELA_DEBUG_SYNC`, `V
 ## Continuous integration
 
 GitHub Actions builds Vela and runs every test that does not require a real DRM/Vulkan device. The GPU-dependent suites remain registered in CTest but are reported as skipped on hosted runners.
+
+The fast prerequisite job also runs the reporter evidence contracts before
+building the desktop, including historical boot selection and log retention.
 
 The Build workflow runs the package/updater contracts in a separate, fast job
 before compiling Vela. The suite also runs through CTest in the Arch build, and

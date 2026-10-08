@@ -21,6 +21,7 @@
 // compositor that never comes back.
 
 #include "supervisor.h"
+#include "diagnostics.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -312,10 +313,28 @@ int vela_supervise(int argc, char **argv)
         child_pid = pid;
         // Adopted apps that end are reaped too: only the compositor matters.
         int status = 0;
+        double started = now_seconds(), next_sample = started;
         for (;;) {
-            pid_t done = waitpid(-1, &status, 0);
+            pid_t done = waitpid(-1, &status, WNOHANG);
             if (done == pid || (done < 0 && errno != EINTR)) {
                 break;
+            }
+            double now = now_seconds();
+            if (now >= next_sample) {
+                struct vela_process_resources resources;
+                if (vela_process_resources(pid, &resources)) {
+                    // A compact record. No paths, window titles or app names.
+                    fprintf(stderr, "vela-supervise: resources pid=%ld elapsed_s=%llu fds=%u "
+                        "sync_file=%u dmabuf=%u eventfd=%u sockets=%u nofile=%llu rss_kib=%llu\n",
+                        (long)pid, (unsigned long long)(now - started), resources.fds,
+                        resources.sync_file, resources.dmabuf, resources.eventfd,
+                        resources.sockets, resources.nofile, resources.rss_kib);
+                }
+                next_sample = now + 2.0;
+            }
+            if (done <= 0) {
+                struct timespec pause = { .tv_nsec = 100000000 };
+                nanosleep(&pause, NULL);
             }
         }
         child_pid = 0;

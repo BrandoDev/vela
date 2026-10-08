@@ -42,9 +42,12 @@ jobs:
       - uses: actions/checkout@v7
       - name: Updater and package source contracts (no network or credentials)
         run: python3 -m unittest discover -s packaging/arch/tests -v
+      - name: Reporter evidence contracts (no GPU or running session)
+        run: PYTHONPATH=report python3 -m unittest discover -s report/tests -v
       - name: Package script syntax
         run: |
           sh -n packaging/arch/vela-update
+          sh -n session/vela-session.in scripts/test-sharpness.sh
           bash -n packaging/arch/PKGBUILD
 
   build:

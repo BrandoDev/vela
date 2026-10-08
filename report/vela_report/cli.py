@@ -185,7 +185,7 @@ def interactive(options, build):
                 break
             except ValueError:
                 print("Example: 2026-10-08T13:20:00+02:00. Include a timezone offset.")
-        context["boot"] = ask("Journal boot: 0=current, -1=previous, or boot ID; independent of log selection",
+        context["boot"] = ask("Journal boot: auto=match selected session, 0=current, -1=previous, or boot ID",
                               options.boot)
         context["minutes_before"] = getattr(options, "minutes_before", 10)
         context["minutes_after"] = getattr(options, "minutes_after", 5)
@@ -210,7 +210,7 @@ def interactive(options, build):
         if selected & {"session_journal", "kernel_journal", "crashes"}:
             print("Journal window: " + str(context["minutes_before"]) + " minutes before and " +
                   str(context["minutes_after"]) + " minutes after the incident, capped at now. "
-                  "If the incident time is unknown, the window is relative to collection time.")
+                  "Unknown incident time uses the selected log's last write, or the whole selected boot.")
         if "runtime" in selected:
             index = choose("Select the live Vela instance; the host desktop is not assumed to be Vela.",
                            ["No live instance", *info["sockets"]])
@@ -310,7 +310,7 @@ def main(argv=None, gui_path=None, build=None):
     parser.add_argument("--log", help="Select an incident log file explicitly.")
     parser.add_argument("--description-file", help="Include a text description file in the reviewed report.")
     parser.add_argument("--incident-time", help="Incident ISO timestamp including its timezone offset.")
-    parser.add_argument("--boot", default="0", help="Journal boot: 0, a negative index, or a boot ID.")
+    parser.add_argument("--boot", default="auto", help="Journal boot: auto matches the selected session; also accepts 0, a negative index, or a boot ID.")
     parser.add_argument("--duration", type=int, default=60, help="Resource recording duration (1–300 seconds).")
     parser.add_argument("--minutes-before", type=int, default=10, help="Journal window before the incident (0–120 minutes).")
     parser.add_argument("--minutes-after", type=int, default=5, help="Journal window after the incident (0–120 minutes).")

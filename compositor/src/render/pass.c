@@ -727,7 +727,6 @@ bool vela_pass_submit(struct vela_pass *pass, struct vela_pass_result *result)
 {
     struct vela_renderer *renderer = pass->renderer;
     struct vela_target *target = pass->target;
-    struct vela_vulkan *vk = renderer->vk;
     if (result) {
         *result = (struct vela_pass_result) { 0, -1, 0 };
     }
@@ -766,12 +765,12 @@ bool vela_pass_submit(struct vela_pass *pass, struct vela_pass_result *result)
     // Implicit sync: wait for whoever still uses the target (the output
     // showing it) and whoever is still writing the textures (the apps); at the
     // end our fence goes into the same dmabufs.
-    if (vk->sync_file) {
-        export_fence(target->dmabuf_fd, DMA_BUF_SYNC_WRITE, waits, &wait_count);
-        for (int i = 0; i < foreign_count; ++i) {
-            if (!explicit_sync(pass, foreign[i])) {
-                export_fence(foreign[i]->dmabuf_fd, DMA_BUF_SYNC_READ, waits, &wait_count);
-            }
+    // CPU synchronization still needs the producers' fences. Only the Vulkan
+    // import/export is disabled; ignoring implicit fences would race clients.
+    export_fence(target->dmabuf_fd, DMA_BUF_SYNC_WRITE, waits, &wait_count);
+    for (int i = 0; i < foreign_count; ++i) {
+        if (!explicit_sync(pass, foreign[i])) {
+            export_fence(foreign[i]->dmabuf_fd, DMA_BUF_SYNC_READ, waits, &wait_count);
         }
     }
 

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import datetime as dt
+from collections import deque
+import io
 import json
 import os
 from pathlib import Path
@@ -11,7 +13,7 @@ import socket
 import stat
 import time
 
-from .core import Result, TEXT_LIMIT, read_regular, run_command, timestamp
+from .core import LOG_LIMIT, Result, TEXT_LIMIT, read_regular, run_command, timestamp
 
 CATEGORIES = ["Crash", "Freeze", "Rendering", "Performance", "Input", "Installation/update", "Other"]
 SPECS = [
@@ -45,6 +47,7 @@ OVERRIDES = [
     "VELA_READY_WAIT", "VELA_LATCH", "VELA_LATCH_MARGIN", "VELA_REALTIME", "VELA_SCREEN_OFF",
     "VELA_LOCK_ON_IDLE", "VELA_STATS", "VELA_VULKAN_VALIDATION", "VELA_DEBUG",
     "VELA_DEBUG_SYNC", "VELA_DEBUG_LINEAR", "VELA_DEBUG_DAMAGE", "VELA_DEBUG_SCANOUT",
+    "VELA_SYNC_FILE", "WLR_RENDER_NO_EXPLICIT_SYNC", "__NV_DISABLE_EXPLICIT_SYNC",
     "XKB_DEFAULT_LAYOUT", "XKB_DEFAULT_VARIANT", "XKB_DEFAULT_OPTIONS",
 ]
 
@@ -212,11 +215,21 @@ def resource_sample(environment, identity):
     return sample
 
 
+class IncidentBootUnavailable(ValueError):
+    pass
+
+
 class Collector:
     def __init__(self, report, runner=run_command):
         self.report = report
         self.environment = report.environment
         self.run = runner
+        self._boot_listing = None
+
+    def boot_listing(self):
+        if self._boot_listing is None:
+            self._boot_listing = self.run(["journalctl", "--list-boots", "--no-pager", "--no-legend", "--utc"], timeout=10)
+        return self._boot_listing
 
     def command_file(self, collection, name, args, timeout=10):
         result = self.run(args, timeout=timeout)
@@ -300,11 +313,69 @@ class Collector:
             results.append(self.file("graphics", driver, "system/nvidia-driver.txt"))
         return combine(results, "Some graphics tools or driver information are unavailable.")
 
-    def logs(self):
+    def logs(self, expected=None):
         path = self.report.context.get("log_path")
         if not path:
             return Result("unavailable", reason="No incident log was selected.")
-        return self.file("logs", Path(path), "logs/vela.log")
+        data, metadata = read_regular(Path(path), LOG_LIMIT, bookends=True)
+        if expected is not None and (metadata["device"], metadata["inode"]) != expected:
+            return Result("partial", reason="Selected log rotated during collection; original snapshot retained.")
+        self.report.add_text("logs", "logs/vela.log", data, path, metadata)
+        session = {"last_log_write": dt.datetime.fromtimestamp(
+            metadata["mtime_ns"] / 1e9, dt.timezone.utc).isoformat()}
+        header = re.search(r"^vela-session: started_at=(\S+) boot_id=([0-9a-fA-F-]{36})$", data, re.M)
+        if header:
+            # Log contents are untrusted: accept only a valid timestamp and UUID.
+            try:
+                started = dt.datetime.fromisoformat(header[1])
+                if started.tzinfo is not None and re.fullmatch(
+                        r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", header[2]):
+                    session.update(started_at=started.isoformat(), boot_id=header[2].replace("-", ""))
+            except ValueError:
+                pass
+        self.report.context["log_session"] = session
+        for derived in ("logs/error-summary.json", "logs/resource-history.jsonl"):
+            if derived in self.report.artifacts:
+                self.report.remove(derived)
+        count, first, last = 0, None, None
+        samples = deque(maxlen=10000)
+        sample_count = 0
+        keys = {"pid", "elapsed_s", "fds", "sync_file", "dmabuf", "eventfd", "sockets", "nofile", "rss_kib"}
+        for line in io.StringIO(data):
+            if "Too many open files" in line:
+                count += 1
+                last = line.strip()[:4096]
+                if first is None:
+                    first = last
+            # wlroots writes log prefixes separately: a supervisor record
+            # can land between a prefix and its message during an error flood.
+            _, separator, record = line.partition("vela-supervise: resources ")
+            if separator:
+                values = {key: int(value) for key, value in re.findall(r"([a-z_]+)=([0-9]{1,20})\b", record)
+                          if key in keys}
+                if {"pid", "fds", "nofile", "sync_file"} <= values.keys():
+                    samples.append(values)
+                    sample_count += 1
+        self.report.observations = [o for o in self.report.observations if not o.startswith("Session log:")]
+        if count:
+            self.report.add_json("logs", "logs/error-summary.json",
+                                 {"file_descriptor_exhaustion_messages": count,
+                                  "first": first, "last": last,
+                                  "scope": "retained log bytes; this does not identify the leaking component"})
+            self.report.observations.append("Session log: file descriptor exhaustion (Too many open files); "
+                                            "see logs/error-summary.json and retained resource samples.")
+        if samples:
+            self.report.add_text("logs", "logs/resource-history.jsonl",
+                                 "".join(json.dumps(s) + "\n" for s in samples),
+                                 source="supervisor samples from the selected incident log",
+                                 metadata={"scope": "historical compositor samples, not the reporting desktop",
+                                           "sample_count": sample_count, "retained_samples": len(samples)})
+        reasons = []
+        if metadata["truncated"]:
+            reasons.append(f"Log exceeds {LOG_LIMIT / (1024 * 1024):g} MiB; startup and latest messages retained, with an explicit omission marker.")
+        if metadata["changed_during_copy"]:
+            reasons.append("Log changed during copying.")
+        return Result("partial" if reasons else "collected", reason=" ".join(reasons))
 
     def config(self):
         results = [self.file("config", self.environment.config_dir() / name, "config/" + name)
@@ -327,34 +398,89 @@ class Collector:
 
     def journal_args(self):
         context = self.report.context
-        boot = str(context.get("boot", "0"))
-        if not re.fullmatch(r"(?:0|-[1-9][0-9]*|[0-9a-fA-F]{32})", boot):
-            raise ValueError("Boot must be 0, a negative index, or a 32-character boot ID.")
+        boot = str(context.get("boot", "auto"))
+        if not re.fullmatch(r"(?:auto|0|-[1-9][0-9]*|[0-9a-fA-F]{32})", boot):
+            raise ValueError("Boot must be auto, 0, a negative index, or a 32-character boot ID.")
         incident = context.get("incident_time", "")
+        session = context.get("log_session", {})
+        source = "explicit"
         if incident:
             when = dt.datetime.fromisoformat(incident)
             if when.tzinfo is None:
                 raise ValueError("Incident time must include a timezone offset.")
+            time_source = "incident_time"
+        elif session.get("last_log_write"):
+            when = dt.datetime.fromisoformat(session["last_log_write"])
+            time_source = "log_last_write"
         else:
-            when = dt.datetime.now().astimezone()
+            when = None
+            time_source = "whole_boot"
+        if boot == "auto":
+            if session.get("boot_id"):
+                boot = session["boot_id"]
+                source = "session_log_header"
+            elif when is not None:
+                listing = self.boot_listing()
+                if listing.output:
+                    self.report.add_text("kernel_journal" if self.report.plan.get("kernel_journal") else "session_journal",
+                                         "logs/journal-boots.txt", listing.output,
+                                         source="journalctl --list-boots --utc")
+                boots = []
+                for line in listing.output.splitlines():
+                    match = re.match(r"\s*(-?\d+)\s+([0-9a-fA-F]{32})\b", line)
+                    dates = re.findall(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", line)
+                    if match and len(dates) == 2:
+                        start, end = [dt.datetime.fromisoformat(d).replace(tzinfo=dt.timezone.utc) for d in dates]
+                        boots.append((start, end, match[2]))
+                boots.sort()
+                for index, (start, end, identifier) in enumerate(boots):
+                    upper = boots[index + 1][0] if index + 1 < len(boots) else dt.datetime.now(dt.timezone.utc)
+                    if start <= when < upper:
+                        boot, source = identifier, time_source
+                        break
+                if boot == "auto":
+                    raise IncidentBootUnavailable("Cannot match the incident to a retained journal boot; current-boot logs were not substituted.")
+            elif str(context.get("live_during_incident", "")).lower() == "yes":
+                boot, source = "0", "live_session"
+            else:
+                raise IncidentBootUnavailable("Incident boot is unknown. Select its boot; current-boot logs were not substituted.")
+        if session.get("boot_id") and source == "explicit":
+            selected_id = self.boot_id().replace("-", "") if boot == "0" else boot
+            if selected_id.startswith("-"):
+                listing = self.boot_listing()
+                selected_id = next((match[2] for line in listing.output.splitlines()
+                                    if (match := re.match(r"\s*(-?\d+)\s+([0-9a-fA-F]{32})\b", line))
+                                    and match[1] == boot), "")
+                if not selected_id:
+                    raise ValueError("Selected boot index cannot be resolved against the incident log.")
+                boot = selected_id
+            if not re.fullmatch(r"[0-9a-fA-F]{32}", selected_id):
+                raise IncidentBootUnavailable("Selected journal boot cannot be verified against the incident log.")
+            if selected_id.lower() != session["boot_id"].lower():
+                raise ValueError("Selected journal boot conflicts with the selected Vela session log.")
         before = int(context.get("minutes_before", 10))
         after = int(context.get("minutes_after", 5))
         if not (0 <= before <= 120 and 0 <= after <= 120):
             raise ValueError("Journal windows must be between 0 and 120 minutes.")
-        start = when - dt.timedelta(minutes=before)
-        stop = min(when + dt.timedelta(minutes=after), dt.datetime.now().astimezone())
-        return ["--boot", boot, "--since", start.isoformat(), "--until", stop.isoformat()]
+        context["journal_scope"] = {"boot": boot, "boot_source": source, "time_source": time_source,
+                                    "journal_order": "newest_first"}
+        args = ["--boot", boot]
+        if when is not None:
+            start = when - dt.timedelta(minutes=before)
+            stop = min(when + dt.timedelta(minutes=after), dt.datetime.now().astimezone())
+            args += ["--since", start.isoformat(), "--until", stop.isoformat()]
+        return args
 
     def session_journal(self):
         return self.command_file("session_journal", "logs/session-journal.txt",
-                    ["journalctl", "--user", "--no-pager", "--output=short-iso-precise",
+                    ["journalctl", "--user", "--no-pager", "--reverse", "--output=short-iso-precise",
                      *self.journal_args(),
                      *["_COMM=" + p for p in ("vela-compositor", "vela-shell", "vela-polkit-age",
                                                "vela-polkit-pro", "vela-files", "vela-settings", "vela-lock")]])
 
     def kernel_journal(self):
         return self.command_file("kernel_journal", "logs/kernel-journal.txt",
-                                 ["journalctl", "-k", "--no-pager", "--output=short-iso-precise",
+                                 ["journalctl", "-k", "--no-pager", "--reverse", "--output=short-iso-precise",
                                   *self.journal_args()])
 
     def crashes(self):
@@ -368,17 +494,20 @@ class Collector:
             boot = ""
         if re.fullmatch(r"-[1-9][0-9]*", boot or ""):
             index = boot
-            listing = self.run(["journalctl", "--list-boots", "--no-pager"], timeout=10)
+            listing = self.boot_listing()
             boot = next((match.group(2) for line in listing.output.splitlines()
                          if (match := re.match(r"\s*(-?\d+)\s+([0-9a-fA-F]{32})\b", line))
                          and match.group(1) == index), "")
         if not re.fullmatch(r"[0-9a-fA-F]{32}", boot or ""):
             return Result("unavailable", reason="The selected boot could not be resolved. Select its explicit boot ID.")
-        return self.command_file("crashes", "crashes/metadata.txt",
+        result = self.command_file("crashes", "crashes/metadata.txt",
                     ["coredumpctl", "--no-pager", *args[2:], "list", "_BOOT_ID=" + boot,
                      "COREDUMP_UID=" + str(self.environment.uid),
                      *["COREDUMP_COMM=" + p for p in ("vela-compositor", "vela-shell", "vela-files",
                                                        "vela-settings", "vela-lock")]])
+        if result.returncode == 1 and result.output.strip() == "No coredumps found.":
+            return Result("collected", result.output, "No coredumps in the selected incident boot/window.", 1)
+        return result
 
     def resources(self, progress):
         identities = self.report.context.get("processes", [])
@@ -472,10 +601,21 @@ class Collector:
                 result = Result("permission_denied", reason="This collection is not accessible to the current user.")
             except FileNotFoundError:
                 result = Result("unavailable", reason="This source is unavailable.")
+            except IncidentBootUnavailable as error:
+                result = Result("unavailable", reason=str(error))
             except (OSError, ValueError, KeyError, TypeError) as error:
                 result = Result("failed", reason=self.report.redactor.text(str(error)))
             self.report.results[key] = {"status": result.status, "reason": result.reason,
                                         "started_at": started, "finished_at": timestamp()}
+            if key == "resources" and "logs" in selected and self.report.artifacts.get("logs/vela.log"):
+                # Include the reproduction itself, not only the log before sampling.
+                original = self.report.artifacts["logs/vela.log"]["metadata"]
+                try:
+                    refreshed = self.logs(expected=(original["device"], original["inode"]))
+                    self.report.results["logs"].update(status=refreshed.status, reason=refreshed.reason,
+                                                       finished_at=timestamp())
+                except (OSError, ValueError):
+                    self.report.results["logs"].update(status="partial", reason="Selected log became unavailable; original snapshot retained.")
         self.report.context["reporting_boot_id"] = self.boot_id()
         self.report.context["reporting_session_id"] = self.environment.env.get("XDG_SESSION_ID", "unknown")
         return self.report.summary()
