@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Run only after installing vela-git in a fresh Arch container.
+set -euo pipefail
+fail() { printf '::error::%s\n' "$*" >&2; exit 1; }
+pacman -Q vela-git
+pacman -Qk vela-git
+for program in vela-compositor vela-shell vela-files vela-settings vela-lock vela-session vela-update; do
+    command -v "$program" >/dev/null || fail "Missing executable: $program"
+done
+for path in \
+    /usr/share/wayland-sessions/vela.desktop \
+    /usr/share/xdg-desktop-portal/vela-portals.conf \
+    /usr/lib/systemd/user/vela-session.target \
+    /etc/xdg/xdg-desktop-portal-wlr/Vela \
+    /etc/pam.d/vela-lock; do
+    test -f "$path" || fail "Missing installed file: $path"
+done
+grep -Fq 'Exec=/usr/bin/vela-session' /usr/share/wayland-sessions/vela.desktop \
+    || fail "Session entry does not launch /usr/bin/vela-session"
+for program in vela-compositor vela-shell vela-files vela-settings vela-lock; do
+    if ldd "$(command -v "$program")" | grep -q 'not found'; then
+        ldd "$(command -v "$program")" >&2
+        fail "$program has an unresolved runtime library"
+    fi
+done
+for foreign_de in plasma-workspace gnome-shell; do
+    if pacman -Q "$foreign_de" >/dev/null 2>&1; then
+        fail "Standalone install unexpectedly pulled in $foreign_de"
+    fi
+done
+echo "Standalone package smoke check passed; graphical login was not tested."
