@@ -22,6 +22,7 @@ CTest includes both CPU-only and GPU-dependent suites.
 | **Files** (`files-copies`) | Copy/move behavior, staged replacement and failure handling including a simulated full disk with `RLIMIT_FSIZE`. | No |
 | **Shell** (`shell-*`) | `.desktop` `Exec=` parsing and default-app resolution through `mimeapps.list`. | No |
 | **Vela Report** (`reporting`, `reporting-gui`) | Guided CLI without a display, shared Qt worker and ZIP export, explicit collection boundaries, redaction, review exclusion, process identity, resource recording, bounded commands and archive failures. | No |
+| **Package updater** (`packaging-update`) | Public HTTPS defaults in both the updater and PKGBUILD, first run and cached fetches, migration of saved SSH URLs and old mirrors, local sources, branch/commit selection, exact CI artifacts, download fallback and failed fetch/build/install handling. Uses real Git repositories with simulated package tools. | No |
 | **Functional** (`functional`) | Opening and manipulating windows (Wayland and X11), menus (popups and X11 override-redirect menus) kept where they belong, resizing from the invisible borders, keyboard Move/Resize, the window menu, drag-to-edge snap with Snap Assist, snap layouts and snap groups, snap, maximize/restore, minimize/Alt+Tab, virtual desktops, Vela's title bar (text, buttons, double click), shell layers (reserved space, live blur), partial redraws identical to full redraws, output hotplug, per-output scale and position set like Settings does, accessibility quick settings (night light and its schedule, color filters, magnifier, sticky keys), Super alone opening Start, the media and volume keys (held volume keys repeat), the mouse's side buttons as Back and Forward in Vela's apps (File Explorer, also with the focus elsewhere or on an inactive window), lock/unlock, screen power, compositor crash recovery, a shell that crashes (restarted, then given up) or exits cleanly (left alone), and an app whose GPU finishes 150 ms late (explicit and implicit sync) without a missed vblank, and the polkit agent (below). | Yes |
 | **Polkit agent / GoogleTest** (`polkit.*`) | The agent's queue, cancellations by polkit and by the user, a crashed dialog counting as "No", retries after a wrong password, sessions that fail by themselves, identity order and choice, the dialog protocol. | No |
 | **Sharpness** (`sharpness`) | Pixel-level checks that windows reach the expected physical pixels across fractional scales and common window states. | Yes |
@@ -53,6 +54,26 @@ Functional session tests:
 ```sh
 ctest --test-dir build -R '^functional$' --output-on-failure
 ```
+
+Package and updater contracts (also runnable without building Vela):
+
+```sh
+python3 -m unittest discover -s packaging/arch/tests -v
+ctest --test-dir build -R '^packaging-update$' --output-on-failure
+```
+
+These tests require Python 3.10+, Git, Bash and a POSIX shell. Each scenario uses
+temporary repositories and an isolated home/config/cache. Git's global and
+system configuration is disabled; only file transport is allowed. The test
+adapter records the requested clone/fetch URL, rejects SSH and unexpected
+repositories, and maps the expected public HTTPS URL to a real local Git
+repository. Package builds, authentication, artifact downloads and installation
+are simulated, so the suite needs no network, GPU, Arch installation, SSH keys,
+GitHub login or administrator privileges.
+
+The previous suite always passed `--source` with a local repository; package CI
+also set `VELA_GIT_URL` to a local checkout. Both bypassed the public defaults.
+The first-run and PKGBUILD default tests now exercise those paths explicitly.
 
 Sharpness only:
 
@@ -212,6 +233,10 @@ Additional rendering switches such as `VELA_DEBUG_DAMAGE`, `VELA_DEBUG_SYNC`, `V
 ## Continuous integration
 
 GitHub Actions builds Vela and runs every test that does not require a real DRM/Vulkan device. The GPU-dependent suites remain registered in CTest but are reported as skipped on hosted runners.
+
+The Build workflow runs the package/updater contracts in a separate, fast job
+before compiling Vela. The suite also runs through CTest in the Arch build, and
+unittest discovery automatically includes new packaging test files.
 
 That means CI protects compilation and CPU-only logic on every push, while the primary development workstation currently provides the repeated real-GPU validation.
 

@@ -6,8 +6,8 @@
 #   cd packaging/arch && makepkg -si      installs
 #   vela-update                           then updates (see vela-update --help)
 #
-# The source is the repository on GitHub (private: it needs your account's
-# SSH key). To build from a local copy, including changes not yet pushed but
+# The public repository is fetched over HTTPS, without SSH keys. To build
+# from a local copy, including changes not yet pushed but
 # already committed:
 #
 #   VELA_GIT_URL=file:///path/to/vela makepkg -si
@@ -51,7 +51,7 @@ optdepends=(
 provides=('vela')
 conflicts=('vela')
 backup=('etc/pam.d/vela-lock' 'etc/xdg/xdg-desktop-portal-wlr/Vela')
-source=("$_name::git+${VELA_GIT_URL:-ssh://git@github.com/BrandoDev/vela.git}")
+source=("$_name::git+${VELA_GIT_URL:-https://github.com/BrandoDev/vela.git}")
 sha256sums=('SKIP')
 
 pkgver() {

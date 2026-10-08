@@ -268,6 +268,10 @@ Actions, so if that package is ready (and the [GitHub CLI](https://cli.github.co
 logged in), `vela-update` offers to download it instead of compiling. Otherwise it
 builds the package locally.
 
+Repository downloads use public HTTPS and need no GitHub account or SSH keys.
+Saved GitHub SSH URLs and cached mirrors from older versions are migrated to
+HTTPS automatically. `--source` can still select a local Git copy.
+
 ```sh
 vela-update                 # update if something new is available
 vela-update --check         # only check, and list the changes

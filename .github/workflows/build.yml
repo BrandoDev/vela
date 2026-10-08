@@ -36,7 +36,19 @@ env:
     hicolor-icon-theme
 
 jobs:
+  packaging-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Updater and package source contracts (no network or credentials)
+        run: python3 -m unittest discover -s packaging/arch/tests -v
+      - name: Package script syntax
+        run: |
+          sh -n packaging/arch/vela-update
+          bash -n packaging/arch/PKGBUILD
+
   build:
+    needs: packaging-tests
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
@@ -76,7 +88,6 @@ jobs:
           for script in packaging/arch/vela-update session/vela-session-env scripts/*.sh; do
             sh -n "$script"
           done
-          python packaging/arch/tests/test_update.py
 
   package:
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
