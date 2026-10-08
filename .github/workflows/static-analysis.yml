@@ -1,0 +1,84 @@
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Static Analysis
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: static-analysis-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-analysis:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install Arch build and analysis tools
+        run: >-
+          pacman -Syu --noconfirm --needed
+          base-devel git cmake clang clang-tools-extra cppcheck shellcheck
+          shaderc vulkan-headers vulkan-icd-loader wayland wayland-protocols
+          wlroots0.20 libxkbcommon pixman libinput libdrm mesa
+          freetype2 harfbuzz fontconfig librsvg cairo pam
+
+      - uses: actions/checkout@v7
+
+      - name: Shell syntax and ShellCheck
+        shell: bash
+        run: |
+          for script in packaging/arch/vela-update session/vela-session-env scripts/*.sh; do
+            sh -n "$script"
+          done
+          bash -n scripts/ci-check-package.sh
+          shellcheck -S warning scripts/ci-check-package.sh
+
+      # Analyze the compositor's C code, without needing Qt or a GPU.
+      - name: Configure Clang static analyzer
+        run: >-
+          scan-build cmake -S . -B build-static
+          -DVELA_BUILD_SHELL=OFF
+          -DVELA_BUILD_TOOLS=OFF
+          -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Clang Static Analyzer
+        run: >-
+          scan-build --status-bugs -o scan-reports
+          cmake --build build-static --parallel 2
+
+      - name: cppcheck on pure C modules
+        shell: bash
+        run: |
+          cppcheck --std=c17 --enable=warning --error-exitcode=1 \
+            --suppress=missingIncludeSystem --suppress=unusedFunction \
+            compositor/src/buffer.c compositor/src/color.c \
+            compositor/src/config.c compositor/src/frame_clock.c \
+            compositor/src/geometry.c compositor/src/legacy_names.c \
+            compositor/src/motion.c compositor/src/output_config.c \
+            compositor/src/sun.c compositor/src/util.c
+
+      - name: clang-tidy on pure C modules
+        shell: bash
+        run: |
+          clang-tidy -p build-static --quiet \
+            --checks='-*,clang-analyzer-core.*,bugprone-sizeof-expression' \
+            compositor/src/buffer.c compositor/src/color.c \
+            compositor/src/config.c compositor/src/frame_clock.c \
+            compositor/src/geometry.c compositor/src/output_config.c \
+            compositor/src/sun.c compositor/src/util.c
+
+      - name: Upload analyzer reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: clang-analyzer-reports
+          path: scan-reports/
+          if-no-files-found: ignore
+          retention-days: 14
