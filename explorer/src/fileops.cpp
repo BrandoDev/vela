@@ -6,6 +6,7 @@
 #include "appmodel.h"
 #include "foldermodel.h"
 #include "links.h"
+#include "systemactions.h"
 
 #include <QClipboard>
 #include <QCollator>
@@ -579,7 +580,7 @@ void FileOps::open(const QStringList& paths)
         }
         const QString app = defaultAppFor(mimes.mimeTypeForFile(info).name());
         if (app.isEmpty() || !m_apps->launchWithFile(app, QUrl::fromLocalFile(path).toString())) {
-            runDetached(QStringLiteral("xdg-open"), { path }, info.absolutePath());
+            chooseApp(path);
         }
     }
 }
@@ -841,11 +842,15 @@ void FileOps::deletePermanently(const QStringList& paths)
 
 void FileOps::emptyTrash()
 {
-    if (!QStandardPaths::findExecutable(QStringLiteral("gio")).isEmpty()) {
-        runDetached(QStringLiteral("gio"), { QStringLiteral("trash"), QStringLiteral("--empty") }, QDir::homePath());
-    } else {
-        runDetached(QStringLiteral("ktrash6"), { QStringLiteral("--empty") }, QDir::homePath());
-    }
+    QPointer<FileOps> self(this);
+    QThreadPool::globalInstance()->start([self] {
+        const QStringList failed = vela::trash::emptyHome();
+        QMetaObject::invokeMethod(qApp, [self, failed] {
+            if (!self || failed.isEmpty()) return;
+            emit self->failed(QCoreApplication::translate("Files",
+                "Couldn't empty the Recycle Bin (%1 items could not be deleted).").arg(failed.size()));
+        }, Qt::QueuedConnection);
+    });
 }
 
 QString FileOps::originalLocation(const QString& trashedPath) const

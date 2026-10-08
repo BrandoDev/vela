@@ -9,6 +9,7 @@
 
 #include "appmodel.h"
 #include "fileops.h"
+#include "systemactions.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -260,6 +261,24 @@ private slots:
         write(path("a/photo.jpg"), "x");
         QCOMPARE(transfer({ path("a/photo.jpg") }, path("a"), 1), QString());
         QCOMPARE(read(path("a/photo - Copy.jpg")), QByteArray("x"));
+    }
+
+    void emptyTrashRemovesFilesAndMetadata()
+    {
+        const QString trash = path("fake-trash");
+        write(trash + "/files/file.txt", "old");
+        write(trash + "/files/folder/nested.txt", "old");
+        write(trash + "/info/file.txt.trashinfo", "[Trash Info]\\n");
+        write(trash + "/info/folder.trashinfo", "[Trash Info]\\n");
+        write(trash + "/info/orphan.trashinfo", "[Trash Info]\\n");
+        write(path("outside.txt"), "keep");
+        QVERIFY(QFile::link(path("outside.txt"), trash + "/files/link"));
+
+        QVERIFY(vela::trash::empty(trash).isEmpty());
+        QCOMPARE(read(path("outside.txt")), QByteArray("keep"));
+        QVERIFY(QDir(trash + "/files").isEmpty(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden));
+        QVERIFY(QDir(trash + "/info").isEmpty(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden));
+        QVERIFY(vela::trash::empty(trash).isEmpty());
     }
 };
 
