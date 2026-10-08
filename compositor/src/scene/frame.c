@@ -1047,6 +1047,12 @@ bool vela_output_frame_render(struct vela_output_frame *frame, double lx, double
     wlr_region_transform(&buffer_damage, &buffer_damage, to_buffer, width, height);
     wlr_region_transform(&frame_damage, &frame_damage, to_buffer, width, height);
 
+    // The damage ring may contain rectangles outside the output (for example
+    // when a window crosses a monitor edge). Only valid buffer coordinates
+    // must reach the renderer and wlroots' screencopy path.
+    pixman_region32_intersect_rect(&buffer_damage, &buffer_damage, 0, 0, buffer->width, buffer->height);
+    pixman_region32_intersect_rect(&frame_damage, &frame_damage, 0, 0, buffer->width, buffer->height);
+
     bool ok = false;
     struct vela_pass *pass = vela_renderer_begin_pass(frame->renderer, buffer);
     if (pass) {

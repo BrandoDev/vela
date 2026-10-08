@@ -20,7 +20,7 @@ CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/vela/updates.conf"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/vela-update"
 MIRROR="$CACHE/vela.git"
 PACKAGES="$CACHE/packages"
-DEFAULT_SOURCE="ssh://git@github.com/BrandoDev/vela.git"
+DEFAULT_SOURCE="https://github.com/BrandoDev/vela.git"
 KEEP=3 # old packages to keep
 
 usage() {
@@ -41,7 +41,7 @@ Updates Vela to the repository's default branch and installs it.
                       /etc/makepkg.conf); 1 is slow but safe
   --source URL|DIR    where to get Vela from: a git repository or a folder
                       (its commits, not uncommitted changes). Remembered
-                      for next time.
+                      for next time. GitHub URLs always use HTTPS.
                       Default: $DEFAULT_SOURCE
 EOF
 }
@@ -98,25 +98,50 @@ fi
 
 # From where: the one given now (and remembered), the remembered one, GitHub.
 # The old file was called aggiornamenti.conf (key sorgente=).
+githubHTTPS() {
+    case "$1" in
+    ssh://git@github.com/*) printf 'https://github.com/%s\n' "${1#ssh://git@github.com/}" ;;
+    git@github.com:*) printf 'https://github.com/%s\n' "${1#git@github.com:}" ;;
+    *) printf '%s\n' "$1" ;;
+    esac
+}
 OLD_CONFIG="$(dirname "$CONFIG")/aggiornamenti.conf"
 if [ ! -f "$CONFIG" ] && [ -f "$OLD_CONFIG" ]; then
     sed 's/^sorgente=/source=/' "$OLD_CONFIG" > "$CONFIG" && rm -f "$OLD_CONFIG"
 fi
+remember=0
 if [ -n "$source" ]; then
+    remember=1
     if [ -d "$source" ]; then
         source=$(cd "$source" && pwd)
     fi
-    mkdir -p "$(dirname "$CONFIG")"
-    printf 'source=%s\n' "$source" > "$CONFIG"
 elif [ -f "$CONFIG" ]; then
     source=$(sed -n 's/^source=//p' "$CONFIG" | head -n 1)
 fi
 source="${source:-$DEFAULT_SOURCE}"
+# Migrate both remembered and explicitly supplied GitHub SSH URLs so users
+# of older packages no longer need SSH keys to fetch the public repository.
+https_source=$(githubHTTPS "$source")
+if [ "$https_source" != "$source" ]; then
+    source="$https_source"
+    remember=1
+fi
+if [ "$remember" = 1 ]; then
+    mkdir -p "$(dirname "$CONFIG")"
+    printf 'source=%s\n' "$source" > "$CONFIG"
+fi
 
 # The repository: cloned the first time, then only new commits.
 mkdir -p "$CACHE"
-if [ -d "$MIRROR" ] && [ "$(git -C "$MIRROR" config remote.origin.url)" != "$source" ]; then
-    rm -rf "$MIRROR"
+if [ -d "$MIRROR" ]; then
+    cached_source=$(git -C "$MIRROR" config remote.origin.url)
+    if [ "$cached_source" != "$source" ]; then
+        if [ "$(githubHTTPS "$cached_source")" = "$source" ]; then
+            git -C "$MIRROR" remote set-url origin "$source"
+        else
+            rm -rf "$MIRROR"
+        fi
+    fi
 fi
 echo ":: Checking for updates in $source"
 if [ -d "$MIRROR" ]; then
@@ -127,13 +152,6 @@ fi
 if [ "$fetched" = no ]; then
     [ -d "$MIRROR/refs" ] || rm -rf "$MIRROR"
     echo "vela-update: can't download Vela from $source." >&2
-    case "$source" in
-    ssh://git@github.com/* | git@github.com:*)
-        echo "The repository is private: you need your GitHub account's SSH key, and" >&2
-        echo "GitHub among the known hosts (try: ssh -T git@github.com)." >&2
-        echo "Or take Vela from a local copy: vela-update --source ~/path/to/vela" >&2
-        ;;
-    esac
     exit 1
 fi
 

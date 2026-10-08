@@ -12,5 +12,7 @@ mkdir -p "$STATE_DIR"
 
 # --supervise: if the compositor crashes it's restarted, and Qt and KDE apps
 # reconnect (see compositor/src/supervisor.c).
-exec "@CMAKE_INSTALL_FULL_BINDIR@/vela-compositor" --supervise -s "@CMAKE_INSTALL_FULL_BINDIR@/vela-shell" "$@" \
-    2> "$STATE_DIR/vela.log"
+exec 2> "$STATE_DIR/vela.log"
+printf 'vela-session: started_at=%s boot_id=%s\n' \
+    "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$(cat /proc/sys/kernel/random/boot_id)" >&2
+exec "@CMAKE_INSTALL_FULL_BINDIR@/vela-compositor" --supervise -s "@CMAKE_INSTALL_FULL_BINDIR@/vela-shell" "$@"

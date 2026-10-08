@@ -7,6 +7,7 @@
 #include "render/render.h"
 
 #include "util.h"
+#include "sync.h"
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -384,9 +385,24 @@ static bool create_device(struct vela_vulkan *vk)
     vkGetPhysicalDeviceExternalSemaphoreProperties(vk->physical, &semaphore_info, &semaphore_props);
     const VkExternalSemaphoreFeatureFlags both
         = VK_EXTERNAL_SEMAPHORE_FEATURE_EXPORTABLE_BIT | VK_EXTERNAL_SEMAPHORE_FEATURE_IMPORTABLE_BIT;
-    vk->sync_file = (semaphore_props.externalSemaphoreFeatures & both) == both;
+    bool sync_supported = (semaphore_props.externalSemaphoreFeatures & both) == both;
+    VkPhysicalDeviceDriverProperties driver = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES };
+    VkPhysicalDeviceProperties2 properties = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+        .pNext = &driver,
+    };
+    vkGetPhysicalDeviceProperties2(vk->physical, &properties);
+    bool nvidia = driver.driverID == VK_DRIVER_ID_NVIDIA_PROPRIETARY;
+    unsigned driver_major = properties.properties.driverVersion >> 22;
+    const char *override = getenv("VELA_SYNC_FILE");
+    vk->sync_file = vela_sync_file_enabled(sync_supported, nvidia, driver_major, override);
     if (!vk->sync_file) {
-        wlr_log(WLR_INFO, "%s: no sync_file semaphores, the CPU will wait for the GPU every frame", vk->name);
+        wlr_log(WLR_INFO, "%s: CPU synchronization (driver %s; sync_file support=%d; VELA_SYNC_FILE=%s)",
+            vk->name, driver.driverInfo, sync_supported, override ? override : "auto");
+        if (sync_supported && nvidia && driver_major == 580 && !override) {
+            wlr_log(WLR_INFO, "NVIDIA 580 compatibility: Vulkan sync_file imports/exports and client explicit sync "
+                "disabled to avoid descriptor exhaustion; VELA_SYNC_FILE=1 opts back in");
+        }
     }
     return true;
 }

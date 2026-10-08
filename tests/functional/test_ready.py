@@ -27,7 +27,7 @@ def move_cursor(vela, seconds=1.0):
 class ReadyCommits(unittest.TestCase):
     def measure(self, *args, env=None):
         """Missed vblanks and held commits while the cursor moves for 1 s."""
-        with Session(env=env) as vela:
+        with Session(env={"VELA_SYNC_FILE": "1", **(env or {})}) as vela:
             vela.open_window(command=[tool("vela-slowgpu"), "150", *args], timeout=15)
             before = vela.wait_for(lambda s: s["held"] >= 2 or env, timeout=5, what="held commits")
             move_cursor(vela)
@@ -53,6 +53,11 @@ class ReadyCommits(unittest.TestCase):
         missed, frames, held = self.measure(env={"VELA_READY_WAIT": "0"})
         self.assertEqual(held, 0)
         self.assertGreaterEqual(missed, 20, f"the app isn't slow enough: {frames} frames")
+
+    def test_cpu_sync_still_waits_for_implicit_producers(self):
+        missed, frames, held = self.measure("--implicit", env={"VELA_SYNC_FILE": "0"})
+        self.assertLessEqual(missed, 2, f"{frames} frames, {held} held commits")
+        self.assertGreaterEqual(held, 3)
 
 
 if __name__ == "__main__":

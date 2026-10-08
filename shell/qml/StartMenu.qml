@@ -148,6 +148,9 @@ Window {
     }
 
     function open() {
+        // A second Super can reopen the menu while it is still closing.
+        // The old animation must not finish by hiding the reopened window.
+        closeAnimation.stop()
         closing = false
         powerButton.menuOpen = false
         Apps.query = ""

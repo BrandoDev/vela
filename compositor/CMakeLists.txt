@@ -115,12 +115,14 @@ add_library(vela-pure STATIC
     src/buffer.c
     src/color.c
     src/config.c
+    src/diagnostics.c
     src/frame_clock.c
     src/geometry.c
     src/legacy_names.c
     src/motion.c
     src/output_config.c
     src/sun.c
+    src/sync.c
     src/util.c)
 target_include_directories(vela-pure PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_definitions(vela-pure PUBLIC _GNU_SOURCE)
@@ -225,6 +227,8 @@ if(VELA_BUILD_TOOLS)
             tests/color_sun_test.cpp
             tests/settings_test.cpp
             tests/output_config_test.cpp
+            tests/diagnostics_test.cpp
+            tests/sync_test.cpp
             tests/buffer_test.cpp)
         target_compile_options(vela-compositor-tests PRIVATE -Wall -Wextra)
         target_link_libraries(vela-compositor-tests PRIVATE vela-pure GTest::gtest_main)

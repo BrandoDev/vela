@@ -45,13 +45,14 @@ class Session:
         vela.wait_for(lambda s: s.window(window)["snap"] == [0, 0, 6, 12])
     """
 
-    def __init__(self, scale=1.0, size="1920x1080@60", supervise=False, lock_hold_ms=None, env=None, startup=None):
+    def __init__(self, scale=1.0, size="1920x1080@60", supervise=False, lock_hold_ms=None, env=None, startup=None, nofile=None):
         self.scale = scale
         self.size = size
         self.supervise = supervise
         self.lock_hold_ms = lock_hold_ms
         self.extra_env = env or {}
         self.startup = startup # the startup command (-s), like the shell
+        self.nofile = nofile
         self.process = None
         self.clients = []
         self.display = None
@@ -92,6 +93,10 @@ class Session:
             command.append("--supervise")
         if self.startup:
             command += ["-s", self.startup]
+        if self.nofile is not None:
+            # prlimit applies only to this isolated test session, including
+            # its compositor after a restart; no parent limits are changed.
+            command = ["prlimit", f"--nofile={self.nofile}:{self.nofile}", "--", *command]
         self.log_path = os.path.join(self.directory, "vela.log")
         self.log = open(self.log_path, "w")
         self.process = subprocess.Popen(command, env=env, stdout=self.log, stderr=subprocess.STDOUT,

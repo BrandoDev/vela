@@ -24,6 +24,10 @@ option(VELA_BUILD_SHELL "Build the shell, Files and Settings (needs Qt 6 and Lay
 option(VELA_BUILD_TOOLS "Build the test tools (vela-shot, vela-windows, vela-input...) and the tests (ctest)" ON)
 if(VELA_BUILD_TOOLS)
     enable_testing()
+    find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
+    add_test(NAME packaging-update COMMAND ${Python3_EXECUTABLE} -m unittest discover
+        -s ${PROJECT_SOURCE_DIR}/packaging/arch/tests -v)
+    set_tests_properties(packaging-update PROPERTIES TIMEOUT 120)
 endif()
 
 option(VELA_BUILD_REPORT "Build the standalone diagnostic reporter (needs Python 3)" ON)
@@ -52,15 +56,16 @@ if(VELA_BUILD_TOOLS)
     # (tests/functional): they need the compositor and a GPU; without a GPU
     # they are reported as skipped (code 77).
     if(VELA_BUILD_COMPOSITOR)
-        find_package(Python3 COMPONENTS Interpreter)
         if(Python3_FOUND)
             add_test(NAME functional COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/functional/run.py)
             add_test(NAME sharpness COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/functional/run.py --sharpness)
-            set_tests_properties(functional sharpness PROPERTIES
+            add_test(NAME sharpness-cpu COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/functional/run.py --sharpness)
+            set_tests_properties(functional sharpness sharpness-cpu PROPERTIES
                 ENVIRONMENT "VELA_BUILD=${CMAKE_BINARY_DIR}"
                 SKIP_RETURN_CODE 77
                 TIMEOUT 600
                 RUN_SERIAL TRUE)
+            set_property(TEST sharpness-cpu APPEND PROPERTY ENVIRONMENT "VELA_SYNC_FILE=0")
         endif()
     endif()
 endif()

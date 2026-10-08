@@ -456,6 +456,31 @@ output, implicit sync remains, and it is enough. `WLR_RENDER_NO_EXPLICIT_SYNC=1`
 turns the protocol off. Tested with vkcube and mpv (Vulkan, Mesa 26): the apps
 run without stalling, so the releases arrive.
 
+**NVIDIA 580 compatibility.** The proprietary 580 branch defaults to CPU
+synchronization (`VELA_SYNC_FILE=0` behavior). This disables Vulkan sync_file
+semaphore imports/exports and the client explicit-sync protocol. Implicit
+producer fences are still exported, waited on and closed; rendering completes
+before handing buffers back. Already completed fences are closed without a
+Vulkan import on every driver. CPU waits retry interrupted polls and failed
+waits prevent submission.
+
+This is a conservative mitigation for the Quadro P1000/580.178.04 report in
+which the compositor exhausted descriptors, not a confirmed attribution of
+the leak. NVIDIA users have reported [sync_file leaks with two EGL waits on
+580.178.04](https://forums.developer.nvidia.com/t/linux-drivers-egl-bug-sync-file-fd-leaked-when-two-eglwaitsync-calls-are-issued-on-one-context/384832)
+and [explicit-sync EGL leaks on 580](https://github.com/NVIDIA/egl-wayland/issues/196).
+Those reproductions use EGL, while Vela uses Vulkan. The mitigation avoids the
+driver's external semaphore path at the cost of CPU/GPU overlap; it still needs
+verification on affected NVIDIA hardware. Mesa/NVK and other NVIDIA branches
+keep the existing policy. `VELA_SYNC_FILE=1` opts back into GPU fence exchange
+when supported; `VELA_SYNC_FILE=0` forces CPU synchronization on other GPUs for
+comparison. Both paths have a sustained 1200-frame FD regression scenario.
+
+Do not close an FD after a successful Vulkan semaphore import: [Vulkan transfers
+ownership to the implementation](https://docs.vulkan.org/refpages/latest/refpages/source/vkImportSemaphoreFdKHR.html).
+Only completed fences skipped before import and failed imports are closed by
+Vela.
+
 **Commits wait for their fences (after S6).** A frame must never wait for an
 app's GPU: one late app would make the whole output miss vblanks, cursor and
 animations included. So a commit with a buffer that isn't ready yet is held back

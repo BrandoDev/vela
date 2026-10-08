@@ -108,6 +108,17 @@ void BackgroundEffects::setBlur(QWindow* window, const QVariantList& rects)
 bool BackgroundEffects::eventFilter(QObject* watched, QEvent* event)
 {
     if (event->type() == QEvent::PlatformSurface
+        && static_cast<QPlatformSurfaceEvent*>(event)->surfaceEventType() == QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed) {
+        auto* window = qobject_cast<QWindow*>(watched);
+        auto entry = m_entries.find(window);
+        if (entry != m_entries.end()) {
+            drop(*entry);
+            // Native window destruction also disconnects its signals. The
+            // next platform window needs its own surface lifetime hooks.
+            entry->following = false;
+        }
+    }
+    if (event->type() == QEvent::PlatformSurface
         && static_cast<QPlatformSurfaceEvent*>(event)->surfaceEventType() == QPlatformSurfaceEvent::SurfaceCreated) {
         // Right after the event: the native window has just been born.
         QMetaObject::invokeMethod(this, [this, window = QPointer<QWindow>(qobject_cast<QWindow*>(watched))] {
