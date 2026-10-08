@@ -4,26 +4,27 @@
 #ifndef VELA_INPUT_H
 #define VELA_INPUT_H
 
-// Il seat e i dispositivi di input, come Windows 11:
+// The seat and input devices, like Windows 11:
 //
-// - mouse: velocità, "Migliora precisione puntatore" (accelerazione),
-//   pulsante principale, righe per ogni scatto della rotellina;
-// - touchpad: acceso o spento (anche solo con un mouse collegato),
-//   velocità, tocco per cliccare (due dita: tasto destro), direzione dello
-//   scorrimento, niente tocchi accidentali mentre si scrive;
-// - gesti a tre e quattro dita: verso l'alto la Visualizzazione attività,
-//   verso il basso il desktop, di lato cambia app (Alt+Tab, seguendo le
-//   dita) o desktop virtuale. Gli altri gesti (pizzico, scorrimenti non
-//   nostri) vanno alle app (pointer-gestures);
-// - giochi e app che vogliono il mouse tutto per sé: movimenti relativi
-//   (relative-pointer) e puntatore bloccato o confinato nella finestra
-//   (pointer-constraints); un'app a fuoco può tenere per sé le scorciatoie
-//   (keyboard-shortcuts-inhibit: macchine virtuali, desktop remoto);
-// - appunti, trascinamento tra app (con l'icona che segue il cursore),
-//   forma del cursore chiesta per nome.
+// - mouse: speed, "Enhance pointer precision" (acceleration), primary
+//   button, lines per wheel notch;
+// - touchpad: on or off (also only while a mouse is plugged in), speed, tap
+//   to click (two fingers: right button), scroll direction, no accidental
+//   touches while typing;
+// - three- and four-finger gestures: up for Task View, down for the desktop,
+//   sideways to switch app (Alt+Tab, following the fingers) or virtual
+//   desktop. Other gestures (pinch, swipes that aren't ours) go to the apps
+//   (pointer-gestures);
+// - games and apps that want the mouse to themselves: relative motion
+//   (relative-pointer) and a pointer locked or confined to the window
+//   (pointer-constraints); a focused app can keep the shortcuts to itself
+//   (keyboard-shortcuts-inhibit: virtual machines, remote desktop);
+// - clipboard, drag between apps (with the icon following the cursor),
+//   cursor shape asked by name.
 //
-// Le scelte in vela.conf; VELA_NATURAL_SCROLL=0 vince sulla direzione. Le
-// tastiere sono in keyboard.h. Crea il seat e il cursore del server.
+// The choices are in vela.conf; VELA_NATURAL_SCROLL=0 wins over the
+// direction. Keyboards are in keyboard.h. Creates the server's seat and
+// cursor.
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -41,13 +42,12 @@ struct wlr_surface;
 
 enum vela_swipe_action {
     VELA_SWIPE_NONE,
-    VELA_SWIPE_APP, // di lato: cambia app (Alt+Tab)
-    VELA_SWIPE_DESKTOP, // di lato: cambia desktop virtuale
-    VELA_SWIPE_OTHER, // un valore sconosciuto in vela.conf: solo su e giù
+    VELA_SWIPE_APP, // sideways: switch app (Alt+Tab)
+    VELA_SWIPE_DESKTOP, // sideways: switch virtual desktop
+    VELA_SWIPE_OTHER, // an unknown value in vela.conf: only up and down
 };
 
-// Un'icona trascinata tra app: segue il cursore, spostata di quanto
-// chiede l'app.
+// An icon dragged between apps: follows the cursor, offset as the app asks.
 struct vela_drag_icon {
     struct vela_input *input;
     struct wlr_surface *surface;
@@ -64,32 +64,33 @@ struct vela_input {
     struct wl_list pointers; // vela_pointer.link
     struct wl_list keyboards; // vela_keyboard.link
 
-    // Da vela.conf.
-    double wheel_factor; // righe per scatto / 3
+    // From vela.conf.
+    double wheel_factor; // lines per notch / 3
     enum vela_swipe_action three_fingers;
     enum vela_swipe_action four_fingers;
 
-    // Lo scorrimento a più dita in corso: nostro (un'azione) o dell'app.
+    // The multi-finger swipe in progress: ours (an action) or the app's.
     struct {
         bool ours;
         enum vela_swipe_action action;
         int fingers;
         double dx;
         double dy;
-        int steps; // passi di "cambia app" già fatti
+        int steps; // "switch app" steps already taken
     } swipe;
 
-    // Super premuto e rilasciato da solo: apre il menu Start.
+    // Super pressed and released alone: opens the Start menu.
     bool super_tap;
-    // Il layout scritto nel log l'ultima volta (keyboard.c): solo i cambi.
+    // The layout written to the log last time (keyboard.c): only changes are
+    // logged.
     char keymap_logged[1024];
 
-    // Presa implicita, come vuole Wayland: finché un tasto resta premuto,
-    // il puntatore resta alla superficie su cui è stato premuto (anche fuori
-    // da lei, anche su un altro schermo), che riceve così anche il rilascio.
+    // Implicit grab, as Wayland wants: while a button is held, the pointer
+    // stays with the surface it was pressed on (even outside it, even on
+    // another output), which so gets the release too.
     struct {
         struct wlr_surface *surface;
-        double origin_x; // dove sta la sua origine nel layout
+        double origin_x; // where its origin is in the layout
         double origin_y;
     } implicit_grab;
 
@@ -128,34 +129,33 @@ struct vela_input {
     struct wl_listener hold_end;
 };
 
-// Crea seat, cursore e protocolli di input. VELA_DEBUG_INPUT=1 accende mouse
-// e tastiere virtuali (per le prove: permettono a qualunque programma di
-// simulare input).
+// Creates the seat, cursor and input protocols. VELA_DEBUG_INPUT=1 enables
+// virtual mice and keyboards (for tests: they let any program fake input).
 struct vela_input *vela_input_create(struct vela_server *server);
-// Prima di distruggere cursore, backend e display.
+// Before destroying cursor, backend and display.
 void vela_input_destroy(struct vela_input *input);
 
-// Rilegge vela.conf ("reload-config"): layout e ripetizione delle
-// tastiere, mouse e touchpad.
+// Rereads vela.conf ("reload-config"): keyboard layouts and repeat, mice and
+// touchpads.
 void vela_input_reload(struct vela_input *input);
 
 bool vela_input_has_touchpad(const struct vela_input *input);
-// L'app a fuoco tiene per sé le scorciatoie.
+// The focused app keeps the shortcuts to itself.
 bool vela_input_shortcuts_inhibited(const struct vela_input *input);
 
-// Il puntatore è su `surface` (NULL: su nessuna): il suo vincolo, se ne ha
-// uno, diventa attivo.
+// The pointer is on `surface` (NULL: none): its constraint, if any, becomes
+// active.
 void vela_input_constrain(struct vela_input *input, struct wlr_surface *surface);
-// La tastiera a questa superficie (anche a un menu X11 che la chiede), con
-// i tasti premuti e i modificatori di adesso.
+// The keyboard to this surface (also to an X11 menu that asks), with the keys
+// and modifiers held now.
 void vela_input_keyboard_enter(struct vela_input *input, struct wlr_surface *surface);
 
-// L'icona del trascinamento dove sta il cursore.
+// The drag icon where the cursor is.
 void vela_input_update_drag_icon(struct vela_input *input);
 
-// Win+V: incolla nell'app a fuoco ciò che la shell ha appena messo negli
-// appunti (Ctrl+V, Ctrl+Maiusc+V nei terminali), un attimo dopo che il
-// pannello si è chiuso.
+// Win+V: pastes into the focused app what the shell has just put on the
+// clipboard (Ctrl+V, Ctrl+Shift+V in terminals), a moment after the panel
+// closed.
 void vela_input_paste(struct vela_input *input);
 
 #endif

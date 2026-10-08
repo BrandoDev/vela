@@ -4,16 +4,16 @@
 #ifndef VELA_RENDER_PIXEL_BUFFER_H
 #define VELA_RENDER_PIXEL_BUFFER_H
 
-// Un'immagine disegnata dalla CPU (testo, simboli dei pulsanti) come
-// wlr_buffer: il renderer la carica in una texture come un buffer wl_shm.
+// An image drawn by the CPU (text, button glyphs) as a wlr_buffer: the
+// renderer uploads it to a texture like a wl_shm buffer.
 
 #include "image.h"
 
 struct wlr_buffer;
 
-// Prende in carico i pixel di `image` (che resta vuota): li libera il
-// buffer quando sparisce. Il buffer nasce con un riferimento: lo si lascia
-// con wlr_buffer_drop().
+// Takes over the pixels of `image` (which is left empty): the buffer frees
+// them when it goes away. The buffer starts with one reference, let go with
+// wlr_buffer_drop().
 struct wlr_buffer *vela_pixel_buffer_create(struct vela_image *image);
 
 #endif

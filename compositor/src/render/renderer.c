@@ -1,10 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Il renderer: gli invii alla GPU con una timeline, ciò che va distrutto
-// quando la GPU ha finito, la memoria di appoggio per i caricamenti, le
-// pipeline, le immagini della sfocatura, i tempi della GPU e il
-// wlr_renderer che wlroots vede.
+// The renderer: GPU submissions with a timeline, what must be destroyed once
+// the GPU is done, staging memory for uploads, pipelines, blur images, GPU
+// times and the wlr_renderer wlroots sees.
 
 #include "render/render.h"
 
@@ -44,102 +43,6 @@ static const uint32_t blur_mix_frag[] = {
 
 #define STAGING_CHUNK_SIZE (8 * 1024 * 1024)
 #define IDLE_STAGING_CHUNKS_KEPT 2
-#define TIMING_SLOTS 64
-
-// Un command buffer del pool: libero quando non è in registrazione e la
-// GPU ha finito l'invio che lo conteneva (point).
-struct command_slot {
-    VkCommandBuffer cmd;
-    uint64_t point; // 0: in registrazione o libero
-    bool busy;
-};
-
-// Un'immagine ritirata (texture, destinazione, livello della sfocatura): si
-// distrugge quando la timeline arriva a `point`.
-struct retired_image {
-    uint64_t point;
-    VkImage image;
-    VkImageView view;
-    VkDeviceMemory memory;
-};
-
-// Un semaforo usato da un invio: torna libero quando la timeline arriva a
-// `point`. release: esportabile come sync_file (fine lavoro).
-struct used_semaphore {
-    uint64_t point;
-    VkSemaphore semaphore;
-    bool release;
-};
-
-struct staging_chunk {
-    VkBuffer buffer;
-    VkDeviceMemory memory;
-    uint8_t *data;
-    VkDeviceSize size;
-    VkDeviceSize used;
-    uint64_t point; // ultimo invio che lo legge; UINT64_MAX: in uso da comandi non ancora inviati
-};
-
-struct pipeline_entry {
-    VkFormat format;
-    enum vela_pipeline_kind kind;
-    bool blend;
-    VkPipeline pipeline;
-};
-
-struct vela_renderer {
-    struct wlr_renderer base; // primo membro: wlr_renderer* <-> vela_renderer*
-    struct vela_vulkan *vk; // non nostro: lo distrugge il server dopo di noi
-
-    VkCommandPool pool;
-    struct command_slot *commands;
-    int command_count, command_capacity;
-    VkCommandBuffer upload; // caricamenti in attesa del prossimo invio
-
-    VkSemaphore timeline;
-    uint64_t last_point;
-    uint64_t completed;
-
-    VkSemaphore *free_waits;
-    int free_wait_count, free_wait_capacity;
-    VkSemaphore *free_releases;
-    int free_release_count, free_release_capacity;
-    struct used_semaphore *used_semaphores;
-    int used_semaphore_count, used_semaphore_capacity;
-    struct retired_image *retired;
-    int retired_count, retired_capacity;
-    struct staging_chunk *staging;
-    int staging_count, staging_capacity;
-
-    // Gli array di un invio, riusati (crescono soltanto).
-    VkSemaphoreSubmitInfo *wait_infos;
-    VkSemaphore *wait_semaphores;
-    int wait_capacity;
-
-    struct wlr_drm_syncobj_timeline *sync_timeline;
-    uint64_t sync_point;
-
-    VkQueryPool query_pool;
-    uint64_t timing[TIMING_SLOTS]; // punto della timeline di ogni slot; UINT64_MAX: in registrazione
-    int next_timing;
-    // Calibrazione: lo stesso istante letto sulla GPU e su CLOCK_MONOTONIC.
-    uint64_t calibration_ticks;
-    int64_t calibration_ns;
-    int64_t calibrated_at;
-
-    struct wl_list targets; // vela_target.link
-    struct wl_list textures; // vela_texture.link
-    struct wlr_drm_format_set shm_formats;
-
-    VkSampler nearest;
-    VkSampler linear;
-    VkDescriptorSetLayout set_layout;
-    VkPipelineLayout layout;
-    VkShaderModule vert, texture_frag, rect_frag, shadow_frag, blur_down_frag, blur_up_frag, blur_mix_frag;
-    struct pipeline_entry *pipelines;
-    int pipeline_count, pipeline_capacity;
-    struct vela_blur_image blur[VELA_BLUR_LEVELS];
-};
 
 static const struct wlr_renderer_impl renderer_impl;
 static const struct wlr_addon_interface target_addon_impl;
@@ -147,11 +50,6 @@ static const struct wlr_addon_interface target_addon_impl;
 struct wlr_renderer *vela_renderer_wlr(struct vela_renderer *renderer)
 {
     return &renderer->base;
-}
-
-struct vela_vulkan *vela_renderer_vulkan(struct vela_renderer *renderer)
-{
-    return renderer->vk;
 }
 
 int vela_renderer_render_fd(const struct vela_renderer *renderer)
@@ -174,33 +72,13 @@ struct wlr_drm_syncobj_timeline *vela_renderer_sync_timeline(const struct vela_r
     return renderer->sync_timeline;
 }
 
-VkPipelineLayout vela_renderer_layout(const struct vela_renderer *renderer)
-{
-    return renderer->layout;
-}
-
-VkSampler vela_renderer_sampler(const struct vela_renderer *renderer, bool linear)
-{
-    return linear ? renderer->linear : renderer->nearest;
-}
-
-const struct vela_blur_image *vela_renderer_blur_image(const struct vela_renderer *renderer, int level)
-{
-    return &renderer->blur[level];
-}
-
-void vela_renderer_track_texture(struct vela_renderer *renderer, struct vela_texture *texture)
-{
-    wl_list_insert(&renderer->textures, &texture->link);
-}
-
-// ------------------------------------------------------------- creazione --
+// -------------------------------------------------------------- creation --
 
 static bool create_samplers_and_layout(struct vela_renderer *r)
 {
     VkDevice device = r->vk->device;
-    // Nearest per le copie 1:1 (nitidezza esatta, §3.3); bilineare per il
-    // resto (il bicubico è nello shader).
+    // Nearest for 1:1 copies (exact sharpness, §3.3); bilinear for the rest
+    // (bicubic is in the shader).
     for (int linear = 0; linear < 2; ++linear) {
         const VkSamplerCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -217,9 +95,9 @@ static bool create_samplers_and_layout(struct vela_renderer *r)
         }
     }
 
-    // Una texture per disegno (due per la sfocatura: il pannello e lo sfondo
-    // sfocato), legate con i push descriptor (Vulkan 1.4): niente pool di
-    // descrittori da gestire.
+    // One texture per draw (two for the blur: the panel and the blurred
+    // background), bound with push descriptors (Vulkan 1.4): no descriptor
+    // pools to manage.
     const VkDescriptorSetLayoutBinding bindings[] = {
         {
             .binding = 0,
@@ -281,9 +159,9 @@ static bool init(struct vela_renderer *r)
         return false;
     }
 
-    // Sincronizzazione esplicita con le app (linux-drm-syncobj-v1): serve una
-    // timeline del kernel su cui far scattare i punti di rilascio, e i
-    // sync_file per passare le fence tra Vulkan e il kernel.
+    // Explicit sync with apps (linux-drm-syncobj-v1): it needs a kernel
+    // timeline to signal release points on, and sync_files to pass fences
+    // between Vulkan and the kernel.
     uint64_t syncobj_timeline = 0;
     if (vk->sync_file && drmGetCap(vk->render_fd, DRM_CAP_SYNCOBJ_TIMELINE, &syncobj_timeline) == 0
         && syncobj_timeline) {
@@ -294,12 +172,12 @@ static bool init(struct vela_renderer *r)
         wlr_log(WLR_INFO, "Renderer: no syncobj timeline, no explicit sync with apps");
     }
 
-    // Timestamp della GPU: due per disegno misurato (inizio e fine).
+    // GPU timestamps: two per measured drawing (start and end).
     if (vk->timestamp_period > 0.0f) {
         const VkQueryPoolCreateInfo query_info = {
             .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
             .queryType = VK_QUERY_TYPE_TIMESTAMP,
-            .queryCount = TIMING_SLOTS * 2,
+            .queryCount = VELA_TIMING_SLOTS * 2,
         };
         if (vkCreateQueryPool(vk->device, &query_info, NULL, &r->query_pool) != VK_SUCCESS) {
             r->query_pool = VK_NULL_HANDLE;
@@ -363,15 +241,15 @@ static void destroy(struct vela_renderer *r)
     }
     vela_renderer_collect(r);
 
-    // Buffer ancora vivi (es. dello schermo): ci stacchiamo da tutti. (Il
-    // renderer si distrugge solo con VELA_VULKAN_VALIDATION: vedi
+    // Buffers still alive (such as the outputs'): we detach from all of them.
+    // (The renderer is destroyed only with VELA_VULKAN_VALIDATION: see
     // vela_server_destroy.)
     struct vela_target *target, *target_tmp;
     wl_list_for_each_safe (target, target_tmp, &r->targets, link) {
         destroy_target(target);
     }
-    // Le texture ancora vive perdono le risorse Vulkan; quelle che wlroots
-    // non usa più spariscono del tutto, le altre le distruggerà wlroots.
+    // Textures still alive lose their Vulkan resources; those wlroots no
+    // longer uses vanish entirely, wlroots will destroy the others.
     struct vela_texture *texture, *texture_tmp;
     wl_list_for_each_safe (texture, texture_tmp, &r->textures, link) {
         vela_texture_release(texture);
@@ -408,7 +286,7 @@ static void destroy(struct vela_renderer *r)
         vkDestroyQueryPool(device, r->query_pool, NULL);
     }
     if (r->sync_timeline) {
-        // Nessuno deve restare ad aspettare un nostro punto.
+        // Nobody must be left waiting for one of our points.
         wlr_drm_syncobj_timeline_signal(r->sync_timeline, UINT64_MAX);
         wlr_drm_syncobj_timeline_unref(r->sync_timeline);
     }
@@ -426,7 +304,7 @@ static void destroy(struct vela_renderer *r)
     free(r);
 }
 
-// ------------------------------------------ sincronizzazione esplicita --
+// ------------------------------------------------------- explicit sync --
 
 uint64_t vela_renderer_signal_sync_point(struct vela_renderer *r, int sync_file)
 {
@@ -437,15 +315,15 @@ uint64_t vela_renderer_signal_sync_point(struct vela_renderer *r, int sync_file)
     bool ok = sync_file >= 0 ? wlr_drm_syncobj_timeline_import_sync_file(r->sync_timeline, point, sync_file)
                              : wlr_drm_syncobj_timeline_signal(r->sync_timeline, point);
     if (!ok) {
-        // Meglio un rilascio anticipato che un'app bloccata per sempre: la
-        // CPU aspetta la GPU e il punto scatta subito.
+        // Better an early release than an app blocked forever: the CPU waits
+        // for the GPU and the point signals at once.
         vela_renderer_wait(r, r->last_point);
         wlr_drm_syncobj_timeline_signal(r->sync_timeline, point);
     }
     return point;
 }
 
-// ---------------------------------------------------- tempi della GPU --
+// ---------------------------------------------------------- GPU times --
 
 int vela_renderer_timing_slot(struct vela_renderer *r)
 {
@@ -453,11 +331,11 @@ int vela_renderer_timing_slot(struct vela_renderer *r)
         return -1;
     }
     uint64_t done = vela_renderer_completed(r);
-    for (int i = 0; i < TIMING_SLOTS; ++i) {
-        int slot = (r->next_timing + i) % TIMING_SLOTS;
+    for (int i = 0; i < VELA_TIMING_SLOTS; ++i) {
+        int slot = (r->next_timing + i) % VELA_TIMING_SLOTS;
         if (r->timing[slot] <= done) {
-            r->timing[slot] = UINT64_MAX; // in registrazione
-            r->next_timing = (slot + 1) % TIMING_SLOTS;
+            r->timing[slot] = UINT64_MAX; // recording
+            r->next_timing = (slot + 1) % VELA_TIMING_SLOTS;
             return slot;
         }
     }
@@ -479,12 +357,12 @@ void vela_renderer_write_timestamp(struct vela_renderer *r, VkCommandBuffer cmd,
 void vela_renderer_timing_submitted(struct vela_renderer *r, int slot, uint64_t point)
 {
     if (slot >= 0) {
-        r->timing[slot] = point; // 0: invio fallito, slot di nuovo libero
+        r->timing[slot] = point; // 0: submission failed, the slot is free again
     }
 }
 
-// Dai tick della GPU a CLOCK_MONOTONIC. I due orologi derivano un poco: la
-// calibrazione si rifà ogni secondo.
+// From GPU ticks to CLOCK_MONOTONIC. The two clocks drift a little:
+// calibration is redone every second.
 static int64_t gpu_to_monotonic(struct vela_renderer *r, uint64_t ticks)
 {
     struct vela_vulkan *vk = r->vk;
@@ -504,7 +382,7 @@ static int64_t gpu_to_monotonic(struct vela_renderer *r, uint64_t ticks)
             r->calibrated_at = now;
         }
     }
-    // Differenza con segno, anche se il contatore ha meno di 64 bit.
+    // Signed difference, even when the counter has fewer than 64 bits.
     uint64_t diff = (ticks - r->calibration_ticks) & mask;
     int64_t signed_diff = (int64_t)diff;
     if (mask != UINT64_MAX && diff > mask / 2) {
@@ -515,7 +393,7 @@ static int64_t gpu_to_monotonic(struct vela_renderer *r, uint64_t ticks)
 
 bool vela_renderer_read_timing(struct vela_renderer *r, int slot, uint64_t point, struct vela_gpu_timing *out)
 {
-    // Lo slot potrebbe essere già stato riusato da un disegno successivo.
+    // The slot may already have been reused by a later drawing.
     if (slot < 0 || point == 0 || r->timing[slot] != point || point > vela_renderer_completed(r)) {
         return false;
     }
@@ -538,14 +416,14 @@ bool vela_renderer_read_timing(struct vela_renderer *r, int slot, uint64_t point
     return true;
 }
 
-// -------------------------------------------------------- destinazioni --
+// ------------------------------------------------------------- targets --
 
 static void destroy_target(struct vela_target *target)
 {
     struct vela_renderer *r = target->renderer;
     wl_list_remove(&target->link);
     wlr_addon_finish(&target->addon);
-    // La GPU potrebbe starci ancora disegnando.
+    // The GPU may still be drawing on it.
     vela_renderer_retire_image(r, target->image, target->view, target->memory);
     free(target);
 }
@@ -588,8 +466,8 @@ struct vela_target *vela_renderer_target(struct vela_renderer *r, struct wlr_buf
     target->dmabuf_fd = dmabuf.fd[0];
     target->width = (uint32_t)dmabuf.width;
     target->height = (uint32_t)dmabuf.height;
-    // Anche leggibile, se il formato lo permette: la sfocatura legge ciò che
-    // è già disegnato sotto una zona (§8.3).
+    // Readable too, if the format allows it: the blur reads what is already
+    // drawn under a zone (§8.3).
     VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     if (vela_vulkan_supports_dmabuf(r->vk, format->srgb, dmabuf.modifier, usage | VK_IMAGE_USAGE_SAMPLED_BIT)) {
         usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -614,7 +492,7 @@ struct vela_target *vela_renderer_target(struct vela_renderer *r, struct wlr_buf
     return target;
 }
 
-// ------------------------------------------------------ command buffer --
+// ----------------------------------------------------- command buffers --
 
 VkCommandBuffer vela_renderer_begin_commands(struct vela_renderer *r)
 {
@@ -659,7 +537,7 @@ VkCommandBuffer vela_renderer_upload_commands(struct vela_renderer *r)
     return r->upload;
 }
 
-// ------------------------------------------------------------ appoggio --
+// ------------------------------------------------------------- staging --
 
 static struct staging_chunk *new_staging_chunk(struct vela_renderer *r, VkDeviceSize size)
 {
@@ -701,8 +579,8 @@ bool vela_renderer_stage(struct vela_renderer *r, VkDeviceSize size, struct vela
     size = (size + 15) & ~(VkDeviceSize)15;
     uint64_t done = vela_renderer_completed(r);
     struct staging_chunk *chosen = NULL;
-    // Prima il blocco che stiamo già riempiendo, poi uno che la GPU ha
-    // finito di leggere, altrimenti uno nuovo.
+    // First the block we are already filling, then one the GPU has finished
+    // reading, otherwise a new one.
     for (int i = 0; i < r->staging_count && !chosen; ++i) {
         struct staging_chunk *chunk = &r->staging[i];
         if (chunk->point == UINT64_MAX && chunk->size - chunk->used >= size) {
@@ -722,7 +600,7 @@ bool vela_renderer_stage(struct vela_renderer *r, VkDeviceSize size, struct vela
             return false;
         }
     }
-    chosen->point = UINT64_MAX; // in uso da comandi non ancora inviati
+    chosen->point = UINT64_MAX; // in use by commands not submitted yet
     out->buffer = chosen->buffer;
     out->offset = chosen->used;
     out->data = chosen->data + chosen->used;
@@ -730,7 +608,7 @@ bool vela_renderer_stage(struct vela_renderer *r, VkDeviceSize size, struct vela
     return true;
 }
 
-// --------------------------------------------------------------- invio --
+// ---------------------------------------------------------- submission --
 
 static VkSemaphore take_semaphore(struct vela_renderer *r, bool release)
 {
@@ -795,7 +673,7 @@ uint64_t vela_renderer_submit(struct vela_renderer *r, VkCommandBuffer cmd, cons
         .commandBuffer = cmd,
     };
 
-    // Le fence del kernel (sync_file) diventano semafori che la GPU aspetta.
+    // Kernel fences (sync_files) become semaphores the GPU waits for.
     if (wait_count > r->wait_capacity) {
         r->wait_infos = realloc(r->wait_infos, (size_t)wait_count * sizeof(*r->wait_infos));
         r->wait_semaphores = realloc(r->wait_semaphores, (size_t)wait_count * sizeof(*r->wait_semaphores));
@@ -813,7 +691,7 @@ uint64_t vela_renderer_submit(struct vela_renderer *r, VkCommandBuffer cmd, cons
             .fd = fd,
         };
         if (!semaphore || vk->import_semaphore_fd(vk->device, &import_info) != VK_SUCCESS) {
-            // Ripiego: aspetta la CPU.
+            // Fallback: the CPU waits.
             struct pollfd pfd = { .fd = fd, .events = POLLIN };
             poll(&pfd, 1, -1);
             close(fd);
@@ -864,7 +742,7 @@ uint64_t vela_renderer_submit(struct vela_renderer *r, VkCommandBuffer cmd, cons
     };
     bool ok = vkQueueSubmit2(vk->queue, 1, &submit_info, VK_NULL_HANDLE) == VK_SUCCESS;
 
-    // I command buffer tornano disponibili quando la GPU li ha eseguiti.
+    // Command buffers become available again once the GPU has executed them.
     VkCommandBuffer upload = r->upload;
     r->upload = VK_NULL_HANDLE;
     for (int i = 0; i < r->command_count; ++i) {
@@ -876,7 +754,7 @@ uint64_t vela_renderer_submit(struct vela_renderer *r, VkCommandBuffer cmd, cons
 
     if (!ok) {
         wlr_log(WLR_ERROR, "Renderer: GPU submission failed");
-        // Semafori in uno stato incerto: meglio buttarli.
+        // Semaphores in an uncertain state: better throw them away.
         for (uint32_t i = 0; i < waits; ++i) {
             vkDestroySemaphore(vk->device, r->wait_semaphores[i], NULL);
         }
@@ -911,9 +789,9 @@ uint64_t vela_renderer_submit(struct vela_renderer *r, VkCommandBuffer cmd, cons
         }
         semaphore_used_until(r, release, true, point);
     }
-    // Diagnosi: VELA_DEBUG_SYNC=1 fa aspettare la GPU alla CPU a ogni invio,
-    // così chi legge i nostri buffer li trova certamente finiti. Senza
-    // sync_file la CPU aspetta comunque.
+    // Diagnostics: VELA_DEBUG_SYNC=1 makes the CPU wait for the GPU at every
+    // submission, so whoever reads our buffers surely finds them finished.
+    // Without sync_files the CPU waits anyway.
     if ((release_fd && *release_fd < 0) || vela_env_one("VELA_DEBUG_SYNC")) {
         vela_renderer_wait(r, point);
     }
@@ -946,8 +824,8 @@ void vela_renderer_wait(struct vela_renderer *r, uint64_t point)
 
 void vela_renderer_retire_image(struct vela_renderer *r, VkImage image, VkImageView view, VkDeviceMemory memory)
 {
-    // Anche i caricamenti registrati ma non ancora inviati contano: finiranno
-    // nel prossimo invio.
+    // Uploads recorded but not yet submitted count too: they will end up in
+    // the next submission.
     uint64_t point = r->upload ? r->last_point + 1 : r->last_point;
     if (point <= vela_renderer_completed(r)) {
         VkDevice device = r->vk->device;
@@ -997,7 +875,7 @@ void vela_renderer_collect(struct vela_renderer *r)
     }
     r->retired_count = kept;
 
-    // Blocchi di appoggio inutilizzati: se ne tengono pochi.
+    // Unused staging blocks: only a few are kept.
     int idle = 0;
     kept = 0;
     for (int i = 0; i < r->staging_count; ++i) {
@@ -1013,7 +891,7 @@ void vela_renderer_collect(struct vela_renderer *r)
     r->staging_count = kept;
 }
 
-// ------------------------------------------------------------ pipeline --
+// ----------------------------------------------------------- pipelines --
 
 VkPipeline vela_renderer_pipeline(struct vela_renderer *r, VkFormat target, enum vela_pipeline_kind kind, bool blend)
 {
@@ -1066,7 +944,7 @@ VkPipeline vela_renderer_pipeline(struct vela_renderer *r, VkFormat target, enum
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
         .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
     };
-    // Alfa premoltiplicato, fuso in spazio lineare (la vista è _SRGB).
+    // Premultiplied alpha, blended in linear space (the view is _SRGB).
     const VkPipelineColorBlendAttachmentState blend_attachment = {
         .blendEnable = blend ? VK_TRUE : VK_FALSE,
         .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
@@ -1118,7 +996,7 @@ VkPipeline vela_renderer_pipeline(struct vela_renderer *r, VkFormat target, enum
     return pipeline;
 }
 
-// ----------------------------------------------------------- sfocatura --
+// ---------------------------------------------------------------- blur --
 
 bool vela_renderer_prepare_blur(struct vela_renderer *r, uint32_t width, uint32_t height)
 {
@@ -1132,7 +1010,8 @@ bool vela_renderer_prepare_blur(struct vela_renderer *r, uint32_t width, uint32_
         if (current->image && current->width >= need_width && current->height >= need_height) {
             continue;
         }
-        // Più grande del necessario: così non si rifà a ogni zona un po' più grande.
+        // Larger than needed, so it isn't redone for every slightly larger
+        // zone.
         uint32_t alloc_width = (need_width > current->width ? need_width : current->width) + 64;
         uint32_t alloc_height = (need_height > current->height ? need_height : current->height) + 64;
         if (current->image) {

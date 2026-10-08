@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""La barra del titolo di Vela (docs/renderer.md §9) per le app che la
-accettano con xdg-decoration: alta 32, sopra il contenuto, col titolo
-scritto dal compositor e i tre pulsanti; chiudere, massimizzare col doppio
-clic. La si trova sullo schermo, non dallo stato."""
+"""Vela's title bar (docs/renderer.md §9) for apps that accept it through
+xdg-decoration: 32 high, above the content, with the title written by the
+compositor and the three buttons; closing, maximizing with a double click.
+It's found on screen, not from the state."""
 
 import unittest
 
@@ -27,21 +27,21 @@ class Decorations(unittest.TestCase):
         state = self.vela.wait_for(lambda s: s["focused"] == window)
         w = state.window(window)
         image = self.vela.pixels()
-        # Dall'alto, nella colonna a metà del titolo: lo sfondo e l'ombra
-        # sono neri, la barra no.
+        # From the top, in the column halfway along the title: wallpaper and
+        # shadow are black, the bar isn't.
         column = w["x"] + 200
         top = next(y for y in range(image.height) if image.at(column, y) != (0, 0, 0))
         return window, w, image, top
 
     def test_bar_above_the_content(self):
         window, w, image, top = self.open()
-        # Il contenuto dell'app comincia subito sotto: vela-pattern codifica
-        # le coordinate del pixel (R = x, G = y).
+        # The app's content starts right below: vela-pattern encodes the pixel
+        # coordinates (R = x, G = y).
         self.assertEqual(image.at(w["x"] + 100, top + BAR), (100, 0, 0))
         self.assertEqual(image.at(w["x"] + 100, top + BAR - 1)[:2] != (100, 0), True)
-        # Il titolo ("vela-pattern") è scritto: antialiasing, più colori.
+        # The title ("vela-pattern") is written: antialiasing, several colors.
         self.assertGreaterEqual(len(image.colors(w["x"] + 12, top, w["x"] + 200, top + BAR)), 4)
-        # E i simboli dei pulsanti.
+        # And the button glyphs.
         for i in range(1, 4):
             left = w["x"] + w["w"] - i * BUTTON
             self.assertGreaterEqual(len(image.colors(left, top, left + BUTTON, top + BAR)), 2, f"button {i}")

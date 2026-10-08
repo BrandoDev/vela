@@ -38,9 +38,9 @@ if(VELA_BUILD_SHELL)
 endif()
 if(VELA_BUILD_TOOLS)
     add_subdirectory(tools)
-    # Le prove funzionali e quella di nitidezza, in sessioni senza schermo
-    # (tests/functional): servono il compositor e una GPU; senza GPU
-    # risultano saltate (codice 77).
+    # The functional and sharpness tests, in sessions without a display
+    # (tests/functional): they need the compositor and a GPU; without a GPU
+    # they are reported as skipped (code 77).
     if(VELA_BUILD_COMPOSITOR)
         find_package(Python3 COMPONENTS Interpreter)
         if(Python3_FOUND)

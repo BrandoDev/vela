@@ -3,6 +3,7 @@
 
 #include "scene/ready.h"
 
+#include "listen.h"
 #include "util.h"
 
 #include <linux/dma-buf.h>
@@ -22,28 +23,28 @@
 struct gate;
 struct held;
 
-// Implicita: una sync_file per dmabuf, nel ciclo degli eventi.
+// Implicit: one sync_file per dmabuf, in the event loop.
 struct held_file {
     struct held *owner;
     int fd;
     struct wl_event_source *source;
 };
 
-// Un commit trattenuto: si applica quando tutte le sue fence sono segnalate.
+// A held commit: applied when all its fences have signaled.
 struct held {
-    struct wl_list link; // gate.held, in ordine di commit
+    struct wl_list link; // gate.held, in commit order
     struct gate *gate;
     uint32_t seq;
     bool locked;
-    int remaining; // fence non ancora segnalate
-    // Esplicita: il punto di acquisizione sulla timeline dell'app.
+    int remaining; // fences not signaled yet
+    // Explicit: the acquire point on the app's timeline.
     struct wlr_drm_syncobj_timeline_waiter waiter;
     bool waiting;
     struct held_file files[WLR_DMABUF_MAX_PLANES];
     int file_count;
 };
 
-// Lo stato per superficie, appeso come addon alla wlr_surface.
+// The per-surface state, hung as an addon on the wlr_surface.
 struct gate {
     struct wlr_addon addon;
     struct vela_ready *ready;
@@ -64,7 +65,7 @@ static void disarm(struct held_file *file)
     }
 }
 
-// Smette di aspettare e libera; il commit, se trattenuto, resta a wlroots.
+// Stops waiting and frees; the commit, if held, stays with wlroots.
 static void held_destroy(struct held *held)
 {
     if (held->waiting) {
@@ -80,8 +81,8 @@ static void held_destroy(struct held *held)
     free(held);
 }
 
-// La superficie muore con i suoi stati in coda: si smette di aspettare
-// senza sbloccarli (wlroots li butta via).
+// The surface dies with its states queued: stop waiting without unlocking them
+// (wlroots throws them away).
 static void handle_surface_destroy(struct wlr_addon *addon)
 {
     struct gate *gate = wl_container_of(addon, gate, addon);
@@ -99,7 +100,7 @@ static const struct wlr_addon_interface gate_addon = {
     .destroy = handle_surface_destroy,
 };
 
-// Una fence in meno; all'ultima il commit si applica.
+// One fence less; at the last one the commit applies.
 static void signaled(struct held *held)
 {
     if (--held->remaining > 0) {
@@ -107,8 +108,8 @@ static void signaled(struct held *held)
     }
     struct wlr_surface *surface = held->gate->surface;
     uint32_t seq = held->seq;
-    // Prima tolto, poi sbloccato: applicare il commit fa partire gli altri
-    // handler (mappatura, danno, frame), e questo held non deve più esserci.
+    // Removed first, then unlocked: applying the commit runs the other
+    // handlers (mapping, damage, frame), and this held must be gone by then.
     held_destroy(held);
     wlr_surface_unlock_cached(surface, seq);
 }
@@ -116,7 +117,7 @@ static void signaled(struct held *held)
 static void handle_syncobj_ready(struct wlr_drm_syncobj_timeline_waiter *waiter)
 {
     struct held *held = wl_container_of(waiter, held, waiter);
-    wlr_drm_syncobj_timeline_waiter_finish(waiter); // wlroots lo permette nella sua callback
+    wlr_drm_syncobj_timeline_waiter_finish(waiter); // wlroots allows it in its callback
     held->waiting = false;
     signaled(held);
 }
@@ -125,19 +126,19 @@ static int handle_file_ready(int fd, uint32_t mask, void *data)
 {
     struct held_file *file = data;
     struct held *held = file->owner;
-    // Una sync_file segnalata resta leggibile: va staccata subito, o il
-    // ciclo degli eventi la conterebbe di nuovo.
+    // A signaled sync_file stays readable: it must be detached at once, or the
+    // event loop would count it again.
     disarm(file);
     signaled(held);
     return 0;
 }
 
-// Lo stato linux-drm-syncobj-v1 del commit in arrivo. wlroots espone solo
-// quello corrente (wlr_linux_drm_syncobj_v1_get_surface_state); quello in
-// arrivo è lo stato dello stesso oggetto sincronizzato per surface->pending.
-// L'oggetto si riconosce perché il suo stato corrente è quello che wlroots
-// restituisce. La lista degli oggetti sincronizzati è privata in wlroots
-// 0.20: se cambia, la compilazione si ferma qui.
+// The linux-drm-syncobj-v1 state of the incoming commit. wlroots exposes only
+// the current one (wlr_linux_drm_syncobj_v1_get_surface_state); the incoming
+// one is the state of the same synced object for surface->pending. The object
+// is recognized because its current state is the one wlroots returns. The list
+// of synced objects is private in wlroots 0.20: if it changes, compilation
+// stops here.
 static struct wlr_linux_drm_syncobj_surface_v1_state *pending_syncobj(struct wlr_surface *surface)
 {
     struct wlr_linux_drm_syncobj_surface_v1_state *current = wlr_linux_drm_syncobj_v1_get_surface_state(surface);
@@ -153,8 +154,8 @@ static struct wlr_linux_drm_syncobj_surface_v1_state *pending_syncobj(struct wlr
     return NULL;
 }
 
-// Esplicita: si aspetta che il punto sia segnalato (wlroots aspetta solo che
-// si materializzi). false se è già pronto o non si può aspettare.
+// Explicit: wait for the point to be signaled (wlroots only waits for it to
+// materialize). false if it's already ready or can't be waited for.
 static bool wait_syncobj(struct held *held, struct wlr_linux_drm_syncobj_surface_v1_state *sync,
     struct wl_event_loop *loop)
 {
@@ -166,20 +167,20 @@ static bool wait_syncobj(struct held *held, struct wlr_linux_drm_syncobj_surface
     }
     if (!wlr_drm_syncobj_timeline_waiter_init(&held->waiter, sync->acquire_timeline, sync->acquire_point, 0, loop,
             handle_syncobj_ready)) {
-        return false; // il frame aspetterà la GPU, come prima
+        return false; // the frame will wait for the GPU, as before
     }
     held->waiting = true;
     held->remaining = 1;
     return true;
 }
 
-// Implicita: le fence di scrittura dei dmabuf, quelle che chi legge deve
-// aspettare, una per ogni descrittore diverso.
+// Implicit: the dmabuf write fences, those readers must wait for, one per
+// distinct descriptor.
 static void wait_dmabuf(struct held *held, struct wlr_buffer *buffer, struct wl_event_loop *loop)
 {
     struct wlr_dmabuf_attributes dmabuf;
     if (!wlr_buffer_get_dmabuf(buffer, &dmabuf)) {
-        return; // memoria condivisa: già pronta
+        return; // shared memory: already ready
     }
     for (int i = 0; i < dmabuf.n_planes; ++i) {
         int fd = dmabuf.fd[i];
@@ -196,7 +197,7 @@ static void wait_dmabuf(struct held *held, struct wlr_buffer *buffer, struct wl_
         }
         struct pollfd poll_fd = { .fd = request.fd, .events = POLLIN };
         if (poll(&poll_fd, 1, 0) > 0) {
-            close(request.fd); // già segnalata
+            close(request.fd); // already signaled
             continue;
         }
         struct held_file *file = &held->files[held->file_count];
@@ -254,8 +255,7 @@ static void handle_new_surface(struct wl_listener *listener, void *data)
     gate->surface = surface;
     wl_list_init(&gate->held);
     wlr_addon_init(&gate->addon, &surface->addons, NULL, &gate_addon);
-    gate->client_commit.notify = handle_client_commit;
-    wl_signal_add(&surface->events.client_commit, &gate->client_commit);
+    vela_listen(&surface->events.client_commit, &gate->client_commit, handle_client_commit);
 }
 
 void vela_ready_init(struct vela_ready *ready, struct wlr_compositor *compositor)
@@ -268,12 +268,10 @@ void vela_ready_init(struct vela_ready *ready, struct wlr_compositor *compositor
         wlr_log(WLR_INFO, "VELA_READY_WAIT=0: frames wait for the apps' GPU");
         return;
     }
-    ready->new_surface.notify = handle_new_surface;
-    wl_signal_add(&compositor->events.new_surface, &ready->new_surface);
+    vela_listen(&compositor->events.new_surface, &ready->new_surface, handle_new_surface);
 }
 
 void vela_ready_finish(struct vela_ready *ready)
 {
-    wl_list_remove(&ready->new_surface.link);
-    wl_list_init(&ready->new_surface.link);
+    vela_unlisten(&ready->new_surface);
 }

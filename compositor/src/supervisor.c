@@ -1,24 +1,24 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Il supervisore della sessione (vela-compositor --supervise ...).
+// The session supervisor (vela-compositor --supervise ...).
 //
-// Se il compositor va in crash, la sessione non deve cadere con lui. Il
-// supervisore è un processo minuscolo che non tocca la GPU né wlroots: crea
-// il socket Wayland (wayland-N), lo tiene aperto e avvia il compositor vero
-// passandogli il socket. Se il compositor muore per errore, ne avvia un
-// altro sullo stesso socket: le app Qt e KDE, con QT_WAYLAND_RECONNECT=1, si
-// ricollegano da sole e ricompaiono, come in Plasma quando KWin si riavvia.
-// Le altre (Chromium, Electron, GTK, X11) si chiudono.
+// If the compositor crashes, the session must not go down with it. The
+// supervisor is a tiny process that touches neither the GPU nor wlroots: it
+// creates the Wayland socket (wayland-N), keeps it open and starts the real
+// compositor handing it the socket. If the compositor dies by mistake, it
+// starts another one on the same socket: Qt and KDE apps, with
+// QT_WAYLAND_RECONNECT=1, reconnect by themselves and show up again, as in
+// Plasma when KWin restarts. The others (Chromium, Electron, GTK, X11) close.
 //
-// Se lo schermo era bloccato, il compositor nuovo riparte bloccato (nero, e
-// vela-lock): un crash non deve mai scoprire il desktop. Se il compositor
-// va in crash tre volte in un minuto, il supervisore si arrende e la
-// sessione finisce (si torna alla schermata di accesso).
+// If the screen was locked, the new compositor starts locked (black, and
+// vela-lock): a crash must never reveal the desktop. If the compositor crashes
+// three times in a minute, the supervisor gives up and the session ends (back
+// to the login screen).
 //
-// Il supervisore adotta le app avviate nella sessione (subreaper): quando
-// la sessione finisce chiude quelle rimaste, che altrimenti resterebbero
-// appese ad aspettare un compositor che non torna.
+// The supervisor adopts the apps started in the session (subreaper): when the
+// session ends it closes those left, which would otherwise hang waiting for a
+// compositor that never comes back.
 
 #include "supervisor.h"
 
@@ -40,10 +40,10 @@
 #include <time.h>
 #include <unistd.h>
 
-#define MAX_CRASHES 3 // in CRASH_WINDOW secondi: poi ci si arrende
+#define MAX_CRASHES 3 // within CRASH_WINDOW seconds: then give up
 #define CRASH_WINDOW 60.0
 
-// Gli unici due stati globali: li toccano i gestori dei segnali.
+// The only two pieces of global state: the signal handlers touch them.
 static volatile sig_atomic_t stop_requested;
 static volatile pid_t child_pid;
 
@@ -65,8 +65,8 @@ static void say(const char *format, ...)
     va_end(args);
 }
 
-// Il socket Wayland, come wl_display_add_socket_auto: il primo wayland-N
-// libero, con il suo file di lock. Appartiene al supervisore fino alla fine.
+// The Wayland socket, like wl_display_add_socket_auto: the first free
+// wayland-N, with its lock file. It belongs to the supervisor until the end.
 struct wayland_socket {
     char name[32];
     char path[PATH_MAX];
@@ -91,10 +91,10 @@ static bool create_socket(const char *runtime_dir, struct wayland_socket *s)
             continue;
         }
         if (flock(s->lock_fd, LOCK_EX | LOCK_NB) != 0) {
-            close(s->lock_fd); // c'è già un compositor su questo numero
+            close(s->lock_fd); // there is already a compositor on this number
             continue;
         }
-        unlink(s->path); // lasciato da un compositor morto
+        unlink(s->path); // left by a dead compositor
         s->fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
         if (s->fd < 0) {
             close(s->lock_fd);
@@ -111,8 +111,8 @@ static bool create_socket(const char *runtime_dir, struct wayland_socket *s)
     return false;
 }
 
-// I processi adottati ancora vivi (i figli diretti, tolto il compositor):
-// un array allocato, da liberare; *count quanti sono.
+// The adopted processes still alive (direct children, the compositor
+// excluded): an allocated array, to free; *count how many.
 static pid_t *children(int *count)
 {
     *count = 0;
@@ -138,7 +138,8 @@ static pid_t *children(int *count)
         char line[1024] = { 0 };
         bool read = fgets(line, sizeof(line), file) != NULL;
         fclose(file);
-        // "pid (nome) stato ppid ...": il nome può contenere spazi e parentesi.
+        // "pid (name) state ppid ...": the name can contain spaces and
+        // parentheses.
         const char *end = read ? strrchr(line, ')') : NULL;
         char state = 0;
         int parent = 0;
@@ -161,8 +162,8 @@ static void reap_all(void)
     }
 }
 
-// Fine della sessione: si chiudono le app adottate rimaste (SIGTERM, e dopo
-// due secondi SIGKILL a chi non ha ascoltato).
+// End of the session: the adopted apps left are closed (SIGTERM, and after two
+// seconds SIGKILL for those that didn't listen).
 static void close_children(void)
 {
     int count = 0;
@@ -224,7 +225,7 @@ bool vela_session_hook_path(char *out, size_t size)
     return written > 0 && (size_t)written < size && access(out, X_OK) == 0;
 }
 
-// Fa partire `program` e ne aspetta la fine (senza lasciarlo zombie).
+// Starts `program` and waits for it to end (without leaving a zombie).
 static void run_and_wait(const char *program, const char *argument)
 {
     pid_t pid = fork();
@@ -251,7 +252,7 @@ int vela_supervise(int argc, char **argv)
     }
     say("socket %s; starting the compositor", socket.name);
 
-    // Il compositor: lo stesso programma, con gli stessi argomenti tranne
+    // The compositor: the same program, with the same arguments except
     // --supervise.
     char self[PATH_MAX] = { 0 };
     if (readlink("/proc/self/exe", self, sizeof(self) - 1) <= 0) {
@@ -268,8 +269,8 @@ int vela_supervise(int argc, char **argv)
     }
     arguments[count] = NULL;
 
-    // Le app avviate nella sessione (dalla shell, con doppio fork) restano
-    // nostre figlie: a fine sessione si sa chi chiudere.
+    // Apps started in the session (by the shell, with a double fork) stay our
+    // children: at the end of the session we know whom to close.
     prctl(PR_SET_CHILD_SUBREAPER, 1);
 
     struct sigaction action = { .sa_handler = on_terminate };
@@ -294,7 +295,7 @@ int vela_supervise(int argc, char **argv)
             signal(SIGTERM, SIG_DFL);
             signal(SIGINT, SIG_DFL);
             signal(SIGHUP, SIG_DFL);
-            fcntl(socket.fd, F_SETFD, 0); // il compositor lo eredita
+            fcntl(socket.fd, F_SETFD, 0); // the compositor inherits it
             char fd[16];
             snprintf(fd, sizeof(fd), "%d", socket.fd);
             setenv("VELA_WAYLAND_SOCKET_FD", fd, 1);
@@ -309,8 +310,7 @@ int vela_supervise(int argc, char **argv)
             _exit(127);
         }
         child_pid = pid;
-        // Si raccolgono anche le app adottate che finiscono: solo il
-        // compositor interessa.
+        // Adopted apps that end are reaped too: only the compositor matters.
         int status = 0;
         for (;;) {
             pid_t done = waitpid(-1, &status, 0);
@@ -321,17 +321,17 @@ int vela_supervise(int argc, char **argv)
         child_pid = 0;
 
         if (stop_requested) {
-            break; // la sessione si chiude (logout, spegnimento)
+            break; // the session is closing (logout, shutdown)
         }
         if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-            break; // uscito da sé: "Esci" dal menu
+            break; // exited by itself: "Sign out" from the menu
         }
         if (WIFSIGNALED(status)) {
             say("the compositor crashed (%s)", strsignal(WTERMSIG(status)));
         } else {
             say("the compositor exited with an error (code %d)", WEXITSTATUS(status));
         }
-        // Si tengono solo i crash dell'ultimo minuto.
+        // Only the crashes of the last minute are kept.
         double t = now_seconds();
         int kept = 0;
         for (int i = 0; i < crash_count; ++i) {
@@ -352,8 +352,8 @@ int vela_supervise(int argc, char **argv)
 
     close_children();
 
-    // Se il compositor non ha potuto farlo (crash), si scollega la sessione
-    // da systemd; se l'ha già fatto, non succede niente.
+    // If the compositor couldn't do it (crash), the session is detached from
+    // systemd; if it already did, nothing happens.
     char hook[PATH_MAX];
     if (vela_session_hook_path(hook, sizeof(hook))) {
         setenv("WAYLAND_DISPLAY", socket.name, 1);

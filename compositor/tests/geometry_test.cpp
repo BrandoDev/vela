@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// La geometria della nitidezza (geometry.h, docs/renderer.md §3): la
-// scala dai DPI, VELA_SCALE, il posizionamento a pixel esatti di snap e
-// massimizzazione, i bordi in pixel, la copia 1:1.
+// The geometry of sharpness (geometry.h, docs/renderer.md §3): scale from DPI,
+// VELA_SCALE, exact-pixel placement of snapped and maximized windows, edges in
+// pixels, the 1:1 copy.
 
 extern "C" {
 #include "geometry.h"
@@ -15,7 +15,7 @@ extern "C" {
 
 namespace {
 
-// Larghezza e altezza fisiche (mm) di uno schermo da `inches` pollici.
+// Physical width and height (mm) of an `inches` inch screen.
 void physicalSize(double inches, int width, int height, double& widthMm, double& heightMm)
 {
     const double diagonal = std::hypot(width, height);
@@ -25,7 +25,7 @@ void physicalSize(double inches, int width, int height, double& widthMm, double&
 
 } // namespace
 
-// La tabella del §3.8.
+// The table of §3.8.
 TEST(Geometry, DefaultScaleFromDpi)
 {
     struct Case {
@@ -57,13 +57,13 @@ TEST(Geometry, DefaultScaleFromDpi)
 TEST(Geometry, AbsurdPhysicalSizesFallBackTo100Percent)
 {
     double dpi = -1;
-    EXPECT_EQ(vela_scale_for_dpi(0, 0, 1920, 1080, false, &dpi), 1.0f); // proiettore: niente misure
+    EXPECT_EQ(vela_scale_for_dpi(0, 0, 1920, 1080, false, &dpi), 1.0f); // projector: no size
     EXPECT_EQ(dpi, 0.0);
     double w = 0, h = 0;
-    physicalSize(150, 3840, 2160, w, h); // 150": una TV o un EDID inventato
+    physicalSize(150, 3840, 2160, w, h); // 150": a TV or a made-up EDID
     EXPECT_EQ(vela_scale_for_dpi(w, h, 3840, 2160, false, &dpi), 1.0f);
-    EXPECT_EQ(vela_scale_for_dpi(160, 90, 3840, 2160, false, &dpi), 1.0f); // 7": troppo piccolo
-    EXPECT_EQ(vela_scale_for_dpi(600, 600, 3840, 2160, false, &dpi), 1.0f); // proporzioni sbagliate
+    EXPECT_EQ(vela_scale_for_dpi(160, 90, 3840, 2160, false, &dpi), 1.0f); // 7": too small
+    EXPECT_EQ(vela_scale_for_dpi(600, 600, 3840, 2160, false, &dpi), 1.0f); // wrong proportions
     EXPECT_EQ(vela_scale_for_dpi(600, 340, 0, 0, false, &dpi), 1.0f);
 }
 
@@ -89,26 +89,27 @@ TEST(Geometry, RequestedScale)
     EXPECT_EQ(vela_requested_scale("DP-1=1.5,HDMI-A-1=1", "DP-1"), 1.5f);
     EXPECT_EQ(vela_requested_scale("DP-1=1.5,HDMI-A-1=1", "HDMI-A-1"), 1.0f);
     EXPECT_EQ(vela_requested_scale("DP-1=1.5,HDMI-A-1=1", "DP-2"), 0.0f);
-    EXPECT_EQ(vela_requested_scale("DP-10=2,DP-1=1.75", "DP-1"), 1.75f); // nomi che iniziano uguali
+    EXPECT_EQ(vela_requested_scale("DP-10=2,DP-1=1.75", "DP-1"), 1.75f); // names starting the same way
 }
 
 TEST(Geometry, BufferPixelsLikeFractionalScale)
 {
-    EXPECT_EQ(vela_buffer_pixels(853, 1.5), 1280); // metà di 2560 a 150%
-    EXPECT_EQ(vela_buffer_pixels(1707, 1.5), 2561); // 2560 non si può: un pixel in più
+    EXPECT_EQ(vela_buffer_pixels(853, 1.5), 1280); // half of 2560 at 150%
+    EXPECT_EQ(vela_buffer_pixels(1707, 1.5), 2561); // 2560 isn't possible: one extra pixel
     EXPECT_EQ(vela_buffer_pixels(1706, 1.5), 2559);
     EXPECT_EQ(vela_buffer_pixels(1024, 1.25), 1280);
     EXPECT_EQ(vela_buffer_pixels(100, 1.0), 100);
 }
 
-// Per ogni scala, schermo e divisione: il buffer copre esattamente i pixel
-// dell'area; se è impossibile, il pixel in più va solo oltre un bordo libero
-// dello schermo; altrimenti si resta dentro.
+// For every scale, output and split: the buffer covers exactly the area's
+// pixels; when that's impossible, the extra pixel goes only past a free edge
+// of the output; otherwise it stays inside.
 TEST(Geometry, PlacementCoversThePixelsExactly)
 {
     const double scales[] = { 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0 };
     const int screens[] = { 1280, 1366, 1440, 1920, 2560, 2880, 3440, 3840 };
-    // Divisioni in dodicesimi, come i layout di snap: metà, terzi, quarti, 2/3.
+    // Splits in twelfths, like the snap layouts: halves, thirds, quarters,
+    // 2/3.
     const int splits[][2] = { { 0, 12 }, { 0, 6 }, { 6, 12 }, { 0, 4 }, { 4, 8 }, { 8, 12 }, { 0, 3 }, { 3, 9 },
         { 9, 12 }, { 0, 8 }, { 8, 12 } };
     int exactCount = 0;
@@ -131,15 +132,15 @@ TEST(Geometry, PlacementCoversThePixelsExactly)
                     }
                     const bool touches = start == 0 || end == screen;
                     if (open && touches) {
-                        // Copre l'area e sborda solo fuori dallo schermo.
+                        // It covers the area and spills only off the output.
                         EXPECT_GT(pixels, size);
-                        // (first è start / scala × scala: a meno dell'arrotondamento)
+                        // (first is start / scale × scale: up to rounding)
                         EXPECT_LE(first, start + 1e-6);
                         EXPECT_GE(first + pixels, end - 1e-6);
                         EXPECT_TRUE(first < -1e-6 || first + pixels > screen + 1e-6);
                         EXPECT_LE(pixels - size, 2);
                     } else {
-                        // Dentro l'area, un pixel al massimo più piccola.
+                        // Inside the area, at most one pixel smaller.
                         EXPECT_LT(pixels, size);
                         EXPECT_GE(pixels, size - 2);
                         EXPECT_DOUBLE_EQ(first, start);
@@ -148,22 +149,22 @@ TEST(Geometry, PlacementCoversThePixelsExactly)
             }
         }
     }
-    // La maggior parte dei casi ha una dimensione esatta (il test serve).
+    // Most cases have an exact size (the test is meaningful).
     EXPECT_GT(exactCount, total / 2);
 }
 
-// Il caso del §3.5: a 150%, 2560 pixel sarebbero 1706,67 unità.
+// The case of §3.5: at 150%, 2560 pixels would be 1706.67 units.
 TEST(Geometry, MaximizedAt150PercentSpillsOnePixelOffScreen)
 {
     const vela_axis open = vela_place_axis(0, 2560, 2560, 1.5, true, true);
     EXPECT_EQ(open.size, 1707);
     EXPECT_EQ(open.offset, 0.0);
     EXPECT_EQ(vela_buffer_pixels(open.size, 1.5), 2561);
-    // Con uno schermo accanto a destra, il pixel in più va a sinistra.
+    // With an output to the right, the extra pixel goes left.
     const vela_axis rightNeighbour = vela_place_axis(0, 2560, 2560, 1.5, true, false);
     EXPECT_EQ(rightNeighbour.size, 1707);
     EXPECT_DOUBLE_EQ(rightNeighbour.offset * 1.5, -1.0);
-    // Con schermi da entrambi i lati si resta dentro.
+    // With outputs on both sides it stays inside.
     const vela_axis closed = vela_place_axis(0, 2560, 2560, 1.5, false, false);
     EXPECT_EQ(closed.size, 1706);
 }
@@ -177,14 +178,14 @@ TEST(Geometry, SnappedHalvesNeverGapOrOverlap)
             const vela_axis right = vela_place_axis(middle, screen - middle, screen, scale, true, true);
             const int64_t leftEnd = int64_t(std::lround(left.offset * scale)) + vela_buffer_pixels(left.size, scale);
             const int64_t rightStart = int64_t(std::lround(right.offset * scale));
-            EXPECT_LE(leftEnd, rightStart + 1) << scale << " " << screen; // nessuna sovrapposizione visibile
-            EXPECT_GE(leftEnd, rightStart - 1) << scale << " " << screen; // nessun buco visibile
+            EXPECT_LE(leftEnd, rightStart + 1) << scale << " " << screen; // no visible overlap
+            EXPECT_GE(leftEnd, rightStart - 1) << scale << " " << screen; // no visible gap
         }
     }
 }
 
-// Si arrotondano i bordi, non posizione e dimensione (§3.2): rettangoli
-// adiacenti restano adiacenti a ogni scala e posizione.
+// Edges are rounded, not position and size (§3.2): adjacent rectangles stay
+// adjacent at every scale and position.
 TEST(Geometry, AdjacentRectanglesStayAdjacent)
 {
     for (double scale : { 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 3.0 }) {
@@ -204,26 +205,26 @@ TEST(Geometry, AdjacentRectanglesStayAdjacent)
 
 TEST(Geometry, BufferMatchesArea)
 {
-    EXPECT_TRUE(vela_buffer_matches_area(0, 0, 1280, 720, 1024, 576, 1.25)); // disegnata alla scala dello schermo
-    EXPECT_TRUE(vela_buffer_matches_area(0, 0, 1280, 721, 853.5, 480.5, 1.5)); // entro l'arrotondamento
-    EXPECT_FALSE(vela_buffer_matches_area(0, 0, 1024, 576, 1024, 576, 1.25)); // scala intera: va ingrandita
-    EXPECT_FALSE(vela_buffer_matches_area(0.5, 0, 1280, 720, 1024, 576, 1.25)); // sorgente non intera (viewport)
+    EXPECT_TRUE(vela_buffer_matches_area(0, 0, 1280, 720, 1024, 576, 1.25)); // drawn at the output scale
+    EXPECT_TRUE(vela_buffer_matches_area(0, 0, 1280, 721, 853.5, 480.5, 1.5)); // within rounding
+    EXPECT_FALSE(vela_buffer_matches_area(0, 0, 1024, 576, 1024, 576, 1.25)); // integer scale: must be magnified
+    EXPECT_FALSE(vela_buffer_matches_area(0.5, 0, 1280, 720, 1024, 576, 1.25)); // non-integer source (viewport)
 }
 
 TEST(Geometry, OneToOneCopy)
 {
     EXPECT_TRUE(vela_one_to_one(0, 0, 1280, 720, 1280, 720, false));
-    EXPECT_TRUE(vela_one_to_one(10, 20, 720, 1280, 1280, 720, true)); // ruotata di 90°
+    EXPECT_TRUE(vela_one_to_one(10, 20, 720, 1280, 1280, 720, true)); // rotated by 90°
     EXPECT_FALSE(vela_one_to_one(0, 0, 1280, 720, 1281, 720, false));
     EXPECT_FALSE(vela_one_to_one(0.5, 0, 1280, 720, 1280, 720, false));
 }
 
 TEST(Geometry, PhysicalEdges)
 {
-    // Un'area libera che tocca i bordi resta esattamente sui pixel dello schermo.
+    // A free area touching the edges stays exactly on the output's pixels.
     EXPECT_EQ(vela_physical_edge(0, 0, 2048, 2560, 1.25), 0);
     EXPECT_EQ(vela_physical_edge(2048, 0, 2048, 2560, 1.25), 2560);
     EXPECT_EQ(vela_physical_edge(-5, 0, 2048, 2560, 1.25), 0);
-    EXPECT_EQ(vela_physical_edge(1104, 0, 1152, 1440, 1.25), 1380); // sopra la taskbar da 48
-    EXPECT_EQ(vela_physical_edge(100, 100, 2148, 2560, 1.25), 0); // schermo non nell'origine
+    EXPECT_EQ(vela_physical_edge(1104, 0, 1152, 1440, 1.25), 1380); // above the 48-high taskbar
+    EXPECT_EQ(vela_physical_edge(100, 100, 2148, 2560, 1.25), 0); // output not at the origin
 }

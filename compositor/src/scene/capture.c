@@ -17,17 +17,17 @@
 #include <wlr/types/wlr_ext_image_copy_capture_v1.h>
 
 struct vela_window_capture {
-    struct wlr_ext_image_capture_source_v1 base; // primo membro: ci si risale con un cast
+    struct wlr_ext_image_capture_source_v1 base; // first member: reached with a cast
     struct vela_scene *scene;
     struct vela_node *node;
     struct vela_view *view;
     struct vela_renderer *renderer;
     struct wlr_allocator *allocator;
     struct wlr_swapchain *swapchain;
-    struct vela_elements elements; // riusati da una cattura all'altra
+    struct vela_elements elements; // reused from one capture to the next
 };
 
-// L'evento "frame" porta con sé il buffer appena disegnato.
+// The "frame" event carries the buffer just drawn.
 struct frame_event {
     struct wlr_ext_image_capture_source_v1_frame_event base;
     struct wlr_buffer *buffer;
@@ -44,8 +44,8 @@ static void copy_frame(struct wlr_ext_image_capture_source_v1 *source, struct wl
     }
 }
 
-// Un buffer grande quanto la finestra, in un formato che sappiamo sia
-// disegnare sia rileggere (per le catture in memoria condivisa).
+// A buffer as large as the window, in a format we can both draw and read back
+// (for shared-memory captures).
 static bool update_constraints(struct vela_window_capture *capture)
 {
     struct wlr_box box = vela_view_frame_box(capture->view);
@@ -83,7 +83,7 @@ static bool update_constraints(struct vela_window_capture *capture)
     return true;
 }
 
-// Disegna la finestra e la offre a chi aspetta un frame.
+// Draws the window and offers it to whoever waits for a frame.
 static void request_frame(struct wlr_ext_image_capture_source_v1 *source, bool schedule_frame)
 {
     struct vela_window_capture *capture = (struct vela_window_capture *)source;

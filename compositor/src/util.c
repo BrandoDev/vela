@@ -70,7 +70,7 @@ void *vela_grow(void *items, int *capacity, int needed, size_t size)
     }
     void *bigger = realloc(items, (size_t)grown * size);
     if (!bigger) {
-        abort(); // senza memoria il compositor non può continuare
+        abort(); // without memory the compositor can't go on
     }
     *capacity = grown;
     return bigger;

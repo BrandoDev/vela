@@ -3,6 +3,7 @@
 
 #include "lock.h"
 
+#include "listen.h"
 #include "switcher.h"
 #include "snap.h"
 #include "focus.h"
@@ -33,9 +34,9 @@
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/util/log.h>
 
-#define SCREEN_OFF_AFTER_LOCK_MS 5000 // bloccato per inattività: poi si spegne
+#define SCREEN_OFF_AFTER_LOCK_MS 5000 // locked for inactivity: then it turns off
 
-// Una superficie del programma di blocco, grande quanto il suo schermo.
+// A surface of the lock program, as large as its output.
 struct lock_surface {
     struct vela_server *server;
     struct wlr_session_lock_surface_v1 *wlr;
@@ -45,7 +46,7 @@ struct lock_surface {
     struct wl_listener destroy;
 };
 
-// Gli strati che il blocco nasconde: tutti tranne il suo.
+// The layers the lock hides: all but its own.
 static void set_desktop_enabled(struct vela_server *server, bool enabled)
 {
     struct vela_layers *l = &server->layers;
@@ -71,7 +72,7 @@ static void handle_surface_map(struct wl_listener *listener, void *data)
 {
     struct lock_surface *surface = wl_container_of(listener, surface, map);
     struct vela_server *server = surface->server;
-    // La tastiera va allo schermo dove sta il mouse (o al primo).
+    // The keyboard goes to the output where the mouse is (or the first).
     struct vela_output *under = vela_output_under_cursor(server);
     if (!server->seat->keyboard_state.focused_surface || (under && under->wlr == surface->wlr->output)) {
         vela_input_keyboard_enter(server->input, surface->wlr->surface);
@@ -104,10 +105,8 @@ static void handle_new_surface(struct wl_listener *listener, void *data)
     surface->surface_node = vela_surface_node_create(surface->tree, wlr->surface);
     wlr->data = surface;
     place_surface(surface);
-    surface->map.notify = handle_surface_map;
-    wl_signal_add(&wlr->surface->events.map, &surface->map);
-    surface->destroy.notify = handle_surface_destroy;
-    wl_signal_add(&wlr->events.destroy, &surface->destroy);
+    vela_listen(&wlr->surface->events.map, &surface->map, handle_surface_map);
+    vela_listen(&wlr->events.destroy, &surface->destroy, handle_surface_destroy);
 }
 
 static void clear_backdrop(struct vela_lock *lock)
@@ -122,7 +121,7 @@ static void handle_unlock(struct wl_listener *listener, void *data)
 {
     struct vela_lock *lock = wl_container_of(listener, lock, unlock);
     struct vela_server *server = lock->server;
-    // Sbloccato davvero: il desktop torna com'era.
+    // Really unlocked: the desktop is back as it was.
     server->locked = false;
     char flag[PATH_MAX];
     if (vela_lock_flag_path(getenv("WAYLAND_DISPLAY"), flag, sizeof(flag))) {
@@ -140,12 +139,12 @@ static void handle_unlock(struct wl_listener *listener, void *data)
 static void handle_lock_destroy(struct wl_listener *listener, void *data)
 {
     struct vela_lock *lock = wl_container_of(listener, lock, destroy);
-    // Se non ha sbloccato (crash), resta tutto bloccato e nero: un nuovo
-    // vela-lock può prendere il suo posto.
+    // If it didn't unlock (crash), everything stays locked and black: a new
+    // vela-lock can take its place.
     if (lock->server->locked) {
         wlr_log(WLR_ERROR, "The locker went away without unlocking: staying locked");
-        // Lo si rilancia tra un secondo (al massimo 5 volte al minuto):
-        // senza, resterebbe solo lo schermo nero.
+        // It's relaunched in a second (at most 5 times a minute): otherwise
+        // only the black screen would be left.
         int64_t now = vela_now_ns() / VELA_NS_PER_MS;
         int kept = 0;
         for (int i = 0; i < lock->respawn_count; ++i) {
@@ -181,7 +180,7 @@ static void handle_new_lock(struct wl_listener *listener, void *data)
     }
     lock->lock = wlr;
     vela_lock_engage(lock);
-    // "Bloccato" si dice all'app quando ogni schermo ha mostrato il nero.
+    // The app is told "locked" once every output has shown black.
     lock->waiting_count = 0;
     struct vela_output *output;
     wl_list_for_each (output, &server->outputs, link) {
@@ -197,12 +196,9 @@ static void handle_new_lock(struct wl_listener *listener, void *data)
     }
     vela_scene_changed(server->scene);
 
-    lock->new_surface.notify = handle_new_surface;
-    wl_signal_add(&wlr->events.new_surface, &lock->new_surface);
-    lock->unlock.notify = handle_unlock;
-    wl_signal_add(&wlr->events.unlock, &lock->unlock);
-    lock->destroy.notify = handle_lock_destroy;
-    wl_signal_add(&wlr->events.destroy, &lock->destroy);
+    vela_listen(&wlr->events.new_surface, &lock->new_surface, handle_new_surface);
+    vela_listen(&wlr->events.unlock, &lock->unlock, handle_unlock);
+    vela_listen(&wlr->events.destroy, &lock->destroy, handle_lock_destroy);
 }
 
 static int handle_respawn(void *data)
@@ -211,9 +207,9 @@ static int handle_respawn(void *data)
     return 0;
 }
 
-// ------------------------------------------------------------- inattività --
+// ------------------------------------------------------------- inactivity --
 
-// Un inibitore dell'inattività (un video): alla sua fine l'attesa riparte.
+// An inactivity inhibitor (a video): when it ends the wait starts again.
 struct inhibitor_watch {
     struct vela_lock *lock;
     struct wl_listener destroy;
@@ -225,7 +221,7 @@ static void handle_inhibitor_destroy(struct wl_listener *listener, void *data)
     struct vela_lock *lock = watch->lock;
     wl_list_remove(&watch->destroy.link);
     free(watch);
-    // Alla sua fine l'inattività riparte da zero.
+    // When it ends, inactivity starts from zero.
     vela_lock_note_activity(lock);
 }
 
@@ -235,8 +231,7 @@ static void handle_new_inhibitor(struct wl_listener *listener, void *data)
     struct wlr_idle_inhibitor_v1 *inhibitor = data;
     struct inhibitor_watch *watch = calloc(1, sizeof(*watch));
     watch->lock = lock;
-    watch->destroy.notify = handle_inhibitor_destroy;
-    wl_signal_add(&inhibitor->events.destroy, &watch->destroy);
+    vela_listen(&inhibitor->events.destroy, &watch->destroy, handle_inhibitor_destroy);
     vela_lock_note_activity(lock);
 }
 
@@ -244,7 +239,7 @@ static int handle_idle_timer(void *data)
 {
     struct vela_lock *lock = data;
     struct vela_server *server = lock->server;
-    // Un'app sta mostrando qualcosa (un video): si riprova più tardi.
+    // An app is showing something (a video): try again later.
     bool inhibited = false;
     struct wlr_idle_inhibitor_v1 *inhibitor;
     wl_list_for_each (inhibitor, &lock->idle_inhibit->inhibitors, link) {
@@ -273,7 +268,7 @@ static int handle_idle_timer(void *data)
 void vela_lock_load_settings(struct vela_lock *lock)
 {
     if (!lock->idle_timer) {
-        return; // annidati o headless non si spegne nulla
+        return; // nested or headless nothing turns off
     }
     struct vela_config settings;
     vela_config_read(&settings);
@@ -290,7 +285,7 @@ void vela_lock_load_settings(struct vela_lock *lock)
     vela_config_finish(&settings);
     wlr_log(WLR_INFO, "Idle: screen off after %d minutes%s", lock->screen_off_ms / 60000,
         lock->lock_on_idle ? ", with lock" : "");
-    // L'attesa riparte da adesso, con i minuti nuovi.
+    // The wait starts again from now, with the new minutes.
     lock->locking = false;
     wl_event_source_timer_update(lock->idle_timer, lock->screen_off_ms);
 }
@@ -317,7 +312,7 @@ void vela_lock_note_activity(struct vela_lock *lock)
     }
 }
 
-// ------------------------------------------------------------- creazione --
+// -------------------------------------------------------------- creation --
 
 struct vela_lock *vela_lock_create(struct vela_server *server)
 {
@@ -325,7 +320,7 @@ struct vela_lock *vela_lock_create(struct vela_server *server)
     lock->server = server;
     lock->lock_on_idle = true;
     vela_node_set_enabled(&server->layers.lock->node, false);
-    // Prima il fondo, poi (sopra) le superfici del programma di blocco.
+    // First the backdrop, then (above) the lock program's surfaces.
     lock->backdrop_tree = vela_tree_create(server->layers.lock);
     lock->respawn = wl_event_loop_add_timer(server->loop, handle_respawn, lock);
     wl_list_init(&lock->new_surface.link);
@@ -333,15 +328,13 @@ struct vela_lock *vela_lock_create(struct vela_server *server)
     wl_list_init(&lock->destroy.link);
 
     lock->manager = wlr_session_lock_manager_v1_create(server->display);
-    lock->new_lock.notify = handle_new_lock;
-    wl_signal_add(&lock->manager->events.new_lock, &lock->new_lock);
+    vela_listen(&lock->manager->events.new_lock, &lock->new_lock, handle_new_lock);
 
     lock->idle_notifier = wlr_idle_notifier_v1_create(server->display);
     lock->idle_inhibit = wlr_idle_inhibit_v1_create(server->display);
-    lock->new_inhibitor.notify = handle_new_inhibitor;
-    wl_signal_add(&lock->idle_inhibit->events.new_inhibitor, &lock->new_inhibitor);
+    vela_listen(&lock->idle_inhibit->events.new_inhibitor, &lock->new_inhibitor, handle_new_inhibitor);
 
-    // Solo nella sessione vera: annidati o headless non si spegne nulla.
+    // Only in the real session: nested or headless nothing turns off.
     if (server->session) {
         lock->idle_timer = wl_event_loop_add_timer(server->loop, handle_idle_timer, lock);
         vela_lock_load_settings(lock);
@@ -366,7 +359,7 @@ void vela_lock_destroy(struct vela_lock *lock)
     free(lock);
 }
 
-// ----------------------------------------------------------------- blocco --
+// ------------------------------------------------------------------- lock --
 
 void vela_lock_engage(struct vela_lock *lock)
 {
@@ -375,8 +368,8 @@ void vela_lock_engage(struct vela_lock *lock)
         return;
     }
     server->locked = true;
-    // Per il supervisore: se il compositor va in crash adesso, il prossimo
-    // riparte bloccato (supervisor.c).
+    // For the supervisor: if the compositor crashes now, the next one starts
+    // locked (supervisor.c).
     char flag[PATH_MAX];
     if (vela_lock_flag_path(getenv("WAYLAND_DISPLAY"), flag, sizeof(flag))) {
         int fd = open(flag, O_CREAT | O_WRONLY | O_CLOEXEC, S_IRUSR | S_IWUSR);
@@ -387,7 +380,7 @@ void vela_lock_engage(struct vela_lock *lock)
     set_desktop_enabled(server, false);
     vela_node_set_enabled(&server->layers.lock->node, true);
     server->cursor_mode = VELA_CURSOR_PASSTHROUGH;
-    // Niente trascinamenti, Alt+Tab o pannelli con la tastiera.
+    // No drags, Alt+Tab or panels with the keyboard.
     server->grabbed = NULL;
     vela_snap_end_zone(server, false);
     vela_switcher_finish(server, false);
@@ -403,10 +396,10 @@ void vela_lock_engage(struct vela_lock *lock)
 void vela_lock_screen(struct vela_lock *lock)
 {
     if (lock->server->locked && lock->lock) {
-        return; // già bloccato, e il programma di blocco c'è
+        return; // already locked, and the lock program is there
     }
-    // VELA_LOCK sceglie un altro programma (es. swaylock). Altrimenti
-    // vela-lock accanto al compositor (installato) o nella cartella di build.
+    // VELA_LOCK picks another program (such as swaylock). Otherwise vela-lock
+    // next to the compositor (installed) or in the build directory.
     char command[PATH_MAX + 2] = "";
     const char *custom = getenv("VELA_LOCK");
     if (custom && *custom) {
@@ -460,8 +453,8 @@ void vela_lock_update_layout(struct vela_lock *lock)
     if (!server->locked) {
         return;
     }
-    // Un fondo nero per schermo, sotto le superfici del programma di blocco:
-    // anche prima che disegni, o se non c'è più, non si vede nient'altro.
+    // A black backdrop per output, below the lock program's surfaces: even
+    // before it draws, or when it's gone, nothing else shows.
     clear_backdrop(lock);
     const struct wlr_render_color black = { 0.0f, 0.0f, 0.0f, 1.0f };
     struct vela_output *output;

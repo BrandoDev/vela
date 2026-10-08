@@ -30,15 +30,15 @@ struct vela_nested {
     struct zwp_keyboard_shortcuts_inhibitor_v1 *inhibitor;
     struct wl_seat *seat;
 
-    int width; // dimensione logica della finestra ospite
+    int width; // logical size of the host window
     int height;
-    double host_scale; // scala dell'ospite (KDE al 125%: 1.25)
-    double extra_scale; // VELA_SCALE, sopra quella dell'ospite
+    double host_scale; // the host's scale (KDE at 125%: 1.25)
+    double extra_scale; // VELA_SCALE, on top of the host's
 };
 
-// Buffer grande quanto i pixel fisici della finestra ospite; la scala dello
-// schermo di Vela è quella dell'ospite (per VELA_SCALE): così le app ci
-// disegnano alla risoluzione piena e nulla viene ingrandito due volte.
+// A buffer as large as the host window's physical pixels; Vela's output scale
+// is the host's (times VELA_SCALE): so apps draw at full resolution and
+// nothing is magnified twice.
 static void apply(struct vela_nested *nested)
 {
     int buffer_width = (int)lround(nested->width * nested->host_scale);
@@ -76,7 +76,7 @@ static const struct wp_fractional_scale_v1_listener fractional_listener = {
     .preferred_scale = handle_preferred_scale,
 };
 
-// Man mano che arrivano i protocolli dell'ospite.
+// As the host's protocols arrive.
 static void setup(struct vela_nested *nested)
 {
     if (nested->viewporter && nested->fractional_manager && !nested->fractional) {
@@ -136,8 +136,8 @@ struct vela_nested *vela_nested_create(struct vela_output *output)
     if (scale && *scale && !strchr(scale, '=')) {
         nested->extra_scale = fmax(0.25, strtod(scale, NULL));
     }
-    // I proxy stanno nella coda predefinita: i loro eventi li smista il
-    // backend di wlroots insieme ai suoi.
+    // The proxies are on the default queue: the wlroots backend dispatches
+    // their events with its own.
     nested->registry = wl_display_get_registry(nested->remote);
     wl_registry_add_listener(nested->registry, &registry_listener, nested);
     wl_display_flush(nested->remote);
@@ -177,11 +177,10 @@ void vela_nested_destroy(struct vela_nested *nested)
 
 void vela_nested_resize(struct vela_nested *nested, int width, int height)
 {
-    // Se l'ospite lascia scegliere a noi, il backend ripropone la dimensione
-    // attuale del buffer: non è una dimensione logica. KWin manda un
-    // configure a ogni cambio di stato (attivazione, focus): se la dimensione
-    // non cambia non si tocca nulla, o ogni volta si rifarebbe il modo dello
-    // schermo.
+    // When the host lets us choose, the backend proposes the current buffer
+    // size again: that isn't a logical size. KWin sends a configure on every
+    // state change (activation, focus): if the size doesn't change nothing is
+    // touched, or the output mode would be redone every time.
     bool buffer_size = width == nested->output->wlr->width && height == nested->output->wlr->height;
     if (width <= 0 || height <= 0 || buffer_size || (width == nested->width && height == nested->height)) {
         return;

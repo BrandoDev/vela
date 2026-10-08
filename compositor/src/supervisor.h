@@ -7,17 +7,17 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-// vela-compositor --supervise ...: tiene il socket Wayland e riavvia il
-// compositor se va in crash. Restituisce il codice di uscita del processo.
+// vela-compositor --supervise ...: holds the Wayland socket and restarts the
+// compositor if it crashes. Returns the process exit code.
 int vela_supervise(int argc, char **argv);
 
-// Il file che dice "lo schermo è bloccato" per il display dato: lo scrive il
-// compositor quando blocca, lo legge il supervisore prima di riavviarlo.
-// false se manca XDG_RUNTIME_DIR.
+// The file that says "the screen is locked" for the given display: the
+// compositor writes it when it locks, the supervisor reads it before
+// restarting. false without XDG_RUNTIME_DIR.
 bool vela_lock_flag_path(const char *wayland_display, char *out, size_t size);
 
-// vela-session-env (collegamento della sessione a systemd): accanto
-// all'eseguibile (cartella di build) o installato. false se non c'è.
+// vela-session-env (ties the session to systemd): next to the executable
+// (build directory) or installed. false if there is none.
 bool vela_session_hook_path(char *out, size_t size);
 
 #endif

@@ -4,8 +4,8 @@
 
 #extension GL_GOOGLE_include_directive : require
 
-// Tinta unita (anteprima dello snap, sfondo, catture): il colore arriva già
-// in spazio lineare e premoltiplicato.
+// Solid color (snap preview, backdrop, captures): the color arrives already
+// linear and premultiplied.
 
 #include "push.glsl"
 #include "shape.glsl"

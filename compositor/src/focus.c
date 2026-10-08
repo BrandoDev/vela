@@ -22,17 +22,17 @@ void vela_focus_view(struct vela_server *server, struct vela_view *view)
     if (!view || !view->mapped || server->locked) {
         return;
     }
-    // Una finestra di un altro desktop: si va su quel desktop, come Windows.
+    // A window on another desktop: go to that desktop, like Windows.
     if (!vela_view_on_current_workspace(view)) {
         vela_workspaces_switch(server, view->workspace, false);
     }
     if (view->minimized) {
-        vela_view_set_minimized(view, false); // la riaccende e torna qui
+        vela_view_set_minimized(view, false); // turns it back on and returns here
         return;
     }
 
-    // Porta in primo piano e in testa alla lista in ogni caso. I dialoghi di
-    // sistema restano sopra (ma la tastiera va dove ha cliccato l'utente).
+    // Bring it forward and to the head of the list in any case. System dialogs
+    // stay above (but the keyboard goes where the user clicked).
     vela_node_raise_to_top(&view->tree->node);
     wl_list_remove(&view->link);
     wl_list_insert(&server->views, &view->link);
@@ -43,8 +43,8 @@ void vela_focus_view(struct vela_server *server, struct vela_view *view)
         }
     }
 
-    // Un pannello che ha chiesto la tastiera in modo esclusivo (es.
-    // schermata di blocco) non la cede a una finestra.
+    // A panel that asked for exclusive keyboard (such as the lock screen)
+    // doesn't give it to a window.
     struct vela_layer_surface *layer = server->focused_layer;
     if (layer && layer->wlr->current.keyboard_interactive == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE) {
         return;
@@ -56,8 +56,8 @@ void vela_focus_view(struct vela_server *server, struct vela_view *view)
     if (server->seat->keyboard_state.focused_surface == surface) {
         return;
     }
-    // La finestra attiva si cerca tra le nostre finestre vive: una appena
-    // chiusa è già fuori dalla lista, e non le si manda nulla.
+    // The active window is looked up among our live windows: one just closed
+    // is already out of the list, and nothing is sent to it.
     struct vela_view *previous = vela_views_focused(server);
     if (previous && previous != view) {
         vela_view_set_activated(previous, false);
@@ -79,18 +79,18 @@ void vela_focus_new_view(struct vela_server *server, struct vela_view *view)
 
 void vela_focus_layer(struct vela_server *server, struct vela_layer_surface *layer)
 {
-    // Si usa lo stato della superficie: l'evento "map" arriva prima del
-    // commit in cui si aggiorna layer->mapped.
+    // Use the surface's state: the "map" event comes before the commit that
+    // updates layer->mapped.
     if (!layer || !layer->wlr->surface->mapped || server->locked) {
         return;
     }
-    // Come su Windows: aprendo il menu Start la finestra attiva si "spegne".
+    // Like Windows: opening the Start menu "dims" the active window.
     struct vela_view *active = vela_views_focused(server);
     if (active) {
         vela_view_set_activated(active, false);
     }
-    // Un menu aperto da un pannello (es. dal menu Start): chiuso il menu, la
-    // tastiera torna al pannello.
+    // A menu opened from a panel (such as the Start menu): once the menu
+    // closes, the keyboard goes back to the panel.
     if (server->focused_layer && server->focused_layer != layer) {
         server->previous_layer = server->focused_layer;
     }
@@ -101,7 +101,7 @@ void vela_focus_layer(struct vela_server *server, struct vela_layer_surface *lay
 void vela_focus_refocus(struct vela_server *server)
 {
     if (server->locked) {
-        return; // la tastiera è della schermata di blocco
+        return; // the keyboard belongs to the lock screen
     }
     server->focused_layer = NULL;
     struct vela_layer_surface *previous = server->previous_layer;
@@ -117,7 +117,7 @@ void vela_focus_refocus(struct vela_server *server)
             return;
         }
     }
-    // Nessuna finestra su questo desktop: la tastiera non va a nessuno.
+    // No window on this desktop: the keyboard goes to nobody.
     struct vela_view *focused = vela_views_focused(server);
     if (focused) {
         vela_view_set_activated(focused, false);
@@ -129,7 +129,7 @@ void vela_focus_forget_view(struct vela_server *server, struct vela_view *view, 
 {
     vela_snap_forget(server, view);
     vela_interact_forget(server, view);
-    // Una finestra che sparisce durante Alt+Tab: si chiude il selettore.
+    // A window that goes away during Alt+Tab closes the switcher.
     vela_switcher_forget(server, view);
     if (server->grabbed == view) {
         vela_snap_end_zone(server, false);

@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// ~/.config/vela/outputs.conf (output_config.c): ciò che l'utente ha scelto
-// per ogni monitor, riletto alla sessione dopo; il vecchio schermi.conf in
-// italiano. In una cartella temporanea (XDG_CONFIG_HOME).
+// ~/.config/vela/outputs.conf (output_config.c): what the user chose for each
+// monitor, read again in the next session; the old Italian schermi.conf. In a
+// temporary directory (XDG_CONFIG_HOME).
 
 extern "C" {
 #include "output_config.h"
@@ -64,7 +64,7 @@ TEST_F(OutputConfig, UnknownMonitor)
 TEST_F(OutputConfig, SaveAndLoad)
 {
     const vela_output_config_entry entries[] = { entry("Dell U2720Q 123", true, -2048, 0) };
-    vela_output_config_save(entries, 1); // crea anche ~/.config e ~/.config/vela
+    vela_output_config_save(entries, 1); // also creates ~/.config and ~/.config/vela
     EXPECT_EQ(contents("outputs.conf"),
         "# Vela's outputs, written by Vela when you change the configuration.\n"
         "# One monitor per section: [make model serial number].\n"
@@ -83,8 +83,8 @@ TEST_F(OutputConfig, SaveAndLoad)
     EXPECT_FALSE(std::filesystem::exists(path("outputs.conf.tmp")));
 }
 
-// Gli altri monitor restano com'erano, nello stesso ordine; uno spento
-// ricorda modalità e posizione di prima.
+// The other monitors stay as they were, in the same order; one turned off
+// remembers its previous mode and position.
 TEST_F(OutputConfig, KeepsOtherMonitorsAndTurnedOffSettings)
 {
     write("outputs.conf", "# a comment\n[Laptop]\nenabled=yes\nmode=1920x1200@60.000\nscale=1.5\n"
@@ -101,7 +101,7 @@ TEST_F(OutputConfig, KeepsOtherMonitorsAndTurnedOffSettings)
     ASSERT_TRUE(vela_output_config_load("TV", &tv));
     EXPECT_FALSE(tv.enabled);
     EXPECT_FLOAT_EQ(tv.scale, 2.0f);
-    EXPECT_EQ(tv.width, 0); // modalità non salvata
+    EXPECT_EQ(tv.width, 0); // mode not saved
     EXPECT_FALSE(tv.has_position);
 }
 
@@ -115,12 +115,12 @@ TEST_F(OutputConfig, MissingKeysHaveDefaults)
     EXPECT_EQ(saved.height, 1080);
     EXPECT_EQ(saved.refresh_mhz, 0);
     EXPECT_EQ(saved.scale, 0.0f);
-    EXPECT_EQ(saved.transform, 0); // nome sconosciuto: normale
+    EXPECT_EQ(saved.transform, 0); // unknown name: normal
     EXPECT_FALSE(saved.has_position);
 }
 
-// Prima di ottobre 2026: schermi.conf, in italiano. Si legge, e alla prima
-// scrittura diventa outputs.conf.
+// Before October 2026: schermi.conf, in Italian. It's read, and becomes
+// outputs.conf at the first write.
 TEST_F(OutputConfig, LegacyItalianFile)
 {
     write("schermi.conf", "[Vecchio]\nattivo=sì\nmodo=3840x2160@60.000\nscala=1.75\nrotazione=specchio-90\n"

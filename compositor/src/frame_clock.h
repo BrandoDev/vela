@@ -4,20 +4,20 @@
 #ifndef VELA_FRAME_CLOCK_H
 #define VELA_FRAME_CLOCK_H
 
-// Il tempo di uno schermo (docs/renderer.md §4): quando verrà mostrato il
-// frame che stiamo per disegnare, e quando cominciare a disegnarlo.
+// An output's time (docs/renderer.md §4): when the frame we are about to
+// draw will be shown, and when to start drawing it.
 //
-// - Le animazioni si calcolano per l'istante in cui il frame diventerà
-//   luce, non per "adesso": il movimento è giusto al frame a qualunque
-//   frequenza, anche se un frame arriva in ritardo (§4.2).
-// - Si disegna il più tardi possibile (late latching, §4.3): si misura
-//   quanto costa un frame (CPU e GPU, fino a quando è pronto) e si comincia
-//   quel tanto, più un margine, prima del vblank. Input e animazioni
-//   campionati più tardi = latenza minore. Se un frame arriva tardi il
-//   margine cresce da solo, poi torna piano piano al minimo.
+// - Animations are computed for the moment the frame will become light, not
+//   for "now": motion is right at every frame at any refresh rate, even when
+//   a frame comes late (§4.2).
+// - Drawing happens as late as possible (late latching, §4.3): we measure
+//   what a frame costs (CPU and GPU, until it's ready) and start that much,
+//   plus a margin, before the vblank. Input and animations sampled later
+//   mean lower latency. When a frame is late the margin grows by itself,
+//   then slowly returns to the minimum.
 //
-// Tutto in nanosecondi su CLOCK_MONOTONIC. La struttura vive dentro
-// vela_output, per valore: nessuna allocazione.
+// Everything in nanoseconds on CLOCK_MONOTONIC. The struct lives inside
+// vela_output, by value: no allocation.
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -26,32 +26,32 @@
 #define VELA_FRAME_PENDING_SLOTS 8
 
 struct vela_frame_plan {
-    int64_t start; // quando cominciare a disegnare
-    int64_t deadline; // il vblank per cui si disegna
-    int64_t present; // quando il frame diventerà luce
+    int64_t start; // when to start drawing
+    int64_t deadline; // the vblank being drawn for
+    int64_t present; // when the frame will become light
 };
 
-// Statistiche dall'ultima vela_frame_clock_take_stats.
+// Statistics since the last vela_frame_clock_take_stats.
 struct vela_frame_stats {
-    double fps; // frame mostrati al secondo
-    double error_mean_ms; // errore della previsione del momento di comparsa
+    double fps; // frames shown per second
+    double error_mean_ms; // error predicting when frames show
     double error_max_ms;
-    double latency_ms; // dall'inizio del disegno alla luce, in media
-    double cost_ms; // costo di un frame (il massimo recente)
+    double latency_ms; // from the start of drawing to light, on average
+    double cost_ms; // cost of a frame (the recent maximum)
     double margin_ms;
-    int missed; // vblank persi
+    int missed; // missed vblanks
 };
 
 struct vela_frame_clock {
-    // Vblank di ritardo tra la consegna di un frame e la sua comparsa.
-    // Sull'hardware di solito 0; in una finestra annidata il compositor
-    // ospite ne aggiunge (KWin: 1 o 2). Si impara da sé.
+    // Vblanks of delay between delivering a frame and its showing. Usually 0
+    // on hardware; in a nested window the host compositor adds some (KWin: 1
+    // or 2). Learned by itself.
     int latency_frames;
-    // Dall'avvio, senza azzerare (per le prove: "state").
+    // Since startup, never reset (for tests: "state").
     uint64_t frames_total;
     uint64_t missed_total;
 
-    // Il resto è privato di frame_clock.c.
+    // The rest is private to frame_clock.c.
     int shift_candidate;
     int shift_count;
     bool warmup_pending;
@@ -87,47 +87,47 @@ struct vela_frame_clock {
 
 void vela_frame_clock_init(struct vela_frame_clock *clock);
 
-// Margine minimo tra "frame pronto" e vblank (VELA_LATCH_MARGIN).
+// Minimum margin between "frame ready" and vblank (VELA_LATCH_MARGIN).
 void vela_frame_clock_set_base_margin(struct vela_frame_clock *clock, int64_t ns);
 
-// Periodo della modalità dello schermo (mHz), usato finché il backend
-// non ci dice il periodo vero con il feedback di presentazione.
+// The output mode's period (mHz), used until the backend reports the real
+// period through presentation feedback.
 void vela_frame_clock_set_mode_refresh(struct vela_frame_clock *clock, int32_t refresh_mhz);
 
 int64_t vela_frame_clock_period(const struct vela_frame_clock *clock);
 
-// Il primo vblank della griglia (ultima presentazione vera + multipli del
-// periodo) dopo `t`. Senza presentazioni: `t` stesso.
+// The first vblank of the grid (last real presentation + multiples of the
+// period) after `t`. Without presentations: `t` itself.
 int64_t vela_frame_clock_vblank_after(const struct vela_frame_clock *clock, int64_t t);
 
-// Un frame misurato: dall'istante in cui doveva cominciare a quello in cui
-// era pronto (commit fatto e GPU finita).
+// A measured frame: from when it should have started to when it was ready
+// (commit done and GPU finished).
 void vela_frame_clock_add_cost(struct vela_frame_clock *clock, int64_t now, int64_t cost);
 
-// Il costo di un frame: il massimo dell'ultimo secondo (almeno gli ultimi
-// 8 frame), perché un frame lento non deve far perdere il vblank.
+// The cost of a frame: the maximum of the last second (at least the last 8
+// frames), because a slow frame must not miss the vblank.
 int64_t vela_frame_clock_cost(const struct vela_frame_clock *clock, int64_t now);
 
 int64_t vela_frame_clock_margin(const struct vela_frame_clock *clock);
 
-// Quanto prima del vblank si comincia: costo + margine, ma mai tanto da
-// saltare un vblank a ogni frame (subito dopo un vblank si fa sempre in
-// tempo per il successivo).
+// How long before the vblank to start: cost + margin, but never so much that a
+// vblank is skipped every frame (right after a vblank there is always time for
+// the next one).
 int64_t vela_frame_clock_budget(const struct vela_frame_clock *clock, int64_t now);
 
-// Il prossimo frame, se ne serve uno adesso. latch: si comincia il più
-// tardi possibile; altrimenti subito.
+// The next frame, if one is needed now. latch: start as late as possible;
+// otherwise right away.
 struct vela_frame_plan vela_frame_clock_plan(const struct vela_frame_clock *clock, int64_t now, bool latch);
 
-// Il frame per `seq` (commit_seq dello schermo), cominciato a `start`,
-// doveva comparire a `predicted`.
+// The frame for `seq` (the output's commit_seq), started at `start`, was due
+// to show at `predicted`.
 void vela_frame_clock_committed(struct vela_frame_clock *clock, uint32_t seq, int64_t start, int64_t predicted);
 
-// Feedback del backend: il frame `seq` è comparso a `when`.
+// Backend feedback: frame `seq` showed at `when`.
 void vela_frame_clock_presented(struct vela_frame_clock *clock, uint32_t seq, int64_t when, int64_t refresh);
 
-// Le statistiche dall'ultima chiamata (e azzera). false se sono passati
-// meno di due secondi.
+// The statistics since the last call (and resets them). false if less than two
+// seconds have passed.
 bool vela_frame_clock_take_stats(struct vela_frame_clock *clock, int64_t now, struct vela_frame_stats *out);
 
 #endif

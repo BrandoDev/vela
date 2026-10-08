@@ -3,6 +3,7 @@
 
 #include "input.h"
 
+#include "listen.h"
 #include "workspace.h"
 #include "view.h"
 #include "switcher.h"
@@ -46,12 +47,12 @@
 #include <wlr/backend/libinput.h>
 #endif
 
-// Di quanto spostarsi (unità del touchpad) perché un gesto valga.
+// How far to move (touchpad units) for a gesture to count.
 #define SWIPE_THRESHOLD 90.0
-// "Cambia app": un passo ogni tanto spostamento.
+// "Switch app": one step per this much movement.
 #define APP_STEP 140.0
 
-// Un mouse o un touchpad.
+// A mouse or a touchpad.
 struct vela_pointer {
     struct wl_list link; // vela_input.pointers
     struct vela_input *input;
@@ -60,20 +61,14 @@ struct vela_pointer {
     struct wl_listener destroy;
 };
 
-// Un vincolo vivo: quando sparisce non deve restare quello attivo.
+// A live constraint: when it goes away it must not stay the active one.
 struct vela_constraint {
     struct vela_input *input;
     struct wlr_pointer_constraint_v1 *wlr;
     struct wl_listener destroy;
 };
 
-static void listen(struct wl_signal *signal, struct wl_listener *listener, wl_notify_func_t notify)
-{
-    listener->notify = notify;
-    wl_signal_add(signal, listener);
-}
-
-// ---------------------------------------------------------- impostazioni --
+// -------------------------------------------------------------- settings --
 
 static enum vela_swipe_action swipe_action(const char *name)
 {
@@ -87,7 +82,8 @@ static enum vela_swipe_action swipe_action(const char *name)
 }
 
 #if WLR_HAS_LIBINPUT_BACKEND
-// Come il cursore di Windows: 1-20, 10 al centro; libinput va da -1 a 1.
+// Like the Windows pointer: 1-20, 10 in the middle; libinput goes from -1 to
+// 1.
 static double speed_setting(const struct vela_config *settings, const char *key)
 {
     int value = vela_clamp(atoi(vela_config_get(settings, key, "10")), 1, 20);
@@ -110,11 +106,11 @@ static void configure_pointer(struct vela_pointer *pointer, const struct vela_co
 {
 #if WLR_HAS_LIBINPUT_BACKEND
     if (!wlr_input_device_is_libinput(pointer->device)) {
-        return; // es. backend annidato: il puntatore è del sistema ospite
+        return; // such as the nested backend: the pointer belongs to the host system
     }
     struct libinput_device *handle = wlr_libinput_get_device_handle(pointer->device);
 
-    // Il pulsante principale (anche per il touchpad, come Windows).
+    // The primary button (for the touchpad too, like Windows).
     if (libinput_device_config_left_handed_is_available(handle)) {
         libinput_device_config_left_handed_set(handle,
             strcmp(vela_config_get(settings, "mouse-primary-button", ""), "right") == 0);
@@ -129,7 +125,7 @@ static void configure_pointer(struct vela_pointer *pointer, const struct vela_co
         return;
     }
 
-    // Touchpad: spento, o spento solo se c'è anche un mouse.
+    // Touchpad: off, or off only while there is also a mouse.
     bool enabled = vela_config_flag(settings, "touchpad", true);
     bool with_mouse = vela_config_flag(settings, "touchpad-with-mouse", true);
     libinput_device_config_send_events_set_mode(handle,
@@ -142,13 +138,13 @@ static void configure_pointer(struct vela_pointer *pointer, const struct vela_co
     libinput_device_config_tap_set_enabled(handle, tap ? LIBINPUT_CONFIG_TAP_ENABLED : LIBINPUT_CONFIG_TAP_DISABLED);
     libinput_device_config_tap_set_drag_enabled(handle,
         tap ? LIBINPUT_CONFIG_DRAG_ENABLED : LIBINPUT_CONFIG_DRAG_DISABLED);
-    // Due dita: tasto destro, tre: centrale (come Windows).
+    // Two fingers: right button, three: middle (like Windows).
     libinput_device_config_tap_set_button_map(handle, LIBINPUT_CONFIG_TAP_MAP_LRM);
     if (libinput_device_config_dwt_is_available(handle)) {
         libinput_device_config_dwt_set_enabled(handle, LIBINPUT_CONFIG_DWT_ENABLED);
     }
     if (libinput_device_config_scroll_has_natural_scroll(handle)) {
-        // "Movimento verso il basso: scorre verso l'alto", come Windows.
+        // "Down motion scrolls up", like Windows.
         bool natural = vela_config_flag(settings, "touchpad-natural-scroll", true);
         const char *env = getenv("VELA_NATURAL_SCROLL");
         if (env && *env) {
@@ -156,8 +152,8 @@ static void configure_pointer(struct vela_pointer *pointer, const struct vela_co
         }
         libinput_device_config_scroll_set_natural_scroll_enabled(handle, natural);
     }
-    // Pulsanti del touchpad: con un tocco di due dita il destro
-    // (clickfinger), dove il touchpad non ha zone disegnate.
+    // Touchpad buttons: a two-finger click is the right button (clickfinger),
+    // where the touchpad has no painted zones.
     if (libinput_device_config_click_get_methods(handle) & LIBINPUT_CONFIG_CLICK_METHOD_CLICKFINGER) {
         libinput_device_config_click_set_method(handle, LIBINPUT_CONFIG_CLICK_METHOD_CLICKFINGER);
     }
@@ -169,7 +165,7 @@ static void configure_pointer(struct vela_pointer *pointer, const struct vela_co
 #endif
 }
 
-// Mouse e touchpad da vela.conf, a tutti i dispositivi.
+// Mouse and touchpad from vela.conf, to all devices.
 static void load_pointer_settings(struct vela_input *input)
 {
     struct vela_config settings;
@@ -195,7 +191,7 @@ void vela_input_reload(struct vela_input *input)
     vela_config_finish(&settings);
     struct wlr_seat *seat = input->server->seat;
     if (seat->keyboard_state.keyboard) {
-        wlr_seat_set_keyboard(seat, seat->keyboard_state.keyboard); // il layout nuovo alle app
+        wlr_seat_set_keyboard(seat, seat->keyboard_state.keyboard); // the new layout to the apps
     }
     load_pointer_settings(input);
 }
@@ -211,7 +207,7 @@ bool vela_input_has_touchpad(const struct vela_input *input)
     return false;
 }
 
-// ------------------------------------------------------------ dispositivi --
+// ---------------------------------------------------------------- devices --
 
 static void pointer_destroy(struct vela_pointer *pointer)
 {
@@ -225,7 +221,7 @@ static void handle_pointer_destroy(struct wl_listener *listener, void *data)
     struct vela_pointer *pointer = wl_container_of(listener, pointer, destroy);
     struct vela_input *input = pointer->input;
     pointer_destroy(pointer);
-    load_pointer_settings(input); // un mouse in meno: il touchpad può riaccendersi
+    load_pointer_settings(input); // one mouse less: the touchpad may turn back on
 }
 
 static void add_pointer(struct vela_input *input, struct wlr_input_device *device)
@@ -238,7 +234,7 @@ static void add_pointer(struct vela_input *input, struct wlr_input_device *devic
         pointer->touchpad = libinput_device_config_tap_get_finger_count(wlr_libinput_get_device_handle(device)) > 0;
     }
 #endif
-    listen(&device->events.destroy, &pointer->destroy, handle_pointer_destroy);
+    vela_listen(&device->events.destroy, &pointer->destroy, handle_pointer_destroy);
     wl_list_insert(input->pointers.prev, &pointer->link);
     load_pointer_settings(input);
 }
@@ -284,7 +280,7 @@ static void handle_new_virtual_keyboard(struct wl_listener *listener, void *data
     add_device(input, &keyboard->keyboard.base);
 }
 
-// ------------------------------------------------- vincoli del puntatore --
+// --------------------------------------------------- pointer constraints --
 
 static void handle_constraint_destroy(struct wl_listener *listener, void *data)
 {
@@ -303,8 +299,8 @@ static void handle_new_constraint(struct wl_listener *listener, void *data)
     struct vela_constraint *constraint = calloc(1, sizeof(*constraint));
     constraint->input = input;
     constraint->wlr = wlr;
-    listen(&wlr->events.destroy, &constraint->destroy, handle_constraint_destroy);
-    // Il puntatore è già sulla superficie: vale da subito.
+    vela_listen(&wlr->events.destroy, &constraint->destroy, handle_constraint_destroy);
+    // The pointer is already on the surface: it applies at once.
     if (input->server->seat->pointer_state.focused_surface == wlr->surface) {
         vela_input_constrain(input, wlr->surface);
     }
@@ -321,7 +317,7 @@ void vela_input_constrain(struct vela_input *input, struct wlr_surface *surface)
     }
     struct wlr_pointer_constraint_v1 *previous = input->active_constraint;
     if (previous) {
-        // Sbloccato: il cursore ricompare dove l'app dice di averlo lasciato.
+        // Unlocked: the cursor shows again where the app says it left it.
         if (previous->type == WLR_POINTER_CONSTRAINT_V1_LOCKED && previous->current.cursor_hint.enabled
             && seat->pointer_state.focused_surface == previous->surface) {
             double origin_x = cursor->x - seat->pointer_state.sx;
@@ -330,7 +326,7 @@ void vela_input_constrain(struct vela_input *input, struct wlr_surface *surface)
                 origin_y + previous->current.cursor_hint.y);
         }
         input->active_constraint = NULL;
-        wlr_pointer_constraint_v1_send_deactivated(previous); // può distruggerlo
+        wlr_pointer_constraint_v1_send_deactivated(previous); // can destroy it
     }
     if (constraint) {
         input->active_constraint = constraint;
@@ -338,8 +334,8 @@ void vela_input_constrain(struct vela_input *input, struct wlr_surface *surface)
     }
 }
 
-// Movimento relativo del mouse: false se il puntatore è bloccato; se è
-// confinato, il movimento si ferma al bordo della regione.
+// Relative mouse motion: false if the pointer is locked; if confined, the
+// motion stops at the region's edge.
 static bool constrain_motion(struct vela_input *input, double *dx, double *dy)
 {
     struct wlr_seat *seat = input->server->seat;
@@ -351,7 +347,7 @@ static bool constrain_motion(struct vela_input *input, double *dx, double *dy)
     if (constraint->type == WLR_POINTER_CONSTRAINT_V1_LOCKED) {
         return false;
     }
-    // Coordinate della superficie.
+    // Surface coordinates.
     double sx = seat->pointer_state.sx;
     double sy = seat->pointer_state.sy;
     double x = sx + *dx;
@@ -365,8 +361,8 @@ static bool constrain_motion(struct vela_input *input, double *dx, double *dy)
 
 static void handle_new_inhibitor(struct wl_listener *listener, void *data)
 {
-    // Concesso sempre: lo chiedono app che l'utente usa a tutto schermo
-    // (macchine virtuali, desktop remoto). Vale solo mentre sono a fuoco.
+    // Always granted: apps the user runs fullscreen ask for it (virtual
+    // machines, remote desktop). It applies only while they are focused.
     wlr_keyboard_shortcuts_inhibitor_v1_activate(data);
 }
 
@@ -385,7 +381,7 @@ bool vela_input_shortcuts_inhibited(const struct vela_input *input)
     return false;
 }
 
-// ------------------------------------------------------------- puntatore --
+// --------------------------------------------------------------- pointer --
 
 static void handle_motion(struct wl_listener *listener, void *data)
 {
@@ -393,13 +389,13 @@ static void handle_motion(struct wl_listener *listener, void *data)
     struct vela_server *server = input->server;
     struct wlr_pointer_motion_event *event = data;
     vela_lock_note_activity(server->lock);
-    // Il movimento grezzo va ai giochi anche se il cursore non si muove.
+    // Raw motion goes to games even if the cursor doesn't move.
     wlr_relative_pointer_manager_v1_send_relative_motion(input->relative_pointers, server->seat,
         (uint64_t)event->time_msec * 1000, event->delta_x, event->delta_y, event->unaccel_dx, event->unaccel_dy);
     double dx = event->delta_x;
     double dy = event->delta_y;
     if (!constrain_motion(input, &dx, &dy)) {
-        return; // puntatore bloccato dall'app
+        return; // pointer locked by the app
     }
     wlr_cursor_move(server->cursor, &event->pointer->base, dx, dy);
     vela_interact_motion(server, event->time_msec);
@@ -413,8 +409,8 @@ static void handle_motion_absolute(struct wl_listener *listener, void *data)
     vela_lock_note_activity(server->lock);
     double x = event->x;
     double y = event->y;
-    // Annidati: il backend divide per i pixel del buffer, che con un
-    // ospite a scala frazionaria sono più delle unità della finestra.
+    // Nested: the backend divides by the buffer pixels, which with a host at a
+    // fractional scale are more than the window's units.
     if (wlr_input_device_is_wl(&event->pointer->base)) {
         struct vela_output *out = vela_output_named(server, event->pointer->output_name);
         if (out && out->nested) {
@@ -422,8 +418,8 @@ static void handle_motion_absolute(struct wl_listener *listener, void *data)
             y *= vela_nested_pointer_scale_y(out->nested);
         }
     }
-    // Anche i movimenti assoluti (tavolette, Vela annidato) rispettano un
-    // puntatore bloccato o confinato dall'app.
+    // Absolute motion too (tablets, nested Vela) respects a pointer locked or
+    // confined by the app.
     double lx = 0.0;
     double ly = 0.0;
     wlr_cursor_absolute_to_layout_coords(server->cursor, &event->pointer->base, x, y, &lx, &ly);
@@ -447,7 +443,7 @@ static void handle_axis(struct wl_listener *listener, void *data)
     struct vela_input *input = wl_container_of(listener, input, axis);
     struct wlr_pointer_axis_event *event = data;
     vela_lock_note_activity(input->server->lock);
-    // La rotellina del mouse: quante righe per scatto (Impostazioni > Mouse).
+    // The mouse wheel: how many lines per notch (Settings > Mouse).
     double lines = event->source == WL_POINTER_AXIS_SOURCE_WHEEL ? input->wheel_factor : 1.0;
     wlr_seat_pointer_notify_axis(input->server->seat, event->time_msec, event->orientation, event->delta * lines,
         (int32_t)lround(event->delta_discrete * lines), event->source, event->relative_direction);
@@ -459,7 +455,7 @@ static void handle_frame(struct wl_listener *listener, void *data)
     wlr_seat_pointer_notify_frame(input->server->seat);
 }
 
-// ------------------------------------------------------------------ gesti --
+// --------------------------------------------------------------- gestures --
 
 static void handle_swipe_begin(struct wl_listener *listener, void *data)
 {
@@ -489,7 +485,7 @@ static void handle_swipe_update(struct wl_listener *listener, void *data)
     }
     input->swipe.dx += event->dx;
     input->swipe.dy += event->dy;
-    // "Cambia app": il pannello di Alt+Tab segue le dita.
+    // "Switch app": the Alt+Tab panel follows the fingers.
     if (input->swipe.action == VELA_SWIPE_APP && fabs(input->swipe.dx) > fabs(input->swipe.dy)) {
         int steps = (int)(input->swipe.dx / APP_STEP);
         while (input->swipe.steps != steps) {
@@ -520,16 +516,16 @@ static void handle_swipe_end(struct wl_listener *listener, void *data)
     double dy = input->swipe.dy;
     bool vertical = fabs(dy) > fabs(dx);
     if (vertical && dy < -SWIPE_THRESHOLD) {
-        vela_shell_send(server, "task-view"); // verso l'alto
+        vela_shell_send(server, "task-view"); // up
     } else if (vertical && dy > SWIPE_THRESHOLD) {
-        vela_shell_send(server, "show-desktop"); // verso il basso
+        vela_shell_send(server, "show-desktop"); // down
     } else if (!vertical && input->swipe.action == VELA_SWIPE_DESKTOP && fabs(dx) > SWIPE_THRESHOLD) {
-        // Le dita verso sinistra portano il desktop di destra, come Windows.
+        // Fingers moving left bring the desktop on the right, like Windows.
         vela_workspaces_switch(server, server->workspaces->current + (dx < 0 ? 1 : -1), true);
     }
 }
 
-// Pizzico (zoom nelle app) e tocco prolungato: sempre alle app.
+// Pinch (zoom in apps) and hold: always to the apps.
 static void handle_pinch_begin(struct wl_listener *listener, void *data)
 {
     struct vela_input *input = wl_container_of(listener, input, pinch_begin);
@@ -567,7 +563,7 @@ static void handle_hold_end(struct wl_listener *listener, void *data)
     wlr_pointer_gestures_v1_send_hold_end(input->gestures, input->server->seat, event->time_msec, event->cancelled);
 }
 
-// ------------------------------------------------- seat: cursore, appunti --
+// ------------------------------------------------ seat: cursor, clipboard --
 
 static void handle_request_set_cursor(struct wl_listener *listener, void *data)
 {
@@ -578,8 +574,8 @@ static void handle_request_set_cursor(struct wl_listener *listener, void *data)
     }
 }
 
-// Le app Qt/GTK recenti chiedono la forma del cursore per nome invece di
-// disegnarlo da sole: più veloce e coerente col tema.
+// Recent Qt/GTK apps ask for the cursor shape by name instead of drawing it
+// themselves: faster and consistent with the theme.
 static void handle_request_set_shape(struct wl_listener *listener, void *data)
 {
     struct vela_input *input = wl_container_of(listener, input, request_set_shape);
@@ -604,8 +600,8 @@ static void handle_request_set_primary_selection(struct wl_listener *listener, v
     wlr_seat_set_primary_selection(input->server->seat, event->source, event->serial);
 }
 
-// Trascinare tra app: si accetta solo da chi ha davvero il tasto premuto
-// sulla propria superficie (serial del clic).
+// Dragging between apps: accepted only from whoever really holds the button on
+// its own surface (the click's serial).
 static void handle_request_start_drag(struct wl_listener *listener, void *data)
 {
     struct vela_input *input = wl_container_of(listener, input, request_start_drag);
@@ -669,27 +665,27 @@ static void handle_start_drag(struct wl_listener *listener, void *data)
 {
     struct vela_input *input = wl_container_of(listener, input, start_drag);
     struct wlr_drag *drag = data;
-    // Da qui il puntatore lo guida il trascinamento.
+    // From here the drag drives the pointer.
     memset(&input->implicit_grab, 0, sizeof(input->implicit_grab));
     if (!drag->icon) {
         return;
     }
-    drag_icon_destroy(input->drag_icon); // un trascinamento alla volta
+    drag_icon_destroy(input->drag_icon); // one drag at a time
     struct wlr_surface *surface = drag->icon->surface;
     struct vela_drag_icon *icon = calloc(1, sizeof(*icon));
     icon->input = input;
     icon->surface = surface;
     icon->tree = vela_tree_create(input->server->layers.drag);
     icon->node = vela_surface_node_create(icon->tree, surface);
-    listen(&surface->events.commit, &icon->commit, handle_drag_icon_commit);
-    listen(&drag->icon->events.destroy, &icon->destroy, handle_drag_icon_destroy);
+    vela_listen(&surface->events.commit, &icon->commit, handle_drag_icon_commit);
+    vela_listen(&drag->icon->events.destroy, &icon->destroy, handle_drag_icon_destroy);
     input->drag_icon = icon;
     vela_input_update_drag_icon(input);
 }
 
-// ------------------------------------------------------------- incollare --
+// --------------------------------------------------------------- pasting --
 
-// Il tasto che nel layout di ora scrive "v" (0: nessuno).
+// The key that types "v" in the current layout (0: none).
 static xkb_keycode_t key_for_v(struct xkb_keymap *keymap)
 {
     for (xkb_keycode_t code = xkb_keymap_min_keycode(keymap); code <= xkb_keymap_max_keycode(keymap); ++code) {
@@ -704,7 +700,7 @@ static xkb_keycode_t key_for_v(struct xkb_keymap *keymap)
     return 0;
 }
 
-// I terminali incollano con Ctrl+Maiusc+V.
+// Terminals paste with Ctrl+Shift+V.
 static bool is_terminal(const char *app)
 {
     const char *names[] = { "konsole", "terminal", "kitty", "alacritty", "foot", "wezterm", "ghostty" };
@@ -726,8 +722,8 @@ static int handle_paste_timer(void *data)
         keyboard = first->wlr;
         wlr_seat_set_keyboard(server->seat, keyboard);
     }
-    // L'app della finestra attiva ("" se non ha app id: c'è, ma non è un
-    // terminale).
+    // The active window's app ("" if it has no app id: there is one, but it's
+    // not a terminal).
     struct vela_view *focused = vela_views_focused(server);
     const char *app = focused ? vela_view_app_id(focused) : NULL;
     if (!keyboard || !keyboard->keymap || !app || server->locked) {
@@ -754,15 +750,15 @@ static int handle_paste_timer(void *data)
 
 void vela_input_paste(struct vela_input *input)
 {
-    // Un attimo dopo: il pannello della shell si chiude e la tastiera torna
-    // all'app, poi Ctrl+V.
+    // A moment later: the shell panel closes and the keyboard goes back to the
+    // app, then Ctrl+V.
     if (!input->paste_timer) {
         input->paste_timer = wl_event_loop_add_timer(input->server->loop, handle_paste_timer, input);
     }
     wl_event_source_timer_update(input->paste_timer, 120);
 }
 
-// ------------------------------------------------------------- creazione --
+// -------------------------------------------------------------- creation --
 
 struct vela_input *vela_input_create(struct vela_server *server)
 {
@@ -780,49 +776,49 @@ struct vela_input *vela_input_create(struct vela_server *server)
     server->cursor_manager
         = wlr_xcursor_manager_create(getenv("XCURSOR_THEME"), (uint32_t)vela_env_int("XCURSOR_SIZE", 24));
 
-    // Giochi e app che vogliono il mouse tutto per sé.
+    // Games and apps that want the mouse to themselves.
     input->relative_pointers = wlr_relative_pointer_manager_v1_create(display);
     input->pointer_constraints = wlr_pointer_constraints_v1_create(display);
-    listen(&input->pointer_constraints->events.new_constraint, &input->new_constraint, handle_new_constraint);
+    vela_listen(&input->pointer_constraints->events.new_constraint, &input->new_constraint, handle_new_constraint);
     input->shortcuts_inhibit = wlr_keyboard_shortcuts_inhibit_v1_create(display);
-    listen(&input->shortcuts_inhibit->events.new_inhibitor, &input->new_inhibitor, handle_new_inhibitor);
+    vela_listen(&input->shortcuts_inhibit->events.new_inhibitor, &input->new_inhibitor, handle_new_inhibitor);
 
     struct wlr_cursor *cursor = server->cursor;
-    listen(&cursor->events.motion, &input->motion, handle_motion);
-    listen(&cursor->events.motion_absolute, &input->motion_absolute, handle_motion_absolute);
-    listen(&cursor->events.button, &input->button, handle_button);
-    listen(&cursor->events.axis, &input->axis, handle_axis);
+    vela_listen(&cursor->events.motion, &input->motion, handle_motion);
+    vela_listen(&cursor->events.motion_absolute, &input->motion_absolute, handle_motion_absolute);
+    vela_listen(&cursor->events.button, &input->button, handle_button);
+    vela_listen(&cursor->events.axis, &input->axis, handle_axis);
     input->gestures = wlr_pointer_gestures_v1_create(display);
-    listen(&cursor->events.swipe_begin, &input->swipe_begin, handle_swipe_begin);
-    listen(&cursor->events.swipe_update, &input->swipe_update, handle_swipe_update);
-    listen(&cursor->events.swipe_end, &input->swipe_end, handle_swipe_end);
-    listen(&cursor->events.pinch_begin, &input->pinch_begin, handle_pinch_begin);
-    listen(&cursor->events.pinch_update, &input->pinch_update, handle_pinch_update);
-    listen(&cursor->events.pinch_end, &input->pinch_end, handle_pinch_end);
-    listen(&cursor->events.hold_begin, &input->hold_begin, handle_hold_begin);
-    listen(&cursor->events.hold_end, &input->hold_end, handle_hold_end);
-    listen(&cursor->events.frame, &input->frame, handle_frame);
+    vela_listen(&cursor->events.swipe_begin, &input->swipe_begin, handle_swipe_begin);
+    vela_listen(&cursor->events.swipe_update, &input->swipe_update, handle_swipe_update);
+    vela_listen(&cursor->events.swipe_end, &input->swipe_end, handle_swipe_end);
+    vela_listen(&cursor->events.pinch_begin, &input->pinch_begin, handle_pinch_begin);
+    vela_listen(&cursor->events.pinch_update, &input->pinch_update, handle_pinch_update);
+    vela_listen(&cursor->events.pinch_end, &input->pinch_end, handle_pinch_end);
+    vela_listen(&cursor->events.hold_begin, &input->hold_begin, handle_hold_begin);
+    vela_listen(&cursor->events.hold_end, &input->hold_end, handle_hold_end);
+    vela_listen(&cursor->events.frame, &input->frame, handle_frame);
 
-    listen(&server->backend->events.new_input, &input->new_input, handle_new_input);
+    vela_listen(&server->backend->events.new_input, &input->new_input, handle_new_input);
     struct wlr_seat *seat = wlr_seat_create(display, "seat0");
     server->seat = seat;
-    listen(&seat->events.request_set_cursor, &input->request_set_cursor, handle_request_set_cursor);
-    listen(&seat->events.request_set_selection, &input->request_set_selection, handle_request_set_selection);
-    listen(&seat->events.request_set_primary_selection, &input->request_set_primary_selection,
+    vela_listen(&seat->events.request_set_cursor, &input->request_set_cursor, handle_request_set_cursor);
+    vela_listen(&seat->events.request_set_selection, &input->request_set_selection, handle_request_set_selection);
+    vela_listen(&seat->events.request_set_primary_selection, &input->request_set_primary_selection,
         handle_request_set_primary_selection);
-    listen(&seat->events.request_start_drag, &input->request_start_drag, handle_request_start_drag);
-    listen(&seat->events.start_drag, &input->start_drag, handle_start_drag);
+    vela_listen(&seat->events.request_start_drag, &input->request_start_drag, handle_request_start_drag);
+    vela_listen(&seat->events.start_drag, &input->start_drag, handle_start_drag);
     struct wlr_cursor_shape_manager_v1 *shapes = wlr_cursor_shape_manager_v1_create(display, 1);
-    listen(&shapes->events.request_set_shape, &input->request_set_shape, handle_request_set_shape);
+    vela_listen(&shapes->events.request_set_shape, &input->request_set_shape, handle_request_set_shape);
 
     wl_list_init(&input->new_virtual_pointer.link);
     wl_list_init(&input->new_virtual_keyboard.link);
     if (vela_env_int("VELA_DEBUG_INPUT", 0) != 0) {
         wlr_log(WLR_INFO, "VELA_DEBUG_INPUT: virtual pointer and keyboard enabled");
         struct wlr_virtual_pointer_manager_v1 *pointers = wlr_virtual_pointer_manager_v1_create(display);
-        listen(&pointers->events.new_virtual_pointer, &input->new_virtual_pointer, handle_new_virtual_pointer);
+        vela_listen(&pointers->events.new_virtual_pointer, &input->new_virtual_pointer, handle_new_virtual_pointer);
         struct wlr_virtual_keyboard_manager_v1 *keyboards = wlr_virtual_keyboard_manager_v1_create(display);
-        listen(&keyboards->events.new_virtual_keyboard, &input->new_virtual_keyboard, handle_new_virtual_keyboard);
+        vela_listen(&keyboards->events.new_virtual_keyboard, &input->new_virtual_keyboard, handle_new_virtual_keyboard);
     }
     return input;
 }
@@ -832,8 +828,8 @@ void vela_input_destroy(struct vela_input *input)
     if (!input) {
         return;
     }
-    // wlroots controlla che nessun listener resti attaccato agli oggetti che
-    // distrugge: tastiere e mouse si staccano qui, prima del backend.
+    // wlroots checks that no listener stays attached to the objects it
+    // destroys: keyboards and mice are detached here, before the backend.
     struct vela_keyboard *keyboard, *next_keyboard;
     wl_list_for_each_safe (keyboard, next_keyboard, &input->keyboards, link) {
         vela_keyboard_destroy(keyboard);

@@ -109,8 +109,7 @@ uninstrumented code (wlroots or Mesa).
   allocation in hot paths (the frame loop reuses its arrays).
 - No macros where a function works; no callbacks where a direct call works.
   Lists are `wl_list`, arrays are plain arrays with a count and a capacity.
-- Comments stay in Italian, logs and messages in English, as in the rest of
-  the project.
+- Comments, logs and messages are in English.
 - The GoogleTest suites remain the specification: they include the C headers
   inside `extern "C"` and keep their names and assertions.
 
@@ -126,6 +125,7 @@ compositor/src/
   session.c/h     session environment (systemd, D-Bus) and hooks
   output_manager.c/h  wlr-output-management (apply and test)
   util.c/h        environment flags, time, small string helpers
+  listen.h        vela_listen()/vela_unlisten() for wlroots signals
   config.c/h      vela.conf; legacy_names.c/h shared with Settings
   motion.c/h      curves and tweens
   geometry.c/h    scale from DPI, exact-pixel placement
@@ -198,29 +198,65 @@ linkage. Those implementations moved to C with their subsystem. After step
 11 `compositor/src` is about 22,000 lines of C and no C++; only the
 GoogleTest suites are C++.
 
-## 5. Pre-existing issues found along the way
+## 5. Bugs found along the way, and their fixes
 
-The migration keeps behavior unchanged, bugs included; these were found by
-the new tests and A/B runs, are present in the original C++ compositor too,
-and are left for a separate fix:
+The migration kept behavior unchanged, bugs included; the new tests and A/B
+runs found these, all present in the original C++ compositor too, and they
+were fixed after step 11:
 
-- **First X11 window lost when it starts Xwayland.** Xwayland starts lazily
-  with the first X11 connection; a client that maps its window right after
-  connecting gets an `xwayland_surface` with a serial but never a buffer, so
-  the window never shows (until another X11 client draws). Slow-starting
-  apps are not affected; a quick one (a terminal) can be. `test_x11` starts
-  Xwayland first (`vela-x11 --probe`).
-- **`state` JSON and Vela's title bar.** For decorated windows `y` is the
-  frame top minus the bar and `h` the frame height plus the bar, but the
-  frame already includes the bar: `y` is 32 too high and `h` 32 too tall.
-  The functional tests account for it.
-- **Blur regions as large as possible.** A background-effect blur region of
-  `INT32_MAX` (what a client sends for "everything") overflows and ends up
-  empty: no blur. `vela-panel` sends its exact size.
-- **Magnifier view origin depends on the frame count.** The zoomed view is
-  updated every animation frame from the previous one, so its last bits
-  depend on how many frames the zoom took; at fractional scales two runs can
-  differ by a sub-pixel. Nothing is stale (a forced full redraw changes
-  nothing); A/B runs of that scene are noisy for this reason only.
-- **Intel crash with screens powered off while locked** (section 1): a
-  use-after-free outside the renderer, in wlroots or Mesa.
+- **Crash with screens powered off while locked (Intel), and a heap
+  corruption everywhere.** Vela's GBM and pixel buffers freed themselves
+  without calling `wlr_buffer_finish()`, so their destroy signal never
+  fired: damage rings and the renderer's caches stayed attached to freed
+  buffers and later wrote into the freed memory. Found with wlroots built
+  with AddressSanitizer and instrumented `wl_list` functions; it is the
+  `vkFreeMemory` crash of section 1 (the memory had been reused by Mesa) and
+  most likely the old amdgpu crash at shutdown too. `test_session` covers it.
+- **Crash on exit (C core only).** At shutdown the backend destroyed the
+  outputs after snapping and accessibility were gone, and the output destroy
+  handler used them: every exit ended in SIGSEGV, which the supervisor
+  would take for a real crash. The functional harness now fails any test
+  whose compositor doesn't exit with 0 when asked to stop.
+- **First X11 window lost when it starts Xwayland.** Two wlroots behaviors
+  together. While setting up its window manager wlroots flushes requests
+  outside its event handler, and xcb reads whatever events have arrived into
+  its queue, which is drained only when the socket becomes readable again:
+  the client that started Xwayland created its window in that moment and
+  never got it managed; later, the message pairing an X window with its
+  Wayland surface could get stuck the same way. And wlroots maps an X11
+  surface only at a commit after the pairing: when Xwayland had already
+  committed the content, no other commit came. Vela now wakes the window
+  manager (a root property change) when Xwayland is ready and whenever an
+  X window gets its Wayland surface, and maps an already drawn surface when
+  it's paired. `test_x11` no longer starts Xwayland first, and `vela-x11`
+  draws only on Expose, like most apps.
+- **`state` JSON and Vela's title bar.** For decorated windows `y` was 32
+  too high and `h` 32 too tall (the bar counted twice); the Snipping Tool's
+  `window-rects` had the same error. Both report the frame now.
+- **Regions as large as possible.** A blur or opaque region of `INT32_MAX`
+  (what toolkits send for "everything") overflowed when scaled to pixels:
+  no blur, and no occlusion. Regions are now clamped to the element before
+  the conversion; `vela-panel` asks for blur that way.
+- **Magnifier view origin depending on the frame count.** The zoomed view
+  was derived every animation frame from the previous one, so its last bits
+  depended on how many frames the zoom took. It is now derived from where
+  the cursor is drawn, fixed at the start of the zoom; A/B runs of the
+  magnifier are identical.
+
+The two `test_ready` failures on the Intel machine are not bugs: the slow
+app and the compositor share the only GPU engine there.
+
+## 6. Simplification after the migration
+
+With the C core complete, a pass removed what wasn't earning its keep:
+functions used only in their own file became `static` (and lost the
+`vela_` prefix, which is for what a module exports), two unused functions
+and write-only fields went, the three copies of the listener helpers and 39
+hand-written `notify`/`wl_signal_add` pairs became `vela_listen()` and
+`vela_unlisten()` (`listen.h`), field-by-field resets became `memset`,
+duplicated code was folded into one function (restoring a window's frame,
+the list of a view's listeners, sun times, the night light transition,
+moving a desktop, the region-to-pixels conversion, JSON strings), trivial
+accessors gave way to the fields (`struct vela_renderer` is visible to the
+render module through `render/render.h`), and every comment was rewritten
+in English.

@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Finestre come le usa una persona: aprire, agganciare, massimizzare,
-ridurre a icona, Alt+Tab, desktop virtuali, chiudere. Ogni prova parte da
-una sessione nuova; gli stati si leggono dal compositor (richiesta "state")."""
+"""Windows as a person uses them: open, snap, maximize, minimize, Alt+Tab,
+virtual desktops, close. Every test starts from a new session; states are
+read from the compositor ("state" request)."""
 
 import time
 import unittest
@@ -16,7 +16,7 @@ TOP_LEFT = [0, 0, 6, 6]
 
 
 def physical(window, scale):
-    """La geometria della finestra in pixel dello schermo."""
+    """The window's geometry in output pixels."""
     return tuple(round(window[key] * scale) for key in ("x", "y", "w", "h"))
 
 
@@ -36,7 +36,7 @@ class Windows(unittest.TestCase):
         w = state.window(window)
         out = state.output
         self.assertEqual((w["w"], w["h"]), (400, 300))
-        # Al centro dello schermo (a meno di un'unità).
+        # In the center of the output (within one unit).
         self.assertAlmostEqual(w["x"] + w["w"] / 2, out["x"] + out["w"] / 2, delta=1)
         self.assertFalse(w["maximized"] or w["minimized"] or w["fullscreen"])
 
@@ -51,7 +51,7 @@ class Windows(unittest.TestCase):
         self.assertAlmostEqual(w["h"], out["h"], delta=1)
         self.vela.keys("super+Right", "super+Right")
         self.vela.wait_for(lambda s: s.window(window)["snap"] == RIGHT_HALF, what="snapped right")
-        # Da una metà, Win+↑ porta al quarto in alto.
+        # From a half, Win+↑ goes to the top quarter.
         self.vela.keys("super+Left", "super+Left", "super+Up")
         self.vela.wait_for(lambda s: s.window(window)["snap"] == TOP_LEFT, what="top-left quarter")
 
@@ -72,10 +72,10 @@ class Windows(unittest.TestCase):
         first = self.vela.open_window()
         second = self.vela.open_window()
         self.vela.wait_for(lambda s: s["focused"] == second)
-        self.vela.keys("super+Down")  # non massimizzata: si riduce a icona
+        self.vela.keys("super+Down") # not maximized: it minimizes
         state = self.vela.wait_for(lambda s: s.window(second)["minimized"], what="minimized")
-        self.assertEqual(state["focused"], first)  # il fuoco passa alla finestra sotto
-        # Alt+Tab ripristina anche le finestre ridotte a icona, come su Windows.
+        self.assertEqual(state["focused"], first) # focus moves to the window below
+        # Alt+Tab restores minimized windows too, like Windows.
         self.vela.input("keydown", "alt", "key", "tab", "sleep", "100", "keyup", "alt")
         state = self.vela.wait_for(lambda s: s["focused"] == second and not s.window(second)["minimized"],
                                    what="restored with Alt+Tab")
@@ -91,29 +91,29 @@ class Windows(unittest.TestCase):
 
     def test_virtual_desktops(self):
         window = self.vela.open_window()
-        self.vela.keys("super+ctrl+d")  # un desktop nuovo, e ci si va
+        self.vela.keys("super+ctrl+d") # a new desktop, and we go there
         state = self.vela.wait_for(lambda s: s["workspaces"] == 2 and s["workspace"] == 1, what="desktop 2")
-        self.assertEqual(state.window(window)["workspace"], 0)  # la finestra resta sul primo
+        self.assertEqual(state.window(window)["workspace"], 0) # the window stays on the first
         other = self.vela.open_window()
         self.assertEqual(self.vela.state().window(other)["workspace"], 1)
         self.vela.keys("super+ctrl+Left")
         state = self.vela.wait_for(lambda s: s["workspace"] == 0, what="desktop 1 again")
         self.assertEqual(state["focused"], window)
-        # Chiudere il desktop 2: la sua finestra passa al desktop accanto.
+        # Closing desktop 2: its window moves to the desktop next to it.
         self.vela.command("workspace close 1")
         state = self.vela.wait_for(lambda s: s["workspaces"] == 1, what="a single desktop")
         self.assertEqual(state.window(other)["workspace"], 0)
 
     def test_system_prompt_keeps_focus_over_new_windows(self):
-        # Il portachiavi chiede la password mentre l'app che l'ha chiesto apre
-        # la sua finestra: il dialogo resta davanti e con la tastiera.
+        # The keyring asks for the password while the app that asked opens its
+        # window: the dialog stays in front with the keyboard.
         prompt = self.vela.open_window(300, 200, app_id="org.kde.ksecretd")
         self.vela.wait_for(lambda s: s["focused"] == prompt)
         app = self.vela.open_window()
         state = self.vela.wait_for(lambda s: s.has(app), what="the app's window")
         self.assertEqual(state["focused"], prompt)
-        self.assertEqual(state.windows[0]["id"], prompt)  # in cima
-        # Chiuso il dialogo, la tastiera passa all'app.
+        self.assertEqual(state.windows[0]["id"], prompt) # on top
+        # Once the dialog closes, the keyboard goes to the app.
         self.vela.keys("alt+F4")
         self.vela.wait_for(lambda s: not s.has(prompt) and s["focused"] == app, what="focus to the app")
 
@@ -125,8 +125,8 @@ class Windows(unittest.TestCase):
 
 
     def test_popup_stays_on_screen(self):
-        # Un menu che uscirebbe dallo schermo a destra scivola dentro
-        # (popup.c); uno che ci sta resta dove l'app lo vuole.
+        # A menu that would go off the output on the right slides inside
+        # (popup.c); one that fits stays where the app wants it.
         magenta = (255, 0, 255)
         for anchor_x, inside in ((1500, False), (40, True)):
             window = self.vela.open_window(300, 200, command=[tool("vela-pattern"), "--popup", f"{anchor_x},50",

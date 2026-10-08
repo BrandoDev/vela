@@ -4,21 +4,21 @@
 #ifndef VELA_OUTPUT_MANAGER_H
 #define VELA_OUTPUT_MANAGER_H
 
-// wlr-output-management: disposizione, modalità, scala e rotazione degli
-// schermi da programmi esterni (Impostazioni > Schermo, wlr-randr, kanshi,
-// wdisplays). Ogni cambiamento si racconta a loro; le scelte applicate si
-// ricordano in outputs.conf (solo nella sessione vera). Più il comando di
-// prova "test-output", che collega e scollega schermi headless.
+// wlr-output-management: layout, mode, scale and rotation of the outputs from
+// outside programs (Settings > Display, wlr-randr, kanshi, wdisplays). Every
+// change is reported to them; applied choices are remembered in outputs.conf
+// (only in the real session). Plus the "test-output" command, which plugs and
+// unplugs headless outputs.
 
 struct vela_server;
 
 void vela_output_manager_init(struct vela_server *server);
 void vela_output_manager_finish(struct vela_server *server);
 
-// La configurazione degli schermi di adesso, ai programmi.
+// The current output configuration, to the programs.
 void vela_output_manager_update(struct vela_server *server);
 
-// "add 1920x1080" o "remove HEADLESS-2": solo col backend headless.
+// "add 1920x1080" or "remove HEADLESS-2": only with the headless backend.
 void vela_test_output_command(struct vela_server *server, const char *arguments);
 
 #endif

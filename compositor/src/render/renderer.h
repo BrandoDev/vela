@@ -4,24 +4,24 @@
 #ifndef VELA_RENDER_RENDERER_H
 #define VELA_RENDER_RENDERER_H
 
-// Il renderer di Vela (docs/renderer.md §6-7): tutto ciò che si disegna passa
-// da qui, su un device Vulkan 1.4 nostro.
+// Vela's renderer (docs/renderer.md §6-7): everything drawn goes through
+// here, on a Vulkan 1.4 device of our own.
 //
-// Verso wlroots si presenta come un wlr_renderer. Così anche ciò che wlroots
-// disegna per conto suo usa i nostri pixel e il nostro device: il cursore
-// hardware, le catture degli schermi (screencopy, ext-image-copy-capture), il
-// caricamento dei buffer delle app. Non esiste un secondo renderer.
+// To wlroots it presents itself as a wlr_renderer. So what wlroots draws on
+// its own uses our pixels and our device too: the hardware cursor, output
+// captures (screencopy, ext-image-copy-capture), uploads of app buffers.
+// There is no second renderer.
 //
-// Chi possiede cosa:
-// - vela_vulkan (device, formati) lo crea il server e lo distrugge per
-//   ultimo, dopo il renderer;
-// - vela_renderer appartiene a wlroots: nasce con vela_renderer_create e
-//   muore con wlr_renderer_destroy(vela_renderer_wlr(r));
-// - un vela_pass vive da vela_renderer_begin_pass a vela_pass_submit, che
-//   lo consuma;
-// - le texture le crea e distrugge wlroots (wlr_texture_from_buffer,
-//   wlr_texture_destroy); le risorse Vulkan se ne vanno quando la GPU ha
-//   finito di usarle.
+// Who owns what:
+// - vela_vulkan (device, formats) is created by the server and destroyed
+//   last, after the renderer;
+// - vela_renderer belongs to wlroots: born with vela_renderer_create, it
+//   dies with wlr_renderer_destroy(vela_renderer_wlr(r));
+// - a vela_pass lives from vela_renderer_begin_pass to vela_pass_submit,
+//   which consumes it;
+// - textures are created and destroyed by wlroots (wlr_texture_from_buffer,
+//   wlr_texture_destroy); their Vulkan resources go away when the GPU is
+//   done with them.
 
 #include <pixman.h>
 #include <stdbool.h>
@@ -41,19 +41,19 @@ struct wlr_texture;
 
 // ------------------------------------------------------------- device --
 
-// backend_drm_fd: il device DRM del backend (-1 se non ce l'ha, es.
-// headless): si sceglie la GPU corrispondente. NULL se Vulkan 1.4 o le
-// estensioni necessarie mancano; il motivo è già nel log.
+// backend_drm_fd: the backend's DRM device (-1 if it has none, such as
+// headless): the matching GPU is chosen. NULL if Vulkan 1.4 or the required
+// extensions are missing; the reason is already in the log.
 struct vela_vulkan *vela_vulkan_create(int backend_drm_fd);
 void vela_vulkan_destroy(struct vela_vulkan *vk);
-// Il render node della stessa GPU, aperto dal device: serve all'allocatore
-// e alle timeline syncobj.
+// The render node of the same GPU, opened by the device: the allocator and the
+// syncobj timelines need it.
 int vela_vulkan_render_fd(const struct vela_vulkan *vk);
 
-// Allocatore dei buffer degli schermi (docs/renderer.md §7.2): GBM sul
-// render node, buffer esportati come dmabuf con un modifier esplicito,
-// adatti sia al disegno Vulkan sia allo scanout. Si distrugge con
-// wlr_allocator_destroy(). Non chiude render_fd.
+// Allocator of output buffers (docs/renderer.md §7.2): GBM on the render node,
+// buffers exported as dmabufs with an explicit modifier, fit for both Vulkan
+// drawing and scanout. Destroyed with wlr_allocator_destroy(). Doesn't close
+// render_fd.
 struct wlr_allocator *vela_gbm_allocator_create(int render_fd);
 
 // ----------------------------------------------------------- renderer --
@@ -62,103 +62,99 @@ struct vela_renderer *vela_renderer_create(struct vela_vulkan *vk);
 struct wlr_renderer *vela_renderer_wlr(struct vela_renderer *renderer);
 int vela_renderer_render_fd(const struct vela_renderer *renderer);
 
-// I formati (e modifier) dmabuf su cui si può disegnare, e quelli che si
-// sanno leggere come texture.
+// The dmabuf formats (and modifiers) that can be drawn on, and those that can
+// be read as textures.
 const struct wlr_drm_format_set *vela_renderer_render_formats(const struct vela_renderer *renderer);
 const struct wlr_drm_format_set *vela_renderer_texture_formats(const struct vela_renderer *renderer);
 
-// La timeline syncobj del renderer (linux-drm-syncobj-v1, §7.3): ogni
-// disegno ne fa scattare un punto quando la GPU ha finito. Sono i punti di
-// rilascio dei buffer delle app. NULL se il kernel non la supporta.
+// The renderer's syncobj timeline (linux-drm-syncobj-v1, §7.3): every drawing
+// signals a point of it when the GPU has finished. These are the release
+// points of app buffers. NULL if the kernel doesn't support it.
 struct wlr_drm_syncobj_timeline *vela_renderer_sync_timeline(const struct vela_renderer *renderer);
 
-// L'ultimo punto della timeline Vulkan che la GPU ha finito.
+// The last point of the Vulkan timeline the GPU has finished.
 uint64_t vela_renderer_completed(struct vela_renderer *renderer);
 
-// Quando la GPU ha cominciato e finito un disegno (§4.3). Con i timestamp
-// calibrati gli istanti sono su CLOCK_MONOTONIC (absolute); altrimenti
-// conta solo la durata (end_ns).
+// When the GPU started and finished a drawing (§4.3). With calibrated
+// timestamps the times are on CLOCK_MONOTONIC (absolute); otherwise only the
+// duration counts (end_ns).
 struct vela_gpu_timing {
     int64_t start_ns;
     int64_t end_ns;
     bool absolute;
 };
-// true se il disegno (slot, punto) è finito e la misura è ancora lì.
+// true if the drawing (slot, point) has finished and the measurement is still
+// there.
 bool vela_renderer_read_timing(struct vela_renderer *renderer, int slot, uint64_t point, struct vela_gpu_timing *out);
 
-// La texture è nostra e il suo formato non ha alfa (un buffer opaco).
+// The texture is ours and its format has no alpha (an opaque buffer).
 bool vela_texture_is_opaque(struct wlr_texture *texture);
 
-// ------------------------------------------------------------- disegno --
+// ------------------------------------------------------------- drawing --
 
-// Comincia un disegno su `buffer` (un dmabuf in uno dei formati di
-// disegno). NULL se non si può.
+// Starts drawing on `buffer` (a dmabuf in one of the drawing formats). NULL if
+// it can't.
 struct vela_pass *vela_renderer_begin_pass(struct vela_renderer *renderer, struct wlr_buffer *buffer);
 
-int vela_pass_width(const struct vela_pass *pass);
-int vela_pass_height(const struct vela_pass *pass);
 struct wlr_render_pass *vela_pass_wlr(struct vela_pass *pass);
 
 struct vela_texture_draw {
-    struct wlr_texture *texture; // nostra; le altre si ignorano
-    struct wlr_fbox src; // in pixel della texture; vuoto: tutta
-    struct wlr_box dst; // in pixel della destinazione
-    enum wl_output_transform transform; // applicata alla texture
+    struct wlr_texture *texture; // ours; others are ignored
+    struct wlr_fbox src; // in texture pixels; empty: all of it
+    struct wlr_box dst; // in target pixels
+    enum wl_output_transform transform; // applied to the texture
     float alpha;
-    bool linear; // filtro bilineare (bicubico se ingrandisce); false: copia 1:1
+    bool linear; // bilinear filter (bicubic when magnifying); false: 1:1 copy
     bool blend;
-    const pixman_region32_t *clip; // in pixel della destinazione; NULL: nessuno
-    // Sincronizzazione esplicita (linux-drm-syncobj-v1): il punto da
-    // aspettare prima di leggere la texture, al posto della fence
-    // implicita del dmabuf.
+    const pixman_region32_t *clip; // in target pixels; NULL: none
+    // Explicit sync (linux-drm-syncobj-v1): the point to wait for before
+    // reading the texture, instead of the dmabuf's implicit fence.
     struct wlr_drm_syncobj_timeline *wait_timeline;
     uint64_t wait_point;
-    // Ritaglio arrotondato (§8.1), in pixel della destinazione: raggio 0 o
-    // rettangolo vuoto, niente ritaglio.
+    // Rounded clip (§8.1), in target pixels: radius 0 or an empty rectangle,
+    // no clip.
     struct wlr_box shape_rect;
     float shape_radius;
 };
 void vela_pass_add_texture(struct vela_pass *pass, const struct vela_texture_draw *draw);
 
-// Colore come in wlroots: sRGB, premoltiplicato. shape_rect può essere NULL.
+// Color as in wlroots: sRGB, premultiplied. shape_rect can be NULL.
 void vela_pass_add_rect(struct vela_pass *pass, const struct wlr_box *box, const struct wlr_render_color *color,
     const pixman_region32_t *clip, bool blend, const struct wlr_box *shape_rect, float shape_radius);
 
-// Ombra di un rettangolo arrotondato (§8.2) dentro `box`: proiettata da
-// `caster`, non disegnata sotto `window`. Colore sRGB premoltiplicato.
+// Shadow of a rounded rectangle (§8.2) inside `box`: cast by `caster`, not
+// drawn under `window`. Premultiplied sRGB color.
 void vela_pass_add_shadow(struct vela_pass *pass, const struct wlr_box *box, const struct wlr_box *caster,
     const struct wlr_box *window, float radius, float sigma, const struct wlr_render_color *color,
     const pixman_region32_t *clip);
 
-// Sfocatura dal vivo (§8.3) sotto un pannello: legge ciò che è già stato
-// disegnato dietro `region` (pixel della destinazione, clip compreso), lo
-// sfoca (dual Kawase) e lo disegna con la ricetta acrylic. La forma la dà
-// l'alfa di `panel`, la superficie che va sopra (da aggiungere dopo, come
-// al solito). `strength`: l'ampiezza dei passaggi, in pixel; `tint`: la
-// tinta acrylic (sRGB premoltiplicato). Niente, se la destinazione non si
-// può leggere.
+// Live blur (§8.3) under a panel: reads what has already been drawn behind
+// `region` (target pixels, clip included), blurs it (dual Kawase) and draws it
+// with the acrylic recipe. The shape comes from the alpha of `panel`, the
+// surface that goes on top (added afterwards, as usual). `strength`: the width
+// of the passes, in pixels; `tint`: the acrylic tint (premultiplied sRGB).
+// Nothing happens if the target can't be read.
 void vela_pass_add_blur(struct vela_pass *pass, const struct vela_texture_draw *panel,
     const pixman_region32_t *region, float strength, const struct wlr_render_color *tint);
 
-// Fin dove legge la sfocatura attorno a una zona, in pixel.
+// How far around a zone the blur reads, in pixels.
 int vela_blur_reach(float strength);
 
-// Il filtro colore dello schermo (Luce notturna, filtri colore): matrice
-// 3x3 per righe, in spazio lineare, applicata a tutto ciò che si disegna.
-// NULL: nessuno.
+// The output's color filter (night light, color filters): a 3x3 matrix by
+// rows, in linear space, applied to everything drawn. NULL: none.
 void vela_pass_set_color_filter(struct vela_pass *pass, const float *matrix);
 
-// Misura i tempi della GPU di questo disegno (vela_renderer_read_timing).
+// Measures the GPU times of this drawing (vela_renderer_read_timing).
 void vela_pass_measure(struct vela_pass *pass);
 
-// A fine lavoro fa scattare anche questo punto (wlroots, per esempio una
-// cattura con sincronizzazione esplicita).
+// When the work is done, also signals this point (for wlroots, such as a
+// capture with explicit sync).
 void vela_pass_signal_on_done(struct vela_pass *pass, struct wlr_drm_syncobj_timeline *timeline, uint64_t point);
 
-// Invia il disegno e libera il pass. Nel risultato: il punto della
-// timeline del renderer, lo slot della misura (-1: non misurato) e il punto
-// della timeline syncobj che scatta a fine lavoro (0 se non c'è): il
-// rilascio dei buffer delle app lette da questo disegno.
+// Submits the drawing and frees the pass. In the result: the renderer timeline
+// point, the measurement slot (-1: not measured) and the syncobj timeline
+// point signaled at the end (0 if none): the release of the app buffers this
+// drawing read.
 struct vela_pass_result {
     uint64_t point;
     int timing_slot;

@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Un disegno su un buffer: si raccolgono i quad (texture, tinta unita,
-// ombre, sfocature), poi vela_pass_submit registra un unico command buffer e
-// lo invia alla GPU, con la sincronizzazione implicita verso chi usa gli
-// stessi buffer (kernel, app, compositor ospite) ed esplicita con le app che
-// la chiedono. Verso wlroots è anche un wlr_render_pass.
+// A drawing on a buffer: quads are collected (textures, solid colors, shadows,
+// blurs), then vela_pass_submit records a single command buffer and submits it
+// to the GPU, with implicit sync toward whoever uses the same buffers (kernel,
+// apps, host compositor) and explicit sync with the apps that ask for it. To
+// wlroots it's also a wlr_render_pass.
 
 #include "render/render.h"
 
@@ -23,25 +23,25 @@
 #include <wlr/render/drm_syncobj.h>
 #include <wlr/util/log.h>
 
-// Un quad pronto per la GPU: un pezzo per ogni rettangolo del ritaglio.
+// A quad ready for the GPU: one piece per clip rectangle.
 struct draw {
     enum vela_pipeline_kind kind;
     bool blend;
     bool linear;
-    struct vela_texture *texture; // NULL: rettangolo o ombra
+    struct vela_texture *texture; // NULL: rectangle or shadow
     struct vela_quad_push push;
     VkRect2D scissor;
-    int blur_op; // prima di disegnarlo, la sfocatura blur_ops[blur_op]; -1: nessuna
+    int blur_op; // before drawing it, the blur blur_ops[blur_op]; -1: none
 };
 
-// Una sfocatura da calcolare: la zona dello schermo da leggere.
+// A blur to compute: the output zone to read.
 struct blur_op {
     struct wlr_box source;
     float strength;
 };
 
-// Un punto di una timeline di un'app da aspettare prima di leggerne il
-// buffer (sincronizzazione esplicita). Il riferimento alla timeline è nostro.
+// A point on an app's timeline to wait for before reading its buffer (explicit
+// sync). The timeline reference is ours.
 struct sync_wait {
     struct vela_texture *texture;
     struct wlr_drm_syncobj_timeline *timeline;
@@ -49,10 +49,10 @@ struct sync_wait {
 };
 
 struct vela_pass {
-    struct wlr_render_pass base; // primo membro: wlr_render_pass* <-> vela_pass*
+    struct wlr_render_pass base; // first member: wlr_render_pass* <-> vela_pass*
     struct vela_renderer *renderer;
     struct vela_target *target;
-    struct wlr_buffer *buffer; // bloccato finché il pass esiste
+    struct wlr_buffer *buffer; // locked as long as the pass exists
 
     struct draw *draws;
     int draw_count, draw_capacity;
@@ -61,7 +61,7 @@ struct vela_pass {
     struct sync_wait *waits;
     int wait_count, wait_capacity;
 
-    struct wlr_drm_syncobj_timeline *signal_timeline; // nostro riferimento
+    struct wlr_drm_syncobj_timeline *signal_timeline; // our reference
     uint64_t signal_point;
     int timing_slot;
     bool filtered;
@@ -70,8 +70,8 @@ struct vela_pass {
 
 static const struct wlr_render_pass_impl pass_impl;
 
-// Le matrici di wl_output_transform (come in wlroots), righe [a b; d e]:
-// la texture ruotata/specchiata nel quadrato unitario.
+// The wl_output_transform matrices (as in wlroots), rows [a b; d e]: the
+// texture rotated/flipped in the unit square.
 struct rotation {
     float a, b, d, e;
 };
@@ -91,7 +91,7 @@ static struct rotation rotation_of(enum wl_output_transform transform)
     return (struct rotation) { 1, 0, 0, 1 };
 }
 
-// Da sRGB premoltiplicato (come wlroots) a lineare premoltiplicato.
+// From premultiplied sRGB (as wlroots) to premultiplied linear.
 static void linear_color(const struct wlr_render_color *color, float min_alpha, float out[4])
 {
     float a = vela_clampf(color->a, min_alpha, 1.0f);
@@ -111,7 +111,7 @@ static void set_box(float out[4], const struct wlr_box *box)
     out[3] = (float)box->height;
 }
 
-// --------------------------------------------------------------- creazione --
+// ---------------------------------------------------------------- creation --
 
 struct vela_pass *vela_renderer_begin_pass(struct vela_renderer *renderer, struct wlr_buffer *buffer)
 {
@@ -141,16 +141,6 @@ static void pass_free(struct vela_pass *pass)
     free(pass->blur_ops);
     free(pass->waits);
     free(pass);
-}
-
-int vela_pass_width(const struct vela_pass *pass)
-{
-    return (int)pass->target->width;
-}
-
-int vela_pass_height(const struct vela_pass *pass)
-{
-    return (int)pass->target->height;
 }
 
 struct wlr_render_pass *vela_pass_wlr(struct vela_pass *pass)
@@ -188,9 +178,9 @@ void vela_pass_set_color_filter(struct vela_pass *pass, const float *matrix)
     }
 }
 
-// ----------------------------------------------------------------- quad --
+// ---------------------------------------------------------------- quads --
 
-// Un disegno per ogni rettangolo del ritaglio, con lo scissor.
+// One draw per clip rectangle, with the scissor.
 static void add_draw(struct vela_pass *pass, const struct draw *draw, const struct wlr_box *dst,
     const pixman_region32_t *clip)
 {
@@ -215,8 +205,7 @@ static void add_draw(struct vela_pass *pass, const struct draw *draw, const stru
     pixman_region32_fini(&region);
 }
 
-// Il quad di una texture, senza ancora i pezzi del ritaglio. false se non
-// c'è niente da disegnare.
+// A texture's quad, before the clip pieces. false if there is nothing to draw.
 static bool prepare_texture(struct vela_pass *pass, const struct vela_texture_draw *in, struct draw *draw)
 {
     struct vela_texture *texture = vela_texture_from_wlr_texture(in->texture);
@@ -248,16 +237,16 @@ static bool prepare_texture(struct vela_pass *pass, const struct vela_texture_dr
     draw->linear = in->linear;
     draw->blur_op = -1;
     struct vela_quad_push *p = &draw->push;
-    // Un ingrandimento vero (non una copia 1:1 né una riduzione): filtro
-    // bicubico invece del bilineare, che ammorbidisce.
+    // A real magnification (neither a 1:1 copy nor a reduction): bicubic
+    // filter instead of bilinear, which softens.
     bool swapped = in->transform & WL_OUTPUT_TRANSFORM_90;
     double shown_width = swapped ? in->dst.height : in->dst.width;
     double shown_height = swapped ? in->dst.width : in->dst.height;
     if (in->linear && shown_width > src.width * 1.01 && shown_height > src.height * 1.01) {
         p->flags |= 1u;
     }
-    // Un quad opaco non ha bisogno di fondersi con ciò che c'è sotto
-    // (ritagliato agli angoli invece sì).
+    // An opaque quad doesn't need blending with what is below (clipped at the
+    // corners it does).
     bool shaped = in->shape_radius > 0.0f && !wlr_box_empty(&in->shape_rect);
     draw->blend = in->blend && (texture->format->alpha || in->alpha < 1.0f || shaped);
     if (shaped) {
@@ -270,11 +259,11 @@ static bool prepare_texture(struct vela_pass *pass, const struct vela_texture_dr
     p->target[1] = (float)pass->target->height;
     p->alpha = in->alpha;
 
-    // Dall'angolo del quad (u, v in [0,1]) alle coordinate della texture: si
-    // annulla la trasformazione nel quadrato unitario (matrice ortogonale:
-    // l'inversa è la trasposta), poi si va nella zona src.
+    // From the quad's corner (u, v in [0,1]) to texture coordinates: undo the
+    // transformation in the unit square (an orthogonal matrix: the inverse is
+    // the transpose), then go into the src zone.
     struct rotation r = rotation_of(in->transform);
-    float corners[3][2] = { { 0, 0 }, { 1, 0 }, { 0, 1 } }; // origine, destra, giù
+    float corners[3][2] = { { 0, 0 }, { 1, 0 }, { 0, 1 } }; // origin, right, down
     float uv[3][2];
     for (int i = 0; i < 3; ++i) {
         float px = 2.0f * corners[i][0] - 1.0f;
@@ -343,7 +332,8 @@ void vela_pass_add_shadow(struct vela_pass *pass, const struct wlr_box *box, con
     set_box(p->shape_rect, caster);
     p->shape[0] = radius;
     p->shape[1] = sigma;
-    // La finestra, dove l'ombra non va: nei campi delle texture, che qui non servono.
+    // The window, where the shadow doesn't go: in the texture fields, unused
+    // here.
     p->uv_origin[0] = (float)window->x;
     p->uv_origin[1] = (float)window->y;
     p->uv_x[0] = (float)window->width;
@@ -351,12 +341,12 @@ void vela_pass_add_shadow(struct vela_pass *pass, const struct wlr_box *box, con
     add_draw(pass, &draw, box, clip);
 }
 
-// ------------------------------------------------------------ sfocatura --
+// ----------------------------------------------------------------- blur --
 
 int vela_blur_reach(float strength)
 {
-    // Ogni livello allarga di circa due volte l'ampiezza nei suoi pixel, che
-    // valgono 2^livello pixel dello schermo: la somma, con un po' di margine.
+    // Each level widens the reach by about two of its pixels, which are
+    // 2^level output pixels: the sum, with some margin.
     return (int)ceilf(strength * 3.0f * (float)(1 << VELA_BLUR_LEVELS)) + 2;
 }
 
@@ -387,12 +377,12 @@ void vela_pass_add_blur(struct vela_pass *pass, const struct vela_texture_draw *
     draw.kind = VELA_PIPELINE_BLUR_MIX;
     draw.blend = true;
     draw.linear = true;
-    draw.push.flags &= ~1u; // il pannello si legge solo per l'alfa
+    draw.push.flags &= ~1u; // the panel is read only for its alpha
     draw.blur_op = pass->blur_count;
     pass->blur_ops = vela_grow(pass->blur_ops, &pass->blur_capacity, pass->blur_count + 1, sizeof(*pass->blur_ops));
     pass->blur_ops[pass->blur_count++] = (struct blur_op) { source, strength };
-    // Dal pixel dello schermo al livello 0 (metà risoluzione) delle immagini di lavoro.
-    const struct vela_blur_image *level0 = vela_renderer_blur_image(pass->renderer, 0);
+    // From the output pixel to level 0 (half resolution) of the work images.
+    const struct vela_blur_image *level0 = &pass->renderer->blur[0];
     draw.push.pad[0] = (float)source.x;
     draw.push.pad[1] = (float)source.y;
     draw.push.shape[2] = 0.5f / (float)level0->width;
@@ -429,16 +419,15 @@ static void barrier(VkCommandBuffer cmd, VkImage image, VkImageLayout from, VkIm
 #define DRAW_STAGES (VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT)
 #define DRAW_ACCESS (VK_ACCESS_2_SHADER_SAMPLED_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT)
 
-// Un passaggio della sfocatura: da `source` (zona `src` in una texture di
-// src_width x src_height) al livello `level`, usato per used_width x
-// used_height.
+// One blur pass: from `source` (zone `src` in a texture of src_width x
+// src_height) to level `level`, used for used_width x used_height.
 static void blur_step(struct vela_pass *pass, VkCommandBuffer cmd, enum vela_pipeline_kind kind, VkImageView source,
     const struct wlr_box *src, uint32_t src_width, uint32_t src_height, int level, uint32_t used_width,
     uint32_t used_height, float strength)
 {
     struct vela_renderer *renderer = pass->renderer;
-    const struct vela_blur_image *dst = vela_renderer_blur_image(renderer, level);
-    VkPipelineLayout layout = vela_renderer_layout(renderer);
+    const struct vela_blur_image *dst = &renderer->blur[level];
+    VkPipelineLayout layout = renderer->layout;
     barrier(cmd, dst->image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, DRAW_STAGES,
         DRAW_ACCESS, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
     const VkRenderingAttachmentInfo attachment = {
@@ -463,7 +452,7 @@ static void blur_step(struct vela_pass *pass, VkCommandBuffer cmd, enum vela_pip
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
         vela_renderer_pipeline(renderer, VELA_BLUR_FORMAT, kind, false));
     const VkDescriptorImageInfo image = {
-        .sampler = vela_renderer_sampler(renderer, true),
+        .sampler = renderer->linear,
         .imageView = source,
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
@@ -485,7 +474,7 @@ static void blur_step(struct vela_pass *pass, VkCommandBuffer cmd, enum vela_pip
     p.uv_origin[1] = (float)src->y / (float)src_height;
     p.uv_x[0] = (float)src->width / (float)src_width;
     p.uv_y[1] = (float)src->height / (float)src_height;
-    // Mezzo texel della sorgente, per l'ampiezza; e dove si può leggere.
+    // Half a source texel, for the reach; and where it can read.
     p.shape[0] = 0.5f / (float)src_width * strength;
     p.shape[1] = 0.5f / (float)src_height * strength;
     p.shape_rect[0] = ((float)src->x + 0.5f) / (float)src_width;
@@ -503,13 +492,13 @@ static void blur_step(struct vela_pass *pass, VkCommandBuffer cmd, enum vela_pip
 static void run_blur(struct vela_pass *pass, VkCommandBuffer cmd, const struct blur_op *op)
 {
     struct vela_target *target = pass->target;
-    // Lo schermo disegnato fin qui diventa leggibile.
+    // The output drawn so far becomes readable.
     vkCmdEndRendering(cmd);
     barrier(cmd, target->image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
         VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
-    // Le dimensioni usate di ogni livello.
+    // The used size of each level.
     uint32_t used_width[VELA_BLUR_LEVELS];
     uint32_t used_height[VELA_BLUR_LEVELS];
     for (int level = 0; level < VELA_BLUR_LEVELS; ++level) {
@@ -518,33 +507,33 @@ static void run_blur(struct vela_pass *pass, VkCommandBuffer cmd, const struct b
         used_width[level] = used_width[level] ? used_width[level] : 1;
         used_height[level] = used_height[level] ? used_height[level] : 1;
     }
-    // Giù: dallo schermo al livello 0, poi ogni livello dal precedente.
+    // Down: from the output to level 0, then each level from the previous one.
     blur_step(pass, cmd, VELA_PIPELINE_BLUR_DOWN, target->view, &op->source, target->width, target->height, 0,
         used_width[0], used_height[0], op->strength);
     for (int level = 1; level < VELA_BLUR_LEVELS; ++level) {
-        const struct vela_blur_image *from = vela_renderer_blur_image(pass->renderer, level - 1);
+        const struct vela_blur_image *from = &pass->renderer->blur[level - 1];
         const struct wlr_box zone = { 0, 0, (int)used_width[level - 1], (int)used_height[level - 1] };
         blur_step(pass, cmd, VELA_PIPELINE_BLUR_DOWN, from->view, &zone, from->width, from->height, level,
             used_width[level], used_height[level], op->strength);
     }
-    // Su: di nuovo fino al livello 0.
+    // Up: back to level 0.
     for (int level = VELA_BLUR_LEVELS - 2; level >= 0; --level) {
-        const struct vela_blur_image *from = vela_renderer_blur_image(pass->renderer, level + 1);
+        const struct vela_blur_image *from = &pass->renderer->blur[level + 1];
         const struct wlr_box zone = { 0, 0, (int)used_width[level + 1], (int)used_height[level + 1] };
         blur_step(pass, cmd, VELA_PIPELINE_BLUR_UP, from->view, &zone, from->width, from->height, level,
             used_width[level], used_height[level], op->strength);
     }
 
-    // Si torna a disegnare sullo schermo.
+    // Back to drawing on the output.
     barrier(cmd, target->image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 }
 
-// ---------------------------------------------------------------- invio --
+// ----------------------------------------------------------- submission --
 
-// La texture è letta con sincronizzazione esplicita (un punto da aspettare).
+// The texture is read with explicit sync (a point to wait for).
 static bool explicit_sync(const struct vela_pass *pass, const struct vela_texture *texture)
 {
     for (int i = 0; i < pass->wait_count; ++i) {
@@ -555,8 +544,8 @@ static bool explicit_sync(const struct vela_pass *pass, const struct vela_textur
     return false;
 }
 
-// Le texture importate (dmabuf) di questo disegno, una volta ciascuna, in
-// un array allocato.
+// The imported textures (dmabuf) of this drawing, once each, in an allocated
+// array.
 static struct vela_texture **foreign_textures(const struct vela_pass *pass, int *count)
 {
     struct vela_texture **foreign = calloc((size_t)(pass->draw_count ? pass->draw_count : 1), sizeof(*foreign));
@@ -577,8 +566,8 @@ static struct vela_texture **foreign_textures(const struct vela_pass *pass, int 
     return foreign;
 }
 
-// Presa in carico (acquire) e restituzione (release) di un'immagine che la
-// coda "foreign" (kernel, altre GPU, altri processi) condivide con noi.
+// Acquire and release of an image the "foreign" queue (kernel, other GPUs,
+// other processes) shares with us.
 static VkImageMemoryBarrier2 ownership(VkImage image, uint32_t queue_family, bool acquire, VkImageLayout layout,
     VkPipelineStageFlags2 stage, VkAccessFlags2 access, VkImageLayout rest)
 {
@@ -597,18 +586,17 @@ static VkImageMemoryBarrier2 ownership(VkImage image, uint32_t queue_family, boo
     };
 }
 
-// I comandi del disegno, dal primo barrier all'ultimo.
+// The drawing's commands, from the first barrier to the last.
 static void record(struct vela_pass *pass, VkCommandBuffer cmd, struct vela_texture **foreign, int foreign_count)
 {
     struct vela_renderer *renderer = pass->renderer;
     struct vela_target *target = pass->target;
-    uint32_t family = vela_renderer_vulkan(renderer)->queue_family;
-    VkPipelineLayout layout = vela_renderer_layout(renderer);
+    uint32_t family = renderer->vk->queue_family;
+    VkPipelineLayout layout = renderer->layout;
 
     VkImageMemoryBarrier2 *acquire = calloc((size_t)foreign_count + 1, sizeof(*acquire));
     VkImageMemoryBarrier2 *release = calloc((size_t)foreign_count + 1, sizeof(*release));
-    // Il contenuto della destinazione si conserva: si ridisegna solo ciò
-    // che è cambiato.
+    // The target's content is kept: only what changed is redrawn.
     acquire[0] = ownership(target->image, family, true, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
@@ -651,7 +639,7 @@ static void record(struct vela_pass *pass, VkCommandBuffer cmd, struct vela_text
     int blur_done = -1;
     for (int i = 0; i < pass->draw_count; ++i) {
         const struct draw *draw = &pass->draws[i];
-        // Una sfocatura: si legge ciò che c'è dietro prima dei suoi pezzi.
+        // A blur: what is behind is read before its pieces.
         if (draw->blur_op >= 0 && draw->blur_op != blur_done) {
             run_blur(pass, cmd, &pass->blur_ops[draw->blur_op]);
             blur_done = draw->blur_op;
@@ -669,13 +657,13 @@ static void record(struct vela_pass *pass, VkCommandBuffer cmd, struct vela_text
         }
         if (draw->texture) {
             const VkDescriptorImageInfo image = {
-                .sampler = vela_renderer_sampler(renderer, draw->linear),
+                .sampler = draw->linear ? renderer->linear : renderer->nearest,
                 .imageView = draw->texture->view,
                 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             };
             const VkDescriptorImageInfo blurred = {
-                .sampler = vela_renderer_sampler(renderer, true),
-                .imageView = vela_renderer_blur_image(renderer, 0)->view,
+                .sampler = renderer->linear,
+                .imageView = renderer->blur[0].view,
                 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             };
             const VkWriteDescriptorSet writes[] = {
@@ -694,7 +682,7 @@ static void record(struct vela_pass *pass, VkCommandBuffer cmd, struct vela_text
                     .pImageInfo = &blurred,
                 },
             };
-            // La composizione della sfocatura legge anche lo sfondo sfocato.
+            // The blur composition also reads the blurred background.
             uint32_t count = draw->kind == VELA_PIPELINE_BLUR_MIX ? 2 : 1;
             vkCmdPushDescriptorSet(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, count, writes);
         }
@@ -720,7 +708,7 @@ static void record(struct vela_pass *pass, VkCommandBuffer cmd, struct vela_text
     free(release);
 }
 
-// La fence implicita di un dmabuf (sync_file), da aggiungere alle attese.
+// A dmabuf's implicit fence (sync_file), to add to the waits.
 static void export_fence(int dmabuf_fd, uint32_t flags, int *fds, int *count)
 {
     struct dma_buf_export_sync_file request = { .flags = flags, .fd = -1 };
@@ -739,7 +727,7 @@ bool vela_pass_submit(struct vela_pass *pass, struct vela_pass_result *result)
 {
     struct vela_renderer *renderer = pass->renderer;
     struct vela_target *target = pass->target;
-    struct vela_vulkan *vk = vela_renderer_vulkan(renderer);
+    struct vela_vulkan *vk = renderer->vk;
     if (result) {
         *result = (struct vela_pass_result) { 0, -1, 0 };
     }
@@ -748,7 +736,7 @@ bool vela_pass_submit(struct vela_pass *pass, struct vela_pass_result *result)
     VkCommandBuffer cmd = vela_renderer_begin_commands(renderer);
     if (!cmd) {
         if (pass->signal_timeline) {
-            // Chi aspetta questo punto non deve restare bloccato.
+            // Whoever waits for this point must not stay blocked.
             wlr_drm_syncobj_timeline_signal(pass->signal_timeline, pass->signal_point);
         }
         vela_renderer_timing_submitted(renderer, pass->timing_slot, 0);
@@ -761,12 +749,12 @@ bool vela_pass_submit(struct vela_pass *pass, struct vela_pass_result *result)
     record(pass, cmd, foreign, foreign_count);
     vela_renderer_write_timestamp(renderer, cmd, pass->timing_slot, true);
 
-    // Le attese: una per ogni punto di sincronizzazione esplicita, una per
-    // la destinazione e una per ogni texture importata.
+    // The waits: one per explicit sync point, one for the target and one per
+    // imported texture.
     int *waits = calloc((size_t)(pass->wait_count + foreign_count + 1), sizeof(*waits));
     int wait_count = 0;
-    // Sincronizzazione esplicita: le app con linux-drm-syncobj-v1 dicono
-    // loro quale punto aspettare prima di leggere il buffer.
+    // Explicit sync: apps with linux-drm-syncobj-v1 say themselves which point
+    // to wait for before reading the buffer.
     for (int i = 0; i < pass->wait_count; ++i) {
         int fd = wlr_drm_syncobj_timeline_export_sync_file(pass->waits[i].timeline, pass->waits[i].point);
         if (fd >= 0) {
@@ -775,9 +763,9 @@ bool vela_pass_submit(struct vela_pass *pass, struct vela_pass_result *result)
             wlr_log(WLR_ERROR, "Pass: can't wait for point %" PRIu64 " of an app", pass->waits[i].point);
         }
     }
-    // Sincronizzazione implicita: si aspetta chi usa ancora la destinazione
-    // (lo schermo che la mostra) e chi sta ancora scrivendo le texture (le
-    // app); a fine lavoro la nostra fence finisce negli stessi dmabuf.
+    // Implicit sync: wait for whoever still uses the target (the output
+    // showing it) and whoever is still writing the textures (the apps); at the
+    // end our fence goes into the same dmabufs.
     if (vk->sync_file) {
         export_fence(target->dmabuf_fd, DMA_BUF_SYNC_WRITE, waits, &wait_count);
         for (int i = 0; i < foreign_count; ++i) {
@@ -807,13 +795,13 @@ bool vela_pass_submit(struct vela_pass *pass, struct vela_pass_result *result)
             }
         }
         if (!ok) {
-            vela_renderer_wait(renderer, point); // il kernel non ha preso la fence
+            vela_renderer_wait(renderer, point); // the kernel didn't take the fence
         }
     }
     free(foreign);
-    // Fine lavoro anche sulle timeline syncobj: la nostra (rilascio dei
-    // buffer delle app) e quella chiesta da wlroots. release_fd -1: la CPU ha
-    // già aspettato, i punti scattano subito.
+    // End of work on the syncobj timelines too: ours (release of app buffers)
+    // and the one wlroots asked for. release_fd -1: the CPU has already
+    // waited, the points signal at once.
     uint64_t sync_point = vela_renderer_signal_sync_point(renderer, release_fd);
     if (pass->signal_timeline) {
         bool signalled = release_fd >= 0
@@ -839,7 +827,7 @@ bool vela_pass_submit(struct vela_pass *pass, struct vela_pass_result *result)
 
 static bool wlr_pass_submit(struct wlr_render_pass *wlr)
 {
-    return vela_pass_submit((struct vela_pass *)wlr, NULL); // wlroots non lo userà più
+    return vela_pass_submit((struct vela_pass *)wlr, NULL); // wlroots won't use it anymore
 }
 
 static void wlr_pass_add_texture(struct wlr_render_pass *wlr, const struct wlr_render_texture_options *options)
@@ -862,7 +850,7 @@ static void wlr_pass_add_rect(struct wlr_render_pass *wlr, const struct wlr_rend
     struct vela_pass *pass = (struct vela_pass *)wlr;
     struct wlr_box box = options->box;
     if (wlr_box_empty(&box)) {
-        box = (struct wlr_box) { 0, 0, vela_pass_width(pass), vela_pass_height(pass) };
+        box = (struct wlr_box) { 0, 0, (int)pass->target->width, (int)pass->target->height };
     }
     vela_pass_add_rect(pass, &box, &options->color, options->clip,
         options->blend_mode == WLR_RENDER_BLEND_MODE_PREMULTIPLIED, NULL, 0.0f);

@@ -1,29 +1,29 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// vela-pattern: client di prova della nitidezza (docs/renderer.md §3.10).
+// vela-pattern: sharpness test client (docs/renderer.md §3.10).
 //
-// Apre una finestra senza decorazioni e la riempie, alla scala frazionaria
-// esatta chiesta dal compositor (fractional-scale-v1 + viewporter), con un
-// buffer grande quanto i suoi pixel fisici. Ogni pixel codifica le proprie
-// coordinate nel buffer:
+// Opens an undecorated window and fills it, at the exact fractional scale
+// the compositor asks for (fractional-scale-v1 + viewporter), with a buffer
+// as large as its physical pixels. Each pixel encodes its own coordinates in
+// the buffer:
 //
 //     R = x % 256,  G = y % 256,  B = (x / 256) * 16 + (y / 256)
 //
-// Sullo schermo, se il compositor copia il buffer 1:1, ogni pixel della
-// finestra "dice" la stessa origine: il test (scripts/test-sharpness.sh)
-// la ritrova e confronta tutto bit per bit. Righe e colonne alternate e
-// valori vicini tra loro sono il caso peggiore per qualunque filtro.
+// On screen, if the compositor copies the buffer 1:1, every pixel of the
+// window "tells" the same origin: the test (scripts/test-sharpness.sh)
+// finds it and compares everything bit for bit. Alternating rows and columns
+// and close values are the worst case for any filter.
 //
-// Uso: vela-pattern [--scale1] [--app-id ID] [--decorated] [--popup X,Y]
-//                    [LARGHEZZA ALTEZZA]   (logiche; predefinito 401x301)
+// Usage: vela-pattern [--scale1] [--app-id ID] [--decorated] [--popup X,Y]
+//                     [WIDTH HEIGHT]   (logical; default 401x301)
 //
-// --scale1: come un'app vecchia, disegna sempre a scala 1 (il compositor
-// deve ingrandire): righe di un pixel e scacchiera, per giudicare il filtro.
-// --decorated: chiede la barra del titolo di Vela (xdg-decoration), come
-// le app Qt e KDE.
-// --popup X,Y: apre anche un menu (xdg-popup) magenta di 200x150, ancorato
-// al punto (X, Y) della finestra; può scorrere per restare sullo schermo.
+// --scale1: like an old app, always draws at scale 1 (the compositor must
+// magnify): one-pixel lines and a checkerboard, to judge the filter.
+// --decorated: asks for Vela's title bar (xdg-decoration), like Qt and KDE
+// apps.
+// --popup X,Y: also opens a 200x150 magenta menu (xdg-popup), anchored at
+// point (X, Y) of the window; it may slide to stay on screen.
 
 #define _GNU_SOURCE
 #include <math.h>
@@ -96,8 +96,8 @@ static void onBufferRelease(void* data, struct wl_buffer* buffer)
 
 static const struct wl_buffer_listener bufferListener = { onBufferRelease };
 
-// Dimensione del buffer come vuole fractional-scale-v1: la dimensione
-// logica per la scala, arrotondata.
+// Buffer size as fractional-scale-v1 wants it: the logical size times the
+// scale, rounded.
 static int physical(int logical)
 {
     return (int)((logical * (int64_t)scale120 + 60) / 120);
@@ -120,8 +120,8 @@ static void draw(void)
         for (int x = 0; x < width; ++x) {
             uint32_t color;
             if (legacy) {
-                // Quattro quadranti: righe orizzontali e verticali di un
-                // pixel, scacchiera, e un bordo nero su bianco.
+                // Four quadrants: one-pixel horizontal and vertical lines, a
+                // checkerboard, and a black border on white.
                 const int left = x < width / 2;
                 const int top = y < height / 2;
                 const int on = top ? (left ? y & 1 : x & 1) : (left ? (x ^ y) & 1 : (x % 16 == 0 || y % 16 == 0));
@@ -151,7 +151,7 @@ static void draw(void)
         scale120, width, height);
 }
 
-// Il menu: un rettangolo magenta a scala 1.
+// The menu: a magenta rectangle at scale 1.
 static void drawPopup(void)
 {
     const int stride = POPUP_WIDTH * 4;
@@ -282,7 +282,7 @@ int main(int argc, char** argv)
             popupWanted = 1;
             ++arg;
         } else if (!strcmp(argv[arg], "--app-id") && arg + 1 < argc) {
-            // Per le prove che dipendono dall'app (dialoghi di sistema).
+            // For tests that depend on the app (system dialogs).
             appId = argv[++arg];
         }
     }

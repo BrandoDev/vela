@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Le curve e i tween delle animazioni (motion.h): uguali alle curve
-// cubic-bezier di CSS e QML, che usa anche la shell.
+// Animation curves and tweens (motion.h): the same as CSS and QML cubic-bezier
+// curves, which the shell uses too.
 
 extern "C" {
 #include "motion.h"
@@ -14,8 +14,8 @@ extern "C" {
 
 namespace {
 
-// Il valore della curva per x, calcolato in un altro modo: campionando il
-// parametro t molto fitto e prendendo il punto con la x più vicina.
+// The curve's value at x, computed another way: sampling the parameter t very
+// densely and taking the point with the closest x.
 double reference(double x1, double y1, double x2, double y2, double x)
 {
     auto bezier = [](double a, double b, double t) {
@@ -77,18 +77,18 @@ TEST(Motion, DecelerateIsMonotonicAndFrontLoaded)
         EXPECT_GE(value, previous);
         previous = value;
     }
-    // Parte decisa: a metà del tempo ha già fatto ben più di metà strada,
-    // ma non così tanto da sparire nei primi frame ad alta frequenza.
+    // A decisive start: halfway through the time it's well over halfway, but
+    // not so much that it vanishes in the first frames at high refresh rates.
     EXPECT_GT(vela_curve_eval(curve, 0.5), 0.7);
-    EXPECT_LT(vela_curve_eval(curve, 3.0 / 45.0), 0.35); // 3 frame a 180 Hz di un'animazione da 250 ms
+    EXPECT_LT(vela_curve_eval(curve, 3.0 / 45.0), 0.35); // 3 frames at 180 Hz of a 250 ms animation
 }
 
 TEST(Motion, TweenStartsAtFirstRead)
 {
     vela_tween tween;
     vela_tween_start(&tween, 250.0, &vela_decelerate);
-    EXPECT_FALSE(vela_tween_finished(&tween, 1000.0)); // non ancora letto: non è partito
-    EXPECT_EQ(vela_tween_progress(&tween, 1000.0), 0.0); // il primo frame è lo stato iniziale
+    EXPECT_FALSE(vela_tween_finished(&tween, 1000.0)); // not read yet: it hasn't started
+    EXPECT_EQ(vela_tween_progress(&tween, 1000.0), 0.0); // the first frame is the initial state
     EXPECT_GT(vela_tween_progress(&tween, 1100.0), 0.0);
     EXPECT_FALSE(vela_tween_finished(&tween, 1249.0));
     EXPECT_TRUE(vela_tween_finished(&tween, 1250.0));

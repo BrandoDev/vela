@@ -1,12 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Il puntatore e la tastiera sulle finestre (interact.c, bindings.c,
-snap.c): i bordi invisibili per ridimensionare, "Sposta" e "Ridimensiona"
-da tastiera, il menu della finestra (clic destro sul titolo, Alt+Spazio),
-lo snap trascinando contro il bordo con Snap Assist, i layout di snap
-(Win+Z) e i gruppi di snap. La shell è una FakeShell che raccoglie i
-messaggi."""
+"""Pointer and keyboard on windows (interact.c, bindings.c, snap.c): the
+invisible resize borders, keyboard "Move" and "Size", the window menu (right
+click on the title, Alt+Space), snapping by dragging against the edge with
+Snap Assist, snap layouts (Win+Z) and snap groups. The shell is a FakeShell
+collecting the messages."""
 
 import time
 import unittest
@@ -24,15 +23,14 @@ class Interaction(unittest.TestCase):
         self.vela.stop()
 
     def frame(self, window):
-        """Il riquadro vero (barra compresa) di una finestra decorata: nello
-        stato "y" è 32 sopra la barra e "h" lo comprende (stateJson)."""
+        """The window's frame, title bar included."""
         w = self.vela.state().window(window)
-        return w["x"], w["y"] + 32, w["w"], w["h"] - 32
+        return w["x"], w["y"], w["w"], w["h"]
 
     def test_resize_from_invisible_border(self):
         window = self.vela.open_window(300, 200, decorated=True)
         x, y, w, h = self.frame(window)
-        # 4 pixel fuori dal bordo destro, a metà altezza.
+        # 4 pixels outside the right edge, at half height.
         grab_x, grab_y = x + w + 4, y + h // 2
         self.vela.input("move", grab_x, grab_y, "sleep", "50", "down", "sleep", "50",
                         "move", grab_x + 50, grab_y, "sleep", "50", "move", grab_x + 100, grab_y, "sleep", "100", "up")
@@ -46,7 +44,7 @@ class Interaction(unittest.TestCase):
         self.vela.keys("Right", "Right", "Right", "Down", "Return")
         state = self.vela.wait_for(lambda s: s.window(window)["x"] == x + 30, what="moved 30 to the right")
         self.assertEqual(self.frame(window)[1], y + 10)
-        # Esc: torna com'era.
+        # Esc: back to how it was.
         self.vela.command("window active move")
         self.vela.keys("Left", "Left", "Escape")
         time.sleep(0.2)
@@ -56,7 +54,8 @@ class Interaction(unittest.TestCase):
         window = self.vela.open_window(300, 200, decorated=True)
         _, _, w, _ = self.frame(window)
         self.vela.command("window active resize")
-        # Il primo tasto sceglie il bordo, i successivi lo muovono (Ctrl: di un'unità).
+        # The first key chooses the edge, the next ones move it (Ctrl: by one
+        # unit).
         self.vela.keys("Right", "Right", "Right", "ctrl+Right", "Return")
         self.vela.wait_for(lambda s: s.window(window)["w"] == w + 21, what="21 wider")
 
@@ -71,7 +70,7 @@ class Interaction(unittest.TestCase):
         self.vela.keys("alt+space")
         line = self.shell.wait_for("window-menu ")
         self.assertEqual(line.split()[1], window)
-        self.assertEqual(line.split()[-1], "1")  # da tastiera
+        self.assertEqual(line.split()[-1], "1") # from the keyboard
 
     def test_drag_to_edge_snaps_and_offers_assist(self):
         other = self.vela.open_window(401, 301)
@@ -92,17 +91,17 @@ class Interaction(unittest.TestCase):
         line = self.shell.wait_for("snap-layouts ")
         self.assertEqual(line.split()[1:3], [second, "HEADLESS-1"])
         self.assertEqual(line.split()[-1], "1")
-        # Come da Snap Assist: la prima a sinistra, la seconda accanto a lei.
+        # As from Snap Assist: the first on the left, the second next to it.
         self.vela.command(f"window {first} snap 0 0 6 12")
         self.vela.command(f"window {second} snap 6 0 12 12 quiet {first}")
         state = self.vela.wait_for(lambda s: s.window(second)["snapGroup"] != 0, what="a snap group")
         self.assertEqual(state.window(first)["snapGroup"], state.window(second)["snapGroup"])
         groups = self.shell.wait_for("workspaces ")
         self.assertIn('"snapGroups":[{"output":"HEADLESS-1"', groups)
-        # Il gruppo dalla taskbar: tutte davanti, quella scelta a fuoco.
+        # The group from the taskbar: all forward, the chosen one focused.
         self.vela.command(f"window {first} activate-group")
         self.vela.wait_for(lambda s: s["focused"] == first, what="the chosen window focused")
-        # Staccandosi, il gruppo di due finisce.
+        # Moving one away ends the group of two.
         self.vela.command(f"window {second} restore")
         self.vela.wait_for(lambda s: s.window(first)["snapGroup"] == 0, what="the group dissolved")
 

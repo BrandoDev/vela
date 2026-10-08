@@ -4,14 +4,14 @@
 #ifndef VELA_SESSION_H
 #define VELA_SESSION_H
 
-// La sessione vera (da SDDM o da una console): Vela è il desktop e lo dice
-// alle app, e avvisa systemd e D-Bus quando parte e quando finisce
-// (session/vela-session-env). Annidati o headless si resta ospiti
-// dell'ambiente che c'è.
+// The real session (from SDDM or a console): Vela is the desktop and tells the
+// apps, and notifies systemd and D-Bus when it starts and ends
+// (session/vela-session-env). Nested or headless, Vela stays a guest of the
+// environment it finds.
 
-// Solo i valori che nessuno (SDDM, l'utente) ha già scelto.
+// Only the values nobody (SDDM, the user) has chosen already.
 void vela_session_set_environment(void);
-// "start" o "stop": aspetta che vela-session-env finisca.
+// "start" or "stop": waits for vela-session-env to finish.
 void vela_session_run_hook(const char *action);
 
 #endif

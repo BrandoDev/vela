@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// vela-shot: cattura lo schermo di Vela in PNG (protocollo wlr-screencopy).
+// vela-shot: captures Vela's screen to PNG (wlr-screencopy protocol).
 //
-// Uso: vela-shot FILE.png [X Y LARGHEZZA ALTEZZA]
+// Usage: vela-shot FILE.png [X Y WIDTH HEIGHT]
 //
-// Cattura il primo schermo; con le coordinate, solo quella zona (in pixel
-// dello schermo). Usa la sessione indicata da WAYLAND_DISPLAY.
+// Captures the first output; with coordinates, only that area (in output
+// pixels). Uses the session given by WAYLAND_DISPLAY.
 
 #define _GNU_SOURCE
 #include <stdint.h>
@@ -35,7 +35,8 @@ static void registryGlobal(void* data, struct wl_registry* registry, uint32_t na
     if (!strcmp(interface, wl_shm_interface.name)) {
         shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
     } else if (!strcmp(interface, wl_output_interface.name) && !output) {
-        // VELA_SHOT_OUTPUT=N sceglie l'N-esimo schermo (da 0); altrimenti il primo.
+        // VELA_SHOT_OUTPUT=N picks the N-th output (from 0); otherwise the
+        // first.
         static int seen = 0;
         const char* wanted = getenv("VELA_SHOT_OUTPUT");
         if (seen++ == (wanted ? atoi(wanted) : 0)) {
@@ -108,10 +109,10 @@ static void writeChunk(FILE* file, const char* type, const unsigned char* data, 
     fwrite(trailer, 1, 4, file);
 }
 
-// Pixel dello schermo -> PNG RGB a 8 bit.
+// Output pixels -> 8-bit RGB PNG.
 static int writePng(const char* path, const unsigned char* pixels, int x, int y, int w, int h)
 {
-    // In memoria: XRGB/ARGB8888 = B,G,R,A; XBGR/ABGR8888 = R,G,B,A.
+    // In memory: XRGB/ARGB8888 = B,G,R,A; XBGR/ABGR8888 = R,G,B,A.
     const int bgr = frame.format == WL_SHM_FORMAT_XRGB8888 || frame.format == WL_SHM_FORMAT_ARGB8888;
     const size_t rowSize = 1 + (size_t)w * 3;
     unsigned char* raw = malloc(rowSize * h);
@@ -119,7 +120,7 @@ static int writePng(const char* path, const unsigned char* pixels, int x, int y,
         const int srcRow = frame.yInvert ? (int)frame.height - 1 - (y + row) : y + row;
         const unsigned char* src = pixels + (size_t)srcRow * frame.stride + (size_t)x * 4;
         unsigned char* dst = raw + row * rowSize;
-        *dst++ = 0; // filtro: nessuno
+        *dst++ = 0; // filter: none
         for (int col = 0; col < w; ++col, src += 4) {
             *dst++ = bgr ? src[2] : src[0];
             *dst++ = src[1];
@@ -140,7 +141,7 @@ static int writePng(const char* path, const unsigned char* pixels, int x, int y,
     unsigned char ihdr[13];
     put32(ihdr, w);
     put32(ihdr + 4, h);
-    ihdr[8] = 8; // bit per canale
+    ihdr[8] = 8; // bits per channel
     ihdr[9] = 2; // RGB
     ihdr[10] = ihdr[11] = ihdr[12] = 0;
     writeChunk(file, "IHDR", ihdr, sizeof(ihdr));

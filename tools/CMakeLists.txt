@@ -1,9 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Strumenti per provare Vela senza toccarlo con le mani: catture dello
-# schermo, elenco/comando delle finestre, mouse e tastiera simulati.
-# Parlano solo protocolli Wayland standard.
+# Tools to test Vela hands-off: screenshots, listing/commanding windows,
+# simulated mouse and keyboard. They speak only standard Wayland protocols.
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(TOOLS_WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
@@ -16,7 +15,7 @@ find_program(WAYLAND_SCANNER NAMES wayland-scanner REQUIRED)
 set(TOOLS_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/protocols)
 file(MAKE_DIRECTORY ${TOOLS_GENERATED_DIR})
 
-# Header e codice client di un protocollo, in una libreria statica.
+# A protocol's header and client code, in a static library.
 function(vela_client_protocol target xml name)
     set(header ${TOOLS_GENERATED_DIR}/${name}-client-protocol.h)
     set(code ${TOOLS_GENERATED_DIR}/${name}-protocol.c)
@@ -65,29 +64,30 @@ target_link_libraries(vela-input PRIVATE
 vela_client_protocol(proto-session-lock
     ${TOOLS_WAYLAND_PROTOCOLS_DIR}/staging/ext-session-lock/ext-session-lock-v1.xml ext-session-lock-v1)
 
-# Programma di blocco di prova: blocca e si sblocca da solo, senza password.
+# Test lock program: locks and unlocks by itself, without a password.
 add_executable(vela-testlock vela-testlock.c)
 target_link_libraries(vela-testlock PRIVATE proto-session-lock)
 
-# Client di prova della nitidezza (scripts/test-sharpness.sh).
+# Sharpness test client (scripts/test-sharpness.sh).
 add_executable(vela-pattern vela-pattern.c)
 target_link_libraries(vela-pattern PRIVATE proto-xdg-shell proto-viewporter proto-fractional-scale
     proto-xdg-decoration)
 
-# Pezzi di shell finti (sfondo, taskbar sfocata) per le prove senza la shell Qt.
+# Fake shell pieces (wallpaper, blurred taskbar) for tests without the Qt
+# shell.
 vela_client_protocol(proto-layer-shell ${PROTOCOLS}/wlr-layer-shell-unstable-v1.xml wlr-layer-shell-unstable-v1)
 vela_client_protocol(proto-background-effect
     ${TOOLS_WAYLAND_PROTOCOLS_DIR}/staging/ext-background-effect/ext-background-effect-v1.xml ext-background-effect-v1)
 add_executable(vela-panel vela-panel.c)
 target_link_libraries(vela-panel PRIVATE proto-layer-shell proto-background-effect proto-xdg-shell)
 
-# Configurazione degli schermi come Impostazioni > Schermo, senza wlr-randr.
+# Output configuration like Settings > Display, without wlr-randr.
 vela_client_protocol(proto-output-management ${PROTOCOLS}/wlr-output-management-unstable-v1.xml
     wlr-output-management-unstable-v1)
 add_executable(vela-randr vela-randr.c)
 target_link_libraries(vela-randr PRIVATE proto-output-management)
 
-# Un'app X11 (attraverso Xwayland) per le prove delle finestre X11.
+# An X11 app (through Xwayland) for the X11 window tests.
 pkg_check_modules(TOOLS_XCB IMPORTED_TARGET xcb)
 if(TOOLS_XCB_FOUND)
     add_executable(vela-x11 vela-x11.c)
@@ -95,8 +95,8 @@ if(TOOLS_XCB_FOUND)
     target_compile_options(vela-x11 PRIVATE -Wall -Wextra -Wno-unused-parameter)
 endif()
 
-# Un'app con la GPU lenta (tests/functional/test_ready.py): un lavoro di
-# calcolo Vulkan fa da rendering e la sua fence arriva tardi.
+# An app with a slow GPU (tests/functional/test_ready.py): a Vulkan compute job
+# stands in for rendering and its fence comes late.
 pkg_check_modules(TOOLS_VULKAN REQUIRED IMPORTED_TARGET vulkan)
 pkg_check_modules(TOOLS_GBM REQUIRED IMPORTED_TARGET gbm)
 pkg_check_modules(TOOLS_DRM REQUIRED IMPORTED_TARGET libdrm)

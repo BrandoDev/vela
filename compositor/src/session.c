@@ -17,16 +17,15 @@
 
 void vela_session_set_environment(void)
 {
-    // Vela usa i servizi di KDE (portachiavi, portali, tema delle app):
-    // "KDE" dopo "Vela" fa sì che Brave, Chrome e le app Electron (VS Code)
-    // usino il portachiavi di KDE come dentro Plasma. Senza, cifrano i dati
-    // con una chiave fissa e non leggono più quelli salvati in Plasma:
-    // accessi ai siti persi, sincronizzazione e password non decifrabili.
-    // Le voci di avvio automatico di Plasma non partono: hanno
-    // X-systemd-skip, tranne il ripristino della sessione, che
-    // vela-session-env spegne.
-    // Plasma Login copia DesktopNames del .desktop così com'è ("Vela;KDE;"),
-    // mentre le app si aspettano i nomi separati da ':'.
+    // Vela uses KDE's services (keyring, portals, app theme): "KDE" after
+    // "Vela" makes Brave, Chrome and Electron apps (VS Code) use KDE's keyring
+    // as they do inside Plasma. Without it they encrypt their data with a
+    // fixed key and can no longer read what they saved in Plasma: site logins
+    // lost, sync and passwords that can't be decrypted. Plasma's autostart
+    // entries don't run: they have X-systemd-skip, except session restore,
+    // which vela-session-env turns off. Plasma Login copies DesktopNames from
+    // the .desktop file as it is ("Vela;KDE;"), while apps expect the names
+    // separated by ':'.
     const char *current = getenv("XDG_CURRENT_DESKTOP");
     size_t size = (current ? strlen(current) : 0) + 16;
     char *desktops = calloc(size, 1);
@@ -38,14 +37,14 @@ void vela_session_set_environment(void)
     free(desktops);
     setenv("KDE_SESSION_VERSION", "6", 0);
     setenv("XDG_SESSION_DESKTOP", "vela", 0);
-    setenv("XDG_SESSION_TYPE", "wayland", 1); // da una console vale "tty"
-    // Le app Qt e KDE con il tema scelto in KDE (stile, colori, font,
-    // icone), come dentro Plasma.
+    setenv("XDG_SESSION_TYPE", "wayland", 1); // from a console it's "tty"
+    // Qt and KDE apps with the theme chosen in KDE (style, colors, fonts,
+    // icons), as inside Plasma.
     if (access("/usr/lib/qt6/plugins/platformthemes/KDEPlasmaPlatformTheme6.so", F_OK) == 0) {
         setenv("QT_QPA_PLATFORMTHEME", "kde", 0);
     }
-    // Il menu delle applicazioni di KDE: senza, Dolphin e gli altri non
-    // sanno con cosa aprire i file.
+    // KDE's application menu: without it, Dolphin and the others don't know
+    // what to open files with.
     if (access("/etc/xdg/menus/plasma-applications.menu", F_OK) == 0) {
         setenv("XDG_MENU_PREFIX", "plasma-", 0);
     }

@@ -20,7 +20,7 @@
 #include <librsvg/rsvg.h>
 #endif
 
-// Un elenco di stringhe allocate.
+// A list of allocated strings.
 struct strings {
     char **items;
     int count;
@@ -55,7 +55,7 @@ static void strings_free(struct strings *list)
     memset(list, 0, sizeof(*list));
 }
 
-// Le voci non vuote di "a,b,c" (o con un altro separatore).
+// The non-empty entries of "a,b,c" (or with another separator).
 static void strings_split(struct strings *list, const char *text, char separator)
 {
     while (*text) {
@@ -70,9 +70,9 @@ static void strings_split(struct strings *list, const char *text, char separator
     }
 }
 
-// Un'associazione nome -> icona, dai file .desktop.
+// A name -> icon mapping, from .desktop files.
 struct icon_name {
-    char *key; // minuscolo
+    char *key; // lowercase
     char *icon;
 };
 
@@ -92,7 +92,7 @@ static const char *icon_names_find(const struct icon_names *names, const char *k
     return NULL;
 }
 
-// Il primo che si trova vince (le cartelle vanno dalla più importante).
+// The first one found wins (directories go from the most important).
 static void icon_names_add(struct icon_names *names, const char *key, const char *icon)
 {
     if (icon_names_find(names, key)) {
@@ -116,7 +116,7 @@ static void icon_names_free(struct icon_names *names)
     free(names->items);
 }
 
-// Un'icona già disegnata (o cercata senza successo), per app e misura.
+// An icon already drawn (or looked up without success), per app and size.
 struct cached_icon {
     char *app_id;
     int size;
@@ -125,10 +125,10 @@ struct cached_icon {
 };
 
 struct vela_icons {
-    struct strings theme_chain; // il tema, quelli che eredita, hicolor
+    struct strings theme_chain; // the theme, those it inherits, hicolor
     struct strings icon_dirs; // .../icons
     bool desktop_loaded;
-    struct icon_names by_id; // id del .desktop (senza estensione) -> Icon
+    struct icon_names by_id; // .desktop id (without extension) -> Icon
     struct icon_names by_class; // StartupWMClass -> Icon
     struct cached_icon *cache;
 };
@@ -145,7 +145,7 @@ static bool exists(const char *path)
     return access(path, F_OK) == 0;
 }
 
-// Le cartelle dati XDG, dalla più importante.
+// The XDG data directories, most important first.
 static void data_dirs(struct strings *dirs)
 {
     const char *home = getenv("HOME");
@@ -161,9 +161,9 @@ static void data_dirs(struct strings *dirs)
     strings_split(dirs, system && *system ? system : "/usr/local/share:/usr/share", ':');
 }
 
-// I valori di alcune chiavi in una sezione [section] di un file .ini o
-// .desktop (a parità di chiave vince l'ultima riga). values[i] resta vuoto
-// se la chiave manca.
+// The values of some keys in a [section] of an .ini or .desktop file (for
+// repeated keys the last line wins). values[i] stays empty if the key is
+// missing.
 static void read_section(const char *path, const char *section, const char *const *keys, char (*values)[256],
     int count)
 {
@@ -228,12 +228,12 @@ struct vela_icons *vela_icons_create(void)
     }
     strings_free(&dirs);
 
-    // Il tema scelto in KDE ([Icons] Theme in kdeglobals), altrimenti Breeze.
+    // The theme chosen in KDE ([Icons] Theme in kdeglobals), otherwise Breeze.
     static const char *const theme_key[] = { "Theme" };
     char theme[1][256];
     kdeglobals_path(path, sizeof(path));
     read_section(path, "Icons", theme_key, theme, 1);
-    // La catena: il tema, quelli che eredita (Inherits), infine hicolor.
+    // The chain: the theme, those it inherits (Inherits), finally hicolor.
     struct strings pending = { 0 };
     strings_push(&pending, theme[0][0] ? theme[0] : "breeze");
     for (int next = 0; next < pending.count; ++next) {
@@ -280,8 +280,8 @@ void vela_icons_destroy(struct vela_icons *icons)
     free(icons);
 }
 
-// I .desktop sotto `dir` (relativa: il pezzo dell'id dopo `apps`), in
-// profondità. Le cartelle collegate non si seguono.
+// The .desktop files under `dir` (relative: the part of the id after `apps`),
+// recursively. Linked directories aren't followed.
 static void scan_applications(struct vela_icons *icons, const char *apps, const char *relative)
 {
     char dir_path[PATH_MAX];
@@ -318,7 +318,7 @@ static void scan_applications(struct vela_icons *icons, const char *apps, const 
         if (!values[0][0]) {
             continue;
         }
-        // L'id con le sottocartelle unite da '-' (specifica Desktop Entry).
+        // The id with subdirectories joined by '-' (Desktop Entry spec).
         child[length - 8] = '\0';
         for (char *c = child; *c; ++c) {
             if (*c == '/') {
@@ -348,10 +348,10 @@ static void load_desktop_entries(struct vela_icons *icons)
     strings_free(&dirs);
 }
 
-// Il nome dell'icona dell'app. Dalla regola più sicura: il nome del
-// .desktop è l'app_id, poi la classe X11, poi l'ultima parte di un id a
-// dominio inverso (il primo in ordine alfabetico); infine l'app_id stesso,
-// perché spesso il tema ha un'icona col nome dell'app.
+// The app's icon name. From the safest rule: the .desktop name is the app_id,
+// then the X11 class, then the last part of a reverse-domain id (the first in
+// alphabetical order); finally the app_id itself, because the theme often has
+// an icon named after the app.
 static const char *icon_name(struct vela_icons *icons, const char *app_id)
 {
     if (!icons->desktop_loaded) {
@@ -379,8 +379,8 @@ static const char *icon_name(struct vela_icons *icons, const char *app_id)
     return icon ? icon : app_id;
 }
 
-// Le cartelle di un tema di icone (index.theme): nome, dimensione, se
-// scalabile. Directories dice quali contano, ogni [cartella] le misure.
+// The directories of an icon theme (index.theme): name, size, whether
+// scalable. Directories says which ones count, each [directory] its sizes.
 struct theme_dir {
     char name[256];
     int size;
@@ -395,10 +395,10 @@ static int theme_dirs(const char *index, struct theme_dir **out)
         return 0;
     }
     struct strings listed = { 0 };
-    struct theme_dir *dirs = NULL; // tutte le sezioni, poi solo quelle elencate
+    struct theme_dir *dirs = NULL; // all sections, then only the listed ones
     int count = 0;
     int capacity = 0;
-    int current = -1; // la sezione in corso; -1: [Icon Theme] o nessuna
+    int current = -1; // the current section; -1: [Icon Theme] or none
     bool in_theme = false;
     char *line = NULL;
     size_t line_capacity = 0;
@@ -448,7 +448,8 @@ static int theme_dirs(const char *index, struct theme_dir **out)
     free(line);
     fclose(file);
 
-    // Nell'ordine di Directories; una cartella senza sezione vale 0, Threshold.
+    // In the order of Directories; a directory without a section counts as 0,
+    // Threshold.
     struct theme_dir *result = calloc((size_t)(listed.count ? listed.count : 1), sizeof(*result));
     for (int i = 0; i < listed.count; ++i) {
         snprintf(result[i].name, sizeof(result[i].name), "%s", listed.items[i]);
@@ -466,9 +467,9 @@ static int theme_dirs(const char *index, struct theme_dir **out)
     return listed_count;
 }
 
-// Il file dell'icona `name` per `size` pixel, in `out`; false se non c'è.
-// Nel tema e in quelli che eredita: la cartella di dimensione più vicina;
-// a parità, l'SVG (si disegna esatto a qualunque misura).
+// The file of icon `name` for `size` pixels, in `out`; false if there is none.
+// In the theme and those it inherits: the directory with the closest size; on
+// a tie, the SVG (drawn exactly at any size).
 static bool find_file(struct vela_icons *icons, const char *name, int size, char *out, size_t out_size)
 {
     if (!*name) {
@@ -500,7 +501,7 @@ static bool find_file(struct vela_icons *icons, const char *name, int size, char
                     }
                     int score = dirs[d].scalable ? 0 : abs(dirs[d].size - size) * 2;
                     if (dirs[d].size < size && !dirs[d].scalable) {
-                        score += 1000; // ingrandire una PNG piccola: ultima scelta
+                        score += 1000; // enlarging a small PNG: last choice
                     }
                     score = e == 0 ? (score > 0 ? score - 1 : 0) : score + 1;
                     if (score < best_score) {
@@ -563,7 +564,7 @@ static void render(const char *path, int size, struct vela_image *image)
     cairo_destroy(cr);
     cairo_surface_flush(surface);
     if (ok) {
-        // Cairo ARGB32 è già ARGB8888 premoltiplicato, riga per riga.
+        // Cairo ARGB32 is already premultiplied ARGB8888, row by row.
         int stride = cairo_image_surface_get_stride(surface);
         const unsigned char *data = cairo_image_surface_get_data(surface);
         image->width = size;

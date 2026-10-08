@@ -4,8 +4,8 @@
 
 #extension GL_GOOGLE_include_directive : require
 
-// Sfocatura dal vivo (§8.3), dual Kawase: ingrandimento al doppio con otto
-// letture bilineari pesate.
+// Live blur (§8.3), dual Kawase: up to double size with eight weighted
+// bilinear reads.
 
 #include "push.glsl"
 

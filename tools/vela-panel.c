@@ -1,17 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// vela-panel: pezzi di shell finti per le prove (wlr-layer-shell), così le
-// prove senza la shell Qt coprono gli strati, l'area riservata e la
-// sfocatura (ext-background-effect).
+// vela-panel: fake shell pieces for tests (wlr-layer-shell), so tests
+// without the Qt shell cover layers, reserved space and blur
+// (ext-background-effect).
 //
-// Uso: vela-panel wallpaper          sfondo a tutto schermo, un gradiente a
-//                                    righe (dà qualcosa da sfocare)
-//      vela-panel taskbar [--blur]   barra in basso alta 48, semitrasparente,
-//                                    con 48 unità riservate; --blur chiede di
-//                                    sfocare ciò che sta dietro
+// Usage: vela-panel wallpaper          fullscreen wallpaper, a striped
+//                                     gradient (something to blur)
+//        vela-panel taskbar [--blur]   48-high translucent bottom bar,
+//                                     reserving 48 units; --blur asks to
+//                                     blur what lies behind
 //
-// Disegna a scala 1 in memoria condivisa e resta finché non lo si chiude.
+// Draws at scale 1 in shared memory and stays until closed.
 
 #define _GNU_SOURCE
 #include <stdint.h>
@@ -32,7 +32,7 @@ static struct ext_background_effect_manager_v1* effects;
 
 static struct wl_surface* surface;
 static struct zwlr_layer_surface_v1* layerSurface;
-static struct ext_background_effect_surface_v1* effect; // con --blur
+static struct ext_background_effect_surface_v1* effect; // with --blur
 static int wallpaper;
 static int running = 1;
 
@@ -74,13 +74,13 @@ static void draw(uint32_t width, uint32_t height)
         for (uint32_t x = 0; x < width; ++x) {
             uint32_t color;
             if (wallpaper) {
-                // Bande colorate che cambiano lungo x e y: la sfocatura si vede.
+                // Colored bands changing along x and y: the blur shows.
                 const uint32_t r = (x * 255 / width) & 0xff;
                 const uint32_t g = ((y / 24) % 2) ? 0xc0 : 0x30;
                 const uint32_t b = (255 - y * 255 / height) & 0xff;
                 color = 0xff000000u | r << 16 | g << 8 | b;
             } else {
-                // Grigio scuro al 50%, premoltiplicato.
+                // Dark gray at 50%, premultiplied.
                 color = 0x80101018u;
             }
             pixels[(size_t)y * width + x] = color;
@@ -94,9 +94,9 @@ static void draw(uint32_t width, uint32_t height)
     close(fd);
     wl_buffer_add_listener(buffer, &bufferListener, NULL);
     if (effect) {
-        // Tutta la superficie, come la taskbar della shell.
+        // "Everything", the way toolkits ask for the whole surface.
         struct wl_region* region = wl_compositor_create_region(compositor);
-        wl_region_add(region, 0, 0, (int32_t)width, (int32_t)height);
+        wl_region_add(region, 0, 0, INT32_MAX, INT32_MAX);
         ext_background_effect_surface_v1_set_blur_region(effect, region);
         wl_region_destroy(region);
     }

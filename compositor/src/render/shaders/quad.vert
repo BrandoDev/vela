@@ -4,8 +4,8 @@
 
 #extension GL_GOOGLE_include_directive : require
 
-// Un quad per disegno: quattro vertici in triangle strip, niente vertex
-// buffer. Posizione e coordinate texture arrivano dalle push constant.
+// One quad per draw: four vertices as a triangle strip, no vertex buffer.
+// Position and texture coordinates come from the push constants.
 
 #include "push.glsl"
 

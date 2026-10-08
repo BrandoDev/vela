@@ -1,8 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""La sessione: blocco e sblocco, schermi spenti e riaccesi, e il
-supervisore che riavvia il compositor dopo un crash (anche bloccato)."""
+"""The session: lock and unlock, outputs turned off and on, and the
+supervisor restarting the compositor after a crash (locked too)."""
 
 import os
 import signal
@@ -37,7 +37,7 @@ class Lock(unittest.TestCase):
             vela.wait_for(lambda s: s["focused"] == window)
             vela.command("lock")
             state = vela.wait_for(lambda s: s["locked"], what="locked")
-            self.assertIsNone(state["focused"])  # nessuna finestra ha la tastiera
+            self.assertIsNone(state["focused"]) # no window has the keyboard
             state = vela.wait_for(lambda s: not s["locked"], timeout=6, what="unlocked")
             vela.wait_for(lambda s: s["focused"] == window, what="focus goes back to the window")
 
@@ -55,8 +55,9 @@ class Lock(unittest.TestCase):
 
 
 class Shell(unittest.TestCase):
-    """Il comando di avvio (la shell): rilanciato se cade, ma non se esce
-    bene né se cade di continuo appena partito (shell.c)."""
+    """The startup command (the shell): relaunched when it fails, but not
+    when it exits cleanly nor when it keeps failing right after starting
+    (shell.c)."""
 
     def runs(self, script):
         count = tempfile.mktemp(prefix="vela-shell-runs-")
@@ -92,13 +93,13 @@ class Supervisor(unittest.TestCase):
             vela.wait_for(lambda s: s["outputs"], what="the new compositor responds")
 
     def test_crash_while_locked_restarts_locked(self):
-        # Il programma di blocco di prova resta 3 s, poi si sblocca da solo.
+        # The test lock program stays 3 s, then unlocks by itself.
         with Session(supervise=True, lock_hold_ms=3000) as vela:
             vela.command("lock")
             vela.wait_for(lambda s: s["locked"])
             os.kill(child_compositor(vela.process.pid), signal.SIGSEGV)
             vela.wait_for_log("restarting locked")
-            # Ripartito bloccato (mai il desktop scoperto), poi lo sblocco.
+            # Restarted locked (the desktop never revealed), then the unlock.
             time.sleep(0.5)
             vela.wait_for(lambda s: s["locked"], what="restarted locked")
             vela.wait_for(lambda s: not s["locked"], timeout=8, what="unlocked by the new locker")
@@ -116,7 +117,7 @@ class Supervisor(unittest.TestCase):
             self.assertNotEqual(vela.process.returncode, 0)
             self.assertIn("giving up", vela.log_text())
             runtime = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
-            self.assertFalse(os.path.exists(os.path.join(runtime, vela.display)))  # socket Wayland tolto
+            self.assertFalse(os.path.exists(os.path.join(runtime, vela.display))) # Wayland socket removed
 
 
 if __name__ == "__main__":

@@ -4,11 +4,11 @@
 #ifndef VELA_SCENE_EFFECTS_H
 #define VELA_SCENE_EFFECTS_H
 
-// ext-background-effect-v1 (docs/renderer.md §8.3): le superfici chiedono
-// di sfocare ciò che sta dietro una loro regione (la shell per taskbar,
-// menu Start, menu, notifiche; le app che lo supportano). wlroots non lo
-// implementa: lo facciamo qui. La regione è nello stato della superficie
-// (si applica al commit), in coordinate della superficie.
+// ext-background-effect-v1 (docs/renderer.md §8.3): surfaces ask to blur what
+// lies behind a region of theirs (the shell for the taskbar, Start menu,
+// menus, notifications; apps that support it). wlroots doesn't implement it,
+// so it's done here. The region is part of the surface state (applied on
+// commit), in surface coordinates.
 
 #include <pixman.h>
 
@@ -16,10 +16,10 @@ struct vela_scene;
 struct wl_display;
 struct wlr_surface;
 
-// Il global del protocollo. Una regione nuova chiede un frame alla scena.
+// The protocol global. A new region asks the scene for a frame.
 void vela_background_effects_init(struct wl_display *display, struct vela_scene *scene);
 
-// La regione da sfocare dietro la superficie, o NULL se non ce n'è.
+// The region to blur behind the surface, or NULL if there is none.
 const pixman_region32_t *vela_blur_region(struct wlr_surface *surface);
 
 #endif

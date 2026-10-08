@@ -1,15 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Un'app lenta non ferma lo schermo (docs/renderer.md §7.3).
+"""A slow app doesn't hold up the screen (docs/renderer.md §7.3).
 
-vela-slowgpu fa il commit di ogni fotogramma mentre la sua GPU lavora
-ancora per ~150 ms. Vela tiene il commit in attesa finché la fence non è
-segnalata (scene/ready.c) e intanto mostra il fotogramma precedente:
-il cursore che si muove resta a 60 Hz. Senza l'attesa (VELA_READY_WAIT=0)
-ogni frame aspetterebbe la GPU dell'app e lo schermo perderebbe quasi tutti
-i vblank: la terza prova controlla che il test se ne accorga davvero.
-"""
+vela-slowgpu commits every frame while its GPU keeps working for another
+~150 ms. Vela holds the commit until the fence signals (scene/ready.c) and
+meanwhile shows the previous frame: the moving cursor stays at 60 Hz.
+Without the wait (VELA_READY_WAIT=0) every frame would wait for the app's
+GPU and the output would miss almost every vblank: the third test checks
+that the test really notices."""
 
 import unittest
 
@@ -17,7 +16,7 @@ from harness import Session, tool
 
 
 def move_cursor(vela, seconds=1.0):
-    """Il cursore attraversa lo schermo a 60 Hz per `seconds`."""
+    """The cursor crosses the output at 60 Hz for `seconds`."""
     steps = int(seconds * 60)
     actions = []
     for i in range(steps):
@@ -27,7 +26,7 @@ def move_cursor(vela, seconds=1.0):
 
 class ReadyCommits(unittest.TestCase):
     def measure(self, *args, env=None):
-        """Vblank persi e commit trattenuti mentre il cursore si muove per 1 s."""
+        """Missed vblanks and held commits while the cursor moves for 1 s."""
         with Session(env=env) as vela:
             vela.open_window(command=[tool("vela-slowgpu"), "150", *args], timeout=15)
             before = vela.wait_for(lambda s: s["held"] >= 2 or env, timeout=5, what="held commits")
@@ -40,12 +39,12 @@ class ReadyCommits(unittest.TestCase):
     def test_explicit_sync(self):
         missed, frames, held = self.measure()
         self.assertLessEqual(missed, 2, f"{frames} frames, {held} held commits")
-        self.assertGreaterEqual(held, 3)  # ~6 fotogrammi dell'app in 1 s, tutti in attesa
+        self.assertGreaterEqual(held, 3) # ~6 app frames in 1 s, all held
 
     def test_implicit_sync(self):
-        # Anche i buffer ridisegnati ma non mostrati: restano importati solo
-        # finché servono (render/texture.c), o il kernel farebbe aspettare
-        # le loro fence a ogni nostro invio.
+        # Buffers redrawn but not shown too: they stay imported only as long as
+        # needed (render/texture.c), or the kernel would make every submission
+        # of ours wait for their fences.
         missed, frames, held = self.measure("--implicit")
         self.assertLessEqual(missed, 2, f"{frames} frames, {held} held commits")
         self.assertGreaterEqual(held, 3)

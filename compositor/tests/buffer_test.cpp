@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Il testo che cresce (buffer.c), con cui si costruiscono i messaggi alla
-// shell e lo stato JSON, e i nomi dei desktop della sessione (util.c).
+// Growing text (buffer.c), used to build the messages to the shell and the
+// state JSON, and the session's desktop names (util.c).
 
 extern "C" {
 #include "buffer.h"
@@ -28,7 +28,7 @@ TEST(Buffer, StartsEmptyAndGrows)
     vela_buffer_appendf(&buffer, "%s %d", "show", 2);
     EXPECT_EQ(text(buffer), "switcher-show 2");
     EXPECT_EQ(buffer.length, 15u);
-    // Molto più della capacità iniziale.
+    // Much more than the initial capacity.
     std::string expected = text(buffer);
     for (int i = 0; i < 1000; ++i) {
         vela_buffer_appendf(&buffer, " %d", i);

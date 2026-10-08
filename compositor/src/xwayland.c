@@ -1,15 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Le app X11 (Steam, molti giochi, app vecchie) attraverso Xwayland.
+// X11 apps (Steam, many games, old apps) through Xwayland.
 //
-// Xwayland parte solo quando la prima app X11 si collega. Ogni sua finestra
-// "gestita" diventa una vela_view come quelle Wayland: stesse animazioni,
-// snap, taskbar e Alt+Tab. Le finestre "override-redirect" (menu, tooltip,
-// tendine) si mettono dove dice l'app, sopra tutto, in uno strato loro.
+// Xwayland starts only when the first X11 app connects. Each of its "managed"
+// windows becomes a vela_view like Wayland ones: same animations, snap,
+// taskbar and Alt+Tab. "Override-redirect" windows (menus, tooltips,
+// drop-downs) go where the app says, above everything, in a layer of their
+// own.
 //
-// Le app X11 non conoscono la scala frazionaria: disegnano a 1× e il
-// compositor le ingrandisce con il filtro di qualità (docs/renderer.md §3.9).
+// X11 apps don't know fractional scaling: they draw at 1× and the compositor
+// magnifies them with the quality filter (docs/renderer.md §3.9).
 
 #include "view.h"
 
@@ -17,6 +18,7 @@
 #include "focus.h"
 #include "bindings.h"
 #include "input.h"
+#include "listen.h"
 #include "output.h"
 #include "scene/scene.h"
 #include "server.h"
@@ -34,23 +36,12 @@
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/xcursor.h>
 #include <wlr/xwayland.h>
+#include <wlr/xwayland/shell.h>
 
-static void listen(struct wl_signal *signal, struct wl_listener *listener, wl_notify_func_t notify)
-{
-    listener->notify = notify;
-    wl_signal_add(signal, listener);
-}
+// -------------------------------------------- menus, tooltips, drop-downs --
 
-static void unlisten(struct wl_listener *listener)
-{
-    wl_list_remove(&listener->link);
-    wl_list_init(&listener->link);
-}
-
-// ------------------------------------------------- menu, tooltip, tendine --
-
-// Un menu, un tooltip o una tendina X11: nessun gestore di finestre, la
-// posizione la sceglie l'app (in coordinate globali).
+// An X11 menu, tooltip or drop-down: no window manager, the app chooses the
+// position (in global coordinates).
 struct unmanaged {
     struct vela_server *server;
     struct wlr_xwayland_surface *x11;
@@ -71,7 +62,7 @@ static void handle_unmanaged_map(struct wl_listener *listener, void *data)
     vela_node_set_position(&menu->tree->node, menu->x11->x, menu->x11->y);
     vela_node_raise_to_top(&menu->tree->node);
     vela_node_set_enabled(&menu->tree->node, true);
-    // Alcuni menu X11 vogliono la tastiera (per scorrere le voci).
+    // Some X11 menus want the keyboard (to move through the entries).
     if (wlr_xwayland_surface_override_redirect_wants_focus(menu->x11)) {
         vela_input_keyboard_enter(menu->server->input, menu->x11->surface);
     }
@@ -86,19 +77,32 @@ static void handle_unmanaged_unmap(struct wl_listener *listener, void *data)
     }
 }
 
+// wlroots maps an X11 surface at the first commit with a buffer after the
+// X window and the Wayland surface are paired. The pairing message can
+// arrive after Xwayland has already committed the window's content; then
+// no further commit comes (Xwayland waits for a frame callback that an
+// unmapped surface never gets) and the window would never show.
+static void map_if_drawn(struct wlr_surface *surface)
+{
+    if (!surface->mapped && wlr_surface_has_buffer(surface)) {
+        wlr_surface_map(surface);
+    }
+}
+
 static void handle_unmanaged_associate(struct wl_listener *listener, void *data)
 {
     struct unmanaged *menu = wl_container_of(listener, menu, associate);
     menu->surface_node = vela_surface_node_create(menu->tree, menu->x11->surface);
-    listen(&menu->x11->surface->events.map, &menu->map, handle_unmanaged_map);
-    listen(&menu->x11->surface->events.unmap, &menu->unmap, handle_unmanaged_unmap);
+    vela_listen(&menu->x11->surface->events.map, &menu->map, handle_unmanaged_map);
+    vela_listen(&menu->x11->surface->events.unmap, &menu->unmap, handle_unmanaged_unmap);
+    map_if_drawn(menu->x11->surface);
 }
 
 static void handle_unmanaged_dissociate(struct wl_listener *listener, void *data)
 {
     struct unmanaged *menu = wl_container_of(listener, menu, dissociate);
-    unlisten(&menu->map);
-    unlisten(&menu->unmap);
+    vela_unlisten(&menu->map);
+    vela_unlisten(&menu->unmap);
     if (menu->surface_node) {
         vela_node_destroy(&menu->surface_node->node);
         menu->surface_node = NULL;
@@ -121,13 +125,13 @@ static void handle_unmanaged_request_configure(struct wl_listener *listener, voi
 static void handle_unmanaged_destroy(struct wl_listener *listener, void *data)
 {
     struct unmanaged *menu = wl_container_of(listener, menu, destroy);
-    unlisten(&menu->associate);
-    unlisten(&menu->dissociate);
-    unlisten(&menu->map);
-    unlisten(&menu->unmap);
-    unlisten(&menu->set_geometry);
-    unlisten(&menu->request_configure);
-    unlisten(&menu->destroy);
+    vela_unlisten(&menu->associate);
+    vela_unlisten(&menu->dissociate);
+    vela_unlisten(&menu->map);
+    vela_unlisten(&menu->unmap);
+    vela_unlisten(&menu->set_geometry);
+    vela_unlisten(&menu->request_configure);
+    vela_unlisten(&menu->destroy);
     if (menu->surface_node) {
         vela_node_destroy(&menu->surface_node->node);
     }
@@ -144,14 +148,14 @@ static void unmanaged_create(struct vela_server *server, struct wlr_xwayland_sur
     vela_node_set_enabled(&menu->tree->node, false);
     wl_list_init(&menu->map.link);
     wl_list_init(&menu->unmap.link);
-    listen(&x11->events.associate, &menu->associate, handle_unmanaged_associate);
-    listen(&x11->events.dissociate, &menu->dissociate, handle_unmanaged_dissociate);
-    listen(&x11->events.set_geometry, &menu->set_geometry, handle_unmanaged_set_geometry);
-    listen(&x11->events.request_configure, &menu->request_configure, handle_unmanaged_request_configure);
-    listen(&x11->events.destroy, &menu->destroy, handle_unmanaged_destroy);
+    vela_listen(&x11->events.associate, &menu->associate, handle_unmanaged_associate);
+    vela_listen(&x11->events.dissociate, &menu->dissociate, handle_unmanaged_dissociate);
+    vela_listen(&x11->events.set_geometry, &menu->set_geometry, handle_unmanaged_set_geometry);
+    vela_listen(&x11->events.request_configure, &menu->request_configure, handle_unmanaged_request_configure);
+    vela_listen(&x11->events.destroy, &menu->destroy, handle_unmanaged_destroy);
 }
 
-// ---------------------------------------------------------- finestre X11 --
+// ----------------------------------------------------------- X11 windows --
 
 void vela_view_sync_x11(struct vela_view *view)
 {
@@ -180,8 +184,7 @@ static void handle_map(struct wl_listener *listener, void *data)
 {
     struct vela_view *view = wl_container_of(listener, view, map);
     vela_view_update_decoration(view);
-    // Le app X11 possono chiedere di partire massimizzate o a schermo
-    // intero (giochi).
+    // X11 apps can ask to start maximized or fullscreen (games).
     if (view->x11->fullscreen) {
         vela_view_set_fullscreen(view, true);
     } else if (view->x11->maximized_horz || view->x11->maximized_vert) {
@@ -202,24 +205,25 @@ static void handle_commit(struct wl_listener *listener, void *data)
     vela_view_committed(view);
 }
 
-// La superficie Wayland arriva dopo (associate) e può andarsene prima della
-// finestra X11 (dissociate).
+// The Wayland surface comes later (associate) and can leave before the X11
+// window (dissociate).
 static void handle_associate(struct wl_listener *listener, void *data)
 {
     struct vela_view *view = wl_container_of(listener, view, associate);
     struct wlr_surface *surface = view->x11->surface;
     view->surface_node = vela_surface_node_create(view->tree, surface);
-    listen(&surface->events.map, &view->map, handle_map);
-    listen(&surface->events.unmap, &view->unmap, handle_unmap);
-    listen(&surface->events.commit, &view->commit, handle_commit);
+    vela_listen(&surface->events.map, &view->map, handle_map);
+    vela_listen(&surface->events.unmap, &view->unmap, handle_unmap);
+    vela_listen(&surface->events.commit, &view->commit, handle_commit);
+    map_if_drawn(surface);
 }
 
 static void handle_dissociate(struct wl_listener *listener, void *data)
 {
     struct vela_view *view = wl_container_of(listener, view, dissociate);
-    unlisten(&view->map);
-    unlisten(&view->unmap);
-    unlisten(&view->commit);
+    vela_unlisten(&view->map);
+    vela_unlisten(&view->unmap);
+    vela_unlisten(&view->commit);
     if (view->surface_node) {
         vela_node_destroy(&view->surface_node->node);
         view->surface_node = NULL;
@@ -237,21 +241,21 @@ static void handle_request_configure(struct wl_listener *listener, void *data)
     struct vela_view *view = wl_container_of(listener, view, request_configure);
     struct wlr_xwayland_surface_configure_event *event = data;
     if (!view->mapped) {
-        // Prima di comparire l'app sceglie dove e quanto (ce lo si ricorda:
-        // è la sua dimensione "normale").
+        // Before appearing the app chooses where and how large (remembered:
+        // it's its "normal" size).
         view->x11_initial = (struct wlr_box) { event->x, event->y, event->width, event->height };
         wlr_xwayland_surface_configure(view->x11, event->x, event->y, event->width, event->height);
         return;
     }
     if (view->maximized || view->fullscreen || !vela_snap_is_none(view->snap)) {
-        view->x11_sent = (struct wlr_box) { 0 }; // decidiamo noi: si ripete la nostra geometria
+        view->x11_sent = (struct wlr_box) { 0 }; // we decide: our geometry is repeated
         vela_view_sync_x11(view);
         return;
     }
-    // Finestra libera: l'app può spostarsi e ridimensionarsi (giochi che
-    // cambiano risoluzione, finestre di dialogo che si centrano), ma resta
-    // dentro lo schermo dove vuole andare: Steam, per esempio, torna alla
-    // posizione e alla dimensione che ricorda, anche se non ci stanno più.
+    // A free window: the app can move and resize itself (games changing
+    // resolution, dialogs centering themselves), but stays inside the output
+    // it wants to go to: Steam, for example, goes back to the position and
+    // size it remembers, even when they no longer fit.
     int bar = vela_view_title_bar_height(view);
     struct wlr_box frame = { event->x, event->y - bar, event->width, event->height + bar };
     struct vela_output *output
@@ -338,30 +342,58 @@ static void view_create(struct vela_server *server, struct wlr_xwayland_surface 
     struct vela_view *view = calloc(1, sizeof(*view));
     vela_view_init(view, server);
     view->x11 = x11;
-    x11->data = view; // per risalire alla finestra genitore
-    listen(&x11->events.associate, &view->associate, handle_associate);
-    listen(&x11->events.dissociate, &view->dissociate, handle_dissociate);
-    listen(&x11->events.destroy, &view->destroy, handle_destroy);
-    listen(&x11->events.request_configure, &view->request_configure, handle_request_configure);
-    listen(&x11->events.request_move, &view->request_move, handle_request_move);
-    listen(&x11->events.request_resize, &view->request_resize, handle_request_resize);
-    listen(&x11->events.request_maximize, &view->request_maximize, handle_request_maximize);
-    listen(&x11->events.request_fullscreen, &view->request_fullscreen, handle_request_fullscreen);
-    listen(&x11->events.request_minimize, &view->request_minimize, handle_request_minimize);
-    listen(&x11->events.request_activate, &view->request_activate, handle_request_activate);
-    listen(&x11->events.set_title, &view->set_title, handle_set_title);
-    listen(&x11->events.set_decorations, &view->set_decorations, handle_set_decorations);
-    listen(&x11->events.set_class, &view->set_app_id, handle_set_class);
-    listen(&x11->events.set_parent, &view->set_parent, handle_set_parent);
+    x11->data = view; // to get back to the parent window
+    vela_listen(&x11->events.associate, &view->associate, handle_associate);
+    vela_listen(&x11->events.dissociate, &view->dissociate, handle_dissociate);
+    vela_listen(&x11->events.destroy, &view->destroy, handle_destroy);
+    vela_listen(&x11->events.request_configure, &view->request_configure, handle_request_configure);
+    vela_listen(&x11->events.request_move, &view->request_move, handle_request_move);
+    vela_listen(&x11->events.request_resize, &view->request_resize, handle_request_resize);
+    vela_listen(&x11->events.request_maximize, &view->request_maximize, handle_request_maximize);
+    vela_listen(&x11->events.request_fullscreen, &view->request_fullscreen, handle_request_fullscreen);
+    vela_listen(&x11->events.request_minimize, &view->request_minimize, handle_request_minimize);
+    vela_listen(&x11->events.request_activate, &view->request_activate, handle_request_activate);
+    vela_listen(&x11->events.set_title, &view->set_title, handle_set_title);
+    vela_listen(&x11->events.set_decorations, &view->set_decorations, handle_set_decorations);
+    vela_listen(&x11->events.set_class, &view->set_app_id, handle_set_class);
+    vela_listen(&x11->events.set_parent, &view->set_parent, handle_set_parent);
 }
 
 // --------------------------------------------------------------- Xwayland --
+
+// wlroots' X window manager can leave events stuck in xcb's queue: when it
+// flushes requests outside its event handler, xcb also reads whatever has
+// arrived, and the queue is drained only when the socket becomes readable
+// again. A quiet client then waits forever: the one that starts Xwayland
+// creates its window while the window manager is being set up, and any
+// window can lose the message that pairs it with its Wayland surface.
+// Touching a root property makes the server send the window manager an
+// event, which drains the queue.
+static void wake_window_manager(struct vela_server *server)
+{
+    xcb_connection_t *connection = wlr_xwayland_get_xwm_connection(server->xwayland);
+    if (!connection || !server->xwayland_wake_atom) {
+        return;
+    }
+    xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(connection)).data;
+    xcb_change_property(connection, XCB_PROP_MODE_REPLACE, screen->root, server->xwayland_wake_atom,
+        XCB_ATOM_CARDINAL, 32, 0, NULL);
+    xcb_flush(connection);
+}
+
+// Xwayland has given an X window its Wayland surface: the pairing message
+// on the X side must not be left in the queue.
+static void handle_shell_surface(struct wl_listener *listener, void *data)
+{
+    struct vela_server *server = wl_container_of(listener, server, xwayland_shell_surface);
+    wake_window_manager(server);
+}
 
 static void handle_ready(struct wl_listener *listener, void *data)
 {
     struct vela_server *server = wl_container_of(listener, server, xwayland_ready);
     wlr_xwayland_set_seat(server->xwayland, server->seat);
-    // Il cursore delle finestre X11 finché l'app non ne sceglie uno.
+    // The cursor for X11 windows until the app picks one.
     if (wlr_xcursor_manager_load(server->cursor_manager, 1.0f)) {
         struct wlr_xcursor *xcursor = wlr_xcursor_manager_get_xcursor(server->cursor_manager, "default", 1.0f);
         if (xcursor) {
@@ -370,6 +402,15 @@ static void handle_ready(struct wl_listener *listener, void *data)
                 (int32_t)image->hotspot_y);
         }
     }
+    // The atom is asked for once, here: later a reply could keep us waiting
+    // on an Xwayland that is itself waiting on us.
+    xcb_connection_t *connection = wlr_xwayland_get_xwm_connection(server->xwayland);
+    static const char name[] = "_VELA_WAKE";
+    xcb_intern_atom_reply_t *atom
+        = xcb_intern_atom_reply(connection, xcb_intern_atom(connection, 0, sizeof(name) - 1, name), NULL);
+    server->xwayland_wake_atom = atom ? atom->atom : XCB_ATOM_NONE;
+    free(atom);
+    wake_window_manager(server);
     wlr_log(WLR_INFO, "Xwayland ready on DISPLAY=%s", server->xwayland->display_name);
 }
 
@@ -388,23 +429,26 @@ void vela_xwayland_init(struct vela_server *server)
 {
     wl_list_init(&server->xwayland_ready.link);
     wl_list_init(&server->xwayland_new_surface.link);
-    // Pigro: il server X parte al primo client, niente costo se non serve.
+    wl_list_init(&server->xwayland_shell_surface.link);
+    // Lazy: the X server starts with the first client, no cost when unused.
     server->xwayland = wlr_xwayland_create(server->display, server->compositor, true);
     if (!server->xwayland) {
         wlr_log(WLR_ERROR, "Xwayland not available: X11-only apps won't start");
         return;
     }
-    listen(&server->xwayland->events.ready, &server->xwayland_ready, handle_ready);
-    listen(&server->xwayland->events.new_surface, &server->xwayland_new_surface, handle_new_surface);
+    vela_listen(&server->xwayland->events.ready, &server->xwayland_ready, handle_ready);
+    vela_listen(&server->xwayland->events.new_surface, &server->xwayland_new_surface, handle_new_surface);
+    vela_listen(&server->xwayland->shell_v1->events.new_surface, &server->xwayland_shell_surface, handle_shell_surface);
     wlr_log(WLR_INFO, "Xwayland on DISPLAY=%s (starts with the first X11 client)", server->xwayland->display_name);
 }
 
 void vela_xwayland_finish(struct vela_server *server)
 {
-    // Chiude le finestre X11 (e le loro viste) prima dei client Wayland.
+    // Closes the X11 windows (and their views) before the Wayland clients.
     if (server->xwayland) {
-        unlisten(&server->xwayland_ready);
-        unlisten(&server->xwayland_new_surface);
+        vela_unlisten(&server->xwayland_ready);
+        vela_unlisten(&server->xwayland_new_surface);
+        vela_unlisten(&server->xwayland_shell_surface);
         wlr_xwayland_destroy(server->xwayland);
         server->xwayland = NULL;
     }

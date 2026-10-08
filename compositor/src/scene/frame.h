@@ -4,11 +4,11 @@
 #ifndef VELA_SCENE_FRAME_H
 #define VELA_SCENE_FRAME_H
 
-// Dalla scena ai pixel di uno schermo (docs/renderer.md §6): la scena
-// appiattita in una lista di quad, le parti coperte scartate, il danno
-// calcolato confrontando con il frame precedente, e solo quello ridisegnato.
-// Se una sola app opaca copre lo schermo, il suo buffer va direttamente sul
-// piano primario (scanout diretto, §5.3).
+// From the scene to an output's pixels (docs/renderer.md §6): the scene
+// flattened into a list of quads, the covered parts dropped, the damage found
+// by comparing with the previous frame, and only that redrawn. When a single
+// opaque app covers the output, its buffer goes straight to the primary plane
+// (direct scanout, §5.3).
 
 #include <pixman.h>
 #include <stdbool.h>
@@ -32,77 +32,77 @@ struct wlr_output_state;
 struct wlr_surface;
 struct wlr_texture;
 
-// Un quad da disegnare, in pixel della destinazione.
+// A quad to draw, in target pixels.
 struct vela_element {
-    const void *key; // chi è: la superficie o il nodo nostro
-    struct wlr_surface *surface; // superfici delle app, altrimenti NULL
-    struct wlr_texture *texture; // NULL: tinta unita
+    const void *key; // who it is: the surface or our node
+    struct wlr_surface *surface; // app surfaces, otherwise NULL
+    struct wlr_texture *texture; // NULL: solid color
     struct wlr_render_color color;
     struct wlr_fbox src;
     enum wl_output_transform transform;
     struct wlr_box box;
     float opacity;
-    bool linear; // filtro bilineare; false: copia 1:1
-    // Dalla superficie ai pixel: pixel = origin + scale * coordinata logica.
+    bool linear; // bilinear filter; false: 1:1 copy
+    // From the surface to pixels: pixel = origin + scale * logical coordinate.
     double origin_x, origin_y;
     double scale_x, scale_y;
-    // La forma (§8.1): ritaglio arrotondato in pixel; raggio 0, nessuno.
+    // The shape (§8.1): rounded clip in pixels; radius 0, none.
     struct wlr_box shape_rect;
     float shape_radius;
-    // Ombra (§8.2) se sigma > 0: proiettata da shape_rect, non sotto shadow_window.
+    // Shadow (§8.2) if sigma > 0: cast by shape_rect, not under shadow_window.
     struct wlr_box shadow_window;
     float shadow_sigma;
-    // Sfocatura dietro la superficie (ext-background-effect, §8.3): dove,
-    // in pixel (vuoto: niente).
+    // Blur behind the surface (ext-background-effect, §8.3): where, in pixels
+    // (empty: none).
     struct wlr_box blur_box;
-    bool visible; // non del tutto coperto
-    int64_t visible_area; // pixel non coperti
-    int order; // posizione nella lista, dal basso
+    bool visible; // not entirely covered
+    int64_t visible_area; // uncovered pixels
+    int order; // position in the list, from the bottom
 };
 
-// Un elenco di elementi, riusato da un frame all'altro (cresce soltanto).
+// A list of elements, reused from frame to frame (it only grows).
 struct vela_elements {
     struct vela_element *items;
     int count, capacity;
 };
 
-// Appiattisce `root` (dal basso verso l'alto) in `out` (che si svuota
-// prima). Il punto logico (origin_x, origin_y) finisce nel pixel (0, 0);
-// `bounds`: i pixel della destinazione.
+// Flattens `root` (bottom to top) into `out` (emptied first). The logical
+// point (origin_x, origin_y) lands on pixel (0, 0); `bounds`: the target's
+// pixels.
 struct vela_build_params {
     double origin_x, origin_y;
     double scale;
     struct wlr_box bounds;
-    // Catture: la radice si disegna anche se nascosta (finestra ridotta a
-    // icona) e senza la sua opacità (animazioni).
+    // Captures: the root is drawn even when hidden (minimized window) and
+    // without its opacity (animations).
     bool capture_root;
 };
 void vela_build_elements(struct vela_scene *scene, struct vela_node *root, const struct vela_build_params *params,
     struct vela_elements *out);
 
-// Disegna gli elementi visibili dentro `clip` (in pixel del buffer; NULL:
-// tutto). Gli elementi sono nello spazio dello schermo ruotato (width x
-// height); il buffer può essere ruotato rispetto a esso.
+// Draws the visible elements inside `clip` (buffer pixels; NULL: all).
+// Elements are in the rotated output space (width x height); the buffer can be
+// rotated relative to it.
 void vela_draw_elements(struct vela_scene *scene, struct vela_pass *pass, const struct vela_elements *elements,
     const pixman_region32_t *clip, enum wl_output_transform output_transform, int width, int height);
 
-// Dopo un disegno che ha letto `elements`: le app con sincronizzazione
-// esplicita riavranno i loro buffer quando scatta `sync_point` della
-// timeline del renderer (la GPU ha finito).
+// After a drawing that read `elements`: apps with explicit sync get their
+// buffers back when the renderer timeline reaches `sync_point` (the GPU has
+// finished).
 void vela_add_release_points(struct vela_scene *scene, const struct vela_elements *elements,
     struct vela_renderer *renderer, uint64_t sync_point);
 
-// L'ultimo frame consegnato: per misurarne il costo (§4.3) e, col vblank
-// virtuale, sapere quando è pronto.
+// The last delivered frame: to measure its cost (§4.3) and, with the virtual
+// vblank, to know when it's ready.
 struct vela_frame_delivered {
-    uint64_t point; // punto della timeline del renderer; 0: nessun disegno della GPU
+    uint64_t point; // renderer timeline point; 0: no GPU drawing
     int timing_slot;
-    bool scanout; // il buffer di un'app direttamente sullo schermo
-    bool tearing; // e mostrato subito, senza aspettare il vblank
+    bool scanout; // an app buffer straight on the output
+    bool tearing; // and shown at once, without waiting for the vblank
 };
 
-// Lo schermo visto dalla scena. Lo crea e lo distrugge il suo vela_output,
-// a cui chiede i frame.
+// The output as the scene sees it. Created and destroyed by its vela_output,
+// which it asks for frames.
 struct vela_output_frame {
     struct wl_list link; // vela_scene.frames
     struct vela_scene *scene;
@@ -113,34 +113,35 @@ struct vela_output_frame {
     int width, height;
     float scale;
 
-    // Il frame precedente e quello in costruzione (si scambiano): da qui il danno.
+    // The previous frame and the one being built (they swap): the damage comes
+    // from them.
     struct vela_elements last;
     struct vela_elements current;
-    // Le superfici visibili nell'ultimo frame (per i frame callback).
+    // The surfaces visible in the last frame (for frame callbacks).
     struct wlr_surface **visible_surfaces;
     int visible_count, visible_capacity;
 
     struct vela_frame_delivered delivered;
-    bool scanout; // l'ultimo frame era uno scanout diretto
-    bool tearing; // l'ultimo scanout era con tearing
-    const char *scanout_reason; // perché non c'è scanout (VELA_DEBUG_SCANOUT)
+    bool scanout; // the last frame was a direct scanout
+    bool tearing; // the last scanout tore
+    const char *scanout_reason; // why there is no scanout (VELA_DEBUG_SCANOUT)
     double zoom;
     double zoom_x, zoom_y;
 
-    // La Luce notturna nella gamma del monitor: la versione applicata (quella
-    // della scena), se il monitor la accetta.
+    // Night light in the monitor's gamma: the version applied (the scene's),
+    // if the monitor accepts it.
     struct wlr_color_transform *night_transform;
     bool night_commit_pending;
     uint32_t night_version;
-    bool night_in_gamma; // la gamma la sta mostrando
-    bool gamma_refused; // questo schermo non la accetta: nel disegno
-    bool cursor_locked; // col filtro nel disegno, il cursore lo disegniamo noi
-    // Sincronizzazione esplicita dello scanout: il backend fa scattare qui il
-    // rilascio del buffer di un'app quando smette di mostrarlo.
+    bool night_in_gamma; // the gamma is showing it
+    bool gamma_refused; // this output doesn't accept it: in drawing
+    bool cursor_locked; // with the filter in drawing, we draw the cursor ourselves
+    // Explicit sync for scanout: the backend signals here the release of an
+    // app's buffer when it stops showing it.
     struct wlr_drm_syncobj_timeline *scanout_timeline;
     uint64_t scanout_point;
     int feedback_debounce;
-    struct wlr_surface *feedback_surface; // chi ha il feedback di scanout da noi
+    struct wlr_surface *feedback_surface; // who has our scanout feedback
 
     struct wl_listener damage;
     struct wl_listener needs_frame;
@@ -150,29 +151,26 @@ struct vela_output_frame *vela_output_frame_create(struct vela_scene *scene, str
     struct wlr_output *output, struct vela_output *owner);
 void vela_output_frame_destroy(struct vela_output_frame *frame);
 
-// Costruisce il frame per lo schermo che nel layout sta in (lx, ly) e fa il
-// commit se c'è qualcosa da mostrare. false: niente da fare. `pending`: uno
-// stato da applicare nello stesso commit (nuova modalità o scala): il frame
-// si disegna già alla nuova dimensione, senza il buffer nero che wlroots
-// metterebbe altrimenti.
+// Builds the frame for the output at (lx, ly) in the layout and commits it if
+// there is something to show. false: nothing to do. `pending`: state to apply
+// in the same commit (new mode or scale): the frame is already drawn at the
+// new size, without the black buffer wlroots would otherwise put.
 bool vela_output_frame_render(struct vela_output_frame *frame, double lx, double ly, struct wlr_output_state *pending);
 
-// Qualcuno (wlroots) ha scritto nei buffer dello schermo: nessuno di loro
-// contiene più ciò che crediamo.
+// Someone (wlroots) wrote into the output's buffers: none of them holds what
+// we think anymore.
 void vela_output_frame_reset_damage(struct vela_output_frame *frame);
 void vela_output_frame_damage_whole(struct vela_output_frame *frame);
 
-// Dopo il frame: i frame callback alle superfici visibili scandite da
-// questo schermo.
+// After the frame: frame callbacks to the visible surfaces paced by this
+// output.
 void vela_output_frame_send_frame_done(struct vela_output_frame *frame, const struct timespec *when);
 
-// Lente di ingrandimento (Accessibilità): lo schermo mostra la zona del
-// layout che comincia nel punto logico (x, y), ingrandita `zoom` volte.
-// zoom 1: lo schermo com'è.
+// Magnifier (Accessibility): the output shows the layout area starting at
+// logical point (x, y), magnified `zoom` times. zoom 1: the output as it is.
 void vela_output_frame_set_magnifier(struct vela_output_frame *frame, double zoom, double x, double y);
 
-// Dalla scena: una superficie mostrata da questo schermo ha fatto un
-// commit, o sparisce.
+// From the scene: a surface shown by this output committed, or goes away.
 bool vela_output_frame_shows(struct vela_output_frame *frame, struct wlr_surface *surface);
 void vela_output_frame_surface_committed(struct vela_output_frame *frame, struct wlr_surface *surface);
 void vela_output_frame_surface_destroyed(struct vela_output_frame *frame, struct wlr_surface *surface);

@@ -4,16 +4,16 @@
 #ifndef VELA_LEGACY_NAMES_H
 #define VELA_LEGACY_NAMES_H
 
-// I nomi italiani che vela.conf ha avuto fino a ottobre 2026, e quelli
-// inglesi che li hanno sostituiti. Chi legge il file (il compositor, le
-// Impostazioni) converte al volo; il compositor all'avvio riscrive il file
-// con i nomi nuovi (vela_config_migrate). Senza dipendenze: lo compilano
-// anche le Impostazioni, che sono in Qt.
+// The Italian names vela.conf had until October 2026 and the English ones that
+// replaced them. Whoever reads the file (the compositor, Settings) converts on
+// the fly; at startup the compositor rewrites the file with the new names
+// (vela_config_migrate). No dependencies: Settings, written in Qt, compiles it
+// too.
 
-// Il nome di adesso della chiave, o NULL se è già quello giusto.
+// The current name of the key, or NULL if it already is the right one.
 const char *vela_legacy_key(const char *key);
 
-// Il valore di adesso per quella chiave (col nome di adesso), o NULL.
+// The current value for that key (under its current name), or NULL.
 const char *vela_legacy_value(const char *key, const char *value);
 
 #endif

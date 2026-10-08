@@ -4,13 +4,13 @@
 #ifndef VELA_FOCUS_H
 #define VELA_FOCUS_H
 
-// La tastiera: a quale finestra o pezzo della shell va. Come Windows, la
-// finestra a fuoco sale in cima (alla scena e alla lista per Alt+Tab), si
-// "accende" per l'app e per la taskbar, e cede la tastiera solo a un
-// pannello che la chiede (menu Start, impostazioni rapide). I dialoghi di
-// sistema che aspettano una risposta restano sopra le finestre normali.
+// The keyboard: which window or shell piece gets it. Like Windows, the focused
+// window rises to the top (of the scene and of the Alt+Tab list), lights up
+// for the app and for the taskbar, and gives the keyboard away only to a panel
+// that asks for it (Start menu, quick settings). System dialogs waiting for an
+// answer stay above normal windows.
 //
-// Lo stato è in vela_server: focused_layer e previous_layer.
+// The state is in vela_server: focused_layer and previous_layer.
 
 #include <stdbool.h>
 
@@ -19,18 +19,18 @@ struct vela_server;
 struct vela_view;
 
 void vela_focus_view(struct vela_server *server, struct vela_view *view);
-// Una finestra che compare o chiede da sola il primo piano (non per un
-// clic): se un dialogo di sistema aspetta, resta sotto di lui e non gli
-// toglie la tastiera.
+// A window that appears or asks to come forward on its own (not by a click):
+// if a system dialog is waiting, it stays below it and doesn't take its
+// keyboard.
 void vela_focus_new_view(struct vela_server *server, struct vela_view *view);
 void vela_focus_layer(struct vela_server *server, struct vela_layer_surface *layer);
-// La tastiera torna a chi deve averla: il pannello di prima, o la finestra
-// più recente del desktop in uso (dopo uno sblocco, una chiusura...).
+// The keyboard goes back to whoever should have it: the previous panel, or the
+// most recent window on the current desktop (after unlocking, a close...).
 void vela_focus_refocus(struct vela_server *server);
 
-// La finestra sparisce (è già fuori dalla lista): chi la ricordava
-// (trascinamento, Alt+Tab, clic, layout di snap) se ne dimentica; se aveva
-// la tastiera, la tastiera passa oltre.
+// The window is gone (already out of the list): whoever remembered it (drag,
+// Alt+Tab, clicks, snap layouts) forgets it; if it had the keyboard, the
+// keyboard moves on.
 void vela_focus_forget_view(struct vela_server *server, struct vela_view *view, bool was_focused);
 void vela_focus_layer_unmapped(struct vela_server *server, struct vela_layer_surface *layer);
 void vela_focus_forget_layer(struct vela_server *server, struct vela_layer_surface *layer);

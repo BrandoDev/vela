@@ -4,6 +4,7 @@
 #include "scene/frame.h"
 
 #include "geometry.h"
+#include "listen.h"
 #include "output.h"
 #include "render/renderer.h"
 #include "scene/effects.h"
@@ -30,11 +31,10 @@
 #include <wlr/util/region.h>
 #include <wlr/util/transform.h>
 
-// --------------------------------------------------------------- aiuti --
+// ------------------------------------------------------------- helpers --
 
-// La Luce notturna come tabella della gamma del monitor: ogni valore
-// codificato sRGB torna in luce lineare, prende il suo guadagno e si
-// ricodifica.
+// Night light as the monitor's gamma table: each sRGB-encoded value goes back
+// to linear light, takes its gain and is encoded again.
 static struct wlr_color_transform *night_lut(const float gains[3])
 {
     enum { SIZE = 256 };
@@ -90,8 +90,8 @@ static struct vela_element *push_element(struct vela_elements *list)
     return e;
 }
 
-// Un rettangolo logico in pixel: si arrotondano i bordi, non posizione e
-// dimensione (§3.2), così due rettangoli adiacenti restano adiacenti.
+// A logical rectangle in pixels: the edges are rounded, not position and size
+// (§3.2), so adjacent rectangles stay adjacent.
 static struct wlr_box to_pixels(double x, double y, double width, double height, const struct vela_build_params *p)
 {
     struct vela_pixel_box box = vela_edges_to_pixels(x, y, width, height, p->origin_x, p->origin_y, p->scale);
@@ -104,44 +104,52 @@ static bool on_screen(const struct wlr_box *box, const struct vela_build_params 
     return box->width > 0 && box->height > 0 && wlr_box_intersection(&clipped, box, &p->bounds);
 }
 
-// Copia 1:1 (nessun ricampionamento) quando un pixel del buffer cade
-// esattamente su un pixel dello schermo (§3.3).
+// 1:1 copy (no resampling) when a buffer pixel lands exactly on an output
+// pixel (§3.3).
 static bool is_one_to_one(const struct wlr_fbox *src, const struct wlr_box *box, enum wl_output_transform transform)
 {
     return vela_one_to_one(src->x, src->y, src->width, src->height, box->width, box->height,
         transform & WL_OUTPUT_TRANSFORM_90);
 }
 
-// L'ampiezza della sfocatura in pixel dello schermo: il raggio è in unità
-// logiche, quindi la stessa sfocatura a ogni scala (§8.3).
+// The blur width in output pixels: the radius is in logical units, so the same
+// blur at every scale (§8.3).
 static float blur_strength(double scale)
 {
     return vela_clampf((float)(1.25 * scale), 1.0f, 3.0f);
 }
 
-// Una regione della superficie (coordinate sue) in pixel, allargata verso
-// l'esterno: per la sfocatura conta coprire tutto.
-static void surface_region_to_pixels(const struct vela_element *e, const pixman_region32_t *region,
+// A region of the surface (in its coordinates) in pixels, within the
+// element. `outward` covers every pixel the region touches (blur); otherwise
+// only the pixels it fills entirely (the opaque region must never cover too
+// much). Clamped while still in floating point: clients send INT32_MAX for
+// "the whole surface", which scaled would not fit an int.
+static void surface_region_to_pixels(const struct vela_element *e, const pixman_region32_t *region, bool outward,
     pixman_region32_t *out)
 {
+    double left = e->box.x, top = e->box.y;
+    double right = left + e->box.width, bottom = top + e->box.height;
     pixman_region32_clear(out);
     int count = 0;
     const pixman_box32_t *rects = pixman_region32_rectangles(region, &count);
     for (int i = 0; i < count; ++i) {
-        int x1 = (int)floor(e->origin_x + rects[i].x1 * e->scale_x);
-        int y1 = (int)floor(e->origin_y + rects[i].y1 * e->scale_y);
-        int x2 = (int)ceil(e->origin_x + rects[i].x2 * e->scale_x);
-        int y2 = (int)ceil(e->origin_y + rects[i].y2 * e->scale_y);
-        if (x2 > x1 && y2 > y1) {
-            pixman_region32_union_rect(out, out, x1, y1, (unsigned)(x2 - x1), (unsigned)(y2 - y1));
+        double x1 = e->origin_x + rects[i].x1 * e->scale_x;
+        double y1 = e->origin_y + rects[i].y1 * e->scale_y;
+        double x2 = e->origin_x + rects[i].x2 * e->scale_x;
+        double y2 = e->origin_y + rects[i].y2 * e->scale_y;
+        int px1 = (int)fmax(left, outward ? floor(x1) : ceil(x1));
+        int py1 = (int)fmax(top, outward ? floor(y1) : ceil(y1));
+        int px2 = (int)fmin(right, outward ? ceil(x2) : floor(x2));
+        int py2 = (int)fmin(bottom, outward ? ceil(y2) : floor(y2));
+        if (px2 > px1 && py2 > py1) {
+            pixman_region32_union_rect(out, out, px1, py1, (unsigned)(px2 - px1), (unsigned)(py2 - py1));
         }
     }
-    pixman_region32_intersect_rect(out, out, e->box.x, e->box.y, (unsigned)e->box.width, (unsigned)e->box.height);
 }
 
-// -------------------------------------------------------- appiattimento --
+// ----------------------------------------------------------- flattening --
 
-// Il ritaglio arrotondato ereditato dalla forma di un antenato (§8.1).
+// The rounded clip inherited from an ancestor's shape (§8.1).
 struct clip {
     struct wlr_box rect;
     float radius;
@@ -155,14 +163,14 @@ static void apply_clip(struct vela_element *e, const struct clip *clip)
     }
 }
 
-// Le ombre di una forma, come Windows 11: una ampia e morbida più una
-// stretta "di contatto", più marcate per la finestra attiva (§8.2).
+// A shape's shadows, like Windows 11: a wide soft one plus a narrow "contact"
+// one, stronger for the active window (§8.2).
 static void add_shadows(const struct vela_tree *tree, const struct wlr_box *window, float radius, float opacity,
     bool active, const struct vela_build_params *p, struct vela_elements *out)
 {
     static const struct {
-        double offset_y; // logici
-        double sigma; // logici
+        double offset_y; // logical
+        double sigma; // logical
         float active_alpha;
         float inactive_alpha;
     } layers[] = {
@@ -180,8 +188,8 @@ static void add_shadows(const struct vela_tree *tree, const struct wlr_box *wind
         }
         float alpha = (active ? layers[i].active_alpha : layers[i].inactive_alpha) * opacity;
         struct vela_element *e = push_element(out);
-        // Un nome per strato, dentro l'albero stesso (nessun altro nodo o
-        // superficie può avere quell'indirizzo).
+        // A name per layer, inside the tree itself (no other node or surface
+        // can have that address).
         e->key = (const char *)tree + 1 + i;
         e->color = (struct wlr_render_color) { 0.0f, 0.0f, 0.0f, alpha };
         e->box = box;
@@ -193,7 +201,7 @@ static void add_shadows(const struct vela_tree *tree, const struct wlr_box *wind
     }
 }
 
-// Ciò che serve a visit() per le superfici di un nodo superficie.
+// What visit() needs for the surfaces of a surface node.
 struct visit {
     struct vela_scene *scene;
     const struct vela_build_params *params;
@@ -209,7 +217,7 @@ static void add_surface(struct wlr_surface *surface, int sx, int sy, void *data)
     const struct vela_build_params *p = v->params;
     struct wlr_texture *texture = wlr_surface_get_texture(surface);
     if (!texture) {
-        return; // nessun buffer: non c'è niente da mostrare
+        return; // no buffer: nothing to show
     }
     double lx = v->lx + sx;
     double ly = v->ly + sy;
@@ -220,11 +228,11 @@ static void add_surface(struct wlr_surface *surface, int sx, int sy, void *data)
     enum wl_output_transform transform = wlr_output_transform_invert(surface->current.transform);
     struct wlr_box box = to_pixels(lx, ly, width, height, p);
 
-    // Nitidezza (§3.3, §3.4): se l'app ha disegnato alla scala di questo
-    // schermo (buffer grande quanto la sua area fisica, a meno
-    // dell'arrotondamento), la superficie si aggancia a un pixel fisico e
-    // occupa esattamente i pixel del buffer: copia 1:1, senza filtri, anche
-    // se la posizione logica cade a metà di un pixel.
+    // Sharpness (§3.3, §3.4): if the app drew at this output's scale (a buffer
+    // as large as its physical area, up to rounding), the surface snaps to a
+    // physical pixel and covers exactly the buffer's pixels: a 1:1 copy,
+    // unfiltered, even when the logical position falls in the middle of a
+    // pixel.
     bool swapped = transform & WL_OUTPUT_TRANSFORM_90;
     double buffer_width = swapped ? src.height : src.width;
     double buffer_height = swapped ? src.width : src.height;
@@ -253,7 +261,7 @@ static void add_surface(struct wlr_surface *surface, int sx, int sy, void *data)
     if (blur) {
         pixman_region32_t pixels;
         pixman_region32_init(&pixels);
-        surface_region_to_pixels(e, blur, &pixels);
+        surface_region_to_pixels(e, blur, true, &pixels);
         if (pixman_region32_not_empty(&pixels)) {
             const pixman_box32_t *ext = pixman_region32_extents(&pixels);
             e->blur_box = (struct wlr_box) { ext->x1, ext->y1, ext->x2 - ext->x1, ext->y2 - ext->y1 };
@@ -288,7 +296,7 @@ static void visit(struct vela_scene *scene, struct vela_node *node, double lx, d
         if (shape->enabled && shape->width > 0.0 && shape->height > 0.0) {
             struct wlr_box rect = to_pixels(lx + shape->x, ly + shape->y, shape->width, shape->height, p);
             float radius = (float)(shape->radius * p->scale);
-            // Nelle catture di una finestra l'ombra non c'entra.
+            // The shadow has no place in captures of a window.
             if (shape->shadow && !captured) {
                 add_shadows(tree, &rect, radius, opacity, shape->active, p, out);
             }
@@ -359,9 +367,9 @@ void vela_build_elements(struct vela_scene *scene, struct vela_node *root, const
     visit(scene, root, lx, ly, 1.0f, params, out, true, (struct clip) { 0 });
 }
 
-// ------------------------------------------------------------ occlusione --
+// ------------------------------------------------------------- occlusion --
 
-// Gli angoli arrotondati non sono opachi: si tolgono quattro quadrati.
+// Rounded corners aren't opaque: four squares are removed.
 static void subtract_corners(const struct vela_element *e, pixman_region32_t *region)
 {
     if (e->shape_radius <= 0.0f) {
@@ -381,7 +389,7 @@ static void subtract_corners(const struct vela_element *e, pixman_region32_t *re
     pixman_region32_fini(&corners);
 }
 
-// La parte certamente opaca di un elemento, in pixel.
+// The surely opaque part of an element, in pixels.
 static void opaque_region(const struct vela_element *e, pixman_region32_t *out)
 {
     pixman_region32_clear(out);
@@ -402,24 +410,11 @@ static void opaque_region(const struct vela_element *e, pixman_region32_t *out)
         subtract_corners(e, out);
         return;
     }
-    // Regione opaca dichiarata dall'app, in coordinate della superficie: la
-    // si restringe verso l'interno, per non coprire mai troppo.
-    int count = 0;
-    const pixman_box32_t *rects = pixman_region32_rectangles(&e->surface->opaque_region, &count);
-    for (int i = 0; i < count; ++i) {
-        int x1 = (int)ceil(e->origin_x + rects[i].x1 * e->scale_x);
-        int y1 = (int)ceil(e->origin_y + rects[i].y1 * e->scale_y);
-        int x2 = (int)floor(e->origin_x + rects[i].x2 * e->scale_x);
-        int y2 = (int)floor(e->origin_y + rects[i].y2 * e->scale_y);
-        if (x2 > x1 && y2 > y1) {
-            pixman_region32_union_rect(out, out, x1, y1, (unsigned)(x2 - x1), (unsigned)(y2 - y1));
-        }
-    }
-    pixman_region32_intersect_rect(out, out, e->box.x, e->box.y, (unsigned)e->box.width, (unsigned)e->box.height);
+    surface_region_to_pixels(e, &e->surface->opaque_region, false, out); // what the app declares opaque
     subtract_corners(e, out);
 }
 
-// Scarta ciò che è coperto da superfici opache (dall'alto verso il basso).
+// Drops what is covered by opaque surfaces (top to bottom).
 static void cull_occluded(struct vela_elements *elements)
 {
     pixman_region32_t covered, visible, opaque;
@@ -441,11 +436,12 @@ static void cull_occluded(struct vela_elements *elements)
     pixman_region32_fini(&opaque);
 }
 
-// Le zone sfocate leggono ciò che sta loro attorno: se il danno ne tocca una
-// (col raggio della sfocatura) si ridisegna tutta, raggio compreso.
+// Blurred zones read what lies around them: if the damage touches one (within
+// the blur radius) it's redrawn whole, radius included.
 static void expand_damage_for_blur(const struct vela_elements *elements, pixman_region32_t *damage)
 {
-    // Più giri: una zona allargata può toccarne un'altra (menu Start sopra la taskbar).
+    // Several rounds: an enlarged zone can touch another (Start menu over the
+    // taskbar).
     for (int round = 0; round < 3; ++round) {
         bool grown = false;
         for (int i = 0; i < elements->count; ++i) {
@@ -474,9 +470,8 @@ static void expand_damage_for_blur(const struct vela_elements *elements, pixman_
     }
 }
 
-// Il contenuto delle superfici cambia con i commit, che portano il loro
-// danno preciso: qui conta solo dove e come si disegnano. Per i nodi nostri
-// anche la texture.
+// Surface content changes with commits, which bring their exact damage: here
+// only where and how they're drawn matters. For our own nodes the texture too.
 static bool same_look(const struct vela_element *a, const struct vela_element *b)
 {
     bool same_texture = a->surface ? true : a->texture == b->texture;
@@ -487,7 +482,7 @@ static bool same_look(const struct vela_element *a, const struct vela_element *b
         && a->shadow_sigma == b->shadow_sigma && same_box(&a->blur_box, &b->blur_box);
 }
 
-// ---------------------------------------------------------------- disegno --
+// ---------------------------------------------------------------- drawing --
 
 void vela_draw_elements(struct vela_scene *scene, struct vela_pass *pass, const struct vela_elements *elements,
     const pixman_region32_t *clip, enum wl_output_transform output_transform, int width, int height)
@@ -507,8 +502,8 @@ void vela_draw_elements(struct vela_scene *scene, struct vela_pass *pass, const 
         if (e->shadow_sigma > 0.0f) {
             struct wlr_box window;
             wlr_box_transform(&window, &e->shadow_window, to_buffer, width, height);
-            // Sotto la finestra l'ombra non si vede: lo shader lavora solo
-            // sulla cornice attorno (gli angoli restano, sono arrotondati).
+            // Under the window the shadow isn't visible: the shader works only
+            // on the frame around it (the corners stay, they're rounded).
             pixman_region32_t ring;
             pixman_region32_init_rect(&ring, dst.x, dst.y, (unsigned)dst.width, (unsigned)dst.height);
             if (clip) {
@@ -544,8 +539,8 @@ void vela_draw_elements(struct vela_scene *scene, struct vela_pass *pass, const 
             .shape_rect = shape,
             .shape_radius = e->shape_radius,
         };
-        // Sincronizzazione esplicita: il buffer è pronto quando scatta il
-        // punto di acquisizione dell'app.
+        // Explicit sync: the buffer is ready when the app's acquire point
+        // signals.
         if (e->surface) {
             struct wlr_linux_drm_syncobj_surface_v1_state *sync
                 = wlr_linux_drm_syncobj_v1_get_surface_state(e->surface);
@@ -554,13 +549,13 @@ void vela_draw_elements(struct vela_scene *scene, struct vela_pass *pass, const 
                 draw.wait_point = sync->acquire_point;
             }
         }
-        // Sotto la superficie, lo sfondo sfocato che ha chiesto (§8.3).
+        // Under the surface, the blurred background it asked for (§8.3).
         const pixman_region32_t *blur = e->surface && !wlr_box_empty(&e->blur_box) ? vela_blur_region(e->surface)
                                                                                    : NULL;
         if (blur) {
             pixman_region32_t region;
             pixman_region32_init(&region);
-            surface_region_to_pixels(e, blur, &region);
+            surface_region_to_pixels(e, blur, true, &region);
             wlr_region_transform(&region, &region, to_buffer, width, height);
             if (clip) {
                 pixman_region32_intersect(&region, &region, clip);
@@ -595,7 +590,7 @@ void vela_add_release_points(struct vela_scene *scene, const struct vela_element
     }
 }
 
-// ---------------------------------------------------------------- schermo --
+// ----------------------------------------------------------------- output --
 
 static void handle_damage(struct wl_listener *listener, void *data)
 {
@@ -623,17 +618,14 @@ struct vela_output_frame *vela_output_frame_create(struct vela_scene *scene, str
     wlr_damage_ring_init(&frame->ring);
     wl_list_insert(scene->frames.prev, &frame->link);
 
-    // Il cursore disegnato da noi (quando non c'è quello hardware) e chi
-    // chiede un frame (cursore hardware, catture) passano da qui.
-    frame->damage.notify = handle_damage;
-    wl_signal_add(&output->events.damage, &frame->damage);
-    frame->needs_frame.notify = handle_needs_frame;
-    wl_signal_add(&output->events.needs_frame, &frame->needs_frame);
+    // The cursor we draw (when there is no hardware one) and whoever asks for
+    // a frame (hardware cursor, captures) come through here.
+    vela_listen(&output->events.damage, &frame->damage, handle_damage);
+    vela_listen(&output->events.needs_frame, &frame->needs_frame, handle_needs_frame);
 
-    // Scanout di buffer con sincronizzazione esplicita: serve un backend che
-    // sappia aspettare e far scattare timeline (DRM, annidato in un ospite
-    // con linux-drm-syncobj). Quello headless dice di saperlo fare, ma poi
-    // rifiuta i commit con le timeline.
+    // Scanout of buffers with explicit sync needs a backend that can wait for
+    // and signal timelines (DRM, nested in a host with linux-drm-syncobj). The
+    // headless one claims it can, but then refuses commits with timelines.
     if (output->backend->features.timeline && vela_renderer_sync_timeline(renderer)
         && !wlr_output_is_headless(output)) {
         frame->scanout_timeline = wlr_drm_syncobj_timeline_create(vela_renderer_render_fd(renderer));
@@ -669,8 +661,8 @@ void vela_output_frame_destroy(struct vela_output_frame *frame)
     free(frame);
 }
 
-// Prima di ogni frame: se la Luce notturna è cambiata, la prova sulla
-// gamma; se il monitor la accetta va nel prossimo commit.
+// Before every frame: if night light changed, try it on the gamma; if the
+// monitor accepts it, it goes into the next commit.
 static void prepare_night_light(struct vela_output_frame *frame)
 {
     struct vela_scene *scene = frame->scene;
@@ -678,7 +670,7 @@ static void prepare_night_light(struct vela_output_frame *frame)
         return;
     }
     frame->night_version = scene->night_version;
-    // Solo gli schermi veri hanno una gamma (non quelli annidati o headless).
+    // Only real outputs have a gamma (not nested or headless ones).
     if (frame->gamma_refused || !wlr_output_is_drm(frame->output)) {
         frame->gamma_refused = true;
         frame->night_in_gamma = false;
@@ -717,7 +709,7 @@ void vela_output_frame_set_magnifier(struct vela_output_frame *frame, double zoo
     frame->zoom = zoom;
     frame->zoom_x = x;
     frame->zoom_y = y;
-    // Tutto si sposta: il confronto con il frame precedente trova il danno.
+    // Everything moves: comparing with the previous frame finds the damage.
     vela_output_schedule_frame(frame->owner);
 }
 
@@ -761,14 +753,14 @@ void vela_output_frame_surface_committed(struct vela_output_frame *frame, struct
         wlr_region_scale_xy(&region, &region, (float)e->scale_x, (float)e->scale_y);
         pixman_region32_translate(&region, (int)floor(e->origin_x), (int)floor(e->origin_y));
         if (!exact) {
-            wlr_region_expand(&region, &region, 1); // il filtro tocca anche i vicini
+            wlr_region_expand(&region, &region, 1); // the filter touches the neighbors too
         }
         pixman_region32_intersect_rect(&region, &region, e->box.x, e->box.y, (unsigned)e->box.width,
             (unsigned)e->box.height);
         wlr_damage_ring_add(&frame->ring, &region);
     }
     pixman_region32_fini(&region);
-    // Anche senza danno: l'app aspetta il suo frame callback.
+    // Even without damage: the app waits for its frame callback.
     vela_output_schedule_frame(frame->owner);
 }
 
@@ -783,7 +775,7 @@ void vela_output_frame_surface_destroyed(struct vela_output_frame *frame, struct
         return;
     }
     wlr_damage_ring_add_box(&frame->ring, &e->box);
-    // Via dal frame precedente (anche gli eventuali doppioni).
+    // Out of the previous frame (duplicates included).
     int kept = 0;
     for (int i = 0; i < frame->last.count; ++i) {
         if (frame->last.items[i].key != surface) {
@@ -823,7 +815,7 @@ static void update_surfaces(struct vela_output_frame *frame, const struct vela_e
 
 void vela_output_frame_reset_damage(struct vela_output_frame *frame)
 {
-    // Tutti i buffer ripartono da capo: il prossimo frame li ridisegna interi.
+    // All buffers start over: the next frame redraws them whole.
     wlr_damage_ring_finish(&frame->ring);
     wlr_damage_ring_init(&frame->ring);
     frame->width = 0;
@@ -831,17 +823,17 @@ void vela_output_frame_reset_damage(struct vela_output_frame *frame)
     vela_output_schedule_frame(frame->owner);
 }
 
-// Il danno: ciò che è apparso, sparito, cambiato o spostato rispetto al
-// frame precedente (il contenuto delle superfici arriva dai commit). Poi
-// `current` diventa `last`.
+// The damage: what appeared, disappeared, changed or moved compared with the
+// previous frame (surface content comes from commits). Then `current` becomes
+// `last`.
 static void diff_with_last(struct vela_output_frame *frame)
 {
     struct vela_elements *current = &frame->current;
     struct vela_elements *last = &frame->last;
     pixman_region32_t changed;
     pixman_region32_init(&changed);
-    // Quali elementi di prima si ritrovano ora; la ricerca parte da dove
-    // ci si aspetta di trovarli (di solito l'ordine non cambia).
+    // Which earlier elements are found now; the search starts where they're
+    // expected (usually the order doesn't change).
     bool *found = calloc((size_t)(last->count ? last->count : 1), sizeof(*found));
     int highest_old_order = 0;
     for (int i = 0; i < current->count; ++i) {
@@ -864,7 +856,7 @@ static void diff_with_last(struct vela_output_frame *frame)
             union_box(&changed, &old->box);
             union_box(&changed, &e->box);
         } else if (old->order < highest_old_order) {
-            union_box(&changed, &e->box); // è salito sopra altri elementi
+            union_box(&changed, &e->box); // it rose above other elements
         }
         if (old->order > highest_old_order) {
             highest_old_order = old->order;
@@ -900,7 +892,7 @@ bool vela_output_frame_render(struct vela_output_frame *frame, double lx, double
     if (!output->enabled) {
         return false;
     }
-    // Dimensione e scala del frame: quelle nuove, se il commit cambia modo.
+    // The frame's size and scale: the new ones, if the commit changes mode.
     int width = output->width;
     int height = output->height;
     float scale = output->scale;
@@ -935,8 +927,8 @@ bool vela_output_frame_render(struct vela_output_frame *frame, double lx, double
         wlr_damage_ring_add_box(&frame->ring, &whole);
     }
 
-    // 1. La scena appiattita, in pixel di questo schermo (con la lente: la
-    //    zona ingrandita), senza ciò che è coperto.
+    // 1. The flattened scene, in this output's pixels (with the magnifier: the
+    //    zoomed area), without what is covered.
     bool magnified = frame->zoom > 1.0;
     const struct vela_build_params params = {
         .origin_x = magnified ? frame->zoom_x : lx,
@@ -947,12 +939,12 @@ bool vela_output_frame_render(struct vela_output_frame *frame, double lx, double
     vela_build_elements(scene, &scene->root->node, &params, &frame->current);
     cull_occluded(&frame->current);
 
-    // 2. Il danno rispetto al frame precedente; da qui gli elementi di
-    //    questo frame sono in frame->last.
+    // 2. The damage compared with the previous frame; from here on this
+    //    frame's elements are in frame->last.
     diff_with_last(frame);
     const struct vela_elements *elements = &frame->last;
     expand_damage_for_blur(elements, &frame->ring.current);
-    // Diagnosi: VELA_DEBUG_DAMAGE=1 ridisegna tutto a ogni frame.
+    // Diagnostics: VELA_DEBUG_DAMAGE=1 redraws everything on every frame.
     if (vela_env_one("VELA_DEBUG_DAMAGE") && pixman_region32_not_empty(&frame->ring.current)) {
         wlr_damage_ring_finish(&frame->ring);
         wlr_damage_ring_init(&frame->ring);
@@ -960,8 +952,8 @@ bool vela_output_frame_render(struct vela_output_frame *frame, double lx, double
     }
     update_surfaces(frame, elements);
 
-    // Il colore: i filtri, e la Luce notturna se la gamma del monitor non la
-    // prende, si applicano nel disegno (cursore compreso).
+    // Color: filters, and night light when the monitor's gamma won't take it,
+    // are applied while drawing (cursor included).
     prepare_night_light(frame);
     bool night_in_drawing = scene->night_active && !frame->night_in_gamma;
     bool filtered = scene->color_filtered || night_in_drawing;
@@ -981,8 +973,8 @@ bool vela_output_frame_render(struct vela_output_frame *frame, double lx, double
         frame->cursor_locked = filtered;
     }
 
-    // Un'app a schermo intero che si può mostrare così com'è (non col
-    // filtro nel disegno).
+    // A fullscreen app that can be shown as it is (not with the filter in
+    // drawing).
     const struct vela_element *candidate = pending || filtered ? NULL : scanout_candidate(frame, elements, transform);
     update_feedback(frame, candidate);
 
@@ -992,26 +984,26 @@ bool vela_output_frame_render(struct vela_output_frame *frame, double lx, double
     }
     frame->delivered = (struct vela_frame_delivered) { 0, -1, false, false };
 
-    // Lo stato del commit: quello del chiamante (cambio di modo, disegnato
-    // subito alla nuova dimensione) o uno nostro.
+    // The commit's state: the caller's (mode change, drawn at once at the new
+    // size) or one of ours.
     struct wlr_output_state own;
     wlr_output_state_init(&own);
     struct wlr_output_state *state = pending ? pending : &own;
     if (frame->night_commit_pending) {
         wlr_output_state_set_color_transform(state, frame->night_transform);
     }
-    // Anche quando c'è solo da spostare il cursore hardware si consegna un
-    // buffer (con danno vuoto il disegno non costa quasi nulla). Con DRM un
-    // commit senza buffer è bloccante: fermerebbe il compositor fino al
-    // vblank di questo schermo, e intanto gli altri schermi perderebbero i
-    // loro (con un 75 Hz accanto, il 180 Hz scendeva sotto i 60 fps).
+    // A buffer is delivered even when only the hardware cursor moves (with
+    // empty damage drawing costs almost nothing). With DRM a commit without a
+    // buffer blocks: it would stop the compositor until this output's vblank,
+    // and meanwhile the other outputs would miss theirs (with a 75 Hz next to
+    // it, the 180 Hz dropped below 60 fps).
 
-    // Scanout diretto: niente disegno, il buffer dell'app va sullo schermo.
+    // Direct scanout: no drawing, the app's buffer goes on screen.
     if (candidate && try_scanout(frame, candidate, state)) {
         wlr_output_state_finish(&own);
         frame->night_commit_pending = false;
-        // Lo schermo è a posto: il danno accumulato non serve più (i nostri
-        // buffer invece sono rimasti indietro, vedi sotto).
+        // The output is up to date: the accumulated damage is no longer needed
+        // (our buffers, instead, fell behind; see below).
         pixman_region32_clear(&frame->ring.current);
         if (!frame->scanout) {
             wlr_log(WLR_INFO, "%s: direct scanout on", output->name);
@@ -1021,8 +1013,8 @@ bool vela_output_frame_render(struct vela_output_frame *frame, double lx, double
         return true;
     }
     if (frame->scanout) {
-        // Si torna a comporre: i nostri buffer non hanno visto i frame dello
-        // scanout, si ridisegnano interi.
+        // Back to compositing: our buffers haven't seen the scanout frames,
+        // they're redrawn whole.
         wlr_log(WLR_INFO, "%s: direct scanout off", output->name);
         frame->scanout = false;
         if (frame->tearing) {
@@ -1042,9 +1034,8 @@ bool vela_output_frame_render(struct vela_output_frame *frame, double lx, double
         return false;
     }
 
-    // Il danno di questo frame (per il backend) e quello del buffer che
-    // stiamo per riusare (per l'età del buffer: ciò che gli manca rispetto
-    // a ora).
+    // This frame's damage (for the backend) and that of the buffer we're about
+    // to reuse (for the buffer age: what it lacks compared with now).
     pixman_region32_t frame_damage, buffer_damage;
     pixman_region32_init(&frame_damage);
     pixman_region32_init(&buffer_damage);
@@ -1062,7 +1053,7 @@ bool vela_output_frame_render(struct vela_output_frame *frame, double lx, double
         if (filtered) {
             vela_pass_set_color_filter(pass, filter);
         }
-        // Sotto tutto, il nero (lo sfondo del desktop di solito lo copre).
+        // Black below everything (the desktop wallpaper usually covers it).
         const struct wlr_box all = { 0, 0, buffer->width, buffer->height };
         const struct wlr_render_color black = { 0.0f, 0.0f, 0.0f, 1.0f };
         vela_pass_add_rect(pass, &all, &black, &buffer_damage, false, NULL, 0.0f);
@@ -1098,7 +1089,7 @@ bool vela_output_frame_render(struct vela_output_frame *frame, double lx, double
     wlr_buffer_unlock(buffer);
     wlr_output_state_finish(&own);
     if (!ok) {
-        // Il frame non è arrivato allo schermo: il suo danno va ridisegnato.
+        // The frame didn't reach the output: its damage must be redrawn.
         wlr_region_transform(&frame_damage, &frame_damage, transform, buffer_width, buffer_height);
         wlr_damage_ring_add(&frame->ring, &frame_damage);
     }
@@ -1107,23 +1098,23 @@ bool vela_output_frame_render(struct vela_output_frame *frame, double lx, double
     return ok;
 }
 
-// --------------------------------------------------------- scanout diretto --
+// ---------------------------------------------------------- direct scanout --
 
-// VELA_DEBUG_SCANOUT=1: perché un'app a schermo intero non va in scanout.
+// VELA_DEBUG_SCANOUT=1: why a fullscreen app doesn't go into scanout.
 static void note_scanout_reason(struct vela_output_frame *frame, const char *reason)
 {
     if (vela_env_one("VELA_DEBUG_SCANOUT") && reason != frame->scanout_reason) {
-        wlr_log(WLR_INFO, "%s: no direct scanout: %s", frame->output->name, reason ? reason : "(candidata)");
+        wlr_log(WLR_INFO, "%s: no direct scanout: %s", frame->output->name, reason ? reason : "candidate again");
     }
     frame->scanout_reason = reason;
 }
 
-// Scanout diretto (§5.3): una sola superficie opaca copre lo schermo, 1:1,
-// e il suo buffer va sul piano primario senza disegnare nulla.
+// Direct scanout (§5.3): a single opaque surface covers the output, 1:1, and
+// its buffer goes on the primary plane without drawing anything.
 static const struct vela_element *scanout_candidate(struct vela_output_frame *frame,
     const struct vela_elements *elements, enum wl_output_transform transform)
 {
-    // VELA_SCANOUT=0: sempre composizione (diagnosi, confronti).
+    // VELA_SCANOUT=0: always composite (diagnostics, comparisons).
     if (vela_env_off("VELA_SCANOUT")) {
         return NULL;
     }
@@ -1156,7 +1147,8 @@ static const struct vela_element *scanout_candidate(struct vela_output_frame *fr
         } else if (e->linear) {
             reason = "is scaled (buffer size differs from the output)";
         } else {
-            // Opaca: formato senza alfa, o regione opaca dichiarata su tutto.
+            // Opaque: a format without alpha, or an opaque region declared
+            // over everything.
             bool opaque = vela_texture_is_opaque(e->texture);
             if (!opaque) {
                 pixman_box32_t all = { 0, 0, e->surface->current.width, e->surface->current.height };
@@ -1194,7 +1186,7 @@ static bool try_scanout(struct vela_output_frame *frame, const struct vela_eleme
     }
     struct wlr_dmabuf_attributes dmabuf;
     if (!wlr_buffer_get_dmabuf(buffer, &dmabuf)) {
-        // Il piano dello schermo legge solo dmabuf.
+        // The output's plane reads only dmabufs.
         note_scanout_reason(frame, "the buffer isn't a dmabuf (shared memory)");
         return false;
     }
@@ -1210,7 +1202,7 @@ static bool try_scanout(struct vela_output_frame *frame, const struct vela_eleme
         return false;
     }
     wlr_output_state_set_buffer(&attempt, buffer);
-    // Tearing: l'app (un gioco) vuole ogni frame sullo schermo subito.
+    // Tearing: the app (a game) wants every frame on screen at once.
     bool tearing = scene->allow_tearing && scene->tearing_control
         && wlr_tearing_control_manager_v1_surface_hint_from_surface(scene->tearing_control, surface)
             == WP_TEARING_CONTROL_V1_PRESENTATION_HINT_ASYNC;
@@ -1230,7 +1222,7 @@ static bool try_scanout(struct vela_output_frame *frame, const struct vela_eleme
         note_scanout_reason(frame, "the monitor (or driver) doesn't accept the buffer on its plane");
     }
     if (!ok && tearing) {
-        // Lo schermo (o il driver) non lo permette: col vblank, come sempre.
+        // The output (or driver) doesn't allow it: with the vblank, as always.
         tearing = false;
         attempt.tearing_page_flip = false;
         ok = wlr_output_test_state(output, &attempt);
@@ -1243,12 +1235,12 @@ static bool try_scanout(struct vela_output_frame *frame, const struct vela_eleme
         ok = wlr_output_commit_state(output, &attempt);
     }
     if (ok && tearing != frame->tearing) {
-        wlr_log(WLR_INFO, "%s: tearing %s", output->name, tearing ? "on (the app asks for it)" : "finito");
+        wlr_log(WLR_INFO, "%s: tearing %s", output->name, tearing ? "on (the app asks for it)" : "off");
         frame->tearing = tearing;
     }
     frame->delivered.tearing = ok && tearing;
     if (ok && sync && sync->acquire_timeline) {
-        // Il backend fa scattare il punto quando smette di mostrare il buffer.
+        // The backend signals the point when it stops showing the buffer.
         ++frame->scanout_point;
         wlr_linux_drm_syncobj_v1_state_add_release_point(sync, frame->scanout_timeline, frame->scanout_point,
             output->event_loop);
@@ -1257,10 +1249,10 @@ static bool try_scanout(struct vela_output_frame *frame, const struct vela_eleme
     return ok;
 }
 
-// Feedback dmabuf: all'app candidata allo scanout i formati del piano
-// primario, dopo qualche frame di conferma; poi di nuovo quelli normali.
-// Come wlr_scene: prima di cambiare i formati consigliati si aspettano un
-// po' di frame di fila, perché ricreare i buffer costa.
+// dmabuf feedback: the primary plane's formats to the app that is a scanout
+// candidate, after a few confirming frames; then the normal ones again. Like
+// wlr_scene: before changing the recommended formats we wait for a run of
+// frames, because recreating buffers is costly.
 static void update_feedback(struct vela_output_frame *frame, const struct vela_element *candidate)
 {
     enum { DEBOUNCE_FRAMES = 30 };
@@ -1298,12 +1290,8 @@ static void update_feedback(struct vela_output_frame *frame, const struct vela_e
 
 static void send_feedback(struct vela_output_frame *frame, struct wlr_surface *surface, bool scanout)
 {
-    struct vela_surface_state *info = vela_surface_state_get(surface);
     if (!scanout) {
         wlr_linux_dmabuf_v1_set_surface_feedback(frame->scene->linux_dmabuf, surface, NULL);
-        if (info) {
-            info->scanout_feedback = NULL;
-        }
         wlr_log(WLR_DEBUG, "%s: default dmabuf feedback to a surface", frame->output->name);
         return;
     }
@@ -1313,13 +1301,10 @@ static void send_feedback(struct vela_output_frame *frame, struct wlr_surface *s
     };
     struct wlr_linux_dmabuf_feedback_v1 feedback = { 0 };
     if (!wlr_linux_dmabuf_feedback_v1_init_with_options(&feedback, &options)) {
-        return; // lo schermo non dice quali formati legge il piano primario
+        return; // the output doesn't say which formats the primary plane reads
     }
     wlr_linux_dmabuf_v1_set_surface_feedback(frame->scene->linux_dmabuf, surface, &feedback);
     wlr_linux_dmabuf_feedback_v1_finish(&feedback);
-    if (info) {
-        info->scanout_feedback = frame->output;
-    }
     wlr_log(WLR_DEBUG, "%s: dmabuf feedback with the scanout tranche to a surface", frame->output->name);
 }
 

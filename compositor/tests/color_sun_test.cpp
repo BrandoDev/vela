@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Luce notturna, filtri colore e ore del sole (color.h, sun.h).
+// Night light, color filters and sun times (color.h, sun.h).
 
 extern "C" {
 #include "color.h"
@@ -29,15 +29,15 @@ TEST(Color, NightGainsAreNeutralAt6500AndWarmBelow)
     float previousBlue = 1.0f;
     for (double kelvin = 6000.0; kelvin >= 1700.0; kelvin -= 500.0) {
         vela_night_gains(kelvin, gains);
-        EXPECT_NEAR(gains[0], 1.0f, 1e-3f) << kelvin; // il rosso resta
+        EXPECT_NEAR(gains[0], 1.0f, 1e-3f) << kelvin; // red stays
         EXPECT_LE(gains[1], 1.0f);
-        EXPECT_LT(gains[2], previousBlue) << kelvin; // il blu cala sempre
+        EXPECT_LT(gains[2], previousBlue) << kelvin; // blue always drops
         previousBlue = gains[2];
     }
 }
 
-// Ogni filtro lascia il bianco bianco (righe che sommano a 1): cambia i
-// colori, non la luminosità dello schermo.
+// Every filter keeps white white (rows summing to 1): it changes colors, not
+// the screen's brightness.
 TEST(Color, FiltersKeepWhiteWhite)
 {
     for (const char* kind : { "grayscale", "deuteranopia", "protanopia", "tritanopia" }) {
@@ -51,7 +51,7 @@ TEST(Color, FiltersKeepWhiteWhite)
     vela_filter_matrix("grayscale", gray);
     for (int row = 1; row < 3; ++row) {
         for (int column = 0; column < 3; ++column) {
-            EXPECT_EQ(gray[row * 3 + column], gray[column]); // tre canali uguali
+            EXPECT_EQ(gray[row * 3 + column], gray[column]); // three equal channels
         }
     }
 }
@@ -103,7 +103,7 @@ int minutes(int hours, int mins)
 
 } // namespace
 
-// Roma il 21 giugno (ora legale): alba 5:35, tramonto 20:48 circa.
+// Rome on June 21 (summer time): sunrise around 5:35, sunset around 20:48.
 TEST(Sun, RomeSummerSolstice)
 {
     const tm june21 = day(171, 2 * 3600);
@@ -111,7 +111,8 @@ TEST(Sun, RomeSummerSolstice)
     EXPECT_NEAR(vela_sun_time(false, &june21, 41.9, 12.48), minutes(20, 48), 6);
 }
 
-// Roma il 21 dicembre (ora solare): alba 7:33, tramonto 16:42 circa.
+// Rome on December 21 (standard time): sunrise around 7:33, sunset around
+// 16:42.
 TEST(Sun, RomeWinterSolstice)
 {
     const tm december21 = day(354, 3600);
@@ -121,7 +122,7 @@ TEST(Sun, RomeWinterSolstice)
 
 TEST(Sun, PolarDayAndNight)
 {
-    // Tromsø: d'estate il sole non tramonta, d'inverno non sorge.
+    // Tromsø: in summer the sun doesn't set, in winter it doesn't rise.
     const tm summer = day(171, 2 * 3600);
     const tm winter = day(354, 3600);
     EXPECT_EQ(vela_sun_time(false, &summer, 69.65, 18.96), -1);
@@ -135,12 +136,12 @@ TEST(Sun, ParseClockAndRanges)
     EXPECT_EQ(vela_parse_clock("24:00", -1), -1);
     EXPECT_EQ(vela_parse_clock("12:60", -1), -1);
     EXPECT_EQ(vela_parse_clock("sera", 42), 42);
-    // Dalle 21 alle 7: attraverso la mezzanotte.
+    // From 21 to 7: across midnight.
     EXPECT_TRUE(vela_in_range(minutes(23, 0), minutes(21, 0), minutes(7, 0)));
     EXPECT_TRUE(vela_in_range(minutes(6, 59), minutes(21, 0), minutes(7, 0)));
     EXPECT_FALSE(vela_in_range(minutes(7, 0), minutes(21, 0), minutes(7, 0)));
     EXPECT_FALSE(vela_in_range(minutes(12, 0), minutes(21, 0), minutes(7, 0)));
-    // Dalle 13 alle 15: lo stesso giorno.
+    // From 13 to 15: the same day.
     EXPECT_TRUE(vela_in_range(minutes(14, 0), minutes(13, 0), minutes(15, 0)));
     EXPECT_FALSE(vela_in_range(minutes(15, 0), minutes(13, 0), minutes(15, 0)));
 }

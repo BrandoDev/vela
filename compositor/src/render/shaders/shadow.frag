@@ -4,11 +4,11 @@
 
 #extension GL_GOOGLE_include_directive : require
 
-// L'ombra di un rettangolo arrotondato (docs/renderer.md §8.2): la formula
-// chiusa dell'integrale di una gaussiana di Evan Wallace
-// (https://madebyevan.com/shaders/fast-rounded-rectangle-shadows/). Un
-// quad, niente texture, niente sfocatura. Sotto la finestra non si disegna:
-// una finestra semitrasparente non deve mostrare la sua ombra attraverso.
+// The shadow of a rounded rectangle (docs/renderer.md §8.2): Evan Wallace's
+// closed form of a Gaussian integral
+// (https://madebyevan.com/shaders/fast-rounded-rectangle-shadows/). One quad,
+// no texture, no blur. It isn't drawn under the window: a semi-transparent
+// window must not show its shadow through.
 
 #include "push.glsl"
 #include "shape.glsl"
@@ -43,7 +43,7 @@ float boxShadow(vec2 lower, vec2 upper, vec2 point, float sigma, float corner)
     const vec2 center = (lower + upper) * 0.5;
     const vec2 halfSize = (upper - lower) * 0.5;
     point -= center;
-    // Si integra lungo y con pochi campioni; lungo x la formula è esatta.
+    // Integrated along y with a few samples; along x the formula is exact.
     const float low = point.y - halfSize.y;
     const float high = point.y + halfSize.y;
     const float start = clamp(-3.0 * sigma, low, high);
@@ -65,7 +65,8 @@ void main()
     const float radius = min(pc.shape.x, 0.5 * min(caster.z, caster.w));
     const float sigma = max(pc.shape.y, 0.5);
     float shadow = boxShadow(caster.xy, caster.xy + caster.zw, p, sigma, radius);
-    // La finestra (in uvOrigin e uvX, che le ombre non usano): lì sotto niente.
+    // The window (in uvOrigin and uvX, which shadows don't use): nothing below
+    // it.
     const vec4 window = vec4(pc.uvOrigin, pc.uvX);
     shadow *= 1.0 - roundedCoverage(p, window, pc.shape.x);
     outColor = colorFilter(pc.color) * shadow;

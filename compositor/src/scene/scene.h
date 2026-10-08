@@ -4,25 +4,24 @@
 #ifndef VELA_SCENE_SCENE_H
 #define VELA_SCENE_SCENE_H
 
-// La scena di Vela (docs/renderer.md §5): cosa c'è sullo schermo, dal basso
-// verso l'alto. Prende il posto di wlr_scene.
+// Vela's scene (docs/renderer.md §5): what is on screen, bottom to top. It
+// takes the place of wlr_scene.
 //
-// - Le superfici delle app si leggono dal vivo (§5.2): un nodo superficie
-//   indica solo la superficie radice; sottosuperfici, buffer e stato
-//   sincronizzato si leggono da wlroots al momento di disegnare.
-// - I nodi nostri (alberi, rettangoli, istantanee) tengono solo ciò che è
-//   nostro: posizione, visibilità, opacità.
-// - Il danno non si calcola a ogni modifica: a ogni frame lo schermo
-//   confronta ciò che disegna con il frame precedente (scene/frame.c). Qui
-//   ogni modifica si limita a chiedere un nuovo frame a tutti gli schermi.
+// - App surfaces are read live (§5.2): a surface node points only at the
+//   root surface; subsurfaces, buffers and synchronized state are read from
+//   wlroots when drawing.
+// - Our own nodes (trees, rectangles, snapshots) hold only what is ours:
+//   position, visibility, opacity.
+// - Damage isn't computed on every change: on every frame the output
+//   compares what it draws with the previous frame (scene/frame.c). Here
+//   every change just asks all outputs for a new frame.
 //
-// Coordinate logiche (double): un'unità = un pixel a scala 100% (§3.1).
+// Logical coordinates (double): one unit = one pixel at 100% scale (§3.1).
 //
-// Chi possiede cosa: ogni nodo lo crea e lo distrugge il suo possessore
-// (una finestra, un pannello, l'animazione), con vela_*_create e
-// vela_node_destroy. Distruggere un albero non distrugge i figli: restano
-// orfani (fuori dalla scena, non si disegnano) finché il loro possessore
-// non li distrugge a sua volta.
+// Who owns what: each node is created and destroyed by its owner (a window,
+// a panel, an animation), with vela_*_create and vela_node_destroy.
+// Destroying a tree doesn't destroy its children: they are left orphaned
+// (out of the scene, not drawn) until their owner destroys them too.
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -51,58 +50,57 @@ enum vela_node_type {
 struct vela_node {
     enum vela_node_type type;
     struct vela_scene *scene;
-    struct vela_tree *parent; // NULL: orfano (o la radice)
-    struct wl_list link; // nei figli del genitore, dal basso verso l'alto
-    double x, y; // rispetto al genitore
+    struct vela_tree *parent; // NULL: orphan (or the root)
+    struct wl_list link; // among the parent's children, bottom to top
+    double x, y; // relative to the parent
     bool enabled;
-    float opacity; // si moltiplica con quella degli antenati
+    float opacity; // multiplied by the ancestors'
 
-    // Chi lo possiede (per sapere cosa c'è sotto il cursore).
+    // Who owns it (to know what is under the cursor).
     void *data;
-    // Rettangoli e immagini di solito lasciano passare i clic (anteprime,
-    // istantanee); quelli della barra del titolo no.
+    // Rectangles and images usually let clicks through (previews, snapshots);
+    // those of the title bar don't.
     bool hittable;
-    // Si vede ma non prende input, lui e i figli (es. l'icona trascinata,
-    // che sta sotto il cursore e non deve coprire dove la si lascia).
+    // Visible but takes no input, with its children (such as the dragged icon,
+    // which sits under the cursor and must not cover the drop target).
     bool ignores_input;
-    // I figli non ereditano il ritaglio della forma di un antenato (i popup:
-    // un menu può uscire dalla finestra).
+    // The children don't inherit an ancestor's shape clip (popups: a menu can
+    // go outside the window).
     bool unclipped;
 };
 
-// La forma di un albero (docs/renderer.md §8): i figli ritagliati in un
-// rettangolo arrotondato, con l'ombra sotto. Coordinate logiche, rispetto
-// all'albero.
+// A tree's shape (docs/renderer.md §8): the children clipped to a rounded
+// rectangle, with a shadow below. Logical coordinates, relative to the tree.
 struct vela_shape {
     bool enabled;
     double x, y, width, height;
     double radius;
     bool shadow;
-    bool active; // la finestra attiva ha l'ombra più marcata
+    bool active; // the active window has a stronger shadow
 };
 
 struct vela_tree {
     struct vela_node node;
-    struct wl_list children; // vela_node.link, dal basso verso l'alto
+    struct wl_list children; // vela_node.link, bottom to top
     struct vela_shape shape;
 };
 
-// Una superficie di un'app con le sue sottosuperfici, lette dal vivo.
+// An app surface with its subsurfaces, read live.
 struct vela_surface_node {
     struct vela_node node;
     struct wlr_surface *surface;
 };
 
-// Un rettangolo a tinta unita (colore sRGB premoltiplicato, come wlroots).
+// A solid rectangle (premultiplied sRGB color, as in wlroots).
 struct vela_rect_node {
     struct vela_node node;
     double width, height;
     struct wlr_render_color color;
 };
 
-// Un buffer "congelato" (pezzo di un'istantanea, testo della barra): resta
-// valido anche se l'app lo cambia o si chiude, perché è bloccato finché il
-// nodo esiste. La texture deve vivere quanto il buffer.
+// A "frozen" buffer (part of a snapshot, title bar text): it stays valid even
+// if the app changes it or quits, because it's locked as long as the node
+// exists. The texture must live as long as the buffer.
 struct vela_buffer_node {
     struct vela_node node;
     struct wlr_buffer *buffer;
@@ -112,32 +110,32 @@ struct vela_buffer_node {
     double width, height;
 };
 
-// La scena: la radice, gli schermi che la disegnano e le scelte che valgono
-// per tutti. Una sola, del server.
+// The scene: the root, the outputs drawing it and the choices that apply to
+// all of them. Only one, the server's.
 struct vela_scene {
     struct vela_tree *root;
-    struct wl_list frames; // vela_output_frame.link: gli schermi attivi
-    // Per il feedback dmabuf per superficie (§5.3); può mancare.
+    struct wl_list frames; // vela_output_frame.link: the active outputs
+    // For per-surface dmabuf feedback (§5.3); may be missing.
     struct wlr_linux_dmabuf_v1 *linux_dmabuf;
-    // Per i punti di rilascio della sincronizzazione esplicita.
+    // For the explicit sync release points.
     struct wl_event_loop *event_loop;
-    // La tinta acrylic delle sfocature (sRGB premoltiplicato): quella del
-    // tema scuro di Windows 11, o del chiaro se la shell è chiara.
+    // The acrylic tint of blurs (premultiplied sRGB): Windows 11's dark theme
+    // one, or the light one when the shell is light.
     struct wlr_render_color acrylic_tint;
-    // I filtri colore di tutti gli schermi: matrice 3x3 per righe in spazio
-    // lineare, se color_filtered. Si applicano nel disegno.
+    // The color filters of all outputs: a 3x3 matrix by rows in linear space,
+    // if color_filtered. Applied while drawing.
     bool color_filtered;
     float color_filter[9];
-    // La Luce notturna: quanto resta di rosso, verde e blu (luce lineare).
-    // Sugli schermi veri va nella gamma del monitor (fuori dal disegno:
-    // niente tinta negli screenshot, scanout diretto salvo); dove non si
-    // può, nel disegno come i filtri. La versione cambia con i valori.
+    // Night light: how much red, green and blue is left (linear light). On
+    // real outputs it goes into the monitor's gamma (outside drawing: no tint
+    // in screenshots, direct scanout kept); where that isn't possible, into
+    // drawing like the filters. The version changes with the values.
     bool night_active;
     float night_gains[3];
     uint32_t night_version;
-    // wp-tearing-control: le app a schermo intero che chiedono di mostrare
-    // ogni frame subito, anche a metà schermo (giochi). Si concede se
-    // allow_tearing (vela.conf "tearing").
+    // wp-tearing-control: fullscreen apps that ask to show every frame at
+    // once, even mid-screen (games). Granted if allow_tearing (vela.conf
+    // "tearing").
     struct wlr_tearing_control_manager_v1 *tearing_control;
     bool allow_tearing;
 
@@ -145,21 +143,21 @@ struct vela_scene {
 };
 
 struct vela_scene *vela_scene_create(void);
-// Prima vanno distrutti gli schermi (i loro frame) e i nodi dei possessori.
+// The outputs (their frames) and the owners' nodes go first.
 void vela_scene_destroy(struct vela_scene *scene);
 
-// Da chiamare a ogni cambiamento: chiede un frame a tutti gli schermi.
+// To call on every change: asks all outputs for a frame.
 void vela_scene_changed(struct vela_scene *scene);
 
-// Le superfici che si impegnano ad arrivare su schermo passano da qui: il
-// danno dei loro commit va agli schermi che le mostrano.
+// Surfaces about to reach the screen pass through here: the damage of their
+// commits goes to the outputs that show them.
 void vela_scene_watch(struct vela_scene *scene, struct wlr_compositor *compositor);
 
-// Cosa c'è in un punto del layout (solo ciò che accetta input).
+// What is at a point of the layout (only what accepts input).
 struct vela_hit {
-    struct wlr_surface *surface; // NULL: un nodo nostro (la barra del titolo)
+    struct wlr_surface *surface; // NULL: one of our nodes (the title bar)
     double sx, sy;
-    void *owner; // il `data` più vicino risalendo l'albero
+    void *owner; // the nearest `data` going up the tree
 };
 struct vela_hit vela_scene_at(struct vela_scene *scene, double lx, double ly);
 
@@ -167,18 +165,16 @@ struct vela_tree *vela_tree_create(struct vela_tree *parent);
 struct vela_surface_node *vela_surface_node_create(struct vela_tree *parent, struct wlr_surface *surface);
 struct vela_rect_node *vela_rect_node_create(struct vela_tree *parent, double width, double height,
     const struct wlr_render_color *color);
-// `buffer` viene bloccato finché il nodo esiste.
+// `buffer` stays locked as long as the node exists.
 struct vela_buffer_node *vela_buffer_node_create(struct vela_tree *parent, struct wlr_buffer *buffer,
     struct wlr_texture *texture, const struct wlr_fbox *src, enum wl_output_transform transform, double width,
     double height);
 void vela_node_destroy(struct vela_node *node);
 
 void vela_node_set_position(struct vela_node *node, double x, double y);
-// Posizione assoluta (logica).
+// Absolute position (logical).
 void vela_node_coords(const struct vela_node *node, double *lx, double *ly);
 void vela_node_set_enabled(struct vela_node *node, bool enabled);
-// Abilitato lui e tutti gli antenati, e appeso alla radice.
-bool vela_node_visible(const struct vela_node *node);
 void vela_node_set_opacity(struct vela_node *node, float opacity);
 void vela_node_raise_to_top(struct vela_node *node);
 void vela_node_place_above(struct vela_node *node, struct vela_node *sibling);
@@ -190,13 +186,13 @@ void vela_rect_node_set_size(struct vela_rect_node *rect, double width, double h
 void vela_rect_node_set_color(struct vela_rect_node *rect, const struct wlr_render_color *color);
 void vela_buffer_node_set_size(struct vela_buffer_node *buffer, double width, double height);
 
-// Ogni superficie di un albero di superfici (radice e sottosuperfici
-// mappate), nell'ordine di disegno, con la posizione relativa alla radice.
+// Every surface of a surface tree (root and mapped subsurfaces), in drawing
+// order, with the position relative to the root.
 typedef void (*vela_surface_iterator)(struct wlr_surface *surface, int x, int y, void *data);
 void vela_for_each_surface(struct wlr_surface *root, vela_surface_iterator iterator, void *data);
 
-// Posizione di un popup rispetto all'origine della superficie genitore
-// (anche se il genitore è un pannello della shell).
+// A popup's position relative to the parent surface's origin (even when the
+// parent is a shell panel).
 void vela_popup_position(struct wlr_xdg_popup *popup, double *x, double *y);
 
 #endif

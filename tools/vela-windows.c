@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// vela-windows: elenca e comanda le finestre di Vela (wlr-foreign-toplevel).
+// vela-windows: lists and commands Vela's windows (wlr-foreign-toplevel).
 //
-// Uso: vela-windows [list]
-//      vela-windows AZIONE APP_ID
+// Usage: vela-windows [list]
+//        vela-windows ACTION APP_ID
 //
-// AZIONE: activate, minimize, restore, maximize, unmaximize, close.
-// Agisce sulla prima finestra con quell'app_id (es. org.kde.konsole).
+// ACTION: activate, minimize, restore, maximize, unmaximize, close.
+// Acts on the first window with that app_id (such as org.kde.konsole).
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +22,7 @@ struct window {
     struct zwlr_foreign_toplevel_handle_v1* handle;
     char title[256];
     char appId[128];
-    uint32_t state; // bit (1 << stato)
+    uint32_t state; // bits (1 << state)
     int hasParent;
     int closed;
 };

@@ -9,7 +9,7 @@
 
 const struct vela_curve vela_decelerate = { 0.0, 0.0, 0.2, 1.0 };
 
-// I coefficienti del polinomio di un asse: ((a t + b) t + c) t.
+// The coefficients of one axis' polynomial: ((a t + b) t + c) t.
 struct axis {
     double a, b, c;
 };
@@ -33,7 +33,7 @@ static double sample_derivative(struct axis axis, double t)
     return (3.0 * axis.a * t + 2.0 * axis.b) * t + axis.c;
 }
 
-// Trova t tale che x(t) == x: Newton, con bisezione di riserva.
+// Finds t such that x(t) == x: Newton, with bisection as a fallback.
 static double solve_t(struct axis ax, double x)
 {
     double t = x;

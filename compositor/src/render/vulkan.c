@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Il device Vulkan di Vela (docs/renderer.md §7). Uno per la GPU che pilota
-// gli schermi; tutto il disegno del renderer passa da qui.
+// Vela's Vulkan device (docs/renderer.md §7). One, for the GPU driving the
+// outputs; all the renderer's drawing goes through here.
 
 #include "render/render.h"
 
@@ -18,7 +18,7 @@
 #include <wlr/util/log.h>
 #include <xf86drm.h>
 
-// Il minimo per scambiare buffer con il kernel e con le app (§7.1).
+// The minimum to exchange buffers with the kernel and with apps (§7.1).
 static const char *const required_extensions[] = {
     VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME,
     VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
@@ -39,7 +39,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL on_debug_message(VkDebugUtilsMessageSeveri
     return VK_FALSE;
 }
 
-// Le estensioni di un device, in un array allocato da liberare.
+// A device's extensions, in an allocated array to free.
 static VkExtensionProperties *device_extensions(VkPhysicalDevice physical, uint32_t *count)
 {
     *count = 0;
@@ -68,7 +68,7 @@ static bool create_instance(struct vela_vulkan *vk)
         return false;
     }
 
-    // Validation layer su richiesta (VELA_VULKAN_VALIDATION=1), se installati.
+    // Validation layers on request (VELA_VULKAN_VALIDATION=1), if installed.
     const char *layers[1];
     const char *extensions[1];
     uint32_t layer_count = 0;
@@ -171,8 +171,8 @@ static bool pick_physical_device(struct vela_vulkan *vk, int backend_drm_fd)
             continue;
         }
 
-        // La GPU dello schermo vince sempre; senza indicazioni (headless) si
-        // preferisce una scheda dedicata.
+        // The output's GPU always wins; without a hint (headless) a dedicated
+        // card is preferred.
         int score = props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? 2
             : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU    ? 1
                                                                             : 0;
@@ -203,9 +203,8 @@ static bool pick_physical_device(struct vela_vulkan *vk, int backend_drm_fd)
     return true;
 }
 
-// Il processo può chiedere una coda ad alta priorità (CAP_SYS_NICE, bit 23
-// di CapEff, o root): un tentativo rifiutato riempirebbe il log di errori
-// del caricatore.
+// The process can ask for a high-priority queue (CAP_SYS_NICE, bit 23 of
+// CapEff, or root): a refused attempt would fill the log with loader errors.
 static bool may_raise_priority(void)
 {
     bool allowed = geteuid() == 0;
@@ -264,9 +263,9 @@ static bool create_device(struct vela_vulkan *vk)
         return false;
     }
 
-    // Cosa usiamo del core: semafori timeline (1.2) per sapere quando la GPU
-    // ha finito, dynamic rendering e synchronization2 (1.3), push
-    // descriptor (1.4) per legare le texture senza pool di descrittori.
+    // What we use from core: timeline semaphores (1.2) to know when the GPU is
+    // done, dynamic rendering and synchronization2 (1.3), push descriptors
+    // (1.4) to bind textures without descriptor pools.
     VkPhysicalDeviceVulkan14Features supported14 = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES };
     VkPhysicalDeviceVulkan13Features supported13
         = { .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, .pNext = &supported14 };
@@ -295,11 +294,11 @@ static bool create_device(struct vela_vulkan *vk)
         .timelineSemaphore = VK_TRUE,
     };
 
-    // Le estensioni: quelle necessarie, i timestamp calibrati (facoltativi:
-    // a che ora, sul nostro orologio, la GPU finisce un frame) e la coda ad
-    // alta priorità (§4.3: i frame del compositor passano davanti al lavoro
-    // delle app, anche di un gioco che tiene la GPU al 100%; il kernel la
-    // concede solo a chi ha CAP_SYS_NICE, come kwin_wayland).
+    // The extensions: the required ones, calibrated timestamps (optional:
+    // when, on our clock, the GPU finishes a frame) and the high-priority
+    // queue (§4.3: the compositor's frames go ahead of the apps' work, even a
+    // game keeping the GPU at 100%; the kernel grants it only to whoever has
+    // CAP_SYS_NICE, like kwin_wayland).
     uint32_t ext_count = 0;
     VkExtensionProperties *exts = device_extensions(vk->physical, &ext_count);
     const char *extensions[REQUIRED_COUNT + 2];
@@ -443,7 +442,7 @@ bool vela_vulkan_supports_dmabuf(const struct vela_vulkan *vk, VkFormat format, 
     return external_props.externalMemoryProperties.externalMemoryFeatures & VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT;
 }
 
-// I modifier di un formato con le loro caratteristiche, in un array allocato.
+// A format's modifiers with their properties, in an allocated array.
 static VkDrmFormatModifierPropertiesEXT *format_modifiers(const struct vela_vulkan *vk, VkFormat format,
     uint32_t *count, VkFormatFeatureFlags *optimal_features)
 {
@@ -466,8 +465,8 @@ static void query_formats(struct vela_vulkan *vk)
         | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
     for (int f = 0; f < vela_pixel_format_count; ++f) {
         const struct vela_pixel_format *format = &vela_pixel_formats[f];
-        // dmabuf: per ogni modifier, se si può leggere (texture delle app)
-        // e se ci si può disegnare sopra (schermi, catture, cursori).
+        // dmabuf: for each modifier, whether it can be read (app textures) and
+        // drawn on (outputs, captures, cursors).
         uint32_t count = 0;
         VkFormatFeatureFlags optimal = 0;
         VkDrmFormatModifierPropertiesEXT *modifiers = format_modifiers(vk, format->unorm, &count, &optimal);
@@ -492,7 +491,7 @@ static void query_formats(struct vela_vulkan *vk)
             free(modifiers);
         }
 
-        // Memoria condivisa: la copiamo in un'immagine nostra.
+        // Shared memory: we copy it into an image of ours.
         const VkFormatFeatureFlags shm_needs = sampled | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
         if ((optimal & shm_needs) == shm_needs && vk->shm_format_count < VELA_MAX_SHM_FORMATS) {
             vk->shm_formats[vk->shm_format_count++] = format->drm;
@@ -564,7 +563,7 @@ bool vela_vulkan_import_dmabuf(const struct vela_vulkan *vk, const struct wlr_dm
 {
     *image = VK_NULL_HANDLE;
     *memory = VK_NULL_HANDLE;
-    // Niente immagini "disjoint": i formati RGB non ne hanno bisogno.
+    // No "disjoint" images: RGB formats don't need them.
     struct stat first;
     fstat(dmabuf->fd[0], &first);
     for (int i = 1; i < dmabuf->n_planes; ++i) {
@@ -617,7 +616,7 @@ bool vela_vulkan_import_dmabuf(const struct vela_vulkan *vk, const struct wlr_dm
     vk->get_memory_fd_properties(vk->device, VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT, dmabuf->fd[0], &fd_props);
     uint32_t memory_type = vela_vulkan_memory_type(vk, requirements.memoryTypeBits & fd_props.memoryTypeBits, 0);
 
-    // Vulkan prende possesso del descrittore: gliene diamo una copia.
+    // Vulkan takes ownership of the descriptor: we give it a copy.
     int fd = fcntl(dmabuf->fd[0], F_DUPFD_CLOEXEC, 0);
     const VkMemoryDedicatedAllocateInfo dedicated = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,

@@ -70,8 +70,8 @@ struct vela_axis vela_place_axis(int start, int size, int screen, double scale, 
     bool touches_start = start <= 0 && open_before;
     bool touches_end = start + size >= screen && open_after;
     int exact = 0;
-    int above = 0; // il più piccolo che sfora
-    int below = 1; // il più grande che resta dentro
+    int above = 0; // the smallest that spills over
+    int below = 1; // the largest that stays inside
     int64_t first = (int64_t)floor(size / scale) - 1;
     int64_t last = (int64_t)ceil(size / scale) + 1;
     for (int64_t w = first; w <= last; ++w) {
@@ -91,8 +91,8 @@ struct vela_axis vela_place_axis(int start, int size, int screen, double scale, 
         return (struct vela_axis) { start / scale, exact };
     }
     if ((touches_start || touches_end) && above) {
-        // Si sfora dal lato dello schermo: oltre la fine, o prima
-        // dell'inizio se è lì il bordo libero.
+        // Spill over the output's side: past the end, or before the start if
+        // the free edge is there.
         int64_t excess = vela_buffer_pixels(above, scale) - size;
         double from = touches_end ? start : (double)(start - excess);
         return (struct vela_axis) { from / scale, above };

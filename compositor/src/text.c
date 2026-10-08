@@ -21,8 +21,8 @@ struct vela_text {
     double pixel_size;
 };
 
-// Il font scelto in KDE: [WM] activeFont, altrimenti [General] font, nel
-// formato di Qt "famiglia,punti,..."; altrimenti quello predefinito di KDE.
+// The font chosen in KDE: [WM] activeFont, otherwise [General] font, in Qt's
+// "family,points,..." format; otherwise KDE's default.
 static void kde_font(char *family, size_t size, double *points)
 {
     snprintf(family, size, "Noto Sans");
@@ -72,8 +72,8 @@ static void kde_font(char *family, size_t size, double *points)
     }
 }
 
-// Il file del font per una famiglia, come lo sceglierebbe il resto del
-// sistema (fontconfig).
+// The font file for a family, as the rest of the system would choose it
+// (fontconfig).
 static bool find_font(const char *family, char *file, size_t size, int *index)
 {
     if (!FcInit()) {
@@ -147,7 +147,7 @@ double vela_text_pixel_size(const struct vela_text *text)
     return text->pixel_size;
 }
 
-// Una riga disposta da HarfBuzz; la larghezza in 26.6.
+// A line laid out by HarfBuzz; the width in 26.6.
 struct shaped {
     hb_buffer_t *buffer;
     hb_glyph_info_t *infos;
@@ -171,14 +171,14 @@ static struct shaped shape(hb_font_t *font, const char *utf8)
     return out;
 }
 
-// Un canale "sopra" in premoltiplicato: i glifi vicini possono toccarsi.
+// One channel "over" in premultiplied form: neighboring glyphs can touch.
 static uint32_t over(uint32_t dst, int shift, double value, double coverage)
 {
     double old = ((dst >> shift) & 0xff) / 255.0;
     return (uint32_t)lround(fmin(1.0, value * coverage + old * (1.0 - coverage)) * 255.0) << shift;
 }
 
-// I primi `count` glifi di `line`, dalla penna in avanti.
+// The first `count` glyphs of `line`, from the pen onwards.
 static void draw_glyphs(FT_Face face, const struct shaped *line, unsigned count, int64_t *pen, int ascender,
     const double color[4], struct vela_image *image)
 {
@@ -224,7 +224,7 @@ void vela_text_render(struct vela_text *text, const char *utf8, double pixel_siz
     struct shaped ellipsis = { 0 };
     unsigned keep = line.count;
     int64_t width = line.width;
-    // Troppo lungo: si taglia e si aggiunge "…".
+    // Too long: cut it and add "…".
     if (max_width > 0 && line.width > (int64_t)max_width * 64) {
         ellipsis = shape(text->font, "…");
         width = 0;
@@ -249,7 +249,7 @@ void vela_text_render(struct vela_text *text, const char *utf8, double pixel_siz
     }
     out->pixels = calloc((size_t)out->width * (size_t)out->height, sizeof(uint32_t));
 
-    // Alfa, rosso, verde, blu, da 0 a 1.
+    // Alpha, red, green, blue, from 0 to 1.
     const double channels[4] = { ((color >> 24) & 0xff) / 255.0, ((color >> 16) & 0xff) / 255.0,
         ((color >> 8) & 0xff) / 255.0, (color & 0xff) / 255.0 };
     int64_t pen = 0;

@@ -4,11 +4,11 @@
 #ifndef VELA_SNAP_H
 #define VELA_SNAP_H
 
-// Snap delle finestre, come Windows 11. Una finestra agganciata occupa un
-// rettangolo dell'area utile in dodicesimi: metà e quarti col trascinamento
-// contro i bordi e gli angoli (in alto la massimizza) e con Win+frecce;
-// metà, terzi e quarti dai layout di snap che la shell mostra sotto il
-// pulsante Ingrandisci (Win+Z).
+// Window snapping, like Windows 11. A snapped window covers a rectangle of the
+// usable area in twelfths: halves and quarters by dragging against edges and
+// corners (the top maximizes it) and with Win+arrows; halves, thirds and
+// quarters from the snap layouts the shell shows under the Maximize button
+// (Win+Z).
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -19,7 +19,7 @@ struct vela_area;
 struct vela_output;
 struct vela_view;
 
-// Un rettangolo dell'area utile in dodicesimi; tutto zero: non agganciata.
+// A rectangle of the usable area in twelfths; all zero: not snapped.
 struct vela_snap {
     int x0;
     int y0;
@@ -50,27 +50,25 @@ static inline bool vela_snap_valid(struct vela_snap s)
     return s.x0 >= 0 && s.y0 >= 0 && s.x1 <= 12 && s.y1 <= 12 && s.x1 > s.x0 && s.y1 > s.y0;
 }
 
-// L'area di uno snap sullo schermo. I bordi si prendono in pixel fisici:
-// le zone vicine si toccano senza fessure né sovrapposizioni a qualunque
-// scala.
+// A snap's area on the output. The edges are taken in physical pixels:
+// neighboring zones touch with no gaps or overlaps at any scale.
 struct vela_area vela_snap_area(const struct vela_output *output, struct vela_snap snap);
 
-// Aggancia (o sgancia, con vela_snap_none) la finestra; `output`: lo
-// schermo, se non quello su cui sta.
+// Snaps (or unsnaps, with vela_snap_none) the window; `output`: the output, if
+// not the one it's on.
 void vela_view_set_snap(struct vela_view *view, struct vela_snap side, struct vela_output *output);
-// La riallinea al suo snap su `output`.
+// Realigns it to its snap on `output`.
 void vela_view_apply_snap(struct vela_view *view, struct vela_output *output);
-// Spostata altrove: non sta più col suo gruppo (un gruppo di una finestra
-// sola non è più un gruppo).
+// Moved elsewhere: it's no longer with its group (a group of one window is no
+// longer a group).
 void vela_view_leave_snap_group(struct vela_view *view);
 
-// ------------------------------------------------- trascinare e la shell --
-//
-// Mentre si trascina una finestra contro un bordo, un'anteprima mostra dove
-// finirà; dopo uno snap, Snap Assist della shell propone le altre finestre
-// per gli spazi rimasti liberi; le finestre sistemate insieme fanno un
-// gruppo che la taskbar riporta davanti insieme. I layout di snap si aprono
-// con Win+Z o col mouse fermo sul pulsante Ingrandisci.
+// ------------------------------------------------ dragging and the shell --
+// While a window is dragged against an edge, a preview shows where it will end
+// up; after a snap, the shell's Snap Assist offers the other windows for the
+// spaces left free; windows arranged together form a group the taskbar brings
+// forward together. Snap layouts open with Win+Z or with the mouse resting on
+// the Maximize button.
 
 struct vela_rect_node;
 struct vela_server;
@@ -78,20 +76,19 @@ struct wl_event_source;
 
 enum vela_snap_zone {
     VELA_SNAP_ZONE_NONE,
-    VELA_SNAP_ZONE_TILE, // con `tile`
+    VELA_SNAP_ZONE_TILE, // with `tile`
     VELA_SNAP_ZONE_MAXIMIZE,
 };
 
 struct vela_snapping {
-    // L'anteprima mentre si trascina: dove si aggancerà la finestra se la si
-    // rilascia ora.
+    // The preview while dragging: where the window will snap if released now.
     enum vela_snap_zone zone;
     struct vela_snap tile;
     struct vela_output *output;
-    struct vela_rect_node *rect; // sotto la finestra trascinata, o NULL
-    double target_x, target_y, target_width, target_height; // l'area di arrivo
+    struct vela_rect_node *rect; // below the dragged window, or NULL
+    double target_x, target_y, target_width, target_height; // the target area
     struct vela_tween tween;
-    // I layout di snap col mouse fermo su Ingrandisci.
+    // Snap layouts with the mouse resting on Maximize.
     struct vela_view *layouts_hover;
     struct wl_event_source *layouts_timer;
     uint32_t next_group;
@@ -100,24 +97,24 @@ struct vela_snapping {
 struct vela_snapping *vela_snapping_create(void);
 void vela_snapping_destroy(struct vela_snapping *snapping);
 
-// Win+frecce, come Windows 11.
+// Win+arrows, like Windows 11.
 void vela_snap_keyboard(struct vela_server *server, struct vela_view *view, uint32_t sym);
-// Durante il trascinamento: l'anteprima secondo dove sta il cursore.
+// While dragging: the preview according to where the cursor is.
 void vela_snap_update_zone(struct vela_server *server);
-// L'anteprima che si accende (true finché si anima) e se c'è.
+// The preview lighting up (true while it animates) and whether there is one.
 bool vela_snap_tick_preview(struct vela_server *server, double now_ms);
 bool vela_snap_preview_shown(const struct vela_server *server);
-// Fine del trascinamento; apply: la finestra si aggancia dove indica.
+// End of the drag; apply: the window snaps where it points.
 void vela_snap_end_zone(struct vela_server *server, bool apply);
-// Dopo uno snap: Snap Assist propone le altre finestre negli spazi liberi.
+// After a snap: Snap Assist offers the other windows in the free spaces.
 void vela_snap_offer_assist(struct vela_server *server, struct vela_view *view);
-// Snap Assist ha messo `view` accanto a `origin`: stesso gruppo.
+// Snap Assist put `view` next to `origin`: same group.
 void vela_snap_join_group(struct vela_server *server, struct vela_view *view, struct vela_view *origin);
-// Il clic sul gruppo nella taskbar: tutte davanti, `view` a fuoco.
+// The click on the group in the taskbar: all forward, `view` focused.
 void vela_snap_activate_group(struct vela_server *server, struct vela_view *view);
-// I layout di snap della finestra (keyboard: Win+Z).
+// The window's snap layouts (keyboard: Win+Z).
 void vela_snap_show_layouts(struct vela_server *server, struct vela_view *view, bool keyboard);
-// Il mouse su Ingrandisci di `view` (NULL: altrove).
+// The mouse on `view`'s Maximize (NULL: elsewhere).
 void vela_snap_hover_maximize(struct vela_server *server, struct vela_view *view);
 void vela_snap_forget(struct vela_server *server, struct vela_view *view);
 

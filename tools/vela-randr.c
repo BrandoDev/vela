@@ -1,15 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// vela-randr: configura gli schermi come fa Impostazioni > Schermo
-// (wlr-output-management), per le prove senza wlr-randr.
+// vela-randr: configures outputs as Settings > Display does
+// (wlr-output-management), for tests without wlr-randr.
 //
-// Uso: vela-randr                          elenca gli schermi
-//      vela-randr --output NOME [--on | --off] [--scale S] [--pos X,Y]
-//                 [--mode LxA]
+// Usage: vela-randr                          lists the outputs
+//        vela-randr --output NAME [--on | --off] [--scale S] [--pos X,Y]
+//                   [--mode WxH]
 //
-// Gli altri schermi restano come sono. Esce con 0 se Vela applica la
-// configurazione, 1 se la rifiuta.
+// The other outputs stay as they are. Exits with 0 if Vela applies the
+// configuration, 1 if it refuses it.
 
 #define _GNU_SOURCE
 #include <stdint.h>
@@ -41,9 +41,9 @@ static struct head* heads;
 static struct mode* modes;
 static uint32_t serial;
 static int done;
-static int result = -1; // 1 applicata, 0 rifiutata
+static int result = -1; // 1 applied, 0 refused
 
-// ------------------------------------------------------------------ modi --
+// ----------------------------------------------------------------- modes --
 
 static void onModeSize(void* data, struct zwlr_output_mode_v1* wl, int32_t width, int32_t height)
 {
@@ -68,7 +68,7 @@ static const struct zwlr_output_mode_v1_listener modeListener = {
     onModeFinished,
 };
 
-// --------------------------------------------------------------- schermi --
+// --------------------------------------------------------------- outputs --
 
 static void onName(void* data, struct zwlr_output_head_v1* wl, const char* name)
 {
@@ -153,7 +153,7 @@ static void onManagerFinished(void* data, struct zwlr_output_manager_v1* wl) { }
 
 static const struct zwlr_output_manager_v1_listener managerListener = { onHead, onDone, onManagerFinished };
 
-// --------------------------------------------------------- configurazione --
+// ---------------------------------------------------------- configuration --
 
 static void onSucceeded(void* data, struct zwlr_output_configuration_v1* config)
 {

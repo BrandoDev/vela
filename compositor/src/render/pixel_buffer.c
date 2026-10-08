@@ -6,8 +6,8 @@
 #include <drm_fourcc.h>
 #include <wlr/interfaces/wlr_buffer.h>
 
-// wlr_buffer come primo membro: dal puntatore che wlroots ci passa si
-// risale ai pixel.
+// wlr_buffer as the first member: from the pointer wlroots passes us we get
+// back to the pixels.
 struct pixel_buffer {
     struct wlr_buffer base;
     uint32_t *pixels;
@@ -16,6 +16,7 @@ struct pixel_buffer {
 static void destroy(struct wlr_buffer *buffer)
 {
     struct pixel_buffer *self = (struct pixel_buffer *)buffer;
+    wlr_buffer_finish(buffer);
     free(self->pixels);
     free(self);
 }

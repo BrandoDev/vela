@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Le texture (render.h): dmabuf importati così come sono, buffer in memoria
-// condivisa copiati in un'immagine nostra (solo la parte cambiata), e la
-// lettura dei pixel per le catture.
+// Textures (render.h): dmabufs imported as they are, shared-memory buffers
+// copied into an image of ours (only the changed part), and pixel readback for
+// captures.
 
 #include "render/render.h"
 
@@ -30,12 +30,12 @@ bool vela_texture_is_opaque(struct wlr_texture *wlr)
     return texture && !texture->format->alpha;
 }
 
-// La texture sparisce: le risorse Vulkan quando la GPU avrà finito di
-// usarle, la struttura subito.
+// The texture goes away: its Vulkan resources when the GPU is done with them,
+// the struct at once.
 static void retire(struct vela_texture *texture)
 {
     if (!texture->renderer) {
-        free(texture); // il renderer è già chiuso: non resta nulla da liberare
+        free(texture); // the renderer is already closed: nothing left to free
         return;
     }
     if (texture->buffer) {
@@ -69,14 +69,13 @@ static void texture_destroy(struct wlr_texture *wlr)
         wlr_buffer_unlock(buffer);
         return;
     }
-    // Un dmabuf che non usiamo più non resta importato, anche se l'app lo
-    // riuserà. RADV mette ogni memoria importata in tutti i nostri invii
-    // alla GPU, e il kernel fa aspettare a ciascun invio le fence di
-    // scrittura dei dmabuf in sincronizzazione implicita: un buffer in
-    // cache che l'app sta ridisegnando fermerebbe ogni nostro frame finché
-    // la sua GPU non ha finito (docs/renderer.md §7.3). Le risorse si
-    // liberano quando la GPU ha finito di leggerle; sbloccare il buffer può
-    // distruggerlo, quindi per ultimo.
+    // A dmabuf we no longer use doesn't stay imported, even if the app will
+    // reuse it. RADV puts every imported memory in all our GPU submissions,
+    // and the kernel makes each submission wait for the dmabufs' write fences
+    // under implicit sync: a cached buffer the app is redrawing would stall
+    // every frame of ours until its GPU finished (docs/renderer.md §7.3). The
+    // resources are freed when the GPU has finished reading them; unlocking
+    // the buffer can destroy it, so it comes last.
     retire(texture);
     if (buffer) {
         wlr_buffer_unlock(buffer);
@@ -90,7 +89,7 @@ static bool create_view(struct vela_texture *texture)
         .image = texture->image,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
         .format = texture->format->unorm,
-        // I formati X... hanno il quarto canale indefinito: vale 1.
+        // X... formats have an undefined fourth channel: it counts as 1.
         .components = {
             VK_COMPONENT_SWIZZLE_IDENTITY,
             VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -99,7 +98,7 @@ static bool create_view(struct vela_texture *texture)
         },
         .subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 },
     };
-    VkDevice device = vela_renderer_vulkan(texture->renderer)->device;
+    VkDevice device = texture->renderer->vk->device;
     return vkCreateImageView(device, &info, NULL, &texture->view) == VK_SUCCESS;
 }
 
@@ -112,7 +111,7 @@ static struct vela_texture *new_texture(struct vela_renderer *renderer, const st
     texture->format = format;
     texture->dmabuf_fd = -1;
     texture->refs = 1;
-    vela_renderer_track_texture(renderer, texture);
+    wl_list_insert(&renderer->textures, &texture->link);
     return texture;
 }
 
@@ -121,7 +120,7 @@ static struct vela_texture *new_texture(struct vela_renderer *renderer, const st
 static struct wlr_texture *import_dmabuf(struct vela_renderer *renderer, struct wlr_buffer *buffer,
     const struct wlr_dmabuf_attributes *dmabuf)
 {
-    // Già importato e ancora in uso (lo stesso buffer in più punti).
+    // Already imported and still in use (the same buffer in several places).
     struct wlr_addon *addon = wlr_addon_find(&buffer->addons, renderer, &texture_addon_impl);
     if (addon) {
         struct vela_texture *texture = wl_container_of(addon, texture, addon);
@@ -130,7 +129,7 @@ static struct wlr_texture *import_dmabuf(struct vela_renderer *renderer, struct 
         return &texture->base;
     }
 
-    struct vela_vulkan *vk = vela_renderer_vulkan(renderer);
+    struct vela_vulkan *vk = renderer->vk;
     const struct vela_pixel_format *format = vela_pixel_format_from_drm(dmabuf->format);
     if (!format || !wlr_drm_format_set_has(&vk->texture_formats, dmabuf->format, dmabuf->modifier)) {
         wlr_log(WLR_DEBUG, "Texture: dmabuf 0x%08x (modifier 0x%" PRIx64 ") not supported", dmabuf->format,
@@ -152,7 +151,7 @@ static struct wlr_texture *import_dmabuf(struct vela_renderer *renderer, struct 
     return &texture->base;
 }
 
-// ------------------------------------------------- memoria condivisa --
+// ----------------------------------------------------- shared memory --
 
 static void image_barrier(VkCommandBuffer cmd, VkImage image, VkImageLayout from, VkImageLayout to,
     VkPipelineStageFlags2 src_stage, VkAccessFlags2 src_access, VkPipelineStageFlags2 dst_stage,
@@ -179,7 +178,7 @@ static void image_barrier(VkCommandBuffer cmd, VkImage image, VkImageLayout from
     vkCmdPipelineBarrier2(cmd, &dependency);
 }
 
-// Copia nell'immagine le zone `rects` dei pixel `data`.
+// Copies the `rects` zones of the `data` pixels into the image.
 static bool upload(struct vela_texture *texture, const uint8_t *data, size_t stride, const pixman_box32_t *rects,
     int count)
 {
@@ -246,7 +245,7 @@ static struct wlr_texture *upload_buffer(struct vela_renderer *renderer, struct 
     if (!wlr_buffer_begin_data_ptr_access(buffer, WLR_BUFFER_DATA_PTR_ACCESS_READ, &data, &drm_format, &stride)) {
         return NULL;
     }
-    struct vela_vulkan *vk = vela_renderer_vulkan(renderer);
+    struct vela_vulkan *vk = renderer->vk;
     const struct vela_pixel_format *format = vela_pixel_format_from_drm(drm_format);
     if (!format || !shm_format_supported(vk, drm_format)) {
         wlr_buffer_end_data_ptr_access(buffer);
@@ -299,8 +298,8 @@ static struct wlr_texture *upload_buffer(struct vela_renderer *renderer, struct 
     return &texture->base;
 }
 
-// L'app ha disegnato di nuovo (in questo buffer o in un altro dello stesso
-// formato e dimensione): si ricopia solo la parte cambiata.
+// The app drew again (in this buffer or another of the same format and size):
+// only the changed part is copied again.
 static bool update_from_buffer(struct wlr_texture *wlr, struct wlr_buffer *buffer, const pixman_region32_t *damage)
 {
     struct vela_texture *texture = (struct vela_texture *)wlr;
@@ -320,7 +319,8 @@ static bool update_from_buffer(struct wlr_texture *wlr, struct wlr_buffer *buffe
         pixman_region32_intersect_rect(&region, damage, 0, 0, (unsigned)buffer->width, (unsigned)buffer->height);
         int count = 0;
         const pixman_box32_t *rects = pixman_region32_rectangles(&region, &count);
-        // Troppi pezzetti: meglio un'unica copia del rettangolo che li contiene.
+        // Too many little pieces: better a single copy of the rectangle
+        // containing them.
         if (count > 16) {
             rects = pixman_region32_extents(&region);
             count = 1;
@@ -332,22 +332,22 @@ static bool update_from_buffer(struct wlr_texture *wlr, struct wlr_buffer *buffe
     return ok;
 }
 
-// -------------------------------------------------------- lettura pixel --
+// ------------------------------------------------------- pixel readback --
 
-// Per le catture (screencopy, anteprime): copia una zona della texture
-// nella memoria indicata. La CPU aspetta la GPU.
+// For captures (screencopy, previews): copies a zone of the texture to the
+// given memory. The CPU waits for the GPU.
 static bool read_pixels(struct wlr_texture *wlr, const struct wlr_texture_read_pixels_options *options)
 {
     struct vela_texture *texture = (struct vela_texture *)wlr;
     struct vela_renderer *renderer = texture->renderer;
-    struct vela_vulkan *vk = vela_renderer_vulkan(renderer);
+    struct vela_vulkan *vk = renderer->vk;
 
     const struct vela_pixel_format *wanted = vela_pixel_format_from_drm(options->format);
     if (!wanted || wanted->unorm != texture->format->unorm) {
         wlr_log(WLR_ERROR, "Texture: reading in format 0x%08x not supported", options->format);
         return false;
     }
-    // Da X... ad A...: il quarto canale va messo a "opaco".
+    // From X... to A...: the fourth channel must be set to "opaque".
     bool force_opaque = wanted->alpha && !texture->format->alpha && wanted->bytes_per_pixel == 4
         && (wanted->unorm == VK_FORMAT_B8G8R8A8_UNORM || wanted->unorm == VK_FORMAT_R8G8B8A8_UNORM);
 
@@ -403,7 +403,7 @@ static bool read_pixels(struct wlr_texture *wlr, const struct wlr_texture_read_p
         .image = texture->image,
         .subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 },
     };
-    // La copia verso il buffer deve essere visibile alla CPU.
+    // The copy into the buffer must be visible to the CPU.
     const VkBufferMemoryBarrier2 host_barrier = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
@@ -425,8 +425,8 @@ static bool read_pixels(struct wlr_texture *wlr, const struct wlr_texture_read_p
     };
     vkCmdPipelineBarrier2(cmd, &after_dependency);
 
-    // Un dmabuf: prima si aspetta chi ci sta scrivendo; dopo, chi vorrà
-    // scriverci aspetterà la nostra lettura.
+    // A dmabuf: first wait for whoever is writing it; afterwards, whoever
+    // wants to write it will wait for our read.
     int waits[1];
     int wait_count = 0;
     if (texture->foreign && vk->sync_file) {
@@ -483,7 +483,7 @@ struct wlr_texture *vela_texture_create(struct vela_renderer *renderer, struct w
 
 void vela_texture_release(struct vela_texture *texture)
 {
-    VkDevice device = vela_renderer_vulkan(texture->renderer)->device;
+    VkDevice device = texture->renderer->vk->device;
     if (texture->image) {
         vkDestroyImageView(device, texture->view, NULL);
         vkDestroyImage(device, texture->image, NULL);
@@ -498,9 +498,9 @@ void vela_texture_release(struct vela_texture *texture)
         wlr_addon_finish(&texture->addon);
         texture->buffer = NULL;
         if (texture->refs <= 0) {
-            free(texture); // la usava solo la cache del buffer
+            free(texture); // only the buffer cache used it
             return;
         }
     }
-    texture->renderer = NULL; // wlroots la distruggerà più tardi
+    texture->renderer = NULL; // wlroots will destroy it later
 }

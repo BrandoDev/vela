@@ -9,6 +9,7 @@
 #include "input.h"
 #include "interact.h"
 #include "layer.h"
+#include "listen.h"
 #include "lock.h"
 #include "output.h"
 #include "output_manager.h"
@@ -71,8 +72,8 @@ static int handle_terminate(int signal, void *data)
     return 0;
 }
 
-// Per il debug del danno: `kill -USR1` fa ridisegnare tutto da capo. Se
-// l'immagine cambia, il danno aveva lasciato pixel vecchi.
+// For damage debugging: `kill -USR1` redraws everything from scratch. If the
+// image changes, the damage had left stale pixels.
 static int handle_redraw_all(int signal, void *data)
 {
     struct vela_server *server = data;
@@ -100,8 +101,8 @@ static void handle_new_output(struct wl_listener *listener, void *data)
     vela_output_create(server, data);
 }
 
-// Ogni cambiamento (schermo collegato, spostato, nuova modalità) si
-// racconta ai programmi di configurazione.
+// Every change (output plugged, moved, new mode) is reported to configuration
+// programs.
 static void handle_layout_change(struct wl_listener *listener, void *data)
 {
     struct vela_server *server = wl_container_of(listener, server, layout_change);
@@ -110,15 +111,13 @@ static void handle_layout_change(struct wl_listener *listener, void *data)
     vela_views_check_outputs_later(server);
 }
 
-// Il ciclo dei frame deve svegliarsi all'istante giusto anche con la CPU
-// piena (una compilazione, un gioco): scheduling realtime, a priorità
-// bassa, per il thread principale, come KWin. Chi viene lanciato da Vela
-// (shell, app) non lo eredita. Serve RLIMIT_RTPRIO o CAP_SYS_NICE;
-// VELA_REALTIME=0 lo spegne.
+// The frame loop must wake at the right moment even with the CPU busy (a
+// build, a game): realtime scheduling, at low priority, for the main thread,
+// like KWin. What Vela launches (shell, apps) doesn't inherit it. Needs
+// RLIMIT_RTPRIO or CAP_SYS_NICE; VELA_REALTIME=0 turns it off.
 static void make_realtime(void)
 {
-    const char *realtime = getenv("VELA_REALTIME");
-    if (realtime && strcmp(realtime, "0") == 0) {
+    if (vela_env_off("VELA_REALTIME")) {
         return;
     }
     struct sched_param param = { .sched_priority = vela_min(10, sched_get_priority_max(SCHED_RR)) };
@@ -129,11 +128,11 @@ static void make_realtime(void)
     }
 }
 
-// Display, backend, renderer e scena; false se manca qualcosa di
-// indispensabile (il motivo è nel log).
+// Display, backend, renderer and scene; false if something essential is
+// missing (the reason is in the log).
 static bool init(struct vela_server *server)
 {
-    // vela.conf con i nomi inglesi, se ha ancora quelli italiani di prima.
+    // vela.conf with the English names, if it still has the old Italian ones.
     vela_config_migrate();
     wl_list_init(&server->outputs);
     wl_list_init(&server->new_output.link);
@@ -149,8 +148,8 @@ static bool init(struct vela_server *server)
     server->loop = wl_display_get_event_loop(server->display);
     struct wl_display *display = server->display;
 
-    // Sceglie da solo il backend: DRM/KMS da una TTY, oppure una finestra
-    // Wayland se lanciato dentro un'altra sessione (es. KDE) per i test.
+    // Picks the backend by itself: DRM/KMS from a VT, or a Wayland window when
+    // launched inside another session (such as KDE) for testing.
     server->backend = wlr_backend_autocreate(server->loop, &server->session);
     if (!server->backend) {
         wlr_log(WLR_ERROR, "Can't create the backend");
@@ -158,9 +157,9 @@ static bool init(struct vela_server *server)
     }
     wlr_multi_for_each_backend(server->backend, find_windowed, &server->nested);
 
-    // Il renderer di Vela (docs/renderer.md): solo Vulkan 1.4, sul device
-    // della GPU che pilota gli schermi. Senza, Vela non parte e il log dice
-    // perché.
+    // Vela's renderer (docs/renderer.md): Vulkan 1.4 only, on the device of
+    // the GPU driving the outputs. Without it Vela doesn't start and the log
+    // says why.
     server->vulkan = vela_vulkan_create(wlr_backend_get_drm_fd(server->backend));
     if (server->vulkan) {
         server->renderer = vela_renderer_create(server->vulkan);
@@ -176,31 +175,29 @@ static bool init(struct vela_server *server)
         return false;
     }
     wlr_renderer_init_wl_shm(server->wlr_renderer, display);
-    // Buffer GPU condivisi con le app, senza copie: i formati sono quelli
-    // che il nostro device sa leggere.
+    // GPU buffers shared with apps, without copies: the formats are those our
+    // device can read.
     struct wlr_linux_dmabuf_v1 *dmabuf = wlr_linux_dmabuf_v1_create_with_renderer(display, 4, server->wlr_renderer);
-    // Sincronizzazione esplicita (§7.3): le app dicono quando il buffer è
-    // pronto e noi quando l'abbiamo finito di leggere, con timeline del
-    // kernel invece delle fence implicite dei dmabuf. Le usano Vulkan (Mesa,
-    // NVIDIA) e i giochi. WLR_RENDER_NO_EXPLICIT_SYNC=1 la spegne, come nel
-    // resto di wlroots.
-    const char *no_explicit = getenv("WLR_RENDER_NO_EXPLICIT_SYNC");
-    if (server->wlr_renderer->features.timeline && !(no_explicit && strcmp(no_explicit, "0") != 0)
+    // Explicit sync (§7.3): apps say when the buffer is ready and we say when
+    // we're done reading it, with kernel timelines instead of the dmabufs'
+    // implicit fences. Vulkan (Mesa, NVIDIA) and games use it.
+    // WLR_RENDER_NO_EXPLICIT_SYNC=1 turns it off, as in the rest of wlroots.
+    if (server->wlr_renderer->features.timeline && !vela_env_flag("WLR_RENDER_NO_EXPLICIT_SYNC")
         && wlr_linux_drm_syncobj_manager_v1_create(display, 1, vela_vulkan_render_fd(server->vulkan))) {
         wlr_log(WLR_INFO, "Explicit sync with apps (linux-drm-syncobj-v1) enabled");
     }
 
-    // Protocolli di base che quasi ogni applicazione moderna si aspetta.
-    // Con il renderer, wlroots carica i buffer delle app nelle nostre
-    // texture a ogni commit (solo la parte cambiata).
+    // Basic protocols almost every modern application expects. With the
+    // renderer, wlroots uploads app buffers to our textures on every commit
+    // (only the changed part).
     server->compositor = wlr_compositor_create(display, 6, server->wlr_renderer);
     vela_ready_init(&server->ready, server->compositor);
     wlr_subcompositor_create(display);
     wlr_data_device_manager_create(display);
     wlr_primary_selection_v1_device_manager_create(display);
     wlr_data_control_manager_v1_create(display);
-    // Gli appunti per chi non ha una finestra: la cronologia degli appunti
-    // della shell (Win+V) e lo Strumento di cattura.
+    // The clipboard for those without a window: the shell's clipboard history
+    // (Win+V) and the Snipping Tool.
     wlr_ext_data_control_manager_v1_create(display, 1);
     wlr_viewporter_create(display);
     wlr_single_pixel_buffer_manager_v1_create(display);
@@ -211,15 +208,14 @@ static bool init(struct vela_server *server)
     server->output_layout = wlr_output_layout_create(display);
     wlr_xdg_output_manager_v1_create(display, server->output_layout);
     vela_output_manager_init(server);
-    server->layout_change.notify = handle_layout_change;
-    wl_signal_add(&server->output_layout->events.change, &server->layout_change);
+    vela_listen(&server->output_layout->events.change, &server->layout_change, handle_layout_change);
 
     server->scene = vela_scene_create();
     vela_scene_watch(server->scene, server->compositor);
     server->scene->linux_dmabuf = dmabuf;
     server->scene->event_loop = server->loop;
 
-    // L'ordine di creazione è l'ordine di impilamento (dal basso).
+    // Creation order is stacking order (from the bottom).
     struct vela_tree *root = server->scene->root;
     struct vela_layers *layers = &server->layers;
     layers->background = vela_tree_create(root);
@@ -230,7 +226,7 @@ static bool init(struct vela_server *server)
     layers->top_above_fullscreen = vela_tree_create(root);
     layers->x11_popups = vela_tree_create(root);
     layers->overlay = vela_tree_create(root);
-    // Sopra le finestre e sotto i pannelli: il desktop che si lascia.
+    // Above the windows and below the panels: the desktop being left.
     layers->windows_out = vela_tree_create(root);
     vela_node_place_above(&layers->windows_out->node, &layers->windows->node);
     layers->windows_out->node.ignores_input = true;
@@ -238,27 +234,26 @@ static bool init(struct vela_server *server)
     layers->drag->node.ignores_input = true;
     layers->lock = vela_tree_create(root);
 
-    server->new_output.notify = handle_new_output;
-    wl_signal_add(&server->backend->events.new_output, &server->new_output);
+    vela_listen(&server->backend->events.new_output, &server->new_output, handle_new_output);
 
-    // Le finestre: xdg-shell, xdg-decoration, foreign-toplevel, cattura,
-    // attivazione (view.c).
+    // Windows: xdg-shell, xdg-decoration, foreign-toplevel, capture,
+    // activation (view.c).
     vela_views_init(server);
-    // La sfocatura dietro i pannelli e le app che la chiedono (§8.3).
+    // The blur behind panels and apps that ask for it (§8.3).
     vela_background_effects_init(display, server->scene);
-    vela_layers_init(server); // i pezzi della shell (layer.c)
-    // Seat, cursore, mouse, tastiere, gesti (input.c).
+    vela_layers_init(server); // the shell pieces (layer.c)
+    // Seat, cursor, mice, keyboards, gestures (input.c).
     server->input = vela_input_create(server);
 
     wl_event_loop_add_signal(server->loop, SIGUSR1, handle_redraw_all, server);
-    vela_xwayland_init(server); // le app X11 (xwayland.c)
-    server->lock = vela_lock_create(server); // blocco e inattività (lock.c)
-    // Accessibilità e colore dello schermo (a11y.c); VRR e tearing.
+    vela_xwayland_init(server); // X11 apps (xwayland.c)
+    server->lock = vela_lock_create(server); // lock and inactivity (lock.c)
+    // Accessibility and screen color (a11y.c); VRR and tearing.
     server->scene->tearing_control = wlr_tearing_control_manager_v1_create(display, 1);
     server->a11y = vela_a11y_create(server);
     vela_output_load_settings(server);
     vela_a11y_load(server->a11y);
-    server->workspaces = vela_workspaces_create(server); // desktop virtuali (workspace.c)
+    server->workspaces = vela_workspaces_create(server); // virtual desktops (workspace.c)
 
     wl_event_loop_add_signal(server->loop, SIGINT, handle_terminate, display);
     wl_event_loop_add_signal(server->loop, SIGTERM, handle_terminate, display);
@@ -270,7 +265,8 @@ struct vela_server *vela_server_create(void)
 {
     struct vela_server *server = calloc(1, sizeof(*server));
     if (!init(server)) {
-        // Ciò che è già nato resta al processo, che sta per finire.
+        // What was already created is left to the process, which is about to
+        // end.
         free(server);
         return NULL;
     }
@@ -279,8 +275,8 @@ struct vela_server *vela_server_create(void)
 
 bool vela_server_start(struct vela_server *server, const char *startup_command)
 {
-    // Nella sessione supervisionata il socket lo tiene il supervisore, che
-    // lo passa a ogni compositor che avvia (supervisor.c).
+    // In the supervised session the supervisor holds the socket and hands it
+    // to every compositor it starts (supervisor.c).
     const char *socket = NULL;
     char given[64] = "";
     const char *socket_fd = getenv("VELA_WAYLAND_SOCKET_FD");
@@ -308,13 +304,13 @@ bool vela_server_start(struct vela_server *server, const char *startup_command)
     }
 
     setenv("WAYLAND_DISPLAY", socket, 1);
-    // Solo nella sessione vera (da SDDM o da una console): annidati o
-    // headless si resta ospiti dell'ambiente che c'è.
+    // Only in the real session (from SDDM or a console): nested or headless,
+    // Vela stays a guest of the environment it finds.
     if (server->session) {
         vela_session_set_environment();
     }
-    // Le app X11 lanciate da qui vanno nel nostro Xwayland, non in quello
-    // della sessione ospite (KDE) da cui magari siamo partiti.
+    // X11 apps launched from here go to our Xwayland, not to the one of the
+    // host session (KDE) we may have started from.
 #if WLR_HAS_XWAYLAND
     if (server->xwayland) {
         setenv("DISPLAY", server->xwayland->display_name, 1);
@@ -324,10 +320,10 @@ bool vela_server_start(struct vela_server *server, const char *startup_command)
 #else
     unsetenv("DISPLAY");
 #endif
-    // Le app Qt si ricollegano al compositor nuovo se questo va in crash:
-    // solo se c'è il supervisore che lo riavvia sullo stesso socket. Senza
-    // (annidati, headless) fa danni: alla chiusura di Vela le app Qt provano
-    // a riconnettersi e vanno in crash dentro Qt.
+    // Qt apps reconnect to the new compositor if this one crashes: only when
+    // the supervisor restarts it on the same socket. Without one (nested,
+    // headless) it does harm: when Vela closes, Qt apps try to reconnect and
+    // crash inside Qt.
     if (supervised) {
         setenv("QT_WAYLAND_RECONNECT", "1", 1);
     } else {
@@ -342,8 +338,8 @@ bool vela_server_start(struct vela_server *server, const char *startup_command)
     wlr_log(WLR_INFO, "Vela running on WAYLAND_DISPLAY=%s%s", socket,
         getenv("VELA_RESTARTED") ? " (restarted after a crash)" : "");
     unsetenv("VELA_RESTARTED");
-    // Era bloccato quando il compositor di prima è caduto: si riparte
-    // bloccati, schermo nero finché vela-lock non si presenta.
+    // It was locked when the previous compositor went down: start locked,
+    // black screen until vela-lock shows up.
     if (getenv("VELA_START_LOCKED")) {
         unsetenv("VELA_START_LOCKED");
         wlr_log(WLR_INFO, "The screen was locked: restarting locked");
@@ -366,20 +362,20 @@ void vela_server_run(struct vela_server *server)
 
 void vela_server_destroy(struct vela_server *server)
 {
-    // Stiamo chiudendo noi: la shell che se ne va non va rilanciata.
+    // We are shutting down: the shell going away must not be relaunched.
     vela_shell_stop(server);
     vela_commands_stop(server);
     if (server->session) {
         vela_session_run_hook("stop");
     }
-    vela_xwayland_finish(server); // le finestre X11 prima dei client Wayland
+    vela_xwayland_finish(server); // X11 windows before the Wayland clients
 
-    // Chiudere i client distrugge finestre e superfici della shell, che si
-    // rimuovono da sole dalle nostre liste.
+    // Closing the clients destroys windows and shell surfaces, which remove
+    // themselves from our lists.
     wl_display_destroy_clients(server->display);
 
-    // wlroots controlla che nessun listener resti attaccato agli oggetti che
-    // distrugge: si staccano tutti quelli globali prima di procedere.
+    // wlroots checks that no listener stays attached to the objects it
+    // destroys: all the global ones are detached first.
     vela_output_manager_finish(server);
     wl_list_remove(&server->layout_change.link);
     wl_list_remove(&server->new_output.link);
@@ -401,9 +397,9 @@ void vela_server_destroy(struct vela_server *server)
 
     wlr_xcursor_manager_destroy(server->cursor_manager);
     wlr_cursor_destroy(server->cursor);
-    wlr_backend_destroy(server->backend); // distrugge schermi e tastiere
-    // Dopo gli schermi, che li usano: il blocco, gli strati e la scena (ogni
-    // nodo, distrutto, avvisa la sua scena).
+    wlr_backend_destroy(server->backend); // destroys outputs and keyboards
+    // After the outputs, which use them: the lock, the layers and the scene
+    // (every node destroyed tells its scene).
     vela_lock_destroy(server->lock);
     server->lock = NULL;
     struct vela_layers *l = &server->layers;
@@ -420,32 +416,38 @@ void vela_server_destroy(struct vela_server *server)
     vela_scene_destroy(server->scene);
     server->scene = NULL;
     vela_ready_finish(&server->ready);
-    // Renderer, allocatore e device Vulkan si smontano solo per cercare
-    // risorse dimenticate (VELA_VULKAN_VALIDATION=1). Alla chiusura normale
-    // il processo sta per finire e il kernel recupera tutto: da annidati,
-    // ogni tanto il driver amdgpu andava in crash liberando la memoria della
-    // GPU (lo stato che RADV e il GBM di Mesa condividono nel processo
-    // risultava già rovinato), e una sessione che si chiude non deve
-    // sembrare un crash.
+    // Renderer, allocator and Vulkan device are torn down only to look for
+    // leaked resources (VELA_VULKAN_VALIDATION=1). On a normal exit the
+    // process is about to end and the kernel reclaims everything: when nested,
+    // the amdgpu driver sometimes crashed freeing GPU memory (the state RADV
+    // and Mesa's GBM share in the process was already corrupted, most likely
+    // by our buffers never calling wlr_buffer_finish, since fixed), and a
+    // session that closes must not look like a crash.
     if (vela_env_flag("VELA_VULKAN_VALIDATION")) {
-        // Il renderer avvisa chi lo usa (wlr_compositor) e si distrugge.
+        // The renderer tells its users (wlr_compositor) and destroys itself.
         wlr_renderer_destroy(server->wlr_renderer);
         wlr_allocator_destroy(server->allocator);
-        vela_vulkan_destroy(server->vulkan); // per ultimo: tutto il resto ne usa il device
+        vela_vulkan_destroy(server->vulkan); // last: everything else uses its device
     }
     wl_display_destroy(server->display);
     free(server);
 }
 
-// ---------------------------------------------------------- dagli schermi --
+// ------------------------------------------------------- from the outputs --
 
 void vela_server_output_destroyed(struct vela_server *server, struct vela_output *output)
 {
-    // Le superfici della shell legate a questo schermo vanno chiuse.
+    // The shell surfaces tied to this output must be closed.
     vela_layers_close_output(server, output);
-    vela_snap_end_zone(server, false); // l'anteprima potrebbe essere su questo schermo
-    vela_a11y_output_destroyed(server->a11y, output);
-    // Un blocco in corso non deve più aspettare il nero su questo schermo.
+    // At shutdown the backend destroys the outputs after snapping and
+    // accessibility are gone.
+    if (server->snapping) {
+        vela_snap_end_zone(server, false); // the preview might be on this output
+    }
+    if (server->a11y) {
+        vela_a11y_output_destroyed(server->a11y, output);
+    }
+    // A lock in progress must no longer wait for black on this output.
     if (server->lock) {
         vela_lock_output_rendered(server->lock, output);
     }
@@ -463,7 +465,7 @@ void vela_server_animate(struct vela_server *server, int64_t present_ns)
     vela_xwayland_sync(server);
     struct vela_view *view;
     wl_list_for_each (view, &server->views, link) {
-        vela_view_update_shape(view); // angoli e ombra secondo lo stato di adesso
+        vela_view_update_shape(view); // corners and shadow for the current state
     }
     server->animation_now_ms = fmax(server->animation_now_ms, present_ns / 1e6);
     if (!vela_views_animating(server) && !vela_snapshots_running(server) && !vela_snap_preview_shown(server)

@@ -1,10 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Le app X11 attraverso Xwayland (xwayland.c): una finestra gestita è una
-finestra come le altre (al centro, con la barra di Vela, massimizzata e
-chiusa dalla tastiera); un menu override-redirect sta dove lo mette l'app.
-La finestra è di tools/vela-x11; Xwayland parte con lei."""
+"""X11 apps through Xwayland (xwayland.c): a managed window is a window like
+any other (centered, with Vela's title bar, maximized and closed from the
+keyboard); an override-redirect menu stays where the app puts it. The
+window is tools/vela-x11, which draws only on Expose; Xwayland starts with
+it, so its window is created while the X window manager is being set up."""
 
 import os
 import subprocess
@@ -28,11 +29,6 @@ class X11(unittest.TestCase):
             self.skipTest("Xwayland not available")
         display = self.vela.wait_for_log("Xwayland on DISPLAY=", lambda line: line.split("DISPLAY=")[1].split()[0])
         self.env = dict(self.vela.client_env, DISPLAY=display)
-        # Xwayland parte alla prima connessione: si fa partire prima (vedi
-        # tools/vela-x11.c, --probe).
-        subprocess.run([tool("vela-x11"), "--probe"], env=self.env, check=True)
-        self.vela.wait_for_log("Xwayland ready")
-        time.sleep(0.3)
 
     def tearDown(self):
         self.vela.stop()
@@ -54,7 +50,7 @@ class X11(unittest.TestCase):
         self.assertEqual((w["app"], w["title"]), ("vela.x11", "vela-x11"))
         self.assertEqual(w["w"], 300)
         self.assertEqual(w["x"], out["x"] + (out["w"] - 300) // 2)
-        # Il contenuto dell'app sotto la barra di Vela.
+        # The app's content below Vela's title bar.
         image = self.vela.pixels()
         self.assertEqual(image.at(w["x"] + 150, w["y"] + w["h"] - 60), ORANGE)
 

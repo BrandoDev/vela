@@ -42,7 +42,7 @@ static const struct {
 };
 
 static const struct {
-    const char *key; // nome nuovo; NULL: qualunque chiave
+    const char *key; // new name; NULL: any key
     const char *from;
     const char *to;
 } values[] = {

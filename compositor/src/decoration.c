@@ -20,15 +20,15 @@
 
 #define HEIGHT VELA_DECORATION_HEIGHT
 #define BUTTON_WIDTH VELA_DECORATION_BUTTON_WIDTH
-#define GLYPH_SIZE 10 // logici, come i simboli di Windows 11
-#define TITLE_MARGIN 12 // senza icona
+#define GLYPH_SIZE 10 // logical, like Windows 11's glyphs
+#define TITLE_MARGIN 12 // without an icon
 #define TITLE_AFTER_ICON (VELA_DECORATION_ICON_X + VELA_DECORATION_ICON_SIZE + 8)
 
-// Colori come Windows 11, in tema scuro e chiaro (la modalità delle app).
+// Colors like Windows 11, in dark and light theme (the apps' mode).
 struct palette {
     struct wlr_render_color active_background;
     struct wlr_render_color inactive_background;
-    struct wlr_render_color hover; // premoltiplicato
+    struct wlr_render_color hover; // premultiplied
     uint32_t active_text;
     uint32_t inactive_text;
 };
@@ -36,7 +36,7 @@ struct palette {
 static const struct palette dark_palette = {
     { 0.125f, 0.125f, 0.125f, 1.0f }, // #202020
     { 0.169f, 0.169f, 0.169f, 1.0f }, // #2b2b2b
-    { 0.08f, 0.08f, 0.08f, 0.08f }, // bianco all'8%
+    { 0.08f, 0.08f, 0.08f, 0.08f }, // white at 8%
     0xffffffff,
     0xff9a9a9a,
 };
@@ -44,7 +44,7 @@ static const struct palette dark_palette = {
 static const struct palette light_palette = {
     { 0.953f, 0.953f, 0.953f, 1.0f }, // #f3f3f3
     { 0.976f, 0.976f, 0.976f, 1.0f }, // #f9f9f9
-    { 0.0f, 0.0f, 0.0f, 0.06f }, // nero al 6%
+    { 0.0f, 0.0f, 0.0f, 0.06f }, // black at 6%
     0xff1a1a1a,
     0xff8f8f8f,
 };
@@ -58,28 +58,27 @@ static const enum vela_decoration_part button_parts[3] = {
     VELA_DECORATION_CLOSE,
 };
 
-// Un'immagine della CPU (testo, simbolo) come nodo della scena.
+// A CPU image (text, glyph) as a scene node.
 struct image {
     struct vela_buffer_node *node;
-    struct wlr_texture *texture;
 };
 
 struct vela_decoration {
     struct vela_server *server;
     struct vela_tree *tree;
     struct vela_rect_node *background;
-    struct vela_rect_node *hover_rects[3]; // riduci, massimizza, chiudi
+    struct vela_rect_node *hover_rects[3]; // minimize, maximize, close
     struct image glyphs[3];
     struct image title;
     struct image icon;
 
-    // Ciò che è disegnato adesso.
+    // What is drawn now.
     int width;
     float scale;
     char *title_text;
     char *app_id;
     bool has_icon;
-    uint32_t tint_version; // la tinta dello sfondo con cui è disegnata
+    uint32_t tint_version; // the wallpaper tint it's drawn with
     bool active;
     bool maximized;
     bool drawn;
@@ -91,7 +90,7 @@ static const struct palette *palette(const struct vela_server *server)
     return server->light_apps ? &light_palette : &dark_palette;
 }
 
-// ---------------------------------------------------------------- simboli --
+// ----------------------------------------------------------------- glyphs --
 
 struct segment {
     double x1, y1, x2, y2;
@@ -104,7 +103,7 @@ static const struct segment maximize_glyph[] = {
     { 1.0, 1.0, 0.0, 1.0 },
     { 0.0, 1.0, 0.0, 0.0 },
 };
-// "Ripristina": due quadrati sovrapposti.
+// "Restore": two overlapping squares.
 static const struct segment restore_glyph[] = {
     { 0.0, 0.2, 0.8, 0.2 },
     { 0.8, 0.2, 0.8, 1.0 },
@@ -140,13 +139,13 @@ static uint32_t scaled_channel(uint32_t color, int shift, double coverage)
     return (uint32_t)lround(((color >> shift) & 0xff) * coverage) << shift;
 }
 
-// Un simbolo fatto di segmenti nel quadrato unitario, disegnato a `size`
-// pixel con un tratto di `stroke` pixel e bordi antialiasati, premoltiplicato.
+// A glyph made of segments in the unit square, drawn at `size` pixels with a
+// `stroke` pixel line and antialiased edges, premultiplied.
 static struct vela_image draw_segments(int size, double stroke, uint32_t color, const struct segment *segments,
     int count)
 {
     struct vela_image image = { size, size, calloc((size_t)size * (size_t)size, 4) };
-    double span = size - stroke; // il tratto resta dentro l'immagine
+    double span = size - stroke; // the stroke stays inside the image
     double offset = stroke / 2.0;
     double alpha = ((color >> 24) & 0xff) / 255.0;
     for (int y = 0; y < size; ++y) {
@@ -186,13 +185,12 @@ static struct vela_image draw_glyph(enum vela_decoration_part part, bool maximiz
     return draw_segments(size, stroke, color, segments, count);
 }
 
-// ---------------------------------------------------------------- colori --
+// ---------------------------------------------------------------- colors --
 
-// I colori della barra con la tinta dello sfondo (Mica, docs/renderer.md
-// §9.4): la tinta resa "sicura" per il testo (meno satura, luminosità nella
-// fascia scura del tema, o in quella chiara) e mescolata al grigio di
-// Windows 11; da inattiva pesa di più. Lo stesso calcolo è in
-// shell/src/mica.h, per le app di Vela.
+// The bar's colors with the wallpaper tint (Mica, docs/renderer.md §9.4): the
+// tint made "safe" for text (less saturated, lightness in the theme's dark
+// band, or the light one) and mixed with Windows 11's gray; when inactive it
+// weighs more. The same computation is in shell/src/mica.h, for Vela's apps.
 static struct wlr_render_color mica_color(struct wlr_render_color base, const struct vela_server *server,
     float weight)
 {
@@ -216,11 +214,11 @@ static struct wlr_render_color mica_color(struct wlr_render_color base, const st
     };
 }
 
-// --------------------------------------------------------------- immagini --
+// ----------------------------------------------------------------- images --
 
-// La texture di un'immagine della barra vive quanto il suo buffer, non
-// quanto l'immagine: un'istantanea (animazioni di finestra) può tenere il
-// buffer bloccato dopo che la barra l'ha già sostituito.
+// The texture of a bar image lives as long as its buffer, not the image: a
+// snapshot (window animations) can keep the buffer locked after the bar has
+// replaced it.
 struct texture_owner {
     struct wlr_addon addon;
     struct wlr_texture *texture;
@@ -241,15 +239,14 @@ static const struct wlr_addon_interface texture_owner_impl = {
 
 static void clear_image(struct image *image)
 {
-    // Sblocca il buffer; la texture se ne va con lui (texture_owner).
+    // Unlocks the buffer; the texture goes with it (texture_owner).
     if (image->node) {
         vela_node_destroy(&image->node->node);
     }
     image->node = NULL;
-    image->texture = NULL;
 }
 
-// Prende in carico i pixel di `pixels`.
+// Takes over the pixels of `pixels`.
 static void set_image(struct vela_decoration *decoration, struct image *image, struct vela_image *pixels, double x,
     double y, double logical_width, double logical_height)
 {
@@ -257,13 +254,13 @@ static void set_image(struct vela_decoration *decoration, struct image *image, s
     int width = pixels->width;
     int height = pixels->height;
     struct wlr_buffer *buffer = vela_pixel_buffer_create(pixels);
-    image->texture = wlr_texture_from_buffer(decoration->server->wlr_renderer, buffer);
-    if (image->texture) {
+    struct wlr_texture *texture = wlr_texture_from_buffer(decoration->server->wlr_renderer, buffer);
+    if (texture) {
         struct texture_owner *owner = calloc(1, sizeof(*owner));
-        owner->texture = image->texture;
+        owner->texture = texture;
         wlr_addon_init(&owner->addon, &buffer->addons, owner, &texture_owner_impl);
         const struct wlr_fbox src = { 0, 0, width, height };
-        image->node = vela_buffer_node_create(decoration->tree, buffer, image->texture, &src,
+        image->node = vela_buffer_node_create(decoration->tree, buffer, texture, &src,
             WL_OUTPUT_TRANSFORM_NORMAL, logical_width, logical_height);
         vela_node_set_position(&image->node->node, x, y);
         image->node->node.hittable = true;
@@ -271,7 +268,7 @@ static void set_image(struct vela_decoration *decoration, struct image *image, s
     wlr_buffer_drop(buffer);
 }
 
-// Il testo delle barre, caricato al primo uso (NULL: nessun font).
+// The bars' text, loaded on first use (NULL: no font).
 static struct vela_text *text_engine(struct vela_server *server)
 {
     if (!server->text_loaded) {
@@ -306,14 +303,14 @@ static bool same_text(const char *a, const char *b)
     return a && b && strcmp(a, b) == 0;
 }
 
-// ------------------------------------------------------------------ barra --
+// -------------------------------------------------------------------- bar --
 
 void vela_decoration_update(struct vela_decoration *decoration, const struct vela_decoration_state *state)
 {
     struct vela_server *server = decoration->server;
     vela_node_set_enabled(&decoration->tree->node, !state->fullscreen);
-    // In cima al riquadro della finestra (le app Wayland possono avere la
-    // geometria spostata rispetto all'origine della superficie).
+    // At the top of the window frame (Wayland apps can have their geometry
+    // offset from the surface origin).
     vela_node_set_position(&decoration->tree->node, state->geometry.x, state->geometry.y);
     int width = state->geometry.width;
     float scale = state->scale;
@@ -336,7 +333,7 @@ void vela_decoration_update(struct vela_decoration *decoration, const struct vel
         vela_rect_node_set_color(decoration->background, &background);
     }
 
-    // L'icona dell'app, disegnata alla dimensione fisica esatta (§9.6).
+    // The app icon, drawn at the exact physical size (§9.6).
     if (restyled || new_app) {
         int pixels = vela_max(1, (int)lround(VELA_DECORATION_ICON_SIZE * scale));
         const struct vela_image *icon = vela_icons_app(icon_loader(server), state->app_id, pixels);
@@ -354,7 +351,7 @@ void vela_decoration_update(struct vela_decoration *decoration, const struct vel
     }
     int title_x = decoration->has_icon ? TITLE_AFTER_ICON : TITLE_MARGIN;
 
-    // Il titolo, rasterizzato ai pixel fisici dello schermo.
+    // The title, rasterized at the output's physical pixels.
     struct vela_text *text = text_engine(server);
     if (text && (restyled || resized || new_title || new_app)) {
         int max_width = (int)((width - title_x - 3 * BUTTON_WIDTH - 8) * scale);
@@ -370,10 +367,10 @@ void vela_decoration_update(struct vela_decoration *decoration, const struct vel
         }
     }
 
-    // I simboli dei pulsanti.
+    // The button glyphs.
     if (restyled || maximized != decoration->maximized) {
         for (int i = 0; i < 3; ++i) {
-            // Sul rosso di Chiudi il simbolo è sempre bianco.
+            // On Close's red the glyph is always white.
             bool close_hovered
                 = button_parts[i] == VELA_DECORATION_CLOSE && decoration->hover == VELA_DECORATION_CLOSE;
             struct vela_image pixels
@@ -408,7 +405,7 @@ struct vela_decoration *vela_decoration_create(struct vela_server *server, struc
     decoration->width = -1;
     decoration->tree = vela_tree_create(parent);
     decoration->background = vela_rect_node_create(decoration->tree, 0, HEIGHT, &dark_palette.active_background);
-    // Sopra la superficie dell'app, fuori dalla sua area.
+    // Above the app's surface, outside its area.
     vela_node_set_position(&decoration->tree->node, 0, -HEIGHT);
     decoration->background->node.hittable = true;
     const struct wlr_render_color none = { 0 };
@@ -493,8 +490,8 @@ void vela_decoration_set_hover(struct vela_decoration *decoration, enum vela_dec
         }
         vela_rect_node_set_color(decoration->hover_rects[i], &hover);
     }
-    // Sul rosso il simbolo di Chiudi diventa bianco (in tema scuro lo è già,
-    // da attiva).
+    // On red the Close glyph turns white (in dark theme it already is, when
+    // active).
     if (close_changed && decoration->drawn && (decoration->server->light_apps || !decoration->active)) {
         float scale = decoration->scale > 0.0f ? decoration->scale : 1.0f;
         uint32_t color = part == VELA_DECORATION_CLOSE ? CLOSE_HOVER_TEXT

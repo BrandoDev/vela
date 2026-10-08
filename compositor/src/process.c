@@ -11,8 +11,8 @@
 void vela_exec_shell(const char *command)
 {
     setsid();
-    // wlroots blocca alcuni segnali per gestirli nel suo loop: i processi
-    // lanciati da noi devono ripartire con una maschera pulita.
+    // wlroots blocks some signals to handle them in its loop: the processes we
+    // launch must start with a clean mask.
     sigset_t set;
     sigemptyset(&set);
     sigprocmask(SIG_SETMASK, &set, NULL);

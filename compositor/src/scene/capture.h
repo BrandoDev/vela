@@ -4,10 +4,9 @@
 #ifndef VELA_SCENE_CAPTURE_H
 #define VELA_SCENE_CAPTURE_H
 
-// Catturare l'immagine di una finestra (anteprime di Alt+Tab, e in futuro la
-// condivisione di una finestra): il nostro renderer la disegna da sola,
-// senza ciò che le sta sopra o sotto, anche se è coperta o ridotta a icona.
-// La possiede la finestra, che la distrugge con sé.
+// Capturing a window's image (Alt+Tab previews, and later sharing a window):
+// our renderer draws it alone, without what lies above or below it, even when
+// covered or minimized. Owned by the window, which destroys it with itself.
 
 struct vela_node;
 struct vela_renderer;
@@ -17,12 +16,12 @@ struct vela_window_capture;
 struct wlr_allocator;
 struct wlr_ext_image_capture_source_v1;
 
-// `source`: l'albero della finestra; il suo riquadro lo dice `view`.
+// `source`: the window's tree; `view` gives its frame.
 struct vela_window_capture *vela_window_capture_create(struct vela_scene *scene, struct vela_node *source,
     struct vela_view *view, struct vela_renderer *renderer, struct wlr_allocator *allocator);
 void vela_window_capture_destroy(struct vela_window_capture *capture);
 
-// La sorgente, con dimensioni e formati aggiornati alla finestra.
+// The source, with sizes and formats kept up to date with the window.
 struct wlr_ext_image_capture_source_v1 *vela_window_capture_source(struct vela_window_capture *capture);
 
 #endif

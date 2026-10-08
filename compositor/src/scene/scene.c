@@ -3,6 +3,7 @@
 
 #include "scene/scene.h"
 
+#include "listen.h"
 #include "output.h"
 #include "scene/frame.h"
 #include "scene/surface.h"
@@ -13,7 +14,7 @@
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_xdg_shell.h>
 
-// ------------------------------------------------------------------ nodi --
+// ----------------------------------------------------------------- nodes --
 
 static void node_init(struct vela_node *node, enum vela_node_type type, struct vela_scene *scene,
     struct vela_tree *parent)
@@ -94,7 +95,7 @@ void vela_node_destroy(struct vela_node *node)
     struct vela_scene *scene = node->scene;
     detach(node);
     if (node->type == VELA_NODE_TREE) {
-        // I figli restano orfani: li distruggerà chi li possiede.
+        // The children are left orphaned: their owner will destroy them.
         struct vela_tree *tree = (struct vela_tree *)node;
         struct vela_node *child, *tmp;
         wl_list_for_each_safe (child, tmp, &tree->children, link) {
@@ -138,15 +139,6 @@ void vela_node_set_enabled(struct vela_node *node, bool enabled)
     vela_scene_changed(node->scene);
 }
 
-bool vela_node_visible(const struct vela_node *node)
-{
-    for (; node->parent; node = &node->parent->node) {
-        if (!node->enabled) {
-            return false;
-        }
-    }
-    return node->enabled && node == &node->scene->root->node;
-}
 
 void vela_node_set_opacity(struct vela_node *node, float opacity)
 {
@@ -242,7 +234,7 @@ void vela_buffer_node_set_size(struct vela_buffer_node *buffer, double width, do
     vela_scene_changed(buffer->node.scene);
 }
 
-// ------------------------------------------------------------- superfici --
+// -------------------------------------------------------------- surfaces --
 
 static void for_each_surface_at(struct wlr_surface *surface, int x, int y, vela_surface_iterator iterator,
     void *data)
@@ -272,8 +264,8 @@ void vela_popup_position(struct wlr_xdg_popup *popup, double *x, double *y)
 {
     *x = popup->current.geometry.x - popup->base->geometry.x;
     *y = popup->current.geometry.y - popup->base->geometry.y;
-    // Rispetto alla finestra (geometria) del genitore, che può avere un
-    // margine per l'ombra; un pannello della shell non ce l'ha.
+    // Relative to the parent's window (geometry), which can have a shadow
+    // margin; a shell panel has none.
     struct wlr_xdg_surface *parent = popup->parent ? wlr_xdg_surface_try_from_wlr_surface(popup->parent) : NULL;
     if (parent) {
         *x += parent->geometry.x;
@@ -281,7 +273,7 @@ void vela_popup_position(struct wlr_xdg_popup *popup, double *x, double *y)
     }
 }
 
-// ------------------------------------------------------------------ scena --
+// ------------------------------------------------------------------ scene --
 
 static void handle_new_surface(struct wl_listener *listener, void *data)
 {
@@ -318,8 +310,7 @@ void vela_scene_changed(struct vela_scene *scene)
 
 void vela_scene_watch(struct vela_scene *scene, struct wlr_compositor *compositor)
 {
-    scene->new_surface.notify = handle_new_surface;
-    wl_signal_add(&compositor->events.new_surface, &scene->new_surface);
+    vela_listen(&compositor->events.new_surface, &scene->new_surface, handle_new_surface);
 }
 
 static bool hit_node(struct vela_node *node, double lx, double ly, struct vela_hit *hit)
@@ -355,8 +346,8 @@ static bool hit_node(struct vela_node *node, double lx, double ly, struct vela_h
     }
     case VELA_NODE_RECT:
     case VELA_NODE_BUFFER: {
-        // Anteprime e istantanee lasciano passare i clic; la barra del
-        // titolo no (senza superficie: è del compositor).
+        // Previews and snapshots let clicks through; the title bar doesn't (no
+        // surface: it belongs to the compositor).
         if (!node->hittable) {
             break;
         }

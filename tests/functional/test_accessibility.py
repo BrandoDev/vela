@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Accessibilità e tastiera (a11y.c, keyboard.c): le impostazioni rapide
-della shell (luce notturna, filtri colore, lente, tasti permanenti) con lo
-stato che la shell riceve e ciò che resta in vela.conf; la luce notturna
-pianificata; i tasti permanenti; Super da solo che apre Start; la lente con
-Win+più e Win+Esc. La shell è una FakeShell che raccoglie i messaggi."""
+"""Accessibility and keyboard (a11y.c, keyboard.c): the shell's quick
+settings (night light, color filters, magnifier, sticky keys) with the state
+the shell receives and what stays in vela.conf; scheduled night light;
+sticky keys; Super alone opening Start; the magnifier with Win+plus and
+Win+Esc. The shell is a FakeShell collecting the messages."""
 
 import json
 import os
@@ -16,11 +16,11 @@ import unittest
 
 from harness import Session, tool
 
-SHIFT = 1  # WLR_MODIFIER_SHIFT
+SHIFT = 1 # WLR_MODIFIER_SHIFT
 
 
 def config_home(lines):
-    """Una XDG_CONFIG_HOME con vela.conf già scritto."""
+    """An XDG_CONFIG_HOME with vela.conf already written."""
     home = tempfile.mkdtemp(prefix="vela-a11y-")
     os.makedirs(os.path.join(home, "vela"))
     with open(os.path.join(home, "vela", "vela.conf"), "w") as conf:
@@ -64,7 +64,7 @@ class Accessibility(unittest.TestCase):
             self.assertTrue(self.a11y()[key], command)
             if setting:
                 self.assertIn(setting, self.conf())
-        # Spenti di nuovo, anche nel file.
+        # Off again, in the file too.
         for command, key in (("night-light", "nightLight"), ("color-filter", "colorFilter"),
                              ("magnifier", "magnifier"), ("sticky-keys", "stickyKeys")):
             self.vela.command(f"{command} off")
@@ -73,13 +73,13 @@ class Accessibility(unittest.TestCase):
         self.assertIn("color-filters=no", self.conf())
 
     def test_night_light_schedule(self):
-        # Pianificata dalle-alle attorno a adesso: accesa già all'avvio.
+        # Scheduled between two times around now: on already at startup.
         now = time.localtime()
         minutes = now.tm_hour * 60 + now.tm_min
         self.start([f"night-light-schedule=hours", f"night-light-from={clock(minutes - 60)}",
                     f"night-light-to={clock(minutes + 60)}"])
         self.assertTrue(self.a11y()["nightLight"])
-        # Una fascia che non comprende adesso: si spegne al "reload-config".
+        # A range that doesn't include now: it turns off at "reload-config".
         with open(self.vela.config_path(), "w") as conf:
             conf.write(f"night-light=yes\nnight-light-schedule=hours\nnight-light-from={clock(minutes + 120)}\n"
                        f"night-light-to={clock(minutes + 180)}\n")
@@ -88,9 +88,9 @@ class Accessibility(unittest.TestCase):
                            read_state=False)
 
     def modifiers_while(self, actions, at_ms):
-        """I modificatori della tastiera (richiesta "modifiers") agli istanti
-        `at_ms` mentre vela-input esegue `actions`: la sua tastiera virtuale
-        vive solo finché lui gira."""
+        """The keyboard modifiers ("modifiers" request) at the moments
+        `at_ms` while vela-input runs `actions`: its virtual keyboard
+        lives only as long as it runs."""
         process = subprocess.Popen([tool("vela-input"), *map(str, actions)], env=self.vela.client_env,
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         start = time.monotonic()
@@ -103,13 +103,13 @@ class Accessibility(unittest.TestCase):
 
     def test_sticky_keys(self):
         self.start(["sticky-keys=yes"])
-        # Maiusc premuto e lasciato vale per il tasto dopo, poi si lascia.
+        # Shift pressed and released applies to the next key, then it's let go.
         latched, after = self.modifiers_while(
             ["keydown", "shift", "keyup", "shift", "sleep", "800", "key", "a", "sleep", "1200"], [400, 1500])
         self.assertEqual(latched & SHIFT, SHIFT)
         self.assertEqual(after & SHIFT, 0)
-        # Win la prima volta resta per il tasto dopo (Start non si apre), la
-        # seconda apre Start come il tasto da solo.
+        # Win the first time stays for the next key (Start doesn't open), the
+        # second time opens Start like the key alone.
         self.vela.keys("super")
         time.sleep(0.3)
         self.assertEqual(self.shell.received("toggle-start"), [])
@@ -120,7 +120,7 @@ class Accessibility(unittest.TestCase):
         self.start()
         self.vela.keys("super")
         self.shell.wait_for("toggle-start")
-        # Con un altro tasto è una scorciatoia, non Start.
+        # With another key it's a shortcut, not Start.
         self.shell.clear()
         self.vela.keys("super+d")
         self.shell.wait_for("show-desktop")
@@ -134,7 +134,7 @@ class Accessibility(unittest.TestCase):
         before = self.vela.pixels()
         self.vela.keys("super+plus")
         self.vela.wait_for(lambda _: self.a11y()["magnifier"], what="the magnifier open", read_state=False)
-        time.sleep(0.6)  # l'animazione
+        time.sleep(0.6) # the animation
         self.assertNotEqual(self.vela.pixels().rows, before.rows)
         self.vela.keys("super+Escape")
         self.vela.wait_for(lambda _: not self.a11y()["magnifier"], what="the magnifier closed", read_state=False)

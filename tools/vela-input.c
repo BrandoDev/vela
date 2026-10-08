@@ -1,23 +1,23 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// vela-input: simula mouse e tastiera dentro Vela, per i test automatici.
-// Il compositor deve essere avviato con VELA_DEBUG_INPUT=1.
+// vela-input: simulates mouse and keyboard inside Vela, for automated tests.
+// The compositor must be started with VELA_DEBUG_INPUT=1.
 //
-// Uso: vela-input AZIONE [AZIONE...]    (eseguite in ordine)
+// Usage: vela-input ACTION [ACTION...]    (run in order)
 //
-//   move X Y                 porta il cursore in (X, Y), coordinate globali
-//   rel DX DY                sposta il mouse di (DX, DY), come un mouse vero
-//                            (movimento relativo: lo vedono anche i giochi)
-//   down|up|click [TASTO]    tasto del mouse: left (predefinito), right, middle,
-//                            back, forward (i tasti laterali)
-//   key COMBINAZIONE         es. super+Left, alt+F4, Return, super (da solo)
-//   keydown|keyup TASTO      tiene premuto / rilascia un tasto (es. alt per Alt+Tab)
-//   type TESTO               scrive del testo (layout us)
-//   scroll N                 la rotellina: N scatti, in giù se positivo
-//   sleep MS                 aspetta
+//   move X Y                 moves the cursor to (X, Y), global coordinates
+//   rel DX DY                moves the mouse by (DX, DY), like a real mouse
+//                            (relative motion: games see it too)
+//   down|up|click [BUTTON]   mouse button: left (default), right, middle,
+//                            back, forward (the side buttons)
+//   key COMBINATION          such as super+Left, alt+F4, Return, super (alone)
+//   keydown|keyup KEY        holds / releases a key (such as alt for Alt+Tab)
+//   type TEXT                types text (us layout)
+//   scroll N                 the wheel: N notches, down if positive
+//   sleep MS                 waits
 //
-// Esempio, trascinare una finestra contro il bordo sinistro:
+// Example, dragging a window against the left edge:
 //   vela-input move 640 100 down move 300 100 move 0 300 sleep 200 up
 
 #define _GNU_SOURCE
@@ -43,8 +43,8 @@ static struct zwlr_virtual_pointer_manager_v1* pointerManager;
 static struct zwp_virtual_keyboard_manager_v1* keyboardManager;
 static struct zxdg_output_manager_v1* outputManager;
 
-// Riquadro che contiene tutti gli schermi: le coordinate assolute del mouse
-// virtuale sono relative a questo.
+// Box containing all outputs: the virtual mouse's absolute coordinates are
+// relative to it.
 #define MAX_OUTPUTS 16
 static struct wl_output* outputs[MAX_OUTPUTS];
 static int outputCount;
@@ -126,7 +126,7 @@ static int buttonCode(const char* name)
     if (!strcmp(name, "middle")) {
         return BTN_MIDDLE;
     }
-    // I tasti laterali: Indietro e Avanti nei browser e nei file manager.
+    // The side buttons: Back and Forward in browsers and file managers.
     if (!strcmp(name, "back")) {
         return BTN_SIDE;
     }
@@ -159,7 +159,7 @@ static void pointerButton(int code, int pressed)
     zwlr_virtual_pointer_v1_frame(pointer);
 }
 
-// ------------------------------------------------------------- tastiera --
+// ------------------------------------------------------------- keyboard --
 
 static int setupKeyboard(void)
 {
@@ -185,7 +185,7 @@ static int setupKeyboard(void)
     return 1;
 }
 
-// Trova il tasto che produce `sym`; *shift dice se serve Maiusc.
+// Finds the key producing `sym`; *shift says whether Shift is needed.
 static int keycodeFor(xkb_keysym_t sym, int* shift)
 {
     const xkb_keycode_t min = xkb_keymap_min_keycode(keymap);
@@ -242,7 +242,7 @@ static xkb_keysym_t keysymFor(const char* name)
     return sym;
 }
 
-// Un tasto solo, premuto o rilasciato.
+// A single key, pressed or released.
 static int pressKey(const char* name, int pressed)
 {
     const xkb_keysym_t sym = keysymFor(name);
@@ -256,7 +256,7 @@ static int pressKey(const char* name, int pressed)
     return 1;
 }
 
-// "super+shift+Left": preme tutto in ordine e rilascia al contrario.
+// "super+shift+Left": presses everything in order and releases in reverse.
 static int pressCombo(const char* combo)
 {
     char buffer[256];
@@ -309,7 +309,7 @@ static int typeText(const char* text)
 
 // ----------------------------------------------------------------- main --
 
-// N scatti della rotellina (15 unità l'uno, come libinput), in giù se N > 0.
+// N wheel notches (15 units each, like libinput), down if N > 0.
 static void pointerScroll(int steps)
 {
     zwlr_virtual_pointer_v1_axis_source(pointer, WL_POINTER_AXIS_SOURCE_WHEEL);
@@ -383,7 +383,7 @@ int main(int argc, char** argv)
         } else if (!strcmp(action, "down") || !strcmp(action, "up") || !strcmp(action, "click")) {
             int code = buttonCode(arg1);
             if (code >= 0 && arg1) {
-                ++i; // il tasto è stato indicato
+                ++i; // the button was given
             } else {
                 code = BTN_LEFT;
             }

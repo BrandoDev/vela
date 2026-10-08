@@ -1,26 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// vela-x11: un'app X11 di prova (attraverso Xwayland), per le prove delle
-// finestre X11 senza dipendere da programmi installati.
+// vela-x11: a test X11 app (through Xwayland), so the X11 window tests do
+// not depend on installed programs.
 //
-// Uso: vela-x11 [--menu X,Y] [LARGHEZZA ALTEZZA]   (predefinito 300x200)
-//      vela-x11 --probe
+// Usage: vela-x11 [--menu X,Y] [WIDTH HEIGHT]   (default 300x200)
 //
-// Apre una finestra arancione con classe "vela.x11" e titolo "vela-x11",
-// che si chiude con WM_DELETE_WINDOW (Alt+F4). --menu apre anche un menu
-// "override-redirect" verde di 120x80 nel punto (X, Y) dello schermo, come
-// le tendine delle app X11.
-//
-// vela-x11 --probe si collega ed esce: fa partire Xwayland. Le prove lo
-// usano prima di aprire la finestra, perché se Xwayland parte proprio per
-// la connessione che mappa la finestra, la finestra non compare (un difetto
-// noto, docs/c-core.md).
+// Opens an orange window with class "vela.x11" and title "vela-x11", which
+// closes on WM_DELETE_WINDOW (Alt+F4). --menu also opens a green 120x80
+// override-redirect menu at (X, Y) on the screen, like the drop-down menus
+// of X11 apps. Like most apps, it draws only when the server asks (Expose).
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <poll.h>
 #include <xcb/xcb.h>
 
 static xcb_atom_t atom(xcb_connection_t* connection, const char* name)
@@ -30,31 +23,6 @@ static xcb_atom_t atom(xcb_connection_t* connection, const char* name)
     xcb_atom_t result = reply ? reply->atom : XCB_ATOM_NONE;
     free(reply);
     return result;
-}
-
-// Una finestra e il colore con cui riempirla. Lo sfondo da solo non basta, e
-// nemmeno un disegno sull'Expose: Xwayland manda il primo buffer solo per un
-// disegno che arriva dopo che ha preso in carico la finestra. Si ridisegna
-// quindi dieci volte al secondo.
-struct painted {
-    xcb_window_t window;
-    xcb_gcontext_t gc;
-    int width;
-    int height;
-};
-
-static void paint(xcb_connection_t* connection, const struct painted* p)
-{
-    const xcb_rectangle_t all = { 0, 0, (uint16_t)p->width, (uint16_t)p->height };
-    xcb_poly_fill_rectangle(connection, p->window, p->gc, 1, &all);
-}
-
-static struct painted painted(xcb_connection_t* connection, xcb_window_t window, int width, int height,
-    uint32_t color)
-{
-    struct painted p = { window, xcb_generate_id(connection), width, height };
-    xcb_create_gc(connection, p.gc, window, XCB_GC_FOREGROUND, &color);
-    return p;
 }
 
 static xcb_window_t create(xcb_connection_t* connection, xcb_screen_t* screen, int x, int y, int width, int height,
@@ -76,12 +44,6 @@ int main(int argc, char** argv)
     int menuX = 0;
     int menuY = 0;
     int arg = 1;
-    if (argc == 2 && !strcmp(argv[1], "--probe")) {
-        xcb_connection_t* connection = xcb_connect(NULL, NULL);
-        int failed = xcb_connection_has_error(connection);
-        xcb_disconnect(connection);
-        return failed ? 1 : 0;
-    }
     if (arg + 1 < argc && !strcmp(argv[arg], "--menu") && sscanf(argv[arg + 1], "%d,%d", &menuX, &menuY) == 2) {
         menu = 1;
         arg += 2;
@@ -98,7 +60,7 @@ int main(int argc, char** argv)
     xcb_screen_t* screen = xcb_setup_roots_iterator(xcb_get_setup(connection)).data;
     xcb_window_t window = create(connection, screen, 0, 0, width, height, 0xff8000, 0);
     const char title[] = "vela-x11";
-    const char wmClass[] = "vela-x11\0vela.x11"; // istanza e classe
+    const char wmClass[] = "vela-x11\0vela.x11"; // instance and class
     xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8,
         sizeof(title) - 1, title);
     xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8,
@@ -106,32 +68,37 @@ int main(int argc, char** argv)
     xcb_atom_t protocols = atom(connection, "WM_PROTOCOLS");
     xcb_atom_t deleteWindow = atom(connection, "WM_DELETE_WINDOW");
     xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, protocols, XCB_ATOM_ATOM, 32, 1, &deleteWindow);
-    struct painted windows[2] = { painted(connection, window, width, height, 0xff8000) };
-    int count = 1;
     xcb_map_window(connection, window);
     if (menu) {
-        xcb_window_t popup = create(connection, screen, menuX, menuY, 120, 80, 0x00c000, 1);
-        windows[count++] = painted(connection, popup, 120, 80, 0x00c000);
-        xcb_map_window(connection, popup);
+        xcb_map_window(connection, create(connection, screen, menuX, menuY, 120, 80, 0x00c000, 1));
     }
     xcb_flush(connection);
 
-    struct pollfd fd = { xcb_get_file_descriptor(connection), POLLIN, 0 };
-    int done = 0;
-    while (!done && !xcb_connection_has_error(connection)) {
-        for (int i = 0; i < count; ++i) {
-            paint(connection, &windows[i]);
-        }
-        xcb_flush(connection);
-        poll(&fd, 1, 100);
-        xcb_generic_event_t* event;
-        while ((event = xcb_poll_for_event(connection))) {
-            if ((event->response_type & 0x7f) == XCB_CLIENT_MESSAGE) {
-                const xcb_client_message_event_t* message = (const xcb_client_message_event_t*)event;
-                done = done || (message->type == protocols && message->data.data32[0] == deleteWindow);
+    // One graphics context per color, made on first use.
+    xcb_gcontext_t orange = XCB_NONE;
+    xcb_gcontext_t green = XCB_NONE;
+    xcb_generic_event_t* event;
+    while ((event = xcb_wait_for_event(connection))) {
+        int type = event->response_type & 0x7f;
+        if (type == XCB_EXPOSE) {
+            const xcb_expose_event_t* expose = (const xcb_expose_event_t*)event;
+            xcb_gcontext_t* gc = expose->window == window ? &orange : &green;
+            if (*gc == XCB_NONE) {
+                uint32_t color = expose->window == window ? 0xff8000 : 0x00c000;
+                *gc = xcb_generate_id(connection);
+                xcb_create_gc(connection, *gc, expose->window, XCB_GC_FOREGROUND, &color);
             }
-            free(event);
+            const xcb_rectangle_t area = { (int16_t)expose->x, (int16_t)expose->y, expose->width, expose->height };
+            xcb_poly_fill_rectangle(connection, expose->window, *gc, 1, &area);
+            xcb_flush(connection);
+        } else if (type == XCB_CLIENT_MESSAGE) {
+            const xcb_client_message_event_t* message = (const xcb_client_message_event_t*)event;
+            if (message->type == protocols && message->data.data32[0] == deleteWindow) {
+                free(event);
+                break;
+            }
         }
+        free(event);
     }
     xcb_disconnect(connection);
     return 0;

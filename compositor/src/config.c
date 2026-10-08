@@ -28,8 +28,8 @@ bool vela_config_path(const char *name, char *out, size_t size)
     return n > 0 && (size_t)n < size;
 }
 
-// La riga con i nomi di adesso (legacy_names.h): una copia nuova se è
-// cambiata, NULL se va bene com'è. Commenti e righe vuote restano.
+// The line with the current names (legacy_names.h): a new copy if it changed,
+// NULL if it's fine as it is. Comments and empty lines stay.
 static char *modernize(const char *line)
 {
     const char *eq = strchr(line, '=');
@@ -50,7 +50,7 @@ static char *modernize(const char *line)
     return result;
 }
 
-// Le righe di un file, per riscriverlo. Ogni riga è allocata.
+// The lines of a file, to rewrite it. Each line is allocated.
 struct lines {
     char **items;
     int count;
@@ -74,8 +74,8 @@ static void lines_free(struct lines *lines)
     free(lines->items);
 }
 
-// Il file riga per riga, già con i nomi di adesso; *changed se qualcuna
-// aveva ancora quelli di prima.
+// The file line by line, already with the current names; *changed if some
+// still had the old ones.
 static void read_lines(const char *path, struct lines *lines, bool *changed)
 {
     FILE *file = fopen(path, "r");
@@ -99,7 +99,7 @@ static void read_lines(const char *path, struct lines *lines, bool *changed)
     fclose(file);
 }
 
-// Un file nuovo al posto del vecchio: chi legge non vede mai metà file.
+// A new file in place of the old one: readers never see half a file.
 static void write_lines(const char *path, const struct lines *lines)
 {
     char temporary[PATH_MAX];
@@ -190,11 +190,6 @@ bool vela_config_flag(const struct vela_config *config, const char *key, bool fa
     return strcmp(value, "yes") == 0 || strcmp(value, "1") == 0 || strcmp(value, "true") == 0;
 }
 
-int vela_config_int(const struct vela_config *config, const char *key, int fallback)
-{
-    const char *value = vela_config_get(config, key, NULL);
-    return value && *value ? atoi(value) : fallback;
-}
 
 void vela_config_write(const char *key, const char *value)
 {
@@ -219,7 +214,7 @@ void vela_config_write(const char *key, const char *value)
         char *line = lines.items[i];
         bool same_key = strncmp(line, key, key_length) == 0 && line[key_length] == '=';
         if (same_key && found) {
-            free(line); // doppioni: ne resta uno
+            free(line); // duplicates: one is left
             continue;
         }
         if (same_key) {

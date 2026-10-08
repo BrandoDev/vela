@@ -36,7 +36,7 @@ void vela_shell_send(struct vela_server *server, const char *line)
         return;
     }
     if (connect(fd, (struct sockaddr *)&address, sizeof(address)) == 0) {
-        // Riga e a capo in un solo invio: la shell legge per righe.
+        // Line and newline in a single send: the shell reads by lines.
         size_t length = strlen(line);
         char *message = malloc(length + 1);
         memcpy(message, line, length);
@@ -49,7 +49,7 @@ void vela_shell_send(struct vela_server *server, const char *line)
     close(fd);
 }
 
-// ------------------------------------------------------------- supervisione --
+// -------------------------------------------------------------- supervision --
 
 static void stop_watching(struct vela_shell *shell)
 {
@@ -75,7 +75,7 @@ static int handle_exit(int fd, uint32_t mask, void *data)
     char *command = shell->command;
     shell->command = NULL;
 
-    // Uscita pulita (es. "già in esecuzione"): era voluta.
+    // A clean exit (such as "already running") was intended.
     if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
         wlr_log(WLR_INFO, "\"%s\" exited", command);
         free(command);
@@ -87,7 +87,7 @@ static int handle_exit(int fd, uint32_t mask, void *data)
     } else {
         snprintf(reason, sizeof(reason), "code %d", WEXITSTATUS(status));
     }
-    // Se si chiude di continuo appena partito, riavviarlo non serve a nulla.
+    // When it keeps exiting right after starting, restarting it is pointless.
     shell->quick_crashes = uptime < 5.0 ? shell->quick_crashes + 1 : 0;
     if (shell->quick_crashes >= 3) {
         wlr_log(WLR_ERROR, "\"%s\" keeps exiting (%s): not restarting it", command, reason);
@@ -102,8 +102,8 @@ static int handle_exit(int fd, uint32_t mask, void *data)
 void vela_shell_start(struct vela_server *server, const char *command)
 {
     struct vela_shell *shell = &server->shell;
-    // Fork singolo, così il processo resta nostro figlio e un pidfd nel
-    // ciclo di Wayland ci avvisa quando termina.
+    // A single fork, so the process stays our child and a pidfd in the Wayland
+    // loop tells us when it ends.
     free(shell->command);
     shell->command = strdup(command);
     pid_t pid = fork();
@@ -112,9 +112,9 @@ void vela_shell_start(struct vela_server *server, const char *command)
         return;
     }
     if (pid == 0) {
-        // La shell muore con il compositor: se questo va in crash, il
-        // supervisore ne avvia un altro con una shell nuova, e la vecchia non
-        // deve ricollegarsi (QT_WAYLAND_RECONNECT) e fare doppione.
+        // The shell dies with the compositor: if the compositor crashes, the
+        // supervisor starts another one with a new shell, and the old shell
+        // must not reconnect (QT_WAYLAND_RECONNECT) and make a duplicate.
         prctl(PR_SET_PDEATHSIG, SIGKILL);
         vela_exec_shell(command);
     }

@@ -4,18 +4,18 @@
 #ifndef VELA_NESTED_H
 #define VELA_NESTED_H
 
-// Vela in una finestra dentro un'altra sessione (es. KDE), per le prove.
-// Il backend annidato di wlroots non sa due cose, e le facciamo noi parlando
-// direttamente con il compositor ospite:
+// Vela in a window inside another session (such as KDE), for testing.
+// The wlroots nested backend can't do two things, so we do them by talking
+// to the host compositor directly:
 //
-// - Nitidezza: l'ospite a scala frazionaria (KDE al 125%) ingrandirebbe la
-//   nostra finestra e la sfocherebbe. Chiediamo la sua scala
-//   (fractional-scale-v1) e disegniamo un buffer grande quanto i suoi pixel
-//   fisici, dichiarando con viewporter la dimensione logica.
-// - Scorciatoie: chiediamo all'ospite di non intercettare Super, Alt+Tab & co.
-//   quando la finestra di Vela ha la tastiera (keyboard-shortcuts-inhibit).
+// - Sharpness: a host at a fractional scale (KDE at 125%) would enlarge our
+//   window and blur it. We ask for its scale (fractional-scale-v1) and draw
+//   a buffer as large as its physical pixels, declaring the logical size
+//   with viewporter.
+// - Shortcuts: we ask the host not to grab Super, Alt+Tab and the like while
+//   Vela's window has the keyboard (keyboard-shortcuts-inhibit).
 //
-// La possiede il suo vela_output.
+// Owned by its vela_output.
 
 struct vela_nested;
 struct vela_output;
@@ -23,11 +23,11 @@ struct vela_output;
 struct vela_nested *vela_nested_create(struct vela_output *output);
 void vela_nested_destroy(struct vela_nested *nested);
 
-// L'ospite chiede una nuova dimensione per la finestra (in unità sue).
+// The host asks for a new window size (in its units).
 void vela_nested_resize(struct vela_nested *nested, int width, int height);
 
-// Pixel del nostro buffer per ogni unità della finestra ospite: il backend
-// annidato riporta il puntatore in pixel del buffer.
+// Pixels of our buffer per unit of the host window: the nested backend reports
+// the pointer in buffer pixels.
 double vela_nested_pointer_scale_x(const struct vela_nested *nested);
 double vela_nested_pointer_scale_y(const struct vela_nested *nested);
 

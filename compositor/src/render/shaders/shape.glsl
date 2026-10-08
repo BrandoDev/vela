@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Il rettangolo arrotondato (docs/renderer.md §8.1): la distanza dal bordo
-// (SDF) calcolata per ogni pixel fisico, con un pixel esatto di
-// antialiasing. I lati dritti cadono sui bordi dei pixel e restano netti.
+// The rounded rectangle (docs/renderer.md §8.1): the distance from the edge
+// (SDF) computed for each physical pixel, with exactly one pixel of
+// antialiasing. Straight sides fall on pixel boundaries and stay crisp.
 float roundedCoverage(vec2 p, vec4 rect, float radius)
 {
     const vec2 halfSize = rect.zw * 0.5;
@@ -13,7 +13,7 @@ float roundedCoverage(vec2 p, vec4 rect, float radius)
     return clamp(0.5 - dist, 0.0, 1.0);
 }
 
-// Il ritaglio della forma, se c'è (flags bit 1).
+// The shape's clip, if any (flags bit 1).
 float shapeClip()
 {
     return (pc.flags & 2u) != 0u ? roundedCoverage(gl_FragCoord.xy, pc.shapeRect, pc.shape.x) : 1.0;

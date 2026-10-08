@@ -19,6 +19,7 @@
 #include <linux/input-event-codes.h>
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_keyboard.h>
@@ -29,9 +30,11 @@
 #include <wlr/util/edges.h>
 #include <xkbcommon/xkbcommon.h>
 
-#define BORDER_BAND 8.0 // fuori dalla finestra, come in Windows 11
-#define BORDER_INNER 4.0 // in alto anche dentro la barra del titolo
-#define BORDER_CORNER 16.0 // gli angoli prendono anche un tratto dei lati
+static void finish_keyboard(struct vela_server *server, bool confirm);
+
+#define BORDER_BAND 8.0 // outside the window, like Windows 11
+#define BORDER_INNER 4.0 // at the top also inside the title bar
+#define BORDER_CORNER 16.0 // corners also take a stretch of the sides
 #define DOUBLE_CLICK_MS 400
 
 struct vela_interaction *vela_interaction_create(void)
@@ -64,13 +67,12 @@ static const char *resize_cursor(uint32_t edges)
     return left ? "w-resize" : "e-resize";
 }
 
-// I bordi invisibili per ridimensionare le finestre con la barra di Vela,
-// come in Windows 11: la finestra e i bordi (WLR_EDGE_*) sotto il punto, o
-// NULL.
+// The invisible borders to resize windows with Vela's bar, like Windows 11:
+// the window and the edges (WLR_EDGE_*) under the point, or NULL.
 static struct vela_view *resize_border_at(struct vela_server *server, double lx, double ly, uint32_t *edges)
 {
     *edges = 0;
-    // Sopra le finestre (taskbar, menu, pannelli): niente bordi.
+    // Above the windows (taskbar, menus, panels): no borders.
     struct vela_hit hit = vela_scene_at(server->scene, lx, ly);
     struct vela_owner *owner = hit.owner;
     if (owner && owner->kind == VELA_OWNER_LAYER) {
@@ -79,7 +81,7 @@ static struct vela_view *resize_border_at(struct vela_server *server, double lx,
             return NULL;
         }
     }
-    // Dalla finestra più in alto: la prima che copre il punto vince.
+    // From the topmost window: the first covering the point wins.
     struct vela_node *child;
     wl_list_for_each_reverse (child, &server->layers.windows->children, link) {
         struct vela_view *view = view_of(child->data);
@@ -90,7 +92,7 @@ static struct vela_view *resize_border_at(struct vela_server *server, double lx,
         bool resizable = view->decoration && !view->maximized && !view->fullscreen && vela_view_resizable(view);
         bool inside = lx >= f.x && lx < f.x + f.width && ly >= f.y && ly < f.y + f.height;
         if (inside && !(resizable && ly < f.y + BORDER_INNER)) {
-            return NULL; // la finestra copre il punto
+            return NULL; // the window covers the point
         }
         if (!resizable || lx < f.x - BORDER_BAND || lx >= f.x + f.width + BORDER_BAND || ly < f.y - BORDER_BAND
             || ly >= f.y + f.height + BORDER_BAND) {
@@ -132,7 +134,7 @@ void vela_interact_motion(struct vela_server *server, uint32_t time_msec)
     vela_input_update_drag_icon(input);
     struct vela_a11y *a11y = server->a11y;
     if (a11y->magnifier || a11y->zoom_animating || a11y->zoom > 1.0) {
-        vela_a11y_update_magnifier(a11y); // la zona ingrandita segue il cursore
+        vela_a11y_update_magnifier(a11y); // the zoomed area follows the cursor
     }
     struct vela_view *dragged = interaction->pending_title_drag.view;
     if (dragged
@@ -142,9 +144,9 @@ void vela_interact_motion(struct vela_server *server, uint32_t time_msec)
     }
     struct vela_view *grabbed = server->grabbed;
     if (server->cursor_mode == VELA_CURSOR_MOVE && grabbed) {
-        // Posizione esatta, anche frazionaria: al disegno la finestra si
-        // aggancia al pixel fisico più vicino (§3.4). Con posizioni logiche
-        // intere, al 125% la finestra avanzerebbe a scatti di 1 e 2 pixel.
+        // Exact position, fractional too: when drawn the window snaps to the
+        // nearest physical pixel (§3.4). With integer logical positions, at
+        // 125% the window would advance in jumps of 1 and 2 pixels.
         vela_node_set_position(&grabbed->tree->node, cursor->x - interaction->grab_x, cursor->y - interaction->grab_y);
         vela_snap_update_zone(server);
         return;
@@ -174,21 +176,19 @@ void vela_interact_motion(struct vela_server *server, uint32_t time_msec)
         return;
     }
 
-    // Un tasto premuto su una superficie: il movimento resta suo finché non
-    // lo si rilascia (la selezione a riquadro che esce dallo schermo, una
-    // barra di scorrimento trascinata fuori dalla finestra).
+    // A button pressed on a surface: motion stays with it until released (a
+    // rubber-band selection leaving the output, a scroll bar dragged outside
+    // the window).
     if (input->implicit_grab.surface && !seat->drag) {
         if (seat->pointer_state.button_count > 0 && seat->pointer_state.focused_surface == input->implicit_grab.surface) {
             wlr_seat_pointer_notify_motion(seat, time_msec, cursor->x - input->implicit_grab.origin_x,
                 cursor->y - input->implicit_grab.origin_y);
             return;
         }
-        input->implicit_grab.surface = NULL;
-        input->implicit_grab.origin_x = 0.0;
-        input->implicit_grab.origin_y = 0.0;
+        memset(&input->implicit_grab, 0, sizeof(input->implicit_grab));
     }
 
-    // Sul bordo di una finestra con la barra di Vela: le frecce per ridimensionare.
+    // On the border of a window with Vela's bar: the resize arrows.
     if (server->cursor_mode == VELA_CURSOR_PASSTHROUGH && seat->pointer_state.button_count == 0 && !seat->drag) {
         uint32_t edges = 0;
         if (resize_border_at(server, cursor->x, cursor->y, &edges)) {
@@ -202,7 +202,7 @@ void vela_interact_motion(struct vela_server *server, uint32_t time_msec)
     }
 
     struct vela_hit hit = vela_scene_at(server->scene, cursor->x, cursor->y);
-    // Sopra la barra del titolo di Vela: i pulsanti si illuminano.
+    // Over Vela's title bar: the buttons light up.
     struct vela_view *decorated = hit.surface ? NULL : view_of(hit.owner);
     if (decorated && !decorated->decoration) {
         decorated = NULL;
@@ -245,15 +245,14 @@ static void decoration_press(struct vela_server *server, struct vela_view *view,
         vela_view_set_minimized(view, true);
         return;
     case VELA_DECORATION_ICON: {
-        // Come Windows: un clic sull'icona apre il menu della finestra, un
-        // doppio clic la chiude.
+        // Like Windows: a click on the icon opens the window menu, a double
+        // click closes the window.
         bool double_click = interaction->last_icon_click.view == view
             && time_msec - interaction->last_icon_click.time_msec < DOUBLE_CLICK_MS;
         interaction->last_icon_click.view = view;
         interaction->last_icon_click.time_msec = time_msec;
         if (double_click) {
-            interaction->last_icon_click.view = NULL;
-            interaction->last_icon_click.time_msec = 0;
+            memset(&interaction->last_icon_click, 0, sizeof(interaction->last_icon_click));
             vela_view_close(view);
             return;
         }
@@ -263,24 +262,22 @@ static void decoration_press(struct vela_server *server, struct vela_view *view,
         return;
     }
     case VELA_DECORATION_TITLE: {
-        // Doppio clic: massimizza o ripristina, come su Windows.
+        // Double click: maximize or restore, like Windows.
         bool double_click = interaction->last_title_click.view == view
             && time_msec - interaction->last_title_click.time_msec < DOUBLE_CLICK_MS;
         interaction->last_title_click.view = view;
         interaction->last_title_click.time_msec = time_msec;
         if (double_click) {
-            interaction->last_title_click.view = NULL;
-            interaction->last_title_click.time_msec = 0;
+            memset(&interaction->last_title_click, 0, sizeof(interaction->last_title_click));
             vela_view_set_maximized(view, !view->maximized, true);
             return;
         }
-        // Il trascinamento parte solo se il mouse si muove davvero: un clic
-        // (o il primo di un doppio clic) non deve ripristinare una finestra
-        // massimizzata.
+        // The drag starts only if the mouse really moves: a click (or the
+        // first of a double click) must not restore a maximized window.
         interaction->pending_title_drag.view = view;
         interaction->pending_title_drag.x = cursor->x;
         interaction->pending_title_drag.y = cursor->y;
-        interaction->modifier_grab = true; // il rilascio non va all'app
+        interaction->modifier_grab = true; // the release doesn't go to the app
         return;
     }
     case VELA_DECORATION_NONE:
@@ -297,8 +294,8 @@ void vela_interact_button(struct vela_server *server, struct wlr_pointer_button_
     bool pressed = event->state == WL_POINTER_BUTTON_STATE_PRESSED;
     input->super_tap = false;
     vela_lock_note_activity(server->lock);
-    // Bloccato: il clic dà la tastiera alla schermata di blocco sotto il
-    // mouse (con più schermi) e arriva solo a lei.
+    // Locked: the click gives the keyboard to the lock screen under the mouse
+    // (with several outputs) and reaches only it.
     if (server->locked) {
         wlr_seat_pointer_notify_button(seat, event->time_msec, event->button, event->state);
         if (pressed) {
@@ -310,14 +307,14 @@ void vela_interact_button(struct vela_server *server, struct wlr_pointer_button_
         return;
     }
 
-    // "Sposta" o "Ridimensiona" da tastiera in corso: un clic conferma.
+    // Keyboard "Move" or "Size" in progress: a click confirms.
     if (interaction->keyboard.view && pressed) {
-        vela_interact_finish_keyboard(server, true);
-        interaction->modifier_grab = true; // nemmeno il rilascio arriva all'app
+        finish_keyboard(server, true);
+        interaction->modifier_grab = true; // not even the release reaches the app
         return;
     }
 
-    // Sul bordo di una finestra con la barra di Vela: si ridimensiona.
+    // On the border of a window with Vela's bar: resize.
     if (pressed && event->button == BTN_LEFT && server->cursor_mode == VELA_CURSOR_PASSTHROUGH
         && seat->pointer_state.button_count == 0) {
         uint32_t edges = 0;
@@ -326,16 +323,15 @@ void vela_interact_button(struct vela_server *server, struct wlr_pointer_button_
             vela_focus_view(server, view);
             vela_interact_begin(server, view, VELA_CURSOR_RESIZE, edges, true);
             if (server->cursor_mode != VELA_CURSOR_PASSTHROUGH) {
-                interaction->modifier_grab = true; // nemmeno il rilascio arriva all'app
+                interaction->modifier_grab = true; // not even the release reaches the app
                 return;
             }
         }
     }
 
-    // Super + trascinamento sposta la finestra, Super + tasto destro la
-    // ridimensiona (dall'angolo più vicino), come in KDE. Serve anche alle
-    // finestre X11 senza barra del titolo propria. Il clic non arriva
-    // all'app.
+    // Super + drag moves the window, Super + right button resizes it (from the
+    // nearest corner), like KDE. X11 windows without a title bar of their own
+    // need it too. The click doesn't reach the app.
     struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(seat);
     bool super = keyboard && (wlr_keyboard_get_modifiers(keyboard) & WLR_MODIFIER_LOGO);
     if (pressed && super && server->cursor_mode == VELA_CURSOR_PASSTHROUGH
@@ -358,12 +354,10 @@ void vela_interact_button(struct vela_server *server, struct wlr_pointer_button_
         }
     }
     if (interaction->modifier_grab && !pressed) {
-        interaction->modifier_grab = false; // la pressione non era arrivata all'app
-        interaction->pending_title_drag.view = NULL;
-        interaction->pending_title_drag.x = 0.0;
-        interaction->pending_title_drag.y = 0.0;
+        interaction->modifier_grab = false; // the press hadn't reached the app
+        memset(&interaction->pending_title_drag, 0, sizeof(interaction->pending_title_drag));
     } else {
-        // Il primo tasto premuto su una superficie la "prende" (vedi
+        // The first button pressed on a surface "grabs" it (see
         // vela_input.implicit_grab).
         if (pressed && seat->pointer_state.button_count == 0 && seat->pointer_state.focused_surface && !seat->drag) {
             input->implicit_grab.surface = seat->pointer_state.focused_surface;
@@ -374,18 +368,16 @@ void vela_interact_button(struct vela_server *server, struct wlr_pointer_button_
     }
 
     if (!pressed) {
-        // Rilasciati tutti i tasti: il puntatore torna a ciò che ha sotto.
+        // All buttons released: the pointer goes back to what's under it.
         if (input->implicit_grab.surface && seat->pointer_state.button_count == 0) {
-            input->implicit_grab.surface = NULL;
-            input->implicit_grab.origin_x = 0.0;
-            input->implicit_grab.origin_y = 0.0;
+            memset(&input->implicit_grab, 0, sizeof(input->implicit_grab));
             if (server->cursor_mode == VELA_CURSOR_PASSTHROUGH) {
                 vela_interact_motion(server, event->time_msec);
             }
         }
         if (server->cursor_mode != VELA_CURSOR_PASSTHROUGH) {
             if (server->cursor_mode == VELA_CURSOR_MOVE) {
-                vela_snap_end_zone(server, true); // rilasciata su un bordo: si aggancia
+                vela_snap_end_zone(server, true); // released on an edge: it snaps
             }
             server->cursor_mode = VELA_CURSOR_PASSTHROUGH;
             server->grabbed = NULL;
@@ -399,8 +391,8 @@ void vela_interact_button(struct vela_server *server, struct wlr_pointer_button_
     if (!owner) {
         return;
     }
-    // La barra del titolo di Vela: pulsanti, trascinamento, doppio clic;
-    // col tasto destro il menu della finestra.
+    // Vela's title bar: buttons, drag, double click; with the right button the
+    // window menu.
     struct vela_view *view = view_of(owner);
     if (view && !hit.surface && view->decoration) {
         if (event->button == BTN_LEFT) {
@@ -429,8 +421,7 @@ void vela_interact_begin(struct vela_server *server, struct vela_view *view, int
 {
     struct vela_interaction *interaction = server->interaction;
     struct wlr_cursor *cursor = server->cursor;
-    // Accetta la richiesta di un'app solo dalla finestra su cui si trova il
-    // puntatore.
+    // An app's request is accepted only from the window the pointer is on.
     struct wlr_surface *focused = server->seat->pointer_state.focused_surface;
     if (!from_modifier && (!focused || wlr_surface_get_root_surface(focused) != vela_view_surface(view))) {
         return;
@@ -440,9 +431,9 @@ void vela_interact_begin(struct vela_server *server, struct vela_view *view, int
     }
     vela_view_finish_open_animation(view);
 
-    // Trascinare una finestra massimizzata o agganciata la ripristina sotto
-    // il cursore, mantenendo il punto afferrato alla stessa proporzione e la
-    // barra del titolo sotto il cursore (come Windows).
+    // Dragging a maximized or snapped window restores it under the cursor,
+    // keeping the grabbed point at the same proportion and the title bar under
+    // the cursor (like Windows).
     if ((view->maximized || !vela_snap_is_none(view->snap)) && mode == VELA_CURSOR_MOVE) {
         struct wlr_box frame = vela_view_frame_box(view);
         double fraction = frame.width > 0 ? (cursor->x - frame.x) / frame.width : 0.5;
@@ -456,7 +447,7 @@ void vela_interact_begin(struct vela_server *server, struct vela_view *view, int
         vela_node_set_position(&view->tree->node, (int)(cursor->x - fraction * restored_width) - geometry.x,
             frame.y - geometry.y);
     }
-    // Ridimensionare una finestra agganciata la sgancia, lasciandola dov'è.
+    // Resizing a snapped window unsnaps it, leaving it where it is.
     if (!vela_snap_is_none(view->snap) && mode == VELA_CURSOR_RESIZE) {
         view->snap = vela_snap_none;
         vela_view_send_tiled(view, WLR_EDGE_NONE);
@@ -478,7 +469,7 @@ void vela_interact_begin(struct vela_server *server, struct vela_view *view, int
     interaction->resize_edges = edges;
 }
 
-// ------------------------------------------------------------ da tastiera --
+// ------------------------------------------------------ from the keyboard --
 
 void vela_interact_begin_keyboard(struct vela_server *server, struct vela_view *view, int mode)
 {
@@ -499,8 +490,8 @@ void vela_interact_begin_keyboard(struct vela_server *server, struct vela_view *
     interaction->keyboard.tree_x = view->tree->node.x;
     interaction->keyboard.tree_y = view->tree->node.y;
     interaction->keyboard.geometry = vela_view_geometry(view);
-    // Come Windows: il puntatore va sulla barra del titolo (spostare) o al
-    // centro della finestra (ridimensionare), e da lì la segue.
+    // Like Windows: the pointer goes to the title bar (move) or the center of
+    // the window (size), and follows it from there.
     if (mode == VELA_CURSOR_MOVE) {
         wlr_cursor_warp(cursor, NULL, frame.x + frame.width / 2.0, frame.y + vela_min(16, frame.height / 2));
         vela_interact_begin(server, view, VELA_CURSOR_MOVE, 0, true);
@@ -538,16 +529,16 @@ static void keyboard_key(struct vela_server *server, xkb_keysym_t sym, uint32_t 
         break;
     case XKB_KEY_Return:
     case XKB_KEY_KP_Enter:
-        vela_interact_finish_keyboard(server, true);
+        finish_keyboard(server, true);
         return;
     case XKB_KEY_Escape:
-        vela_interact_finish_keyboard(server, false);
+        finish_keyboard(server, false);
         return;
     default:
         return;
     }
     if (interaction->keyboard.mode == VELA_CURSOR_RESIZE && !interaction->keyboard.edge_chosen) {
-        // Il primo tasto freccia sceglie il bordo da muovere.
+        // The first arrow key chooses the edge to move.
         struct wlr_box frame = vela_view_frame_box(view);
         double x = edge == WLR_EDGE_LEFT ? frame.x
             : edge == WLR_EDGE_RIGHT     ? frame.x + frame.width
@@ -576,7 +567,7 @@ bool vela_interact_keyboard(struct vela_server *server, const uint32_t *syms, in
     return true;
 }
 
-void vela_interact_finish_keyboard(struct vela_server *server, bool confirm)
+static void finish_keyboard(struct vela_server *server, bool confirm)
 {
     struct vela_interaction *interaction = server->interaction;
     struct vela_view *view = interaction->keyboard.view;
@@ -584,7 +575,7 @@ void vela_interact_finish_keyboard(struct vela_server *server, bool confirm)
         return;
     }
     if (!confirm) {
-        // Esc: torna com'era.
+        // Esc: back to how it was.
         vela_node_set_position(&view->tree->node, interaction->keyboard.tree_x, interaction->keyboard.tree_y);
         if (interaction->keyboard.mode == VELA_CURSOR_RESIZE && interaction->keyboard.edge_chosen) {
             vela_view_configure_size(view, interaction->keyboard.geometry.width,
@@ -592,12 +583,7 @@ void vela_interact_finish_keyboard(struct vela_server *server, bool confirm)
         }
     }
     vela_snap_end_zone(server, false);
-    interaction->keyboard.view = NULL;
-    interaction->keyboard.mode = VELA_CURSOR_PASSTHROUGH;
-    interaction->keyboard.edge_chosen = false;
-    interaction->keyboard.tree_x = 0.0;
-    interaction->keyboard.tree_y = 0.0;
-    interaction->keyboard.geometry = (struct wlr_box) { 0 };
+    memset(&interaction->keyboard, 0, sizeof(interaction->keyboard));
     server->cursor_mode = VELA_CURSOR_PASSTHROUGH;
     server->grabbed = NULL;
     wlr_cursor_set_xcursor(server->cursor, server->cursor_manager, "default");
@@ -611,25 +597,15 @@ void vela_interact_forget(struct vela_server *server, struct vela_view *view)
         interaction->hovered_decoration = NULL;
     }
     if (interaction->last_title_click.view == view) {
-        interaction->last_title_click.view = NULL;
-        interaction->last_title_click.time_msec = 0;
+        memset(&interaction->last_title_click, 0, sizeof(interaction->last_title_click));
     }
     if (interaction->last_icon_click.view == view) {
-        interaction->last_icon_click.view = NULL;
-        interaction->last_icon_click.time_msec = 0;
+        memset(&interaction->last_icon_click, 0, sizeof(interaction->last_icon_click));
     }
     if (interaction->pending_title_drag.view == view) {
-        interaction->pending_title_drag.view = NULL;
-        interaction->pending_title_drag.x = 0.0;
-        interaction->pending_title_drag.y = 0.0;
+        memset(&interaction->pending_title_drag, 0, sizeof(interaction->pending_title_drag));
     }
     if (interaction->keyboard.view == view) {
-        struct wlr_box none = { 0 };
-        interaction->keyboard.view = NULL;
-        interaction->keyboard.mode = VELA_CURSOR_PASSTHROUGH;
-        interaction->keyboard.edge_chosen = false;
-        interaction->keyboard.tree_x = 0.0;
-        interaction->keyboard.tree_y = 0.0;
-        interaction->keyboard.geometry = none;
+        memset(&interaction->keyboard, 0, sizeof(interaction->keyboard));
     }
 }

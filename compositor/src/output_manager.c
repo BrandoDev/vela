@@ -3,6 +3,7 @@
 
 #include "output_manager.h"
 
+#include "listen.h"
 #include "output.h"
 #include "output_config.h"
 #include "scene/scene.h"
@@ -34,7 +35,7 @@ void vela_output_manager_update(struct vela_server *server)
     wlr_output_manager_v1_set_configuration(server->output_manager, config);
 }
 
-// Uno schermo come è stato applicato, da ricordare in outputs.conf.
+// An output as it was applied, to remember in outputs.conf.
 struct applied {
     struct wlr_output *output;
     bool enabled;
@@ -61,8 +62,8 @@ static void apply(struct vela_server *server, struct wlr_output_configuration_v1
         if (test_only) {
             ok = wlr_output_test_state(wanted->output, &state) && ok;
         } else if (wanted->enabled) {
-            // Prima la posizione: il primo frame alla nuova modalità si
-            // disegna già lì.
+            // Position first: the first frame at the new mode is already drawn
+            // there.
             wlr_output_layout_add(server->output_layout, wanted->output, wanted->x, wanted->y);
             ok = vela_output_commit_mode(output, &state) && ok;
             applied[n++] = (struct applied) { wanted->output, true, wanted->x, wanted->y };
@@ -95,8 +96,8 @@ static void apply(struct vela_server *server, struct wlr_output_configuration_v1
     wl_list_for_each (output, &server->outputs, link) {
         vela_output_arrange_layers(output);
     }
-    // Le finestre di uno schermo spento vanno su un altro (e tornano quando
-    // lui si riaccende), quelle massimizzate e agganciate si risistemano.
+    // The windows of an output turned off move to another (and come back when
+    // it's turned on again), maximized and snapped ones are rearranged.
     vela_views_check_outputs(server);
     struct vela_view *view;
     wl_list_for_each (view, &server->views, link) {
@@ -104,7 +105,7 @@ static void apply(struct vela_server *server, struct wlr_output_configuration_v1
     }
     vela_scene_changed(server->scene);
 
-    // Scelte dell'utente: si ricordano (solo nella sessione vera).
+    // The user's choices are remembered (only in the real session).
     if (server->session && ok) {
         char (*keys)[256] = calloc((size_t)n + 1, sizeof(*keys));
         struct vela_output_config_entry *entries = calloc((size_t)n + 1, sizeof(*entries));
@@ -137,10 +138,8 @@ static void handle_test(struct wl_listener *listener, void *data)
 void vela_output_manager_init(struct vela_server *server)
 {
     server->output_manager = wlr_output_manager_v1_create(server->display);
-    server->output_manager_apply.notify = handle_apply;
-    wl_signal_add(&server->output_manager->events.apply, &server->output_manager_apply);
-    server->output_manager_test.notify = handle_test;
-    wl_signal_add(&server->output_manager->events.test, &server->output_manager_test);
+    vela_listen(&server->output_manager->events.apply, &server->output_manager_apply, handle_apply);
+    vela_listen(&server->output_manager->events.test, &server->output_manager_test, handle_test);
 }
 
 void vela_output_manager_finish(struct vela_server *server)
@@ -160,7 +159,7 @@ static void find_headless(struct wlr_backend *candidate, void *data)
 
 void vela_test_output_command(struct vela_server *server, const char *arguments)
 {
-    // Solo senza schermi veri: collegare e scollegare a caldo nelle prove.
+    // Only without real outputs: hot plugging and unplugging in tests.
     struct wlr_backend *headless = NULL;
     wlr_multi_for_each_backend(server->backend, find_headless, &headless);
     if (!headless) {
@@ -172,7 +171,8 @@ void vela_test_output_command(struct vela_server *server, const char *arguments)
     char name[64] = "";
     if (sscanf(arguments, "add %dx%d", &width, &height) == 2 && width > 0 && height > 0) {
         struct wlr_output *wlr = wlr_headless_add_output(headless, (unsigned)width, (unsigned)height);
-        // VELA_OUTPUT_SIZE vale per gli schermi di partenza: questo ha la sua.
+        // VELA_OUTPUT_SIZE applies to the initial outputs: this one has its
+        // own.
         struct vela_output *output = wlr ? wlr->data : NULL;
         if (output) {
             struct wlr_output_state state;

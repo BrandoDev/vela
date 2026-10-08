@@ -1,17 +1,16 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Una sessione di Vela senza schermo, comandata dai test come da una persona.
+"""A display-less Vela session, driven by the tests as a person would.
 
-Il compositor gira con il backend headless di wlroots, in cartelle di
-configurazione temporanee: niente di ciò che fa tocca la sessione vera. Le
-finestre sono di vela-pattern; tastiera e mouse sono quelli virtuali di
-vela-input; lo stato si legge con la richiesta "state" sul socket dei
-comandi (vela_state_json in command.c).
+The compositor runs on the wlroots headless backend, in temporary
+configuration directories: nothing it does touches the real session. The
+windows are vela-pattern's; keyboard and mouse are vela-input's virtual
+ones; the state is read with the "state" request on the command socket
+(state_json in command.c).
 
-Solo libreria standard di Python. Serve una GPU con Vulkan 1.4 (il renderer
-di Vela non ha ripieghi software): senza, run.py salta le prove.
-"""
+Python standard library only. Needs a GPU with Vulkan 1.4 (Vela's renderer
+has no software fallback): without one, run.py skips the tests."""
 
 import json
 import os
@@ -38,7 +37,7 @@ class TimeoutError(AssertionError):
 
 
 class Session:
-    """Un compositor headless con il suo socket dei comandi.
+    """A headless compositor with its command socket.
 
     with Session(scale=1.25) as vela:
         window = vela.open_window()
@@ -52,14 +51,14 @@ class Session:
         self.supervise = supervise
         self.lock_hold_ms = lock_hold_ms
         self.extra_env = env or {}
-        self.startup = startup  # il comando di avvio (-s), come la shell
+        self.startup = startup # the startup command (-s), like the shell
         self.process = None
         self.clients = []
         self.display = None
         self.directory = None
         self.shell = None
 
-    # ------------------------------------------------------------ avvio --
+    # ---------------------------------------------------------- startup --
 
     def __enter__(self):
         self.start()
@@ -102,7 +101,7 @@ class Session:
         self.socket_path = os.path.join(runtime, f"vela-{self.display}.sock")
         self.wait_for(lambda _: os.path.exists(self.socket_path), what="the command socket", read_state=False)
         self.client_env = dict(env, WAYLAND_DISPLAY=self.display)
-        # Il primo frame: lo schermo c'è.
+        # The first frame: the output exists.
         self.wait_for(lambda s: s["outputs"], what="an output")
 
     def stop(self, keep_log=False):
@@ -116,19 +115,25 @@ class Session:
                 client.wait(2)
             except subprocess.TimeoutExpired:
                 client.kill()
+        status = 0
         if self.process and self.process.poll() is None:
             os.killpg(self.process.pid, signal.SIGTERM)
             try:
-                self.process.wait(5)
+                status = self.process.wait(5)
             except subprocess.TimeoutExpired:
                 os.killpg(self.process.pid, signal.SIGKILL)
+                status = "a hang"
         if self.directory:
             self.log.close()
-            if keep_log:
+            if keep_log or status != 0:
                 print(f"\n--- Vela log ({self.log_path}) ---")
                 with open(self.log_path, errors="replace") as log:
                     print("".join(log.readlines()[-40:]))
             shutil.rmtree(self.directory, ignore_errors=True)
+        # Asked to stop, Vela closes cleanly: a crash on the way out would look
+        # like a real one to the supervisor.
+        if status != 0:
+            raise AssertionError(f"vela-compositor stopped with {status}")
 
     def log_text(self):
         self.log.flush()
@@ -146,7 +151,7 @@ class Session:
             time.sleep(0.05)
         raise TimeoutError(f"the log is missing «{needle}»")
 
-    # -------------------------------------------------------- comandi --
+    # ------------------------------------------------------- commands --
 
     def command(self, line):
         with socket.socket(socket.AF_UNIX) as connection:
@@ -169,7 +174,7 @@ class Session:
         return State(self.query("state"))
 
     def wait_for(self, condition, timeout=5.0, what="the condition", read_state=True):
-        """Aspetta che condition(stato) sia vera; restituisce lo stato."""
+        """Waits until condition(state) is true; returns the state."""
         deadline = time.monotonic() + timeout
         last = None
         while time.monotonic() < deadline:
@@ -187,18 +192,18 @@ class Session:
         return os.path.join(self.env["XDG_CONFIG_HOME"], "vela", name)
 
     def fake_shell(self):
-        """Da qui in poi i messaggi di Vela alla shell arrivano a una FakeShell."""
+        """From here on Vela's messages to the shell reach a FakeShell."""
         self.shell = FakeShell(self.display)
         return self.shell
 
-    # -------------------------------------------------- tastiera e mouse --
+    # ------------------------------------------------ keyboard and mouse --
 
     def input(self, *actions):
         subprocess.run([tool("vela-input"), *map(str, actions)], env=self.client_env, check=True,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def randr(self, *args):
-        """Configura gli schermi come Impostazioni > Schermo (wlr-output-management)."""
+        """Configures outputs as Settings > Display does (wlr-output-management)."""
         return subprocess.run([tool("vela-randr"), *map(str, args)], env=self.client_env, check=True,
                               capture_output=True, text=True).stdout
 
@@ -208,12 +213,12 @@ class Session:
             actions += ["key", combo, "sleep", "60"]
         self.input(*actions)
 
-    # ------------------------------------------------------- finestre --
+    # -------------------------------------------------------- windows --
 
     def open_window(self, width=400, height=300, command=None, timeout=5.0, app_id=None, decorated=False):
-        """Apre una finestra (vela-pattern, o `command`); restituisce il suo identificativo.
+        """Opens a window (vela-pattern, or `command`); returns its identifier.
 
-        decorated: con la barra del titolo di Vela (xdg-decoration)."""
+        decorated: with Vela's title bar (xdg-decoration)."""
         before = {w["id"] for w in self.state().windows}
         pattern = ([tool("vela-pattern")] + (["--app-id", app_id] if app_id else [])
                    + (["--decorated"] if decorated else []) + [str(width), str(height)])
@@ -223,11 +228,11 @@ class Session:
         state = self.wait_for(lambda s: {w["id"] for w in s.windows} - before, timeout=timeout,
                               what="a new window")
         identifier = next(iter({w["id"] for w in state.windows} - before))
-        self.wait_still(identifier)  # finita l'animazione di apertura (sale di qualche pixel)
+        self.wait_still(identifier) # the opening animation is over (it rises a few pixels)
         return identifier
 
     def wait_still(self, identifier, timeout=3.0):
-        """Aspetta che la geometria della finestra resti ferma per un po'."""
+        """Waits until the window's geometry stays still for a while."""
         def geometry():
             window = self.state().window(identifier)
             return (window["x"], window["y"], window["w"], window["h"])
@@ -248,15 +253,15 @@ class Session:
         subprocess.run([tool("vela-shot"), path], env=self.client_env, check=True)
 
     def pixels(self):
-        """Lo schermo adesso, come Image (vela-shot)."""
+        """The screen now, as an Image (vela-shot)."""
         path = os.path.join(self.directory, "shot.png")
         self.screenshot(path)
         return Image.read(path)
 
 
 class FakeShell:
-    """La shell Qt finta: ascolta sul suo socket e raccoglie le righe che
-    Vela le manda ("toggle-start", "accessibility {...}", ...)."""
+    """The fake Qt shell: listens on its socket and collects the lines
+    Vela sends it ("toggle-start", "accessibility {...}", ...)."""
 
     def __init__(self, display):
         runtime = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
@@ -289,7 +294,7 @@ class FakeShell:
             return [line for line in self.lines if line.startswith(prefix)]
 
     def wait_for(self, prefix, timeout=5.0):
-        """L'ultima riga che comincia con `prefix`, appena arriva."""
+        """The last line starting with `prefix`, as soon as it arrives."""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             lines = self.received(prefix)
@@ -304,7 +309,7 @@ class FakeShell:
 
     def close(self):
         try:
-            self.server.shutdown(socket.SHUT_RDWR)  # sveglia accept()
+            self.server.shutdown(socket.SHUT_RDWR) # wakes accept()
         except OSError:
             pass
         self.server.close()
@@ -313,7 +318,7 @@ class FakeShell:
 
 
 class Image:
-    """Un PNG di vela-shot: RGB a 8 bit, senza filtri (solo libreria standard)."""
+    """A vela-shot PNG: 8-bit RGB, no filters (standard library only)."""
 
     def __init__(self, width, height, rows):
         self.width = width
@@ -352,7 +357,7 @@ class Image:
 
 
 class State(dict):
-    """Lo stato di "state", con qualche comodità."""
+    """The result of "state", with a few conveniences."""
 
     @property
     def windows(self):
@@ -373,5 +378,5 @@ class State(dict):
 
 
 def gpu_available():
-    """Il renderer di Vela vuole una GPU vera (nodo DRM e Vulkan 1.4)."""
+    """Vela's renderer wants a real GPU (DRM node and Vulkan 1.4)."""
     return any(name.startswith("renderD") for name in os.listdir("/dev/dri")) if os.path.isdir("/dev/dri") else False

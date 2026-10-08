@@ -27,7 +27,7 @@
 #include <wlr/types/wlr_output.h>
 #include <xkbcommon/xkbcommon.h>
 
-// Il comando della shell, se la shell c'è.
+// The shell's command, if there is a shell.
 static bool shell(struct vela_server *server, const char *line)
 {
     vela_shell_send(server, line);
@@ -40,28 +40,28 @@ bool vela_bindings_handle(struct vela_server *server, uint32_t modifiers, uint32
     bool super = modifiers & WLR_MODIFIER_LOGO;
     bool shift = modifiers & WLR_MODIFIER_SHIFT;
     bool ctrl = modifiers & WLR_MODIFIER_CTRL;
-    // Le varianti con Alt+lettera esistono perché, quando Vela gira in una
-    // finestra dentro KDE, KDE si tiene per sé il tasto Super. Nella
-    // sessione vera restano alle app, che le usano per aprire i propri menu.
+    // The Alt+letter variants exist because, when Vela runs in a window inside
+    // KDE, KDE keeps the Super key for itself. In the real session they are
+    // left to the apps, which use them to open their own menus.
     bool alt_nested = alt && server->nested;
     bool windows_key = super || alt_nested;
     struct vela_a11y *a11y = server->a11y;
 
-    // Ctrl+Alt+F1...F12: un'altra console (o la sessione di Plasma). La
-    // tastiera traduce già la combinazione nel tasto XF86Switch_VT_n.
+    // Ctrl+Alt+F1...F12: another console (or the Plasma session). The keyboard
+    // already translates the combination into the XF86Switch_VT_n key.
     if (sym >= XKB_KEY_XF86Switch_VT_1 && sym <= XKB_KEY_XF86Switch_VT_12) {
         if (server->session) {
             wlr_session_change_vt(server->session, (unsigned)(sym - XKB_KEY_XF86Switch_VT_1 + 1));
         }
         return true;
     }
-    // L'app a fuoco tiene le scorciatoie per sé (macchina virtuale, desktop
-    // remoto), o lo schermo è bloccato: resta solo il cambio di console qui
-    // sopra.
+    // The focused app keeps the shortcuts for itself (virtual machine, remote
+    // desktop), or the screen is locked: only the console switch above is
+    // left.
     if (vela_input_shortcuts_inhibited(server->input) || server->locked) {
         return false;
     }
-    // Win+L blocca lo schermo, come su Windows (Alt+L dentro KDE).
+    // Win+L locks the screen, like Windows (Alt+L inside KDE).
     if (windows_key && (sym == XKB_KEY_l || sym == XKB_KEY_L)) {
         vela_lock_screen(server->lock);
         return true;
@@ -82,9 +82,9 @@ bool vela_bindings_handle(struct vela_server *server, uint32_t modifiers, uint32
         }
         return true;
     }
-    // Alt+Tab (dentro KDE: Alt+J), con Maiusc all'indietro. Si sceglie
-    // finché Alt resta premuto; rilasciandolo si passa alla finestra scelta
-    // (keyboard.c), Esc annulla.
+    // Alt+Tab (inside KDE: Alt+J), backwards with Shift. The choice goes on
+    // while Alt is held; releasing it switches to the chosen window
+    // (keyboard.c), Esc cancels.
     bool tab = sym == XKB_KEY_Tab || sym == XKB_KEY_ISO_Left_Tab;
     bool nested_tab = sym == XKB_KEY_j || sym == XKB_KEY_J;
     if ((alt && tab) || (alt_nested && nested_tab)) {
@@ -95,9 +95,9 @@ bool vela_bindings_handle(struct vela_server *server, uint32_t modifiers, uint32
         vela_switcher_finish(server, false);
         return true;
     }
-    // Desktop virtuali, come Windows: Win+Ctrl+←/→ per passare, Win+Ctrl+D
-    // per crearne uno nuovo, Win+Ctrl+F4 per chiudere quello in uso (dentro
-    // KDE con Alt+Ctrl); Win+Tab (Alt+W) la Visualizzazione attività.
+    // Virtual desktops, like Windows: Win+Ctrl+←/→ to switch, Win+Ctrl+D to
+    // create a new one, Win+Ctrl+F4 to close the current one (inside KDE with
+    // Alt+Ctrl); Win+Tab (Alt+W) Task View.
     if (windows_key && ctrl) {
         if (sym == XKB_KEY_Left || sym == XKB_KEY_Right) {
             vela_workspaces_switch(server, server->workspaces->current + (sym == XKB_KEY_Left ? -1 : 1), true);
@@ -112,9 +112,9 @@ bool vela_bindings_handle(struct vela_server *server, uint32_t modifiers, uint32
             return true;
         }
     }
-    // Accessibilità: Win+Ctrl+C i filtri colore (se la scorciatoia è accesa
-    // nelle Impostazioni, come Windows); Win+più e Win+meno la lente di
-    // ingrandimento, Win+Esc la chiude.
+    // Accessibility: Win+Ctrl+C the color filters (if the shortcut is on in
+    // Settings, like Windows); Win+plus and Win+minus the magnifier, Win+Esc
+    // closes it.
     if (super && ctrl && xkb_keysym_to_lower(sym) == XKB_KEY_c && a11y->color_filter_shortcut) {
         vela_a11y_set_color_filter(a11y, !a11y->color_filter, true);
         return true;
@@ -131,8 +131,8 @@ bool vela_bindings_handle(struct vela_server *server, uint32_t modifiers, uint32
         vela_a11y_set_magnifier(a11y, false);
         return true;
     }
-    // Win+V: la cronologia degli appunti; Win+Maiusc+S e Stamp: lo Strumento
-    // di cattura (li disegna la shell).
+    // Win+V: clipboard history; Win+Shift+S and Print: the Snipping Tool
+    // (drawn by the shell).
     if (super && !ctrl && xkb_keysym_to_lower(sym) == XKB_KEY_v) {
         return shell(server, "clipboard");
     }
@@ -142,8 +142,8 @@ bool vela_bindings_handle(struct vela_server *server, uint32_t modifiers, uint32
     if ((super && tab) || (alt_nested && (sym == XKB_KEY_w || sym == XKB_KEY_W))) {
         return shell(server, "task-view");
     }
-    // Win+frecce: metà, quarti, massimizza, riduci (snap.c). Dentro KDE
-    // Alt+frecce e Alt+M (massimizza o ripristina).
+    // Win+arrows: halves, quarters, maximize, minimize (snap.c). Inside KDE
+    // Alt+arrows and Alt+M (maximize or restore).
     if (windows_key && (sym == XKB_KEY_Left || sym == XKB_KEY_Right || (super && (sym == XKB_KEY_Up || sym == XKB_KEY_Down)))) {
         if (active) {
             vela_snap_keyboard(server, active, sym);
@@ -156,7 +156,7 @@ bool vela_bindings_handle(struct vela_server *server, uint32_t modifiers, uint32
         }
         return true;
     }
-    // Win+Z: i layout di snap della finestra attiva.
+    // Win+Z: the active window's snap layouts.
     if (windows_key && (sym == XKB_KEY_z || sym == XKB_KEY_Z)) {
         if (active) {
             vela_snap_show_layouts(server, active, true);
@@ -166,9 +166,9 @@ bool vela_bindings_handle(struct vela_server *server, uint32_t modifiers, uint32
     if (alt_nested && sym == XKB_KEY_s) {
         return shell(server, "toggle-start");
     }
-    // Win+X: il menu del pulsante Start; Win+R: Esegui; Win+D: il desktop;
-    // Win+A: impostazioni rapide; Win+N: centro notifiche e calendario;
-    // Win+I: le Impostazioni; Win+E: Esplora file. Dentro KDE con Alt.
+    // Win+X: the Start button menu; Win+R: Run; Win+D: the desktop; Win+A:
+    // quick settings; Win+N: notification center and calendar; Win+I:
+    // Settings; Win+E: File Explorer. Inside KDE with Alt.
     static const struct {
         xkb_keysym_t key;
         const char *command;
@@ -187,7 +187,7 @@ bool vela_bindings_handle(struct vela_server *server, uint32_t modifiers, uint32
             return shell(server, shell_keys[i].command);
         }
     }
-    // Alt+Spazio: il menu della finestra, sotto la sua barra del titolo.
+    // Alt+Space: the window menu, under its title bar.
     if (alt && !super && sym == XKB_KEY_space && active) {
         struct wlr_box frame = vela_view_frame_box(active);
         int bar = vela_view_title_bar_height(active) > 0 ? vela_view_title_bar_height(active) : 36;
@@ -209,7 +209,8 @@ void vela_window_menu_show(struct vela_server *server, struct vela_view *view, d
     if (!output) {
         return;
     }
-    // Alla shell: la finestra, lo schermo e il punto in coordinate dello schermo.
+    // To the shell: the window, the output and the point in output
+    // coordinates.
     struct wlr_box box = vela_output_box(output);
     char line[512];
     snprintf(line, sizeof(line), "window-menu %s %s %d %d %d %d %d", view->ext_handle->identifier,
@@ -226,7 +227,7 @@ static bool starts_with(const char *text, const char *prefix)
 void vela_window_action(struct vela_server *server, struct vela_view *view, const char *action)
 {
     if (strcmp(action, "activate") == 0) {
-        // Dalla Visualizzazione attività: in primo piano (sul suo desktop).
+        // From Task View: bring to front (on its desktop).
         if (view->minimized) {
             vela_view_set_minimized(view, false);
         } else {
@@ -252,13 +253,13 @@ void vela_window_action(struct vela_server *server, struct vela_view *view, cons
     } else if (strcmp(action, "resize") == 0) {
         vela_interact_begin_keyboard(server, view, VELA_CURSOR_RESIZE);
     } else if (strcmp(action, "snap-left") == 0 || strcmp(action, "snap-right") == 0) {
-        // Dalla Visualizzazione attività: "Aggancia a sinistra/destra".
+        // From Task View: "Snap left/right".
         vela_focus_view(server, view);
         vela_view_set_snap(view, strcmp(action, "snap-left") == 0 ? vela_snap_left : vela_snap_right, NULL);
     } else if (starts_with(action, "snap ")) {
-        // Dai layout di snap e da Snap Assist: "snap x0 y0 x1 y1 [quiet
-        // [finestra]]", in dodicesimi. Da Snap Assist anche la finestra
-        // accanto a cui va: insieme fanno un gruppo di snap.
+        // From snap layouts and Snap Assist: "snap x0 y0 x1 y1 [quiet
+        // [window]]", in twelfths. From Snap Assist also the window it goes
+        // next to: together they form a snap group.
         struct vela_snap tile = vela_snap_none;
         char quiet[8] = "";
         char origin[128] = "";
@@ -281,7 +282,7 @@ void vela_window_action(struct vela_server *server, struct vela_view *view, cons
             }
         }
     } else if (strcmp(action, "activate-group") == 0) {
-        // Il gruppo di snap dalla taskbar: tutte le sue finestre davanti.
+        // The snap group from the taskbar: all its windows to the front.
         vela_snap_activate_group(server, view);
     } else if (starts_with(action, "move-to ")) {
         vela_workspaces_move_view(server, view, atoi(action + 8));

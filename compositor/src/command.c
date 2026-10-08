@@ -34,9 +34,9 @@
 #include <wlr/types/wlr_seat.h>
 #include <wlr/util/log.h>
 
-#define MAX_LINE 4096 // una connessione che manda di più si chiude
+#define MAX_LINE 4096 // a connection sending more is closed
 
-// Una connessione al socket dei comandi.
+// A connection to the command socket.
 struct client {
     struct wl_list link; // vela_commands.clients
     struct vela_server *server;
@@ -58,9 +58,9 @@ static bool starts_with(const char *text, const char *prefix)
     return strncmp(text, prefix, strlen(prefix)) == 0;
 }
 
-// ------------------------------------------------------------- risposte --
+// -------------------------------------------------------------- answers --
 
-void vela_state_json(struct vela_server *server, struct vela_buffer *json)
+static void state_json(struct vela_server *server, struct vela_buffer *json)
 {
     const char *t = "true";
     const char *f = "false";
@@ -89,15 +89,12 @@ void vela_state_json(struct vela_server *server, struct vela_buffer *json)
     }
     vela_buffer_append(json, "],\"windows\":[");
     first = true;
-    struct vela_view *view; // ordine di uso recente: la prima è quella sopra
+    struct vela_view *view; // order of recent use: the first is on top
     wl_list_for_each (view, &server->views, link) {
         if (!view->mapped || !view->ext_handle || !view->ext_handle->identifier) {
             continue;
         }
-        // Come prima della migrazione: y e h contano la barra due volte
-        // (docs/c-core.md §5).
         struct wlr_box frame = vela_view_frame_box(view);
-        int bar = vela_view_title_bar_height(view);
         struct vela_output *out = vela_view_output(view);
         vela_buffer_append(json, first ? "{\"id\":" : ",{\"id\":");
         vela_buffer_append_json(json, view->ext_handle->identifier);
@@ -105,8 +102,8 @@ void vela_state_json(struct vela_server *server, struct vela_buffer *json)
         vela_buffer_append_json(json, vela_view_app_id(view));
         vela_buffer_append(json, ",\"title\":");
         vela_buffer_append_json(json, vela_view_title(view));
-        vela_buffer_appendf(json, ",\"x\":%d,\"y\":%d,\"w\":%d,\"h\":%d,\"output\":", frame.x, frame.y - bar,
-            frame.width, frame.height + bar);
+        vela_buffer_appendf(json, ",\"x\":%d,\"y\":%d,\"w\":%d,\"h\":%d,\"output\":", frame.x, frame.y,
+            frame.width, frame.height);
         if (out) {
             vela_buffer_append_json(json, out->wlr->name);
         } else {
@@ -127,27 +124,11 @@ void vela_state_json(struct vela_server *server, struct vela_buffer *json)
     vela_buffer_append(json, "]}");
 }
 
-// Una stringa JSON alla vecchia maniera dello Strumento di cattura: i
-// caratteri di controllo diventano spazi.
-static void append_plain_json(struct vela_buffer *out, const char *text)
+// The visible windows of the current desktop, topmost first, with their frame
+// (bar included): for the Snipping Tool.
+static void window_rects_json(struct vela_server *server, struct vela_buffer *json)
 {
-    vela_buffer_append(out, "\"");
-    for (const char *c = text ? text : ""; *c; ++c) {
-        char piece[3] = { *c, '\0', '\0' };
-        if (*c == '"' || *c == '\\') {
-            piece[0] = '\\';
-            piece[1] = *c;
-        } else if ((unsigned char)*c < 0x20) {
-            piece[0] = ' ';
-        }
-        vela_buffer_append(out, piece);
-    }
-    vela_buffer_append(out, "\"");
-}
-
-void vela_window_rects_json(struct vela_server *server, struct vela_buffer *json)
-{
-    // [{"id":...,"title":...,"x":..,"y":..,"w":..,"h":..}], la più in alto per prima.
+    // [{"id":...,"title":...,"x":..,"y":..,"w":..,"h":..}], topmost first.
     vela_buffer_append(json, "[");
     bool first = true;
     struct vela_view *view;
@@ -156,37 +137,37 @@ void vela_window_rects_json(struct vela_server *server, struct vela_buffer *json
             continue;
         }
         struct wlr_box frame = vela_view_frame_box(view);
-        int bar = vela_view_title_bar_height(view);
         vela_buffer_append(json, first ? "{\"id\":" : ",{\"id\":");
-        append_plain_json(json, view->ext_handle->identifier);
+        vela_buffer_append_json(json, view->ext_handle->identifier);
         vela_buffer_append(json, ",\"title\":");
-        append_plain_json(json, vela_view_title(view));
-        vela_buffer_appendf(json, ",\"x\":%d,\"y\":%d,\"w\":%d,\"h\":%d}", frame.x, frame.y - bar, frame.width,
-            frame.height + bar);
+        vela_buffer_append_json(json, vela_view_title(view));
+        vela_buffer_appendf(json, ",\"x\":%d,\"y\":%d,\"w\":%d,\"h\":%d}", frame.x, frame.y, frame.width,
+            frame.height);
         first = false;
     }
     vela_buffer_append(json, "]");
 }
 
-// Le domande con risposta: false se la riga non è una di loro.
+// Questions with an answer: false if the line isn't one of them.
 static bool answer(struct vela_server *server, int fd, const char *line)
 {
     struct vela_buffer reply = { 0 };
     if (strcmp(line, "modifiers") == 0) {
-        // La shell non ha la tastiera quando si clicca la taskbar, quindi non
-        // sa se Maiusc è premuto (Maiusc+clic destro: il menu della finestra).
+        // The shell doesn't have the keyboard when the taskbar is clicked, so
+        // it doesn't know whether Shift is held (Shift+right click: the window
+        // menu).
         struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(server->seat);
         vela_buffer_appendf(&reply, "%u", keyboard ? wlr_keyboard_get_modifiers(keyboard) : 0);
     } else if (strcmp(line, "workspaces") == 0) {
-        vela_workspaces_json(server, &reply); // per la shell appena partita
+        vela_workspaces_json(server, &reply); // for a shell that has just started
     } else if (strcmp(line, "window-rects") == 0) {
-        vela_window_rects_json(server, &reply);
+        window_rects_json(server, &reply);
     } else if (strcmp(line, "state") == 0) {
-        vela_state_json(server, &reply);
+        state_json(server, &reply);
     } else if (strcmp(line, "accessibility") == 0) {
         char json[512];
         if (!vela_a11y_json(server->a11y, json, sizeof(json))) {
-            return true; // non ci sta: nessuna risposta
+            return true; // doesn't fit: no answer
         }
         vela_buffer_append(&reply, json);
     } else {
@@ -198,7 +179,7 @@ static bool answer(struct vela_server *server, int fd, const char *line)
     return true;
 }
 
-// ------------------------------------------------------------- comandi --
+// ------------------------------------------------------------ commands --
 
 static void refresh_decorations(struct vela_server *server)
 {
@@ -208,7 +189,8 @@ static void refresh_decorations(struct vela_server *server)
     }
 }
 
-// wallpaper-tint R G B (0-255): il colore medio dello sfondo, per le barre.
+// wallpaper-tint R G B (0-255): the wallpaper's average color, for the title
+// bars.
 static void wallpaper_tint(struct vela_server *server, const char *arguments)
 {
     int r = 0;
@@ -225,7 +207,7 @@ static void wallpaper_tint(struct vela_server *server, const char *arguments)
     refresh_decorations(server);
 }
 
-// theme <shell> <app>, "light" o "dark": la modalità di Vela e quella delle app.
+// theme <shell> <apps>, "light" or "dark": Vela's mode and the apps' mode.
 static void theme(struct vela_server *server, const char *arguments)
 {
     char shell_mode[16] = "";
@@ -240,7 +222,7 @@ static void theme(struct vela_server *server, const char *arguments)
     }
     server->light_shell = shell_light;
     server->light_apps = apps_light;
-    // La tinta acrylic di Windows 11, scura o chiara (sRGB premoltiplicato).
+    // Windows 11's acrylic tint, dark or light (premultiplied sRGB).
     server->scene->acrylic_tint = shell_light
         ? (struct wlr_render_color) { 0.95f * 0.55f, 0.95f * 0.55f, 0.96f * 0.55f, 0.55f }
         : (struct wlr_render_color) { 0.11f * 0.55f, 0.11f * 0.55f, 0.12f * 0.55f, 0.55f };
@@ -253,7 +235,7 @@ static void theme(struct vela_server *server, const char *arguments)
 }
 
 // workspace switch|close <n>, workspace new [switch], workspace rename <n>
-// <nome>, workspace move <da> <a>: dalla Visualizzazione attività.
+// <name>, workspace move <from> <to>: from Task View.
 static void workspace(struct vela_server *server, const char *line)
 {
     char verb[16] = "";
@@ -279,14 +261,14 @@ static void workspace(struct vela_server *server, const char *line)
     }
 }
 
-// on, off o toggle.
+// on, off or toggle.
 static bool wanted(const char *what, bool now)
 {
     return strcmp(what, "toggle") == 0 ? !now : strcmp(what, "on") == 0;
 }
 
-// window <identificativo ext-foreign-toplevel | active> <azione>: dal menu
-// della finestra.
+// window <ext-foreign-toplevel identifier | active> <action>: from the window
+// menu.
 static void window(struct vela_server *server, const char *line)
 {
     const char *id = line + 7;
@@ -312,8 +294,8 @@ static void window(struct vela_server *server, const char *line)
     }
 }
 
-// "Termina attività": chiude subito i processi delle finestre di quell'app,
-// senza chiedere (come Windows).
+// "End task": kills the processes of that app's windows at once, without
+// asking (like Windows).
 static void end_task(struct vela_server *server, const char *app_id)
 {
     int count = wl_list_length(&server->views);
@@ -337,7 +319,7 @@ static void end_task(struct vela_server *server, const char *app_id)
     free(pids);
 }
 
-void vela_command_run(struct vela_server *server, const char *line)
+static void run_command(struct vela_server *server, const char *line)
 {
     struct vela_a11y *a11y = server->a11y;
     if (strcmp(line, "logout") == 0) {
@@ -348,22 +330,22 @@ void vela_command_run(struct vela_server *server, const char *line)
     } else if (starts_with(line, "theme ")) {
         theme(server, line + 6);
     } else if (strcmp(line, "paste") == 0) {
-        vela_input_paste(server->input); // Win+V: la shell ha messo l'elemento negli appunti
+        vela_input_paste(server->input); // Win+V: the shell has put the item on the clipboard
     } else if (strcmp(line, "modifiers") == 0 || strcmp(line, "workspaces") == 0
         || strcmp(line, "accessibility") == 0 || strcmp(line, "window-rects") == 0) {
-        // già risposto a chi l'ha chiesto
+        // already answered to whoever asked
     } else if (starts_with(line, "workspace ")) {
         workspace(server, line);
     } else if (strcmp(line, "reload-config") == 0) {
-        // Le Impostazioni hanno cambiato vela.conf.
+        // Settings changed vela.conf.
         wlr_log(WLR_INFO, "Settings: reloading vela.conf");
         vela_lock_load_settings(server->lock);
-        vela_input_reload(server->input); // tastiere, mouse e touchpad
+        vela_input_reload(server->input); // keyboards, mice and touchpads
         vela_output_load_settings(server);
         vela_a11y_load(a11y);
     } else if (starts_with(line, "night-light ")) {
-        // Dalle impostazioni rapide: night-light on|off|toggle (e così
-        // filtri, lente, tasti permanenti).
+        // From quick settings: night-light on|off|toggle (and likewise
+        // filters, magnifier, sticky keys).
         vela_a11y_set_night_light(a11y, wanted(line + 12, a11y->night_light), true);
     } else if (starts_with(line, "color-filter ")) {
         vela_a11y_set_color_filter(a11y, wanted(line + 13, a11y->color_filter), true);
@@ -372,13 +354,13 @@ void vela_command_run(struct vela_server *server, const char *line)
     } else if (starts_with(line, "sticky-keys ")) {
         vela_a11y_set_sticky_keys(a11y, wanted(line + 12, a11y->sticky_keys), true);
     } else if (starts_with(line, "switcher-pick ")) {
-        // Un clic su un'anteprima di Alt+Tab: si passa a quella finestra.
+        // A click on an Alt+Tab preview: switch to that window.
         vela_switcher_pick(server, atoi(line + 14));
     } else if (starts_with(line, "test-output ")) {
         vela_test_output_command(server, line + 12);
     } else if (strcmp(line, "test-power off") == 0 || strcmp(line, "test-power on") == 0) {
-        // Per le prove: spegne e riaccende gli schermi come l'inattività,
-        // solo quelli headless (come test-output).
+        // For tests: turns outputs off and on like inactivity does, headless
+        // ones only (like test-output).
         struct vela_output *output;
         wl_list_for_each (output, &server->outputs, link) {
             if (wlr_output_is_headless(output->wlr)) {
@@ -386,7 +368,7 @@ void vela_command_run(struct vela_server *server, const char *line)
             }
         }
     } else if (strcmp(line, "lock") == 0) {
-        vela_lock_screen(server->lock); // per esempio prima di sospendere il computer
+        vela_lock_screen(server->lock); // for example before suspending the computer
     } else if (starts_with(line, "window ")) {
         window(server, line);
     } else if (starts_with(line, "end-task ")) {
@@ -418,7 +400,7 @@ static int handle_client(int fd, uint32_t mask, void *data)
         memcpy(client->buffer + client->length, chunk, take);
         client->length += take;
     }
-    // Le righe complete; il resto aspetta il prossimo pezzo.
+    // The complete lines; the rest waits for the next piece.
     char lines[MAX_LINE + 1];
     size_t lines_length = 0;
     char *newline;
@@ -437,9 +419,9 @@ static int handle_client(int fd, uint32_t mask, void *data)
     if (closed) {
         client_destroy(client);
     }
-    // Dopo aver sistemato il client: un comando può chiudere tutto.
+    // After the client is settled: a command can close everything.
     for (size_t at = 0; at < lines_length; at += strlen(lines + at) + 1) {
-        vela_command_run(server, lines + at);
+        run_command(server, lines + at);
     }
     return 0;
 }
@@ -474,7 +456,7 @@ void vela_commands_listen(struct vela_server *server)
     }
     struct sockaddr_un address = { .sun_family = AF_UNIX };
     snprintf(address.sun_path, sizeof(address.sun_path), "%s", commands->path);
-    unlink(commands->path); // rimasto da un'esecuzione precedente
+    unlink(commands->path); // left over from a previous run
     commands->fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
     if (commands->fd < 0 || bind(commands->fd, (struct sockaddr *)&address, sizeof(address)) != 0
         || listen(commands->fd, 4) != 0) {

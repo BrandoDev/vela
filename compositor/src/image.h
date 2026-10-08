@@ -4,10 +4,10 @@
 #ifndef VELA_IMAGE_H
 #define VELA_IMAGE_H
 
-// Un'immagine disegnata dalla CPU (testo, icone, simboli dei pulsanti):
-// ARGB8888 premoltiplicato, riga dopo riga, senza spazi tra le righe.
-// `pixels` è allocato con malloc e appartiene a chi tiene l'immagine;
-// render/pixel_buffer.h può prenderlo in carico come wlr_buffer.
+// An image drawn by the CPU (text, icons, button glyphs): premultiplied
+// ARGB8888, row after row with no padding. `pixels` comes from malloc and
+// belongs to whoever holds the image; render/pixel_buffer.h can take it over
+// as a wlr_buffer.
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -15,7 +15,7 @@
 struct vela_image {
     int width;
     int height;
-    uint32_t *pixels; // NULL: immagine vuota
+    uint32_t *pixels; // NULL: empty image
 };
 
 static inline void vela_image_finish(struct vela_image *image)

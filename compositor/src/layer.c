@@ -4,6 +4,7 @@
 #include "layer.h"
 
 #include "focus.h"
+#include "listen.h"
 #include "output.h"
 #include "popup.h"
 #include "scene/scene.h"
@@ -16,8 +17,8 @@
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_xdg_shell.h>
 
-// Lo strato della scena per una superficie: lo strato "top" con la tastiera
-// sta sopra lo schermo intero.
+// The scene layer for a surface: the "top" layer with the keyboard goes above
+// fullscreen.
 static struct vela_tree *layer_tree(struct vela_server *server, uint32_t layer, bool wants_keyboard)
 {
     struct vela_layers *layers = &server->layers;
@@ -47,7 +48,7 @@ bool vela_layer_surface_wants_keyboard(const struct vela_layer_surface *layer)
 static void handle_map(struct wl_listener *listener, void *data)
 {
     struct vela_layer_surface *layer = wl_container_of(listener, layer, map);
-    // Menu Start, launcher & co. ricevono subito la tastiera.
+    // Start menu, launcher and the like get the keyboard at once.
     uint32_t which = layer->wlr->current.layer;
     if (vela_layer_surface_wants_keyboard(layer)
         && (which == ZWLR_LAYER_SHELL_V1_LAYER_TOP || which == ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY)) {
@@ -67,8 +68,8 @@ static void handle_commit(struct wl_listener *listener, void *data)
     struct wlr_layer_surface_v1 *wlr = layer->wlr;
     uint32_t committed = wlr->current.committed;
 
-    // Il client può spostarsi di strato (es. da "bottom" a "top"), o
-    // chiedere la tastiera (e salire sopra lo schermo intero).
+    // The client can change layer (such as from "bottom" to "top"), or ask for
+    // the keyboard (and rise above fullscreen).
     if (wlr->initialized
         && (committed & (WLR_LAYER_SURFACE_V1_STATE_LAYER | WLR_LAYER_SURFACE_V1_STATE_KEYBOARD_INTERACTIVITY))) {
         layer->layer = wlr->current.layer;
@@ -78,8 +79,8 @@ static void handle_commit(struct wl_listener *listener, void *data)
         }
     }
 
-    // Si ridispone solo quando cambia qualcosa che conta: ogni configure
-    // costringe il client a ridisegnare.
+    // Rearrange only when something that matters changes: every configure
+    // forces the client to redraw.
     if (wlr->initial_commit || committed || wlr->surface->mapped != layer->mapped) {
         layer->mapped = wlr->surface->mapped;
         struct vela_output *output = vela_layer_surface_output(layer);
@@ -102,7 +103,7 @@ static void handle_destroy(struct wl_listener *listener, void *data)
     vela_focus_forget_layer(layer->server, layer);
     struct vela_output *output = vela_layer_surface_output(layer);
     if (output) {
-        vela_output_arrange_layers(output); // libera lo spazio che occupava
+        vela_output_arrange_layers(output); // frees the space it took
     }
     wl_list_remove(&layer->map.link);
     wl_list_remove(&layer->unmap.link);
@@ -118,7 +119,7 @@ static void handle_new_surface(struct wl_listener *listener, void *data)
 {
     struct vela_server *server = wl_container_of(listener, server, new_layer_surface);
     struct wlr_layer_surface_v1 *wlr = data;
-    // Se il client non ha scelto uno schermo, quello sotto il cursore.
+    // If the client didn't choose an output, the one under the cursor.
     if (!wlr->output) {
         struct vela_output *output = vela_output_under_cursor(server);
         if (!output) {
@@ -138,16 +139,11 @@ static void handle_new_surface(struct wl_listener *listener, void *data)
     layer->surface_node = vela_surface_node_create(layer->tree, wlr->surface);
     layer->tree->node.data = &layer->owner;
 
-    layer->map.notify = handle_map;
-    wl_signal_add(&wlr->surface->events.map, &layer->map);
-    layer->unmap.notify = handle_unmap;
-    wl_signal_add(&wlr->surface->events.unmap, &layer->unmap);
-    layer->commit.notify = handle_commit;
-    wl_signal_add(&wlr->surface->events.commit, &layer->commit);
-    layer->destroy.notify = handle_destroy;
-    wl_signal_add(&wlr->events.destroy, &layer->destroy);
-    layer->new_popup.notify = handle_new_popup;
-    wl_signal_add(&wlr->events.new_popup, &layer->new_popup);
+    vela_listen(&wlr->surface->events.map, &layer->map, handle_map);
+    vela_listen(&wlr->surface->events.unmap, &layer->unmap, handle_unmap);
+    vela_listen(&wlr->surface->events.commit, &layer->commit, handle_commit);
+    vela_listen(&wlr->events.destroy, &layer->destroy, handle_destroy);
+    vela_listen(&wlr->events.new_popup, &layer->new_popup, handle_new_popup);
     wl_list_insert(server->layer_surfaces.prev, &layer->link);
 }
 
@@ -155,13 +151,12 @@ void vela_layers_init(struct vela_server *server)
 {
     wl_list_init(&server->layer_surfaces);
     server->layer_shell = wlr_layer_shell_v1_create(server->display, 4);
-    server->new_layer_surface.notify = handle_new_surface;
-    wl_signal_add(&server->layer_shell->events.new_surface, &server->new_layer_surface);
+    vela_listen(&server->layer_shell->events.new_surface, &server->new_layer_surface, handle_new_surface);
 }
 
-// ------------------------------------------------------------ disposizione --
+// ------------------------------------------------------------------ layout --
 
-// Lo spazio che una superficie "esclusiva" (la taskbar) toglie all'area utile.
+// The space an "exclusive" surface (the taskbar) takes from the usable area.
 static void apply_exclusive_zone(const struct wlr_layer_surface_v1_state *state, enum wlr_edges edge,
     struct wlr_box *usable)
 {
@@ -187,9 +182,9 @@ static void apply_exclusive_zone(const struct wlr_layer_surface_v1_state *state,
     usable->height = vela_max(usable->height, 0);
 }
 
-// Come wlr_scene_layer_surface_v1_configure di wlroots: dimensione e
-// posizione secondo ancore e margini, dentro l'area utile (o tutto lo
-// schermo se la superficie lo chiede con exclusive_zone = -1).
+// Like wlroots' wlr_scene_layer_surface_v1_configure: size and position from
+// anchors and margins, inside the usable area (or the whole output if the
+// surface asks for it with exclusive_zone = -1).
 static void configure(struct vela_layer_surface *layer, const struct wlr_box *full, struct wlr_box *usable)
 {
     struct wlr_layer_surface_v1 *wlr = layer->wlr;

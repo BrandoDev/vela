@@ -4,8 +4,8 @@
 #ifndef VELA_SHELL_H
 #define VELA_SHELL_H
 
-// La shell Qt: il comando di avvio (la shell) che il compositor lancia e
-// rilancia se si chiude male, e i messaggi che le manda.
+// The Qt shell: the startup command (the shell) that the compositor launches
+// and relaunches when it fails, and the messages it sends it.
 
 #include <stdint.h>
 #include <sys/types.h>
@@ -13,27 +13,27 @@
 struct vela_server;
 struct wl_event_source;
 
-// La shell lanciata e sorvegliata (un pidfd nel ciclo degli eventi ci dice
-// quando finisce). Sta in vela_server.shell.
+// The launched and supervised shell (a pidfd in the event loop tells when it
+// ends). Lives in vela_server.shell.
 struct vela_shell {
-    char *command; // NULL: nessuna
+    char *command; // NULL: none
     pid_t pid;
     int pidfd;
     struct wl_event_source *source;
     int64_t started_ns;
-    int quick_crashes; // chiusure anomale di fila poco dopo l'avvio
+    int quick_crashes; // abnormal exits in a row shortly after starting
 };
 
-// Lancia `command` e lo rilancia se si chiude male (non se si chiude bene,
-// né se si chiude di continuo appena partito).
+// Launches `command` and relaunches it when it fails (not when it exits
+// cleanly, nor when it keeps failing right after starting).
 void vela_shell_start(struct vela_server *server, const char *command);
-// Stiamo chiudendo noi: la shell che se ne va non va rilanciata.
+// We are shutting down: the shell going away must not be relaunched.
 void vela_shell_stop(struct vela_server *server);
 
-// Una riga di testo sul socket Unix della shell
-// ($XDG_RUNTIME_DIR/vela-shell-<WAYLAND_DISPLAY>.sock), per esempio
-// "toggle-start" o "accessibility {...}". Non blocca mai: se la shell non
-// c'è, il messaggio va perso e basta.
+// One line of text on the shell's Unix socket
+// ($XDG_RUNTIME_DIR/vela-shell-<WAYLAND_DISPLAY>.sock), such as "toggle-start"
+// or "accessibility {...}". Never blocks: without a shell the message is
+// simply lost.
 void vela_shell_send(struct vela_server *server, const char *line);
 
 #endif

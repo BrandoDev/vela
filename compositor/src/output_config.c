@@ -11,8 +11,8 @@
 #include <string.h>
 #include <sys/stat.h>
 
-// Le chiavi di una sezione, nell'ordine in cui si scrivono. Le altre si
-// ignorano (e alla prossima scrittura spariscono).
+// The keys of a section, in the order they are written. Others are ignored
+// (and disappear at the next write).
 enum key { ENABLED, MODE, SCALE, ROTATION, POSITION, KEY_COUNT };
 static const char *const key_names[KEY_COUNT] = { "enabled", "mode", "scale", "rotation", "position" };
 
@@ -20,15 +20,15 @@ static const char *const transform_names[8] = {
     "normal", "90", "180", "270", "flipped", "flipped-90", "flipped-180", "flipped-270",
 };
 
-// Una sezione del file: un monitor. I valori sono corti per natura
-// ("2560x1440@180.000"); uno più lungo, scritto a mano, si tronca.
+// A section of the file: one monitor. Values are short by nature
+// ("2560x1440@180.000"); a longer one, written by hand, is truncated.
 struct section {
     char *name;
     char values[KEY_COUNT][64];
     bool has[KEY_COUNT];
 };
 
-// Il file intero, in ordine. Si legge, si cambia, si riscrive.
+// The whole file, in order. It's read, changed, written back.
 struct file {
     struct section *sections;
     int count;
@@ -71,7 +71,7 @@ static void set_value(struct section *section, enum key key, const char *value)
     section->has[key] = true;
 }
 
-// Le chiavi e i valori italiani di schermi.conf con i nomi di adesso.
+// The Italian keys and values of schermi.conf with the current names.
 static const char *modern_key(const char *key)
 {
     static const char *const legacy[KEY_COUNT] = { "attivo", "modo", "scala", "rotazione", "posizione" };
@@ -213,7 +213,7 @@ void vela_output_config_save(const struct vela_output_config_entry *entries, int
         set_value(section, POSITION, buffer);
     }
 
-    // La cartella ~/.config, poi ~/.config/vela.
+    // The ~/.config directory, then ~/.config/vela.
     char *slash = strrchr(dir, '/');
     if (slash) {
         *slash = '\0';
@@ -239,7 +239,7 @@ void vela_output_config_save(const struct vela_output_config_entry *entries, int
         }
         fclose(out);
         if (rename(temporary, path) == 0 && vela_config_path("schermi.conf", legacy, sizeof(legacy))) {
-            remove(legacy); // ora c'è outputs.conf
+            remove(legacy); // outputs.conf exists now
         }
     }
     free_file(&file);

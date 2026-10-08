@@ -10,7 +10,7 @@
 #define MS INT64_C(1000000)
 #define SECOND INT64_C(1000000000)
 
-// Quante misure concordi servono per cambiare la latenza dello schermo.
+// How many agreeing measurements it takes to change the output latency.
 #define AGREEMENT_NEEDED 8
 
 static int64_t max64(int64_t a, int64_t b)
@@ -49,7 +49,7 @@ int64_t vela_frame_clock_period(const struct vela_frame_clock *clock)
     if (clock->presented_period > 0) {
         return clock->presented_period;
     }
-    return clock->mode_period > 0 ? clock->mode_period : 16666667; // sconosciuto: 60 Hz
+    return clock->mode_period > 0 ? clock->mode_period : 16666667; // unknown: 60 Hz
 }
 
 int64_t vela_frame_clock_vblank_after(const struct vela_frame_clock *clock, int64_t t)
@@ -117,7 +117,7 @@ struct vela_frame_plan vela_frame_clock_plan(const struct vela_frame_clock *cloc
         plan.start = now;
     }
     if (clock->last_present <= 0) {
-        plan.deadline = plan.start + vela_frame_clock_period(clock); // nessuna griglia ancora: stima
+        plan.deadline = plan.start + vela_frame_clock_period(clock); // no grid yet: an estimate
     }
     plan.present = plan.deadline + (int64_t)clock->latency_frames * vela_frame_clock_period(clock);
     return plan;
@@ -132,9 +132,9 @@ void vela_frame_clock_committed(struct vela_frame_clock *clock, uint32_t seq, in
     clock->pending[slot].valid = true;
 }
 
-// Se le ultime misure concordano su uno scarto di un numero intero di
-// vblank, quello scarto è la latenza dello schermo: si corregge la
-// previsione. Una misura isolata (un frame perso) non basta.
+// When the last measurements agree on an offset of a whole number of vblanks,
+// that offset is the output's latency: the prediction is corrected. A single
+// measurement (a missed frame) isn't enough.
 static void learn_latency(struct vela_frame_clock *clock, int64_t error)
 {
     int64_t period = vela_frame_clock_period(clock);
@@ -150,8 +150,8 @@ static void learn_latency(struct vela_frame_clock *clock, int64_t error)
             clock->latency_frames = 0;
         }
         if (shift > 0) {
-            // Il ritardo era dello schermo, non nostro: il margine
-            // cresciuto per inseguirlo non serve più.
+            // The delay was the output's, not ours: the margin grown to chase
+            // it is no longer needed.
             clock->extra_margin = 0;
         }
         clock->shift_candidate = 0;
@@ -174,23 +174,23 @@ void vela_frame_clock_presented(struct vela_frame_clock *clock, uint32_t seq, in
     clock->pending[slot].valid = false;
     int64_t period = vela_frame_clock_period(clock);
     int64_t error = when - clock->pending[slot].predicted;
-    // Il primo secondo dopo l'avvio o un cambio di modo non insegna nulla:
-    // allocazioni, pipeline nuove e modeset fanno arrivare tardi qualche
-    // frame una volta sola.
+    // The first second after startup or a mode change teaches nothing:
+    // allocations, new pipelines and modesets make a few frames late just
+    // once.
     if (clock->warmup_pending) {
         clock->warmup_until = when + SECOND;
         clock->warmup_pending = false;
     }
     bool warming_up = when < clock->warmup_until;
     if (error > period / 2) {
-        // Arrivato tardi. Se il margine può ancora crescere è colpa
-        // nostra (frame lento): margine più ampio. Se non può, il ritardo
-        // è dello schermo (compositor ospite): lo impara la latenza.
+        // Late. If the margin can still grow it's our fault (a slow frame): a
+        // wider margin. If it can't, the delay is the output's (a host
+        // compositor): the latency learns it.
         int missed = (int)((error + period / 2) / period);
         clock->missed += missed;
         clock->missed_total += missed;
         if (warming_up) {
-            // niente da imparare
+            // nothing to learn
         } else if (vela_frame_clock_budget(clock, when) < max_budget(clock)) {
             clock->extra_margin = min64(clock->extra_margin + max64(250000, period / 10), period);
             clock->shift_candidate = 0;
@@ -202,7 +202,7 @@ void vela_frame_clock_presented(struct vela_frame_clock *clock, uint32_t seq, in
         if (!warming_up) {
             learn_latency(clock, error);
         }
-        // Puntuale: il margine in più torna giù di 0,25 ms al secondo.
+        // On time: the extra margin goes down by 0.25 ms per second.
         clock->extra_margin = max64(0, clock->extra_margin - 250000 * period / SECOND - 1);
     }
     double error_ms = (double)error / 1e6;

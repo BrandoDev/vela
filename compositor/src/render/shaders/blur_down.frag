@@ -4,11 +4,11 @@
 
 #extension GL_GOOGLE_include_directive : require
 
-// Sfocatura dal vivo (docs/renderer.md §8.3), dual Kawase: riduzione a metà
-// risoluzione con cinque letture bilineari. La prima legge lo schermo (vista
-// sRGB: arriva in lineare), le altre il livello precedente (16 bit).
-// shape.xy: mezzo texel della sorgente per l'ampiezza; shapeRect: dove si può
-// leggere (coordinate texture), il resto dell'immagine è di altri.
+// Live blur (docs/renderer.md §8.3), dual Kawase: down to half resolution with
+// five bilinear reads. The first reads the output (sRGB view: it arrives
+// linear), the others the previous level (16 bit). shape.xy: half a source
+// texel for the reach; shapeRect: where reading is allowed (texture
+// coordinates), the rest of the image belongs to others.
 
 #include "push.glsl"
 

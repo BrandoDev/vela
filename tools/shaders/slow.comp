@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Il "rendering" di vela-slowgpu: un solo gruppo che gira a lungo su una
-// coda compute. Ogni passo dipende dal precedente, quindi la durata cresce
-// con le iterazioni e il compilatore non può accorciarla; il risultato va
-// in un buffer perché il ciclo non venga tolto.
+// vela-slowgpu's "rendering": a single group running long on a compute queue.
+// Every step depends on the previous one, so the duration grows with the
+// iterations and the compiler can't shorten it; the result goes into a buffer
+// so the loop isn't removed.
 #version 450
 
 layout(local_size_x = 64) in;

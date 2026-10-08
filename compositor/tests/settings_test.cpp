@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// ~/.config/vela/vela.conf (config.c): lettura, scrittura che conserva
-// il resto, valori sì/no. In una cartella temporanea (XDG_CONFIG_HOME).
+// ~/.config/vela/vela.conf (config.c): reading, writing that keeps the rest,
+// yes/no values. In a temporary directory (XDG_CONFIG_HOME).
 
 extern "C" {
 #include "config.h"
@@ -45,7 +45,7 @@ protected:
     std::string m_dir;
 };
 
-// vela.conf letto adesso; si libera da solo.
+// vela.conf as read now; freed automatically.
 struct Read {
     vela_config config;
     Read() { vela_config_read(&config); }
@@ -78,13 +78,13 @@ TEST_F(Settings, WriteCreatesUpdatesAndKeepsTheRest)
 {
     vela_config_write("tearing", "no");
     EXPECT_STREQ(Read().get("tearing"), "no");
-    EXPECT_EQ(contents().rfind('#', 0), 0u); // un file nuovo ha la riga di intestazione
+    EXPECT_EQ(contents().rfind('#', 0), 0u); // a new file has the header line
 
     write("# my comment\nscreen-off=10\ntearing=yes\ntearing=duplicate\n");
     vela_config_write("tearing", "no");
     vela_config_write("variable-refresh", "always");
     EXPECT_EQ(contents(), "# my comment\nscreen-off=10\ntearing=no\nvariable-refresh=always\n");
-    EXPECT_FALSE(std::filesystem::exists(file() + ".tmp")); // scritto con una rename
+    EXPECT_FALSE(std::filesystem::exists(file() + ".tmp")); // written with a rename
 }
 
 TEST_F(Settings, Flags)
@@ -96,11 +96,11 @@ TEST_F(Settings, Flags)
     }
     EXPECT_FALSE(s.flag("f", true));
     EXPECT_FALSE(s.flag("g", true));
-    EXPECT_TRUE(s.flag("h", true)); // vuota: il predefinito
+    EXPECT_TRUE(s.flag("h", true)); // empty: the default
     EXPECT_TRUE(s.flag("missing", true));
 }
 
-// I file scritti prima di ottobre 2026 hanno chiavi e valori in italiano.
+// Files written before October 2026 have Italian keys and values.
 TEST_F(Settings, LegacyItalianNames)
 {
     write("# commento\nluce-notturna=sì\nluce-notturna-pianifica=tramonto\nfrequenza-variabile=giochi\n"
@@ -114,7 +114,7 @@ TEST_F(Settings, LegacyItalianNames)
     EXPECT_TRUE(s.flag("touchpad-tap", false));
     EXPECT_STREQ(s.get("language"), "it");
 
-    // All'avvio il file si riscrive con i nomi nuovi; i commenti restano.
+    // At startup the file is rewritten with the new names; comments stay.
     vela_config_migrate();
     EXPECT_EQ(contents(), "# commento\nnight-light=yes\nnight-light-schedule=sunset\nvariable-refresh=games\n"
                           "mouse-primary-button=right\ncolor-filter=grayscale\ntouchpad-tap=yes\nlanguage=it\n");

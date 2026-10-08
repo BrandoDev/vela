@@ -3,6 +3,7 @@
 
 #include "scene/effects.h"
 
+#include "listen.h"
 #include "scene/scene.h"
 
 #include <stdlib.h>
@@ -12,12 +13,12 @@
 
 #include "ext-background-effect-v1-protocol.h"
 
-// L'effetto di una superficie: regione in attesa (dal client) e corrente
-// (applicata al commit). Si trova dalla superficie con un addon. Vive
-// quanto la risorsa del client; se la superficie muore prima, resta inerte.
+// A surface's effect: pending region (from the client) and current one
+// (applied on commit). Found from the surface through an addon. Lives as long
+// as the client's resource; if the surface dies first, it stays inert.
 struct effect {
     struct wl_resource *resource;
-    struct wlr_surface *surface; // NULL quando la superficie non c'è più
+    struct wlr_surface *surface; // NULL once the surface is gone
     struct vela_scene *scene;
     pixman_region32_t pending;
     pixman_region32_t current;
@@ -36,7 +37,7 @@ static void detach_surface(struct effect *effect)
     effect->surface = NULL;
 }
 
-// La superficie se ne va: l'oggetto resta, inerte.
+// The surface goes away: the object stays, inert.
 static void handle_surface_gone(struct wlr_addon *addon)
 {
     struct effect *effect = wl_container_of(addon, effect, addon);
@@ -48,7 +49,7 @@ static const struct wlr_addon_interface effect_addon = {
     .destroy = handle_surface_gone,
 };
 
-// Stato doppio: la regione nuova vale dal commit.
+// Double-buffered state: the new region applies from the commit.
 static void handle_commit(struct wl_listener *listener, void *data)
 {
     struct effect *effect = wl_container_of(listener, effect, commit);
@@ -121,8 +122,7 @@ static void handle_get_effect(struct wl_client *client, struct wl_resource *mana
     pixman_region32_init(&effect->pending);
     pixman_region32_init(&effect->current);
     wlr_addon_init(&effect->addon, &surface->addons, NULL, &effect_addon);
-    effect->commit.notify = handle_commit;
-    wl_signal_add(&surface->events.commit, &effect->commit);
+    vela_listen(&surface->events.commit, &effect->commit, handle_commit);
     wl_resource_set_implementation(resource, &surface_impl, effect, handle_resource_destroy);
 }
 

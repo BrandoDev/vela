@@ -7,7 +7,7 @@
 #include <math.h>
 #include <stdio.h>
 
-// Il numero scritto nelle cifre [from, from + count) di `digits`.
+// The number written in digits [from, from + count) of `digits`.
 static double digits_value(const char *digits, int from, int count)
 {
     double value = 0.0;
@@ -17,8 +17,8 @@ static double digits_value(const char *digits, int from, int count)
     return value;
 }
 
-// ±GG..PP[SS] a partire da *pos: `degree_digits` cifre di gradi, due di
-// primi, due facoltative di secondi.
+// ±DD..MM[SS] starting at *pos: `degree_digits` digits of degrees, two of
+// minutes, two optional ones of seconds.
 static bool parse_angle(const char *text, int *pos, int degree_digits, double *value)
 {
     const char *start = text + *pos;

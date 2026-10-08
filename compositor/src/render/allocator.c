@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Allocatore dei buffer degli schermi (docs/renderer.md §7.2): GBM sul
-// render node della GPU di Vela, buffer esportati come dmabuf con un
-// modifier esplicito, adatti sia al disegno Vulkan sia allo scanout.
+// Allocator of output buffers (docs/renderer.md §7.2): GBM on the render node
+// of Vela's GPU, buffers exported as dmabufs with an explicit modifier, fit
+// for both Vulkan drawing and scanout.
 
 #include "render/renderer.h"
 
@@ -19,13 +19,13 @@
 #include <wlr/render/drm_format_set.h>
 #include <wlr/util/log.h>
 
-// wlr_allocator come primo membro: wlr_allocator* <-> gbm_allocator*.
+// wlr_allocator as the first member: wlr_allocator* <-> gbm_allocator*.
 struct gbm_allocator {
     struct wlr_allocator base;
     struct gbm_device *gbm;
 };
 
-// wlr_buffer come primo membro: wlr_buffer* <-> gbm_buffer*.
+// wlr_buffer as the first member: wlr_buffer* <-> gbm_buffer*.
 struct gbm_buffer {
     struct wlr_buffer base;
     struct gbm_bo *bo;
@@ -35,6 +35,9 @@ struct gbm_buffer {
 static void buffer_destroy(struct wlr_buffer *wlr_buffer)
 {
     struct gbm_buffer *buffer = (struct gbm_buffer *)wlr_buffer;
+    // Whoever is attached to the buffer (damage rings, the renderer's
+    // caches) lets go before it disappears.
+    wlr_buffer_finish(wlr_buffer);
     for (int i = 0; i < buffer->dmabuf.n_planes; ++i) {
         close(buffer->dmabuf.fd[i]);
     }
@@ -58,7 +61,7 @@ static struct wlr_buffer *create_buffer(struct wlr_allocator *wlr_alloc, int wid
 {
     struct gbm_allocator *alloc = (struct gbm_allocator *)wlr_alloc;
 
-    // Solo modifier espliciti: Vulkan deve sapere com'è fatto il buffer.
+    // Explicit modifiers only: Vulkan must know how the buffer is laid out.
     uint64_t *modifiers = calloc(format->len ? format->len : 1, sizeof(*modifiers));
     unsigned count = 0;
     bool has_linear = false;
@@ -73,8 +76,8 @@ static struct wlr_buffer *create_buffer(struct wlr_allocator *wlr_alloc, int wid
         free(modifiers);
         return NULL;
     }
-    // Diagnosi: VELA_DEBUG_LINEAR=1 usa buffer lineari, senza tiling né
-    // compressione della GPU (per escludere problemi di compatibilità).
+    // Diagnostics: VELA_DEBUG_LINEAR=1 uses linear buffers, without GPU tiling
+    // or compression (to rule out compatibility problems).
     if (has_linear && vela_env_one("VELA_DEBUG_LINEAR")) {
         modifiers[0] = DRM_FORMAT_MOD_LINEAR;
         count = 1;
@@ -83,7 +86,7 @@ static struct wlr_buffer *create_buffer(struct wlr_allocator *wlr_alloc, int wid
     struct gbm_bo *bo = gbm_bo_create_with_modifiers2(alloc->gbm, (uint32_t)width, (uint32_t)height, format->format,
         modifiers, count, GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
     if (!bo) {
-        // Alcuni driver rifiutano SCANOUT su certi modifier (es. headless).
+        // Some drivers refuse SCANOUT on certain modifiers (such as headless).
         bo = gbm_bo_create_with_modifiers2(alloc->gbm, (uint32_t)width, (uint32_t)height, format->format, modifiers,
             count, GBM_BO_USE_RENDERING);
     }

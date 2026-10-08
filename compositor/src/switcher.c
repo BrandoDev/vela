@@ -33,8 +33,8 @@ bool vela_switcher_active(const struct vela_server *server)
     return server->switcher->active;
 }
 
-// "switcher-show N id1 id2..." oppure "switcher-select N": la shell trova le
-// finestre per identificativo (ext-foreign-toplevel-list).
+// "switcher-show N id1 id2..." or "switcher-select N": the shell finds the
+// windows by identifier (ext-foreign-toplevel-list).
 static void announce(struct vela_server *server, const char *command)
 {
     struct vela_switcher *switcher = server->switcher;
@@ -57,9 +57,9 @@ void vela_switcher_step(struct vela_server *server, int direction)
         announce(server, "select");
         return;
     }
-    // Tutte le finestre, dalla più recente; le ridotte a icona stanno già in
-    // fondo alla lista e si ripristinano se scelte. Solo il desktop in uso,
-    // come Windows.
+    // All windows, most recent first; minimized ones are already at the end of
+    // the list and are restored if chosen. Only the current desktop, like
+    // Windows.
     switcher->count = 0;
     struct vela_view *view;
     wl_list_for_each (view, &server->views, link) {
@@ -73,8 +73,8 @@ void vela_switcher_step(struct vela_server *server, int direction)
         return;
     }
     switcher->active = true;
-    // Si parte dalla finestra usata prima di quella attiva (o dalla più
-    // recente, se nessuna è attiva).
+    // Start from the window used before the active one (or the most recent, if
+    // none is active).
     bool front_active = vela_views_focused(server) == switcher->views[0];
     if (direction > 0) {
         switcher->selected = front_active ? 1 % switcher->count : 0;

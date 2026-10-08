@@ -70,8 +70,8 @@ int main(int argc, char *argv[])
         }
     }
 
-    // Il late latching sveglia il compositor a un istante preciso prima del
-    // vblank: il kernel non deve arrotondare i timer (predefinito 50 µs).
+    // Late latching wakes the compositor at a precise moment before the
+    // vblank: the kernel must not round timers (50 µs by default).
     prctl(PR_SET_TIMERSLACK, 1UL, 0UL, 0UL, 0UL);
 
     const char *debug = getenv("VELA_DEBUG");

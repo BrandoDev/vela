@@ -6,6 +6,7 @@
 #include "config.h"
 #include "geometry.h"
 #include "layer.h"
+#include "listen.h"
 #include "nested.h"
 #include "output_config.h"
 #include "output_manager.h"
@@ -29,16 +30,16 @@
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/util/log.h>
 
-// --------------------------------------------------------------- creazione --
+// ---------------------------------------------------------------- creation --
 
-// Molti monitor ad alta frequenza dichiarano come "preferita" una modalità a
-// 60 Hz. Noi prendiamo la risoluzione preferita alla frequenza più alta
-// disponibile: sul tuo monitor, 180 Hz senza toccare nulla.
+// Many high refresh rate monitors declare a 60 Hz mode as "preferred". We take
+// the preferred resolution at the highest refresh rate available: 180 Hz on a
+// 180 Hz monitor without touching anything.
 static struct wlr_output_mode *pick_mode(struct wlr_output *output)
 {
     struct wlr_output_mode *preferred = wlr_output_preferred_mode(output);
     if (!preferred) {
-        return NULL; // es. backend annidato: nessuna lista di modalità
+        return NULL; // such as the nested backend: no mode list
     }
     struct wlr_output_mode *best = preferred;
     struct wlr_output_mode *mode;
@@ -50,7 +51,7 @@ static struct wlr_output_mode *pick_mode(struct wlr_output *output)
     return best;
 }
 
-// La modalità dello schermo più vicina a quella salvata, NULL se non c'è.
+// The output mode closest to the saved one, NULL if there is none.
 static struct wlr_output_mode *find_mode(struct wlr_output *output, int width, int height, int refresh_mhz)
 {
     struct wlr_output_mode *best = NULL;
@@ -81,9 +82,9 @@ void vela_output_key(const struct wlr_output *output, char *out, size_t size)
     }
 }
 
-// Lo stato iniziale: ciò che l'utente ha scelto l'ultima volta per questo
-// monitor (solo nella sessione vera), altrimenti la modalità migliore e la
-// scala dai DPI. `saved` è NULL se non c'è niente di salvato.
+// The initial state: what the user chose last time for this monitor (only in
+// the real session), otherwise the best mode and the scale from DPI. `saved`
+// is NULL when nothing was saved.
 static void initial_state(struct wlr_output *wlr, const struct vela_saved_output *saved,
     struct wlr_output_state *state)
 {
@@ -94,15 +95,15 @@ static void initial_state(struct wlr_output *wlr, const struct vela_saved_output
     struct wlr_output_mode *best = NULL;
     const char *size = getenv("VELA_OUTPUT_SIZE");
     if (!enabled) {
-        // Spento, come l'ha lasciato l'utente.
+        // Off, as the user left it.
     } else if (saved_mode) {
         wlr_output_state_set_mode(state, saved_mode);
     } else if ((best = pick_mode(wlr))) {
         wlr_output_state_set_mode(state, best);
     } else if (size) {
-        // Schermo senza modalità (finestra annidata, headless): la dimensione
-        // la scegliamo noi, es. VELA_OUTPUT_SIZE=1920x1080, con la frequenza
-        // facoltativa per le prove: 1920x1080@144.
+        // An output without modes (nested window, headless): we choose the
+        // size, such as VELA_OUTPUT_SIZE=1920x1080, with an optional refresh
+        // rate for tests: 1920x1080@144.
         int width = 0;
         int height = 0;
         double hz = 0.0;
@@ -174,8 +175,8 @@ void vela_output_create(struct vela_server *server, struct wlr_output *wlr)
     output->vblank_fd = -1;
     wl_list_init(&output->link);
     wlr->data = output;
-    // Tutto ciò che si disegna su questo schermo passa dal renderer di Vela,
-    // anche ciò che fa wlroots (cursore, catture).
+    // Everything drawn on this output goes through Vela's renderer, including
+    // what wlroots does (cursor, captures).
     wlr_output_init_render(wlr, server->allocator, server->wlr_renderer);
 
     char key[256];
@@ -187,7 +188,7 @@ void vela_output_create(struct vela_server *server, struct wlr_output *wlr)
     struct wlr_output_state state;
     wlr_output_state_init(&state);
     initial_state(wlr, saved, &state);
-    // Il VRR lo accende e spegne il ciclo dei frame (vrr_state).
+    // The frame cycle turns VRR on and off (vrr_state).
     wlr_output_commit_state(wlr, &state);
     wlr_output_state_finish(&state);
     if (enabled) {
@@ -200,8 +201,8 @@ void vela_output_create(struct vela_server *server, struct wlr_output *wlr)
     output->frame = vela_output_frame_create(server->scene, server->renderer, wlr, output);
     vela_frame_clock_init(&output->clock);
     vela_frame_clock_set_mode_refresh(&output->clock, wlr->refresh);
-    // Late latching (§4.3): VELA_LATCH=0 lo spegne (si disegna appena il
-    // backend dice "frame"); VELA_LATCH_MARGIN: margine minimo in ms.
+    // Late latching (§4.3): VELA_LATCH=0 turns it off (drawing starts as soon
+    // as the backend says "frame"); VELA_LATCH_MARGIN: minimum margin in ms.
     output->latching = !vela_env_off("VELA_LATCH");
     const char *margin = getenv("VELA_LATCH_MARGIN");
     if (margin && *margin) {
@@ -219,21 +220,17 @@ void vela_output_create(struct vela_server *server, struct wlr_output *wlr)
     if (wlr_output_is_headless(wlr)) {
         start_virtual_vblank(output);
     } else {
-        output->present.notify = handle_present;
-        wl_signal_add(&wlr->events.present, &output->present);
-        output->frame_event.notify = handle_frame_event;
-        wl_signal_add(&wlr->events.frame, &output->frame_event);
+        vela_listen(&wlr->events.present, &output->present, handle_present);
+        vela_listen(&wlr->events.frame, &output->frame_event, handle_frame_event);
     }
-    output->request_state.notify = handle_request_state;
-    wl_signal_add(&wlr->events.request_state, &output->request_state);
-    output->destroy.notify = handle_destroy;
-    wl_signal_add(&wlr->events.destroy, &output->destroy);
+    vela_listen(&wlr->events.request_state, &output->request_state, handle_request_state);
+    vela_listen(&wlr->events.destroy, &output->destroy, handle_destroy);
 
-    // Nella lista prima di entrare nel layout: il cambio del layout avvisa i
-    // programmi di configurazione degli schermi, e questo deve già esserci.
+    // In the list before entering the layout: the layout change notifies the
+    // output configuration programs, and this output must already be there.
     wl_list_insert(server->outputs.prev, &output->link);
     if (!enabled) {
-        // Fuori dal layout finché qualcuno non lo riaccende.
+        // Out of the layout until someone turns it back on.
         vela_output_manager_update(server);
     } else if (saved && saved->has_position) {
         wlr_output_layout_add(server->output_layout, wlr, saved->x, saved->y);
@@ -251,8 +248,8 @@ static void handle_destroy(struct wl_listener *listener, void *data)
 {
     struct vela_output *output = wl_container_of(listener, output, destroy);
     struct vela_server *server = output->server;
-    // Pannelli chiusi, anteprima dello snap e lente spente, il blocco non
-    // aspetta più il nero su questo schermo.
+    // Panels closed, snap preview and magnifier off, the lock no longer waits
+    // for black on this output.
     vela_server_output_destroyed(server, output);
     wl_list_remove(&output->link);
     vela_output_manager_update(server);
@@ -281,7 +278,7 @@ static void handle_destroy(struct wl_listener *listener, void *data)
     free(output);
 }
 
-// Nel backend annidato: la finestra ospite è stata ridimensionata.
+// In the nested backend: the host window was resized.
 static void handle_request_state(struct wl_listener *listener, void *data)
 {
     struct vela_output *output = wl_container_of(listener, output, request_state);
@@ -304,8 +301,8 @@ bool vela_output_commit_mode(struct vela_output *output, struct wlr_output_state
     struct wlr_box area = vela_output_box(output);
     bool ok = vela_output_frame_render(output->frame, area.x, area.y, state);
     if (!ok) {
-        // Ripiego (anche per accendere o spegnere lo schermo): wlroots mette
-        // un buffer vuoto, che il nostro registro dei danni non conosce.
+        // Fallback (also to turn the output on or off): wlroots puts an empty
+        // buffer, which our damage tracking doesn't know about.
         ok = wlr_output_commit_state(output->wlr, state);
         vela_output_frame_reset_damage(output->frame);
     }
@@ -345,11 +342,10 @@ void vela_output_set_powered(struct vela_output *output, bool on)
     wlr_log(WLR_INFO, "%s: screen %s", wlr->name, on ? "back on" : "off because idle");
 }
 
-// ------------------------------------------------------ il ciclo dei frame --
-//
-// Il backend dice "frame" (al vblank dopo una consegna, o subito se lo
-// schermo era fermo), si pianifica il disegno il più tardi possibile prima
-// del vblank, e al momento giusto si disegna (docs/renderer.md §4.3).
+// --------------------------------------------------------- the frame cycle --
+// The backend says "frame" (at the vblank after a delivery, or at once if the
+// output was idle), drawing is planned as late as possible before the vblank,
+// and at the right moment it draws (docs/renderer.md §4.3).
 
 static void on_frame_event(struct vela_output *output);
 static void on_frame(struct vela_output *output);
@@ -366,11 +362,11 @@ static void handle_idle_frame(void *data)
 void vela_output_schedule_frame(struct vela_output *output)
 {
     output->frame_requested = true;
-    // Come fa wlroots con DRM: se nessun frame consegnato aspetta ancora il
-    // vblank, il "frame" arriva subito; altrimenti con lo scambio di pagina.
-    // Non si usa wlr_output_schedule_frame: segnerebbe lo schermo come
-    // bisognoso di un commit anche quando su di lui non cambia nulla (un
-    // commit vuoto, che con DRM blocca fino al vblank).
+    // Like wlroots with DRM: if no delivered frame is still waiting for the
+    // vblank, "frame" comes at once; otherwise with the page flip.
+    // wlr_output_schedule_frame isn't used: it would mark the output as
+    // needing a commit even when nothing on it changes (an empty commit, which
+    // with DRM blocks until the vblank).
     bool waiting = output->vblank_fd >= 0 ? output->awaiting_present : output->wlr->frame_pending;
     if (!waiting && !output->latch_armed && !output->idle_frame) {
         output->idle_frame = wl_event_loop_add_idle(output->server->loop, handle_idle_frame, output);
@@ -415,12 +411,12 @@ static int handle_latch_timer(int fd, uint32_t mask, void *data)
 static void on_frame_event(struct vela_output *output)
 {
     if (output->latch_armed || (!output->frame_requested && !output->wlr->needs_frame)) {
-        return; // già pianificato, o niente da fare
+        return; // already planned, or nothing to do
     }
     collect_costs(output);
-    // Tearing (un gioco a schermo intero che lo chiede), o VRR con un gioco
-    // in scanout diretto: il suo frame va sullo schermo appena arriva, non al
-    // momento migliore prima di un vblank che col VRR non è fisso.
+    // Tearing (a fullscreen game asking for it), or VRR with a game in direct
+    // scanout: its frame goes on screen as soon as it arrives, not at the best
+    // moment before a vblank that with VRR isn't fixed.
     const struct vela_frame_delivered *last = &output->frame->delivered;
     if (last->tearing || (last->scanout && output->wlr->adaptive_sync_status == WLR_OUTPUT_ADAPTIVE_SYNC_ENABLED)) {
         output->planned = false;
@@ -437,10 +433,10 @@ static void on_frame_event(struct vela_output *output)
     on_frame(output);
 }
 
-// Il VRR secondo la scelta dell'utente (vela_server.vrr_mode): se va
-// acceso o spento lo mette in `state` e restituisce true. "games": solo con
-// un'app a schermo intero su questo schermo (come l'"Automatico" di KWin: il
-// desktop non sfarfalla sui monitor che lo fanno); "always"; "no".
+// VRR according to the user's choice (vela_server.vrr_mode): if it must be
+// turned on or off it goes into `state` and true is returned. "games": only
+// with a fullscreen app on this output (like KWin's "Automatic": the desktop
+// doesn't flicker on monitors that do); "always"; "no".
 static bool vrr_state(struct vela_output *output, struct wlr_output_state *state)
 {
     struct vela_server *server = output->server;
@@ -464,7 +460,7 @@ static bool vrr_state(struct vela_output *output, struct wlr_output_state *state
 
 static void log_stats(struct vela_output *output, int64_t now)
 {
-    // VELA_STATS=1: le statistiche anche senza il log dettagliato.
+    // VELA_STATS=1: statistics even without the verbose log.
     bool requested = vela_env_flag("VELA_STATS");
     struct vela_frame_stats stats;
     if (!vela_frame_clock_take_stats(&output->clock, now, &stats) || stats.fps <= 0.0) {
@@ -491,8 +487,8 @@ static void log_stats(struct vela_output *output, int64_t now)
 
 static void on_frame(struct vela_output *output)
 {
-    // Uno scambio di pagina ancora in corso (es. dopo un cambio di modo): il
-    // suo evento "frame" ci richiamerà.
+    // A page flip still in progress (such as after a mode change): its "frame"
+    // event will call us back.
     if (output->vblank_fd < 0 && output->wlr->frame_pending) {
         output->planned = false;
         return;
@@ -502,12 +498,12 @@ static void on_frame(struct vela_output *output)
     output->planned = false;
     output->frame_requested = false;
 
-    // Prima si fa avanzare ogni animazione all'istante in cui questo frame
-    // diventerà luce (docs/renderer.md §4.2), poi si disegna.
+    // First every animation advances to the moment this frame will become
+    // light (docs/renderer.md §4.2), then it draws.
     vela_server_animate(output->server, plan.present);
 
     struct wlr_box area = vela_output_box(output);
-    // Il VRR da accendere o spegnere va nel commit di questo frame.
+    // VRR to turn on or off goes into this frame's commit.
     struct wlr_output_state vrr;
     wlr_output_state_init(&vrr);
     bool vrr_change = vrr_state(output, &vrr);
@@ -526,7 +522,8 @@ static void on_frame(struct vela_output *output)
             --output->delivery_count;
         }
         output->deliveries[output->delivery_count++] = delivery;
-        // Col vblank virtuale il frame compare al primo battito in cui è pronto.
+        // With the virtual vblank the frame shows at the first beat when it's
+        // ready.
         if (output->vblank_fd >= 0) {
             output->awaiting = delivery;
             output->awaiting_present = true;
@@ -540,8 +537,8 @@ static void on_frame(struct vela_output *output)
     log_stats(output, now);
 }
 
-// Quando il frame era pronto: commit fatto e GPU finita. false se non si sa
-// ancora.
+// When the frame was ready: commit done and GPU finished. false if not known
+// yet.
 static bool ready_time(struct vela_output *output, const struct vela_delivery *delivery, int64_t *when)
 {
     if (delivery->point == 0) {
@@ -551,14 +548,14 @@ static bool ready_time(struct vela_output *output, const struct vela_delivery *d
     struct vela_renderer *renderer = output->server->renderer;
     struct vela_gpu_timing timing;
     if (vela_renderer_read_timing(renderer, delivery->timing_slot, delivery->point, &timing)) {
-        // Senza timestamp calibrati si sa solo quanto ha lavorato la GPU: si
-        // suppone che abbia cominciato al commit.
+        // Without calibrated timestamps only how long the GPU worked is known:
+        // it's assumed to have started at the commit.
         *when = timing.absolute ? (delivery->committed_at > timing.end_ns ? delivery->committed_at : timing.end_ns)
                                 : delivery->committed_at + timing.end_ns;
         return true;
     }
     if (delivery->point <= vela_renderer_completed(renderer)) {
-        *when = delivery->committed_at; // finito, ma senza misura
+        *when = delivery->committed_at; // finished, but not measured
         return true;
     }
     return false;
@@ -572,7 +569,7 @@ static void breakdown_add(struct vela_output *output, int i, double ms)
     }
 }
 
-// Il costo dei frame già consegnati, appena la GPU li ha finiti.
+// The cost of frames already delivered, as soon as the GPU has finished them.
 static void collect_costs(struct vela_output *output)
 {
     int64_t now = vela_now_ns();
@@ -595,20 +592,19 @@ static void collect_costs(struct vela_output *output)
             continue;
         }
         if (now - delivery->committed_at > VELA_NS_PER_SEC) {
-            continue; // misura persa
+            continue; // measurement lost
         }
         output->deliveries[kept++] = *delivery;
     }
     output->delivery_count = kept;
 }
 
-// ----------------------------------------------------------- vblank virtuale --
-//
-// Schermo headless: un vblank virtuale esatto al nanosecondo, per provare
-// qualunque frequenza (il timer del backend headless di wlroots lavora al
-// millisecondo e non ha vblank). Batte solo quando un frame consegnato
-// aspetta di comparire; un frame compare al primo vblank in cui è pronto
-// (anche la GPU deve aver finito), come su uno schermo vero.
+// ------------------------------------------------------------ virtual vblank --
+// Headless output: a virtual vblank exact to the nanosecond, to test any
+// refresh rate (the wlroots headless backend timer works in milliseconds and
+// has no vblank). It beats only when a delivered frame is waiting to show; a
+// frame shows at the first vblank when it's ready (the GPU must have finished
+// too), as on a real output.
 
 static int handle_virtual_vblank(int fd, uint32_t mask, void *data);
 
@@ -626,8 +622,8 @@ static void start_virtual_vblank(struct vela_output *output)
         vela_frame_clock_period(&output->clock) / 1e6);
 }
 
-// Il prossimo vblank sulla griglia esatta (ultimo vblank + multipli del
-// periodo), anche se il timer è rimasto fermo a lungo.
+// The next vblank on the exact grid (last vblank + multiples of the period),
+// even if the timer stayed idle for long.
 static void arm_virtual_vblank(struct vela_output *output)
 {
     if (output->vblank_armed || output->vblank_fd < 0) {
@@ -654,16 +650,17 @@ static int handle_virtual_vblank(int fd, uint32_t mask, void *data)
     output->vblank_armed = false;
     int64_t period = vela_frame_clock_period(&output->clock);
     int64_t now = vela_now_ns();
-    // L'ultimo vblank della griglia passato (il timer può svegliarci tardi).
+    // The last vblank of the grid that has passed (the timer can wake us
+    // late).
     int64_t anchor = output->last_vblank;
     int64_t steps = (now - anchor) / period;
     int64_t vblank = anchor + (steps > 1 ? steps : 1) * period;
     output->last_vblank = vblank;
 
     if (output->awaiting_present) {
-        // Il frame compare al primo vblank in cui era pronto: commit fatto e
-        // GPU finita. Se non lo è ancora, resta sullo schermo il precedente e
-        // si riprova al prossimo battito (vblank perso).
+        // The frame shows at the first vblank when it was ready: commit done
+        // and GPU finished. If it isn't yet, the previous one stays on screen
+        // and we try again at the next beat (missed vblank).
         int64_t ready = 0;
         if (!ready_time(output, &output->awaiting, &ready)) {
             arm_virtual_vblank(output);
@@ -680,12 +677,12 @@ static int handle_virtual_vblank(int fd, uint32_t mask, void *data)
         output->awaiting_present = false;
         collect_costs(output);
     }
-    // Come l'evento "frame" di DRM al vblank dopo una consegna.
+    // Like DRM's "frame" event at the vblank after a delivery.
     on_frame_event(output);
     return 0;
 }
 
-// ---------------------------------------------------- aree in pixel fisici --
+// ------------------------------------------------ areas in physical pixels --
 
 struct wlr_box vela_output_box(const struct vela_output *output)
 {
@@ -710,8 +707,8 @@ struct vela_area vela_output_full_area(const struct vela_output *output)
     return vela_output_from_physical(output, (struct wlr_box) { 0, 0, width, height });
 }
 
-// L'area libera dai pannelli in pixel dello schermo: i bordi che toccano
-// quelli dello schermo restano esattamente sui suoi pixel.
+// The area free of panels in output pixels: edges touching the output's stay
+// exactly on its pixels.
 struct wlr_box vela_output_physical_usable(const struct vela_output *output)
 {
     struct wlr_box full = vela_output_box(output);
@@ -732,16 +729,16 @@ struct vela_area vela_output_usable_area(const struct vela_output *output)
     return vela_output_from_physical(output, vela_output_physical_usable(output));
 }
 
-// Un bordo dello schermo senza un altro schermo accanto: ciò che sborda lì
-// non si vede.
+// An output edge without another output next to it: what spills over there
+// isn't seen.
 static bool open_at(const struct vela_output *output, double lx, double ly)
 {
     return !wlr_output_layout_output_at(output->server->output_layout, lx, ly);
 }
 
-// Il client disegna un buffer di round(dimensione × scala) pixel
-// (fractional-scale-v1, scala in 120esimi): per ogni asse si cerca la
-// dimensione logica che dà esattamente i pixel dell'area.
+// The client draws a buffer of round(size × scale) pixels
+// (fractional-scale-v1, scale in 120ths): for each axis we look for the
+// logical size that gives exactly the area's pixels.
 struct vela_placement vela_output_place(const struct vela_output *output, struct vela_area area)
 {
     struct wlr_box full = vela_output_box(output);

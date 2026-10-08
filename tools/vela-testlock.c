@@ -1,16 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Un programma di blocco di prova (ext-session-lock-v1): blocca, disegna su
-// ogni schermo chiedendo un frame callback a ogni frame (come vela-lock con
-// l'orologio), e dopo il tempo dato si sblocca da solo ed esce. Serve a
-// provare blocco e sblocco senza password, nelle sessioni di prova:
+// A test lock program (ext-session-lock-v1): locks, draws on every output
+// asking for a frame callback on every frame (like vela-lock with its
+// clock), and after the given time unlocks by itself and exits. It tests
+// locking and unlocking without a password, in test sessions:
 //
-//   VELA_LOCK="vela-testlock 1500" vela-compositor ...   poi il comando "lock"
+//   VELA_LOCK="vela-testlock 1500" vela-compositor ...   then the "lock" command
 //
-// Uso: vela-testlock [millisecondi] [--keep-surfaces]
-//   --keep-surfaces  dopo lo sblocco esce senza distruggere le superfici
-//                        (le distrugge la disconnessione, come in un crash)
+// Usage: vela-testlock [milliseconds] [--keep-surfaces]
+//   --keep-surfaces  after unlocking exits without destroying the surfaces
+//                    (the disconnection destroys them, as in a crash)
 
 #define _GNU_SOURCE
 #include <stdbool.h>
@@ -72,7 +72,7 @@ static void frame_done(void* data, struct wl_callback* callback, uint32_t time)
 }
 static const struct wl_callback_listener frame_listener = { frame_done };
 
-// Ogni frame: danno, un nuovo frame callback e commit, come un orologio.
+// Every frame: damage, a new frame callback and commit, like a clock.
 static void draw(struct screen* screen)
 {
     if (!screen->buffer) {
@@ -160,7 +160,7 @@ int main(int argc, char* argv[])
         ext_session_lock_surface_v1_add_listener(screen->lock_surface, &lock_surface_listener, screen);
     }
 
-    // Bloccato, poi "hold" millisecondi di frame, poi lo sblocco.
+    // Locked, then "hold" milliseconds of frames, then the unlock.
     int64_t until = -1;
     while (!finished && wl_display_dispatch(display) != -1) {
         if (locked && until < 0) {

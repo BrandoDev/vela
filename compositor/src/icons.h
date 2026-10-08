@@ -4,24 +4,24 @@
 #ifndef VELA_ICONS_H
 #define VELA_ICONS_H
 
-// Le icone delle app nella barra del titolo (docs/renderer.md §9.6): dal
-// file .desktop dell'app (Icon=) al tema di icone di KDE (specifica
-// freedesktop), disegnate alla dimensione fisica esatta. Gli SVG con
-// librsvg, preferiti sempre; le PNG solo se non c'è altro, ridotte con un
-// filtro di qualità. Senza librsvg (opzionale) niente icone.
+// App icons in the title bar (docs/renderer.md §9.6): from the app's .desktop
+// file (Icon=) to KDE's icon theme (freedesktop spec), drawn at the exact
+// physical size. SVGs through librsvg, always preferred; PNGs only when
+// nothing else exists, scaled down with a quality filter. Without librsvg
+// (optional) there are no icons.
 
 #include "image.h"
 
 struct vela_icons;
 
-// Il tema di KDE e la sua catena di eredità; i file .desktop si leggono
-// alla prima richiesta.
+// KDE's theme and its inheritance chain; .desktop files are read on the first
+// request.
 struct vela_icons *vela_icons_create(void);
 void vela_icons_destroy(struct vela_icons *icons);
 
-// L'icona dell'app (app_id Wayland o classe X11), size x size pixel. Mai
-// NULL: un'immagine vuota (pixels NULL) se non si trova. Resta valida, e di
-// proprietà di `icons`, finché `icons` esiste.
+// The app's icon (Wayland app_id or X11 class), size x size pixels. Never
+// NULL: an empty image (pixels NULL) when none is found. It stays valid, owned
+// by `icons`, as long as `icons` exists.
 const struct vela_image *vela_icons_app(struct vela_icons *icons, const char *app_id, int size);
 
 #endif

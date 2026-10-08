@@ -4,17 +4,15 @@
 #ifndef VELA_SCENE_READY_H
 #define VELA_SCENE_READY_H
 
-// Un'app lenta non ferma lo schermo (docs/renderer.md §7.3). Un commit il
-// cui buffer la GPU dell'app non ha ancora finito di disegnare resta in
-// attesa (wlr_surface_lock_pending) e diventa lo stato corrente solo quando
-// la sua fence è segnalata. Nel frattempo i frame mostrano lo stato
-// precedente, già pronto: cursore, animazioni e le altre finestre non
-// aspettano la GPU di nessuno.
+// A slow app doesn't hold up the screen (docs/renderer.md §7.3). A commit
+// whose buffer the app's GPU hasn't finished drawing waits
+// (wlr_surface_lock_pending) and becomes the current state only when its fence
+// signals. Meanwhile frames show the previous, ready state: cursor, animations
+// and other windows wait for nobody's GPU.
 //
-// Vale per la sincronizzazione esplicita (il punto di acquisizione di
-// linux-drm-syncobj-v1, quella di Mesa Vulkan, Firefox e dei giochi) e per
-// quella implicita (la fence di scrittura del dmabuf, OpenGL). I buffer in
-// memoria condivisa sono pronti per definizione.
+// This covers explicit sync (the linux-drm-syncobj-v1 acquire point, used by
+// Mesa Vulkan, Firefox and games) and implicit sync (the dmabuf write fence,
+// OpenGL). Shared-memory buffers are ready by definition.
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -22,11 +20,11 @@
 
 struct wlr_compositor;
 
-// Una, del server; ogni superficie ha il suo stato (un addon).
+// One, the server's; each surface has its own state (an addon).
 struct vela_ready {
-    bool enabled; // VELA_READY_WAIT=0: i commit si applicano subito e il frame aspetta la GPU dell'app
-    uint64_t held_total; // commit trattenuti dall'avvio
-    uint64_t held_now; // e quanti lo sono ora
+    bool enabled; // VELA_READY_WAIT=0: commits apply at once and the frame waits for the app's GPU
+    uint64_t held_total; // commits held since startup
+    uint64_t held_now; // and how many are held now
     struct wl_listener new_surface;
 };
 

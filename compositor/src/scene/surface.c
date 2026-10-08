@@ -3,6 +3,7 @@
 
 #include "scene/surface.h"
 
+#include "listen.h"
 #include "scene/frame.h"
 #include "scene/scene.h"
 #include "util.h"
@@ -25,7 +26,7 @@ struct vela_surface_state *vela_surface_state_get(struct wlr_surface *surface)
     return state;
 }
 
-// Dal commit al danno degli schermi che la mostrano.
+// From the commit to the damage of the outputs showing it.
 static void handle_commit(struct wl_listener *listener, void *data)
 {
     struct vela_surface_state *state = wl_container_of(listener, state, commit);
@@ -37,7 +38,7 @@ static void handle_commit(struct wl_listener *listener, void *data)
             shown = true;
         }
     }
-    // Una superficie nuova o finora nascosta: forse ora si vede.
+    // A new or so far hidden surface: maybe it shows now.
     if (!shown) {
         vela_scene_changed(state->scene);
     }
@@ -66,8 +67,7 @@ void vela_surface_state_create(struct vela_scene *scene, struct wlr_surface *sur
     struct vela_surface_state *state = calloc(1, sizeof(*state));
     state->surface = surface;
     state->scene = scene;
-    state->commit.notify = handle_commit;
-    wl_signal_add(&surface->events.commit, &state->commit);
+    vela_listen(&surface->events.commit, &state->commit, handle_commit);
     wlr_addon_init(&state->addon, &surface->addons, NULL, &state_addon);
 }
 
@@ -101,12 +101,10 @@ static void refresh(struct vela_surface_state *state)
     }
     state->pacing = pacing;
     if (!primary) {
-        // Non si vede da nessuna parte (ridotta a icona, fuori schermo):
-        // niente leave, così ricomparendo sullo stesso schermo non cambia
-        // nulla per l'app.
+        // It isn't visible anywhere (minimized, off screen): no leave, so that
+        // showing up on the same output again changes nothing for the app.
         return;
     }
-    state->primary = primary;
 
     struct wlr_surface *surface = state->surface;
     struct wlr_surface_output *entered, *tmp;
@@ -120,7 +118,7 @@ static void refresh(struct vela_surface_state *state)
             wlr_surface_send_enter(surface, state->outputs[i].output);
         }
     }
-    // La scala dello schermo che ne mostra la parte maggiore (§3.6).
+    // The scale of the output showing the largest part (§3.6).
     double scale = primary->scale;
     wlr_fractional_scale_v1_notify_scale(surface, scale);
     wlr_surface_set_preferred_buffer_scale(surface, (int32_t)ceil(scale));

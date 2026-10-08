@@ -34,8 +34,8 @@ struct vela_area vela_snap_area(const struct vela_output *output, struct vela_sn
     return vela_output_from_physical(output, (struct wlr_box) { x0, y0, x1 - x0, y1 - y0 });
 }
 
-// "Tiled" dice all'app di togliere ombre e angoli arrotondati sui lati che
-// toccano i bordi dello schermo.
+// "Tiled" tells the app to drop shadows and rounded corners on the sides
+// touching the output edges.
 static uint32_t tiled_edges(struct vela_snap snap)
 {
     uint32_t edges = WLR_EDGE_NONE;
@@ -66,7 +66,7 @@ void vela_view_set_snap(struct vela_view *view, struct vela_snap side, struct ve
     }
     vela_view_finish_open_animation(view);
     if (!vela_snap_equal(side, view->snap)) {
-        vela_view_leave_snap_group(view); // spostata altrove: non sta più col suo gruppo
+        vela_view_leave_snap_group(view); // moved elsewhere: it's no longer with its group
     }
     if (vela_snap_is_none(side)) {
         if (vela_snap_is_none(view->snap)) {
@@ -85,8 +85,8 @@ void vela_view_set_snap(struct vela_view *view, struct vela_snap side, struct ve
     if (!vela_snap_valid(side)) {
         return;
     }
-    // La dimensione da ripristinare è quella "libera", non quella di un
-    // altro snap o della finestra massimizzata.
+    // The size to restore is the "free" one, not that of another snap or of
+    // the maximized window.
     if (vela_snap_is_none(view->snap) && !view->maximized) {
         view->restore = vela_view_frame_box(view);
     }
@@ -108,7 +108,7 @@ void vela_view_leave_snap_group(struct vela_view *view)
     if (group == 0) {
         return;
     }
-    // Un gruppo di una finestra sola non è più un gruppo.
+    // A group of one window is no longer a group.
     int rest = 0;
     struct vela_view *other;
     wl_list_for_each (other, &view->server->views, link) {
@@ -124,7 +124,7 @@ void vela_view_leave_snap_group(struct vela_view *view)
     vela_workspaces_announce(view->server);
 }
 
-// ------------------------------------------------------------ Win+frecce --
+// ------------------------------------------------------------ Win+arrows --
 
 static bool is_half_column(struct vela_snap s)
 {
@@ -137,9 +137,9 @@ static bool is_quarter(struct vela_snap s)
         || vela_snap_equal(s, vela_snap_bottom_left) || vela_snap_equal(s, vela_snap_bottom_right);
 }
 
-// Come Windows 11: Win+←/→ alla metà (verso il lato opposto si sgancia); da
-// una metà, Win+↑/↓ al quarto in alto o in basso; dal quarto in alto Win+↑
-// massimizza, da quello in basso Win+↓ riduce a icona.
+// Like Windows 11: Win+←/→ to the half (toward the opposite side it unsnaps);
+// from a half, Win+↑/↓ to the top or bottom quarter; from the top quarter
+// Win+↑ maximizes, from the bottom one Win+↓ minimizes.
 void vela_snap_keyboard(struct vela_server *server, struct vela_view *view, uint32_t sym)
 {
     struct vela_snap s = view->snap;
@@ -153,7 +153,7 @@ void vela_snap_keyboard(struct vela_server *server, struct vela_view *view, uint
             vela_view_set_snap(view, to_left ? vela_snap_left : vela_snap_right, NULL);
             vela_snap_offer_assist(server, view);
         }
-        return; // da quella parte c'è già
+        return; // it's already on that side
     }
     if (sym == XKB_KEY_Up) {
         if (is_half_column(s)) {
@@ -166,7 +166,7 @@ void vela_snap_keyboard(struct vela_server *server, struct vela_view *view, uint
         }
         return;
     }
-    // Giù: prima si ripristina, poi si riduce a icona.
+    // Down: first restore, then minimize.
     if (view->maximized) {
         vela_view_set_maximized(view, false, true);
     } else if (is_half_column(s)) {
@@ -181,17 +181,17 @@ void vela_snap_keyboard(struct vela_server *server, struct vela_view *view, uint
     }
 }
 
-// --------------------------------------------------------------- anteprima --
+// ----------------------------------------------------------------- preview --
 
-// Quanto vicino al bordo deve arrivare il cursore. Nella sessione vera il
-// cursore si ferma sul bordo; dentro KDE può uscire dalla finestra di Vela
-// prima di toccarlo, per questo non è zero.
+// How close to the edge the cursor must get. In the real session the cursor
+// stops at the edge; inside KDE it can leave Vela's window before touching it,
+// which is why this isn't zero.
 #define EDGE_THRESHOLD 6
-// Lungo un bordo, così vicino a un angolo si aggancia al quarto.
+// Along an edge, this close to a corner it snaps to the quarter.
 #define CORNER_SIZE 96
-// Il mouse fermo sul pulsante Ingrandisci: dopo quanto si aprono i layout.
+// The mouse resting on the Maximize button: how long before the layouts open.
 #define LAYOUTS_DELAY_MS 450
-// L'accento della shell (Theme.accent, #5b8cff), traslucido.
+// The shell's accent (Theme.accent, #5b8cff), translucent.
 static const float preview_color[3] = { 0.357f, 0.549f, 1.0f };
 #define PREVIEW_ALPHA 0.28f
 
@@ -228,7 +228,7 @@ bool vela_snap_tick_preview(struct vela_server *server, double now_ms)
     if (!snapping->rect) {
         return false;
     }
-    // Cresce dal centro dell'area e si accende.
+    // Grows from the center of the area and lights up.
     double p = now_ms > 0.0 ? vela_tween_progress(&snapping->tween, now_ms) : 0.0;
     double scale = 0.9 + 0.1 * p;
     double width = snapping->target_width * scale;
@@ -273,7 +273,7 @@ void vela_snap_update_zone(struct vela_server *server)
         bool near_bottom = cursor->y >= box.y + box.height - CORNER_SIZE;
         bool near_left = cursor->x <= box.x + CORNER_SIZE;
         bool near_right = cursor->x >= box.x + box.width - CORNER_SIZE;
-        // Negli angoli il quarto, sui lati la metà, in alto massimizza.
+        // Quarters in the corners, halves on the sides, the top maximizes.
         zone = VELA_SNAP_ZONE_TILE;
         if ((left && near_top) || (top && near_left)) {
             tile = vela_snap_top_left;
@@ -309,7 +309,7 @@ void vela_snap_update_zone(struct vela_server *server)
         const struct wlr_render_color none = { 0 };
         snapping->rect = vela_rect_node_create(grabbed->tree->node.parent, 0, 0, &none);
     }
-    // Sotto la finestra trascinata, come su Windows.
+    // Below the dragged window, like Windows.
     vela_node_place_below(&snapping->rect->node, &grabbed->tree->node);
     vela_tween_start(&snapping->tween, VELA_SNAP_PREVIEW_MS, &vela_decelerate);
     vela_snap_tick_preview(server, 0.0);
@@ -351,7 +351,7 @@ void vela_snap_offer_assist(struct vela_server *server, struct vela_view *view)
     if (!output || vela_snap_is_none(view->snap) || !view_id(view)) {
         return;
     }
-    // {"window":id,"output":nome,"tile":[x0,y0,x1,y1],"occupied":[[...]],"candidates":[id...]}
+    // {"window":id,"output":name,"tile":[x0,y0,x1,y1],"occupied":[[...]],"candidates":[id...]}
     struct vela_buffer occupied = { 0 };
     struct vela_buffer candidates = { 0 };
     struct vela_view *other;
@@ -367,7 +367,7 @@ void vela_snap_offer_assist(struct vela_server *server, struct vela_view *view)
             vela_buffer_appendf(&candidates, "%s\"%s\"", candidates.length ? "," : "", view_id(other));
         }
     }
-    if (candidates.length) { // altrimenti nessuna finestra da proporre
+    if (candidates.length) { // otherwise no window to offer
         struct vela_buffer line = { 0 };
         struct vela_snap s = view->snap;
         vela_buffer_appendf(&line,
@@ -397,8 +397,8 @@ void vela_snap_join_group(struct vela_server *server, struct vela_view *view, st
 
 void vela_snap_activate_group(struct vela_server *server, struct vela_view *view)
 {
-    // Prima le altre, poi quella scelta: resta sopra e a fuoco. La lista
-    // cambia mentre le si porta davanti: prima si raccolgono.
+    // The others first, then the chosen one: it stays on top and focused. The
+    // list changes while they're brought forward: collect them first.
     uint32_t group = view->snap_group;
     int count = wl_list_length(&server->views);
     struct vela_view **members = calloc((size_t)count + 1, sizeof(*members));
@@ -419,7 +419,7 @@ void vela_snap_activate_group(struct vela_server *server, struct vela_view *view
     free(members);
 }
 
-// ------------------------------------------------------- shell: layout --
+// ------------------------------------------------------ shell: layouts --
 
 void vela_snap_show_layouts(struct vela_server *server, struct vela_view *view, bool keyboard)
 {
@@ -427,8 +427,8 @@ void vela_snap_show_layouts(struct vela_server *server, struct vela_view *view, 
     if (!output || !view_id(view) || view->fullscreen || server->locked) {
         return;
     }
-    // Sotto il pulsante Ingrandisci; senza la barra di Vela, in alto al
-    // centro della finestra.
+    // Below the Maximize button; without Vela's bar, at the top center of the
+    // window.
     struct wlr_box frame = vela_view_frame_box(view);
     struct wlr_box anchor = { frame.x + frame.width / 2, frame.y, 0, 0 };
     if (view->decoration) {
@@ -444,8 +444,8 @@ void vela_snap_show_layouts(struct vela_server *server, struct vela_view *view, 
 static int handle_layouts_timer(void *data)
 {
     struct vela_server *server = data;
-    // Una volta sola: il pannello copre il pulsante, e tornandoci sopra si
-    // ricomincia.
+    // Only once: the panel covers the button, and hovering it again starts
+    // over.
     struct vela_view *hovered = server->snapping->layouts_hover;
     server->snapping->layouts_hover = NULL;
     if (hovered && hovered->decoration && server->cursor_mode == VELA_CURSOR_PASSTHROUGH

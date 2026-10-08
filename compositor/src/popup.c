@@ -4,6 +4,7 @@
 #include "popup.h"
 
 #include "layer.h"
+#include "listen.h"
 #include "output.h"
 #include "scene/scene.h"
 #include "view.h"
@@ -17,7 +18,7 @@
 struct vela_popup {
     struct wlr_xdg_popup *xdg;
     struct vela_owner *owner;
-    struct vela_tree *tree; // origine: quella della superficie del popup
+    struct vela_tree *tree; // origin: the popup surface's
     struct vela_surface_node *surface_node;
 
     struct wl_listener commit;
@@ -26,8 +27,8 @@ struct vela_popup {
     struct wl_listener destroy;
 };
 
-// Lo schermo di chi possiede il popup, rispetto all'origine della sua
-// superficie radice (come vuole wlroots, anche per i popup dei popup).
+// The owner's output, relative to the origin of its root surface (as wlroots
+// wants, popups of popups included).
 static struct wlr_box constraint_box(const struct vela_popup *popup)
 {
     struct vela_output *output = NULL;
@@ -36,7 +37,7 @@ static struct wlr_box constraint_box(const struct vela_popup *popup)
     case VELA_OWNER_VIEW: {
         struct vela_view *view = (struct vela_view *)popup->owner;
         output = vela_view_output(view);
-        tree = vela_view_tree(view);
+        tree = view->tree;
         break;
     }
     case VELA_OWNER_LAYER: {
@@ -62,10 +63,10 @@ static void handle_commit(struct wl_listener *listener, void *data)
 {
     struct vela_popup *popup = wl_container_of(listener, popup, commit);
     if (popup->xdg->base->initial_commit) {
-        unconstrain(popup); // invia anche il primo configure
+        unconstrain(popup); // also sends the first configure
     }
-    // La posizione dipende dalla geometria sua e del genitore, che cambiano
-    // con i commit.
+    // The position depends on its geometry and its parent's, which change with
+    // commits.
     double x = 0.0;
     double y = 0.0;
     vela_popup_position(popup->xdg, &x, &y);
@@ -103,14 +104,10 @@ void vela_popup_create(struct wlr_xdg_popup *xdg, struct vela_tree *parent, stru
     popup->owner = owner;
     popup->tree = vela_tree_create(parent);
     popup->surface_node = vela_surface_node_create(popup->tree, xdg->base->surface);
-    popup->tree->node.unclipped = true; // un menu esce dalla finestra: niente angoli della finestra
+    popup->tree->node.unclipped = true; // a menu goes outside the window: no window corners
 
-    popup->commit.notify = handle_commit;
-    wl_signal_add(&xdg->base->surface->events.commit, &popup->commit);
-    popup->reposition.notify = handle_reposition;
-    wl_signal_add(&xdg->events.reposition, &popup->reposition);
-    popup->new_popup.notify = handle_new_popup;
-    wl_signal_add(&xdg->base->events.new_popup, &popup->new_popup);
-    popup->destroy.notify = handle_destroy;
-    wl_signal_add(&xdg->events.destroy, &popup->destroy);
+    vela_listen(&xdg->base->surface->events.commit, &popup->commit, handle_commit);
+    vela_listen(&xdg->events.reposition, &popup->reposition, handle_reposition);
+    vela_listen(&xdg->base->events.new_popup, &popup->new_popup, handle_new_popup);
+    vela_listen(&xdg->events.destroy, &popup->destroy, handle_destroy);
 }

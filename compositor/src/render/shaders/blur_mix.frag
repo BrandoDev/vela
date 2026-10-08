@@ -4,15 +4,15 @@
 
 #extension GL_GOOGLE_include_directive : require
 
-// Sfocatura dal vivo (§8.3): lo sfondo sfocato sotto un pannello, con la
-// ricetta acrylic di Windows 11: un po' più di saturazione, una tinta e un
-// velo di rumore (niente bande nei gradienti). La forma la dà il pannello
-// stesso: dove la sua superficie è trasparente (fuori dagli angoli
-// arrotondati) non si sfoca. Poi sopra si disegna il pannello.
+// Live blur (§8.3): the blurred background under a panel, with Windows 11's
+// acrylic recipe: a bit more saturation, a tint and a veil of noise (no
+// banding in gradients). The panel itself gives the shape: where its surface
+// is transparent (outside the rounded corners) nothing is blurred. The panel
+// is then drawn on top.
 //
-// binding 0: la superficie del pannello (uv); binding 1: lo sfondo sfocato,
-// letto nel punto dello schermo: (pixel - pad) * shape.zw.
-// color: la tinta (lineare, premoltiplicata: alfa = quanta).
+// binding 0: the panel surface (uv); binding 1: the blurred background, read
+// at the output point: (pixel - pad) * shape.zw. color: the tint (linear,
+// premultiplied: alpha = how much).
 
 #include "push.glsl"
 #include "shape.glsl"
@@ -31,9 +31,10 @@ void main()
 {
     vec3 c = texture(blurred, (gl_FragCoord.xy - pc.pad) * pc.shape.zw).rgb;
     const float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
-    c = mix(vec3(luma), c, 1.25); // saturazione
-    // Lo sfondo letto ha già il filtro dello schermo (se c'è): solo la tinta lo prende qui.
-    c = c * (1.0 - pc.color.a) + colorFilter(pc.color).rgb; // tinta
+    c = mix(vec3(luma), c, 1.25); // saturation
+    // The background read already has the output's filter (if any): only the
+    // tint takes it here.
+    c = c * (1.0 - pc.color.a) + colorFilter(pc.color).rgb; // tint
     c += (noise(gl_FragCoord.xy) - 0.5) * (2.0 / 255.0);
     c = max(c, 0.0);
     const float coverage = smoothstep(0.0, 0.5, texture(mask, uv).a) * shapeClip() * pc.alpha;

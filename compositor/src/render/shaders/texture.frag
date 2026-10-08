@@ -4,11 +4,10 @@
 
 #extension GL_GOOGLE_include_directive : require
 
-// Una texture (finestra, pannello, istantanea, cursore). I pixel delle app
-// sono codificati sRGB e premoltiplicati: si riportano in spazio lineare
-// (§7.5) togliendo e rimettendo l'alfa, così anche i bordi semitrasparenti
-// sono giusti. La vista di destinazione è _SRGB: la GPU fonde in lineare e
-// codifica scrivendo.
+// A texture (window, panel, snapshot, cursor). App pixels are sRGB-encoded and
+// premultiplied: they're brought to linear space (§7.5) by removing and
+// restoring the alpha, so semi-transparent edges are right too. The target
+// view is _SRGB: the GPU blends in linear and encodes on write.
 
 #include "push.glsl"
 #include "shape.glsl"
@@ -23,8 +22,8 @@ vec3 srgbToLinear(vec3 c)
     return mix(pow((c + 0.055) / 1.055, vec3(2.4)), c / 12.92, low);
 }
 
-// Ingrandimento di qualità (§3.3): Catmull-Rom, 16 texel pesati con 9
-// letture bilineari. Più nitido del bilineare, senza i gradini del nearest.
+// Quality magnification (§3.3): Catmull-Rom, 16 texels weighted with 9
+// bilinear reads. Sharper than bilinear, without nearest's steps.
 vec4 catmullRom(vec2 coord)
 {
     const vec2 size = vec2(textureSize(tex, 0));
@@ -48,8 +47,8 @@ vec4 catmullRom(vec2 coord)
     c += texture(tex, vec2(p0.x, p3.y)) * w0.x * w3.y;
     c += texture(tex, vec2(p12.x, p3.y)) * w12.x * w3.y;
     c += texture(tex, vec2(p3.x, p3.y)) * w3.x * w3.y;
-    // I lobi negativi possono uscire dall'intervallo: si riporta dentro,
-    // con il colore mai oltre l'alfa (premoltiplicato).
+    // The negative lobes can leave the range: bring it back, with the color
+    // never above the alpha (premultiplied).
     c.a = clamp(c.a, 0.0, 1.0);
     c.rgb = clamp(c.rgb, 0.0, c.a);
     return c;
@@ -61,7 +60,7 @@ void main()
     if (c.a > 0.0) {
         c.rgb = srgbToLinear(clamp(c.rgb / c.a, 0.0, 1.0)) * c.a;
     } else {
-        c.rgb = srgbToLinear(clamp(c.rgb, 0.0, 1.0)); // additivo: raro, ma lecito
+        c.rgb = srgbToLinear(clamp(c.rgb, 0.0, 1.0)); // additive: rare, but allowed
     }
     outColor = colorFilter(c) * (pc.alpha * shapeClip());
 }

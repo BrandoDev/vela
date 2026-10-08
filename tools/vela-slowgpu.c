@@ -1,21 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Brando Giuffrida
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// vela-slowgpu: un'app la cui GPU finisce tardi (docs/renderer.md §7.3).
+// vela-slowgpu: an app whose GPU finishes late (docs/renderer.md §7.3).
 //
-// Ogni fotogramma ha un colore pieno, scritto dalla CPU in un dmabuf (GBM,
-// lineare); poi un lavoro su una coda compute che dura circa MS millisecondi
-// fa da "rendering": la sua fence diventa il punto di acquisizione del buffer
-// (linux-drm-syncobj-v1) o, con --implicit, la fence di scrittura del
-// dmabuf. Il commit parte subito, con la GPU ancora al lavoro, come fa
-// un'app vera che disegna più lentamente dello schermo.
+// Every frame is a solid color, written by the CPU into a dmabuf (GBM,
+// linear); then a job on a compute queue lasting about MS milliseconds stands
+// in for "rendering": its fence becomes the buffer's acquire point
+// (linux-drm-syncobj-v1) or, with --implicit, the dmabuf's write fence. The
+// commit goes out at once, with the GPU still working, as a real app drawing
+// slower than the output does.
 //
-// La coda compute lascia libera quella grafica, che usa il compositor: ciò
-// che si misura è solo l'attesa della fence, non la contesa della GPU. Se il
-// compositor aspettasse la fence nel suo frame, perderebbe i vblank (lo
-// "state" di Vela li conta per schermo).
+// The compute queue leaves the graphics one, which the compositor uses, free:
+// only waiting for the fence is measured, not GPU contention. If the
+// compositor waited for the fence in its frame, it would miss vblanks (Vela's
+// "state" counts them per output).
 //
-// Uso: vela-slowgpu [MS] [--implicit]    (predefinito 150 ms)
+// Usage: vela-slowgpu [MS] [--implicit]    (150 ms by default)
 
 #define _GNU_SOURCE
 #include <errno.h>
@@ -40,7 +40,7 @@
 #include "linux-drm-syncobj-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 
-#define WIDTH 512 // righe di 2048 byte: i dmabuf lineari vogliono passi allineati
+#define WIDTH 512 // 2048-byte rows: linear dmabufs want aligned strides
 #define HEIGHT 320
 #define BUFFERS 3
 
@@ -72,12 +72,12 @@ struct Buffer {
     struct gbm_bo* bo;
     int fd;
     struct wl_buffer* wl;
-    int busy; // implicita: finché il compositor non lo rilascia
-    uint64_t releasePoint; // esplicita: il punto da aspettare prima di riusarlo
+    int busy; // implicit: until the compositor releases it
+    uint64_t releasePoint; // explicit: the point to wait for before reusing it
 };
 static struct Buffer buffers[BUFFERS];
 
-// Esplicita: due timeline nostre, una per l'acquisizione e una per il rilascio.
+// Explicit: two timelines of ours, one for acquire and one for release.
 static uint32_t acquireHandle, releaseHandle;
 static struct wp_linux_drm_syncobj_timeline_v1* acquireTimeline;
 static struct wp_linux_drm_syncobj_timeline_v1* releaseTimeline;
@@ -136,8 +136,8 @@ static void onGlobal(void* data, struct wl_registry* registry, uint32_t name, co
 static void onGlobalRemove(void* data, struct wl_registry* registry, uint32_t name) { }
 static const struct wl_registry_listener registryListener = { onGlobal, onGlobalRemove };
 
-// Del feedback dmabuf serve solo il device principale del compositor: i
-// buffer si allocano lì, e lì gira il lavoro della GPU.
+// Of the dmabuf feedback only the compositor's main device is needed: buffers
+// are allocated there, and the GPU work runs there.
 static void onFeedbackDone(void* data, struct zwp_linux_dmabuf_feedback_v1* feedback) { }
 static void onFormatTable(void* data, struct zwp_linux_dmabuf_feedback_v1* feedback, int32_t fd, uint32_t size)
 {
@@ -210,7 +210,8 @@ static void setupVulkan(void)
     };
     check(vkCreateInstance(&instanceInfo, NULL, &instance), "vkCreateInstance");
 
-    // Il device del compositor (stesso nodo DRM), con VK_EXT_physical_device_drm.
+    // The compositor's device (same DRM node), with
+    // VK_EXT_physical_device_drm.
     uint32_t count = 0;
     vkEnumeratePhysicalDevices(instance, &count, NULL);
     VkPhysicalDevice devices[16];
@@ -234,7 +235,7 @@ static void setupVulkan(void)
         die("no Vulkan device for the compositor's DRM node");
     }
 
-    // Una coda di solo calcolo, se c'è: non occupa quella grafica.
+    // A compute-only queue, if there is one: it doesn't take the graphics one.
     uint32_t families = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physical, &families, NULL);
     VkQueueFamilyProperties family[16];
@@ -276,7 +277,7 @@ static void setupVulkan(void)
     vkGetDeviceQueue(device, (uint32_t)chosen, 0, &queue);
     getSemaphoreFd = (PFN_vkGetSemaphoreFdKHR)vkGetDeviceProcAddr(device, "vkGetSemaphoreFdKHR");
 
-    // Il buffer del risultato (64 float), solo perché il ciclo non sparisca.
+    // The result buffer (64 floats), only so the loop doesn't vanish.
     const VkBufferCreateInfo bufferInfo = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = 64 * sizeof(float),
@@ -388,7 +389,7 @@ static void setupVulkan(void)
     };
     check(vkCreateFence(device, &fenceInfo, NULL, &fence), "vkCreateFence");
 
-    // Un semaforo esportabile come sync_file: la fence del "rendering".
+    // A semaphore exportable as a sync_file: the "rendering" fence.
     const VkExportSemaphoreCreateInfo exportInfo = {
         .sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO,
         .handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT,
@@ -397,8 +398,8 @@ static void setupVulkan(void)
     check(vkCreateSemaphore(device, &semaphoreInfo, NULL, &semaphore), "vkCreateSemaphore");
 }
 
-// Lancia il lavoro lento. Con exportFence, restituisce la sua sync_file
-// (ancora da segnalare); senza, aspetta che finisca.
+// Launches the slow job. With exportFence, returns its sync_file (not signaled
+// yet); without, waits for it to finish.
 static int runJob(int exportFence)
 {
     vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
@@ -436,7 +437,7 @@ static int runJob(int exportFence)
     return fd;
 }
 
-// Quante iterazioni per durare `targetMs` su questa GPU.
+// How many iterations to last `targetMs` on this GPU.
 static void calibrate(double targetMs)
 {
     double elapsed = 0.0;
@@ -459,20 +460,20 @@ static void calibrate(double targetMs)
     fflush(stdout);
 }
 
-// --------------------------------------------------------------- buffer --
+// -------------------------------------------------------------- buffers --
 
 static void setupBuffers(void)
 {
     for (int i = 0; i < BUFFERS; ++i) {
         struct Buffer* b = &buffers[i];
-        // Lineare: la CPU ci scrive il colore direttamente.
+        // Linear: the CPU writes the color directly.
         b->bo = gbm_bo_create(gbm, WIDTH, HEIGHT, GBM_FORMAT_XRGB8888, GBM_BO_USE_LINEAR | GBM_BO_USE_RENDERING);
         if (!b->bo) {
             die("gbm_bo_create");
         }
         b->fd = gbm_bo_get_fd(b->bo);
-        // Con GBM_BO_USE_LINEAR la disposizione è lineare anche quando GBM
-        // non lo dice (modificatore implicito, che Vela non accetta).
+        // With GBM_BO_USE_LINEAR the layout is linear even when GBM doesn't
+        // say so (an implicit modifier, which Vela doesn't accept).
         uint64_t linear = gbm_bo_get_modifier(b->bo);
         if (linear == DRM_FORMAT_MOD_INVALID) {
             linear = DRM_FORMAT_MOD_LINEAR;
@@ -517,8 +518,8 @@ static struct Buffer* freeBuffer(unsigned frame)
             }
         }
     }
-    // Esplicita: a turno, aspettando il rilascio (lo segnala il compositor
-    // quando ha finito di leggerlo e ha un buffer più nuovo).
+    // Explicit: taking turns, waiting for the release (the compositor signals
+    // it when it has finished reading and has a newer buffer).
     struct Buffer* b = &buffers[frame % BUFFERS];
     if (b->releasePoint) {
         uint64_t point = b->releasePoint;
@@ -538,7 +539,7 @@ static void draw(void)
     struct Buffer* b = freeBuffer(frame);
     fill(b, colors[frame++ % 4]);
 
-    const int syncFile = runJob(1); // la GPU lavora ancora quando il commit parte
+    const int syncFile = runJob(1); // the GPU is still working when the commit goes out
     if (implicitSync) {
         struct dma_buf_import_sync_file request = { .flags = DMA_BUF_SYNC_WRITE, .fd = syncFile };
         if (ioctl(b->fd, DMA_BUF_IOCTL_IMPORT_SYNC_FILE, &request) != 0) {

@@ -4,22 +4,21 @@
 #ifndef VELA_LOCK_H
 #define VELA_LOCK_H
 
-// Blocco dello schermo e inattività.
+// Screen lock and inactivity.
 //
-// Il blocco è ext-session-lock-v1: un programma (vela-lock) chiede di
-// bloccare, e da quel momento il compositor mostra solo le sue superfici,
-// una per schermo, su un fondo nero. Tutto il resto è spento: niente
-// finestre, niente scorciatoie, niente tastiera alle app. Si sblocca solo
-// quando il programma lo dice (password giusta); se va in crash, lo schermo
-// resta nero e bloccato, e un nuovo programma di blocco può prenderne il
-// posto (lo si rilancia, al massimo 5 volte al minuto).
+// The lock is ext-session-lock-v1: a program (vela-lock) asks to lock, and
+// from then on the compositor shows only its surfaces, one per output, over
+// black. Everything else is off: no windows, no shortcuts, no keyboard for
+// apps. It unlocks only when the program says so (right password); if it
+// crashes, the screen stays black and locked, and a new lock program can take
+// its place (it's relaunched, at most 5 times a minute).
 //
-// Inattività: dopo alcuni minuti senza input (predefinito 10; 0: mai) lo
-// schermo si blocca e, pochi secondi dopo, si spegne. I minuti e il blocco
-// stanno in vela.conf ("screen-off", "lock-on-idle"; VELA_SCREEN_OFF e
-// VELA_LOCK_ON_IDLE hanno la precedenza). Un'app può impedirlo mentre
-// mostra qualcosa (un video: idle-inhibit). Le app sanno quando l'utente è
-// inattivo con ext-idle-notify. Annidati o headless non si spegne nulla.
+// Inactivity: after some minutes without input (10 by default; 0: never) the
+// screen locks and, a few seconds later, turns off. Minutes and locking are in
+// vela.conf ("screen-off", "lock-on-idle"; VELA_SCREEN_OFF and
+// VELA_LOCK_ON_IDLE take precedence). An app can prevent it while showing
+// something (a video: idle-inhibit). Apps learn the user is idle through
+// ext-idle-notify. Nested or headless nothing turns off.
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -34,31 +33,31 @@ struct wlr_idle_notifier_v1;
 struct wlr_session_lock_manager_v1;
 struct wlr_session_lock_v1;
 
-#define VELA_LOCK_RESPAWNS 5 // al massimo, in un minuto
+#define VELA_LOCK_RESPAWNS 5 // at most, in one minute
 
 struct vela_lock {
     struct vela_server *server;
     struct wlr_session_lock_manager_v1 *manager;
-    struct wlr_session_lock_v1 *lock; // il programma di blocco attivo, o NULL
-    struct vela_tree *backdrop_tree; // in fondo allo strato del blocco
-    struct vela_rect_node **backdrop; // nero, uno per schermo
+    struct wlr_session_lock_v1 *lock; // the active lock program, or NULL
+    struct vela_tree *backdrop_tree; // at the bottom of the lock layer
+    struct vela_rect_node **backdrop; // black, one per output
     int backdrop_count;
     int backdrop_capacity;
-    // Gli schermi che devono ancora mostrare il nero prima di dire all'app
-    // "bloccato".
+    // The outputs that still have to show black before telling the app
+    // "locked".
     struct vela_output **waiting;
     int waiting_count;
     int waiting_capacity;
-    struct wl_event_source *respawn; // rilancia vela-lock se sparisce
-    int64_t respawns[VELA_LOCK_RESPAWNS]; // quando (ms), per non insistere all'infinito
+    struct wl_event_source *respawn; // relaunches vela-lock if it goes away
+    int64_t respawns[VELA_LOCK_RESPAWNS]; // when (ms), so as not to insist forever
     int respawn_count;
 
     struct wlr_idle_notifier_v1 *idle_notifier;
     struct wlr_idle_inhibit_manager_v1 *idle_inhibit;
-    struct wl_event_source *idle_timer; // solo nella sessione vera
-    int screen_off_ms; // 0: mai
+    struct wl_event_source *idle_timer; // only in the real session
+    int screen_off_ms; // 0: never
     bool lock_on_idle;
-    bool locking; // bloccato per inattività, schermi da spegnere tra poco
+    bool locking; // locked for inactivity, outputs to turn off shortly
     bool screens_off;
 
     struct wl_listener new_lock;
@@ -71,19 +70,19 @@ struct vela_lock {
 struct vela_lock *vela_lock_create(struct vela_server *server);
 void vela_lock_destroy(struct vela_lock *lock);
 
-// Win+L, inattività, prima di sospendere: avvia vela-lock (VELA_LOCK ne
-// sceglie un altro).
+// Win+L, inactivity, before suspend: starts vela-lock (VELA_LOCK picks
+// another).
 void vela_lock_screen(struct vela_lock *lock);
-// Nasconde tutto tranne lo strato del blocco (nero finché vela-lock non
-// c'è) e lo ricorda al supervisore.
+// Hides everything but the lock layer (black until vela-lock shows up) and
+// tells the supervisor.
 void vela_lock_engage(struct vela_lock *lock);
-// L'utente c'è: riaccende gli schermi e azzera l'attesa.
+// The user is here: turns the outputs back on and restarts the wait.
 void vela_lock_note_activity(struct vela_lock *lock);
-// Rilegge vela.conf (comando "reload-config").
+// Rereads vela.conf (the "reload-config" command).
 void vela_lock_load_settings(struct vela_lock *lock);
-// A ogni frame consegnato: il blocco aspetta il nero su ogni schermo.
+// On every delivered frame: the lock waits for black on every output.
 void vela_lock_output_rendered(struct vela_lock *lock, struct vela_output *output);
-// Gli schermi sono cambiati mentre è bloccato.
+// The outputs changed while locked.
 void vela_lock_update_layout(struct vela_lock *lock);
 
 #endif

@@ -28,6 +28,8 @@
 
 #include "scene/scene.h"
 
+static void announce(struct vela_a11y *a11y);
+
 #define STICKY_MASK (WLR_MODIFIER_SHIFT | WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT | WLR_MODIFIER_LOGO)
 
 static const char *yes_no(bool on)
@@ -35,10 +37,10 @@ static const char *yes_no(bool on)
     return on ? "yes" : "no";
 }
 
-// ------------------------------------------------------------------ sole --
+// ------------------------------------------------------------------- sun --
 
-// Le coordinate del fuso orario del sistema, da zone1970.tab (o zone.tab):
-// "+4154+01229" per Europe/Rome. Bastano per le ore del sole.
+// The system time zone's coordinates, from zone1970.tab (or zone.tab):
+// "+4154+01229" for Europe/Rome. Good enough for sun times.
 static bool timezone_coordinates(double *latitude, double *longitude)
 {
     char zone[256];
@@ -79,11 +81,11 @@ static bool timezone_coordinates(double *latitude, double *longitude)
     return false;
 }
 
-// ---------------------------------------------------------------- colore --
+// ----------------------------------------------------------------- color --
 
-// I filtri e la luce notturna alla scena: dove passano dal disegno, tutto
-// va ridisegnato (dove passano dalla gamma del monitor basta il commit,
-// che il frame fa comunque).
+// Filters and night light to the scene: where they go through drawing,
+// everything must be redrawn (where they go through the monitor's gamma the
+// commit is enough, which the frame does anyway).
 static void apply_color(struct vela_a11y *a11y)
 {
     struct vela_scene *scene = a11y->server->scene;
@@ -115,6 +117,22 @@ static void apply_color(struct vela_a11y *a11y)
     }
 }
 
+// Today's sunset and sunrise here, in minutes after midnight.
+static bool sun_today(int *set, int *rise)
+{
+    double latitude = 0.0;
+    double longitude = 0.0;
+    if (!timezone_coordinates(&latitude, &longitude)) {
+        return false;
+    }
+    time_t now = time(NULL);
+    struct tm local;
+    localtime_r(&now, &local);
+    *set = vela_sun_time(false, &local, latitude, longitude);
+    *rise = vela_sun_time(true, &local, latitude, longitude);
+    return *set >= 0 && *rise >= 0;
+}
+
 static void check_night_schedule(struct vela_a11y *a11y)
 {
     bool sunset = strcmp(a11y->schedule, "sunset") == 0;
@@ -128,19 +146,15 @@ static void check_night_schedule(struct vela_a11y *a11y)
     int minutes = local.tm_hour * 60 + local.tm_min;
     int from = a11y->night_from;
     int to = a11y->night_to;
-    double latitude = 0.0;
-    double longitude = 0.0;
-    if (sunset && timezone_coordinates(&latitude, &longitude)) {
-        int set = vela_sun_time(false, &local, latitude, longitude);
-        int rise = vela_sun_time(true, &local, latitude, longitude);
-        if (set >= 0 && rise >= 0) {
-            from = set;
-            to = rise;
-        }
+    int set = 0;
+    int rise = 0;
+    if (sunset && sun_today(&set, &rise)) {
+        from = set;
+        to = rise;
     }
     int wanted = vela_in_range(minutes, from, to) ? 1 : 0;
     if (wanted == a11y->scheduled) {
-        return; // nessun passaggio: resta la scelta fatta a mano
+        return; // no change: the choice made by hand stays
     }
     a11y->scheduled = wanted;
     if ((bool)wanted != a11y->night_light) {
@@ -150,8 +164,7 @@ static void check_night_schedule(struct vela_a11y *a11y)
     }
 }
 
-// Un controllo al minuto basta (e dopo una sospensione si rimette subito
-// in pari).
+// A check per minute is enough (and after a suspend it catches up at once).
 static int handle_schedule_timer(void *data)
 {
     struct vela_a11y *a11y = data;
@@ -160,7 +173,7 @@ static int handle_schedule_timer(void *data)
     return 0;
 }
 
-// ------------------------------------------------------------- creazione --
+// -------------------------------------------------------------- creation --
 
 struct vela_a11y *vela_a11y_create(struct vela_server *server)
 {
@@ -192,6 +205,15 @@ void vela_a11y_destroy(struct vela_a11y *a11y)
     free(a11y);
 }
 
+// Like Windows: the screen warms up (or cools down) over one second.
+static void start_night_transition(struct vela_a11y *a11y)
+{
+    a11y->level_from = a11y->night_level;
+    vela_tween_start(&a11y->level_tween, 1000.0, &vela_decelerate);
+    a11y->level_animating = true;
+    vela_server_schedule_frames(a11y->server);
+}
+
 void vela_a11y_load(struct vela_a11y *a11y)
 {
     struct vela_config settings;
@@ -209,9 +231,9 @@ void vela_a11y_load(struct vela_a11y *a11y)
     bool sticky = vela_config_flag(&settings, "sticky-keys", false);
     vela_config_finish(&settings);
 
-    // Una pianificazione nuova (o cambiata) decide subito; altrimenti vale
-    // ciò che c'è nel file (anche se a mano l'utente ha scelto diversamente
-    // dalla pianificazione, fino al suo prossimo passaggio).
+    // A new (or changed) schedule decides at once; otherwise the file's value
+    // holds (even if the user chose differently from the schedule by hand,
+    // until its next change).
     char key[64];
     snprintf(key, sizeof(key), "%s %d %d", a11y->schedule, a11y->night_from, a11y->night_to);
     if (strcmp(key, a11y->schedule_key) != 0) {
@@ -226,22 +248,19 @@ void vela_a11y_load(struct vela_a11y *a11y)
         a11y->locked = 0;
     }
     check_night_schedule(a11y);
-    // All'avvio niente passaggio graduale: com'era.
+    // No gradual change at startup: as it was.
     if (a11y->night_level == 0.0 && a11y->night_light && !a11y->level_animating
         && a11y->server->animation_now_ms == 0.0) {
         a11y->night_level = 1.0;
     }
     if (a11y->night_light != (a11y->night_level > 0.5) && !a11y->level_animating) {
-        a11y->level_from = a11y->night_level;
-        vela_tween_start(&a11y->level_tween, 1000.0, &vela_decelerate);
-        a11y->level_animating = true;
-        vela_server_schedule_frames(a11y->server);
+        start_night_transition(a11y);
     }
     apply_color(a11y);
-    vela_a11y_announce(a11y);
+    announce(a11y);
 }
 
-// --------------------------------------------------------------- scelte --
+// -------------------------------------------------------------- choices --
 
 void vela_a11y_set_night_light(struct vela_a11y *a11y, bool on, bool save)
 {
@@ -252,12 +271,8 @@ void vela_a11y_set_night_light(struct vela_a11y *a11y, bool on, bool save)
         return;
     }
     a11y->night_light = on;
-    // Come Windows: si scalda (o si raffredda) in un secondo.
-    a11y->level_from = a11y->night_level;
-    vela_tween_start(&a11y->level_tween, 1000.0, &vela_decelerate);
-    a11y->level_animating = true;
-    vela_server_schedule_frames(a11y->server);
-    vela_a11y_announce(a11y);
+    start_night_transition(a11y);
+    announce(a11y);
 }
 
 void vela_a11y_set_color_filter(struct vela_a11y *a11y, bool on, bool save)
@@ -270,7 +285,7 @@ void vela_a11y_set_color_filter(struct vela_a11y *a11y, bool on, bool save)
     }
     a11y->color_filter = on;
     apply_color(a11y);
-    vela_a11y_announce(a11y);
+    announce(a11y);
 }
 
 void vela_a11y_set_sticky_keys(struct vela_a11y *a11y, bool on, bool save)
@@ -292,10 +307,10 @@ void vela_a11y_set_sticky_keys(struct vela_a11y *a11y, bool on, bool save)
         }
     }
     a11y->candidate = 0;
-    vela_a11y_announce(a11y);
+    announce(a11y);
 }
 
-// ----------------------------------------------------------------- lente --
+// ------------------------------------------------------------- magnifier --
 
 void vela_a11y_set_magnifier(struct vela_a11y *a11y, bool on)
 {
@@ -303,7 +318,7 @@ void vela_a11y_set_magnifier(struct vela_a11y *a11y, bool on)
         return;
     }
     a11y->magnifier = on;
-    // Come Windows: si parte dal doppio.
+    // Like Windows: it starts at double.
     a11y->zoom_target = on ? 1.0 + a11y->zoom_step / 100.0 : 1.0;
     a11y->zoom_from = a11y->zoom;
     vela_tween_start(&a11y->zoom_tween, VELA_MAGNIFIER_MS, &vela_decelerate);
@@ -313,10 +328,12 @@ void vela_a11y_set_magnifier(struct vela_a11y *a11y, bool on)
         a11y->zoom_output = vela_output_at(a11y->server, cursor->x, cursor->y);
         a11y->view_x = a11y->zoom_output ? vela_output_box(a11y->zoom_output).x : 0.0;
         a11y->view_y = a11y->zoom_output ? vela_output_box(a11y->zoom_output).y : 0.0;
+        a11y->anchor_x = (cursor->x - a11y->view_x) * a11y->zoom;
+        a11y->anchor_y = (cursor->y - a11y->view_y) * a11y->zoom;
     }
     wlr_log(WLR_INFO, "Magnifier %s", on ? "open" : "closed");
     vela_server_schedule_frames(a11y->server);
-    vela_a11y_announce(a11y);
+    announce(a11y);
 }
 
 void vela_a11y_zoom(struct vela_a11y *a11y, int direction)
@@ -339,7 +356,7 @@ void vela_a11y_zoom(struct vela_a11y *a11y, int direction)
     vela_server_schedule_frames(a11y->server);
 }
 
-// I cursori disegnati su uno schermo, in coordinate del suo buffer logico.
+// The cursors drawn on an output, in its logical buffer coordinates.
 static void move_output_cursors(struct vela_output *output, double x, double y)
 {
     struct wlr_output_cursor *c;
@@ -348,7 +365,8 @@ static void move_output_cursors(struct vela_output *output, double x, double y)
     }
 }
 
-void vela_a11y_update_magnifier(struct vela_a11y *a11y)
+// Shows the zoomed view at the current zoom, around view_x/view_y.
+static void update_magnifier(struct vela_a11y *a11y)
 {
     struct vela_server *server = a11y->server;
     struct wlr_cursor *cursor = server->cursor;
@@ -358,7 +376,8 @@ void vela_a11y_update_magnifier(struct vela_a11y *a11y)
     wl_list_for_each (output, &server->outputs, link) {
         if ((output != out || !zoomed) && output->frame->zoom > 1.0) {
             vela_output_frame_set_magnifier(output->frame, 1.0, 0.0, 0.0);
-            // Il cursore torna dove lo mette wlr_cursor (punto logico dello schermo).
+            // The cursor goes back where wlr_cursor puts it (the output's
+            // logical point).
             struct wlr_box box = vela_output_box(output);
             move_output_cursors(output, cursor->x - box.x, cursor->y - box.y);
         }
@@ -369,21 +388,33 @@ void vela_a11y_update_magnifier(struct vela_a11y *a11y)
     }
     struct wlr_box box = vela_output_box(out);
     if (out != a11y->zoom_output) {
-        // Un altro schermo: la zona ingrandita parte attorno al cursore.
+        // Another output: the zoomed area starts around the cursor.
         a11y->zoom_output = out;
         a11y->view_x = cursor->x - (cursor->x - box.x) / a11y->zoom;
         a11y->view_y = cursor->y - (cursor->y - box.y) / a11y->zoom;
+        a11y->anchor_x = cursor->x - box.x;
+        a11y->anchor_y = cursor->y - box.y;
     }
     double w = box.width / a11y->zoom;
     double h = box.height / a11y->zoom;
-    // Il cursore spinge la zona quando arriva ai suoi bordi.
+    // The cursor pushes the area when it reaches its edges.
     a11y->view_x = vela_clampd(a11y->view_x, cursor->x - w, cursor->x);
     a11y->view_y = vela_clampd(a11y->view_y, cursor->y - h, cursor->y);
     a11y->view_x = vela_clampd(a11y->view_x, box.x, box.x + box.width - w);
     a11y->view_y = vela_clampd(a11y->view_y, box.y, box.y + box.height - h);
     vela_output_frame_set_magnifier(out->frame, a11y->zoom, a11y->view_x, a11y->view_y);
-    // Il cursore dove si vede il punto che indica.
+    // The cursor where the point it indicates is seen.
     move_output_cursors(out, (cursor->x - a11y->view_x) * a11y->zoom, (cursor->y - a11y->view_y) * a11y->zoom);
+}
+
+void vela_a11y_update_magnifier(struct vela_a11y *a11y)
+{
+    update_magnifier(a11y);
+    if (a11y->zoom_output) {
+        struct wlr_cursor *cursor = a11y->server->cursor;
+        a11y->anchor_x = (cursor->x - a11y->view_x) * a11y->zoom;
+        a11y->anchor_y = (cursor->y - a11y->view_y) * a11y->zoom;
+    }
 }
 
 bool vela_a11y_animating(const struct vela_a11y *a11y)
@@ -407,22 +438,21 @@ bool vela_a11y_tick(struct vela_a11y *a11y, double now_ms)
     }
     if (a11y->zoom_animating) {
         double p = vela_tween_progress(&a11y->zoom_tween, now_ms);
-        double before = a11y->zoom;
         a11y->zoom = a11y->zoom_from + (a11y->zoom_target - a11y->zoom_from) * p;
         if (vela_tween_finished(&a11y->zoom_tween, now_ms)) {
             a11y->zoom = a11y->zoom_target;
             a11y->zoom_animating = false;
         }
-        // Il punto sotto il cursore resta fermo sullo schermo.
+        // The point under the cursor stays still on screen.
         struct wlr_cursor *cursor = a11y->server->cursor;
-        if (a11y->zoom_output && before > 0.0 && a11y->zoom > 0.0) {
-            a11y->view_x = cursor->x - (cursor->x - a11y->view_x) * before / a11y->zoom;
-            a11y->view_y = cursor->y - (cursor->y - a11y->view_y) * before / a11y->zoom;
+        if (a11y->zoom_output && a11y->zoom > 0.0) {
+            a11y->view_x = cursor->x - a11y->anchor_x / a11y->zoom;
+            a11y->view_y = cursor->y - a11y->anchor_y / a11y->zoom;
         }
         if (!a11y->zoom_animating && a11y->zoom <= 1.0 && !a11y->magnifier) {
             a11y->zoom = 1.0;
         }
-        vela_a11y_update_magnifier(a11y);
+        update_magnifier(a11y);
         running = running || a11y->zoom_animating;
     }
     return running;
@@ -435,7 +465,7 @@ void vela_a11y_output_destroyed(struct vela_a11y *a11y, struct vela_output *outp
     }
 }
 
-// ------------------------------------------------------ tasti permanenti --
+// ----------------------------------------------------------- sticky keys --
 
 static uint32_t sticky_bit(xkb_keysym_t sym)
 {
@@ -477,7 +507,7 @@ bool vela_a11y_sticky_key(struct vela_a11y *a11y, struct wlr_keyboard *keyboard,
     }
     if (!bit) {
         a11y->candidate = 0;
-        // Il tasto dopo li ha usati: al suo rilascio si lasciano.
+        // The next key used them: they are let go when it's released.
         if (!pressed && a11y->latched) {
             a11y->latched = 0;
             apply_sticky(a11y, keyboard);
@@ -489,13 +519,13 @@ bool vela_a11y_sticky_key(struct vela_a11y *a11y, struct wlr_keyboard *keyboard,
         return false;
     }
     if (a11y->candidate != bit) {
-        return false; // usato con un altro tasto: niente da ricordare
+        return false; // used with another key: nothing to remember
     }
     a11y->candidate = 0;
     bool super_latched = false;
     if (bit == WLR_MODIFIER_LOGO) {
-        // Win: la prima volta resta premuto per il tasto dopo; di nuovo,
-        // apre Start (come il tasto da solo).
+        // Win: the first time it stays pressed for the next key; again, it
+        // opens Start (like the key alone).
         if (a11y->latched & bit) {
             a11y->latched &= ~bit;
         } else {
@@ -514,25 +544,17 @@ bool vela_a11y_sticky_key(struct vela_a11y *a11y, struct wlr_keyboard *keyboard,
     return super_latched;
 }
 
-// ------------------------------------------------------------- la shell --
+// ------------------------------------------------------------ the shell --
 
 bool vela_a11y_json(const struct vela_a11y *a11y, char *out, size_t size)
 {
-    // Le ore del sole di oggi, per la pagina della Luce notturna ("Dal
-    // tramonto all'alba").
+    // Today's sun times, for the night light page ("Sunset to sunrise").
     char sun[64] = "";
-    double latitude = 0.0;
-    double longitude = 0.0;
-    if (timezone_coordinates(&latitude, &longitude)) {
-        time_t now = time(NULL);
-        struct tm local;
-        localtime_r(&now, &local);
-        int set = vela_sun_time(false, &local, latitude, longitude);
-        int rise = vela_sun_time(true, &local, latitude, longitude);
-        if (set >= 0 && rise >= 0) {
-            snprintf(sun, sizeof(sun), ",\"sunset\":\"%02d:%02d\",\"sunrise\":\"%02d:%02d\"", set / 60, set % 60,
-                rise / 60, rise % 60);
-        }
+    int set = 0;
+    int rise = 0;
+    if (sun_today(&set, &rise)) {
+        snprintf(sun, sizeof(sun), ",\"sunset\":\"%02d:%02d\",\"sunrise\":\"%02d:%02d\"", set / 60, set % 60,
+            rise / 60, rise % 60);
     }
     const char *t = "true";
     const char *f = "false";
@@ -542,7 +564,7 @@ bool vela_a11y_json(const struct vela_a11y *a11y, char *out, size_t size)
         vela_input_has_touchpad(a11y->server->input) ? t : f, sun);
 }
 
-void vela_a11y_announce(struct vela_a11y *a11y)
+static void announce(struct vela_a11y *a11y)
 {
     char line[512] = "accessibility ";
     size_t used = strlen(line);

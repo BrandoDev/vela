@@ -4,12 +4,13 @@
 #ifndef VELA_SERVER_H
 #define VELA_SERVER_H
 
-// Il compositor: display Wayland, backend, renderer, scena e tutto ciò che
-// vive quanto la sessione. Lo crea main.c e lo distrugge alla fine.
+// The compositor: Wayland display, backend, renderer, scene and everything
+// that lives as long as the session. main.c creates it and destroys it at the
+// end.
 //
-// La struttura tiene gli oggetti globali e i puntatori ai sottosistemi; ogni
-// sottosistema ha il suo modulo, che lo crea e lo distrugge (server.c dice
-// in che ordine).
+// The struct holds the global objects and pointers to the subsystems; each
+// subsystem has its module, which creates and destroys it (server.c says in
+// which order).
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -52,36 +53,34 @@ struct wlr_output_manager_v1;
 struct wlr_session;
 struct wlr_xcursor_manager;
 
-// Gli strati della scena, dal basso verso l'alto. L'ordine di creazione è
-// quello di impilamento.
+// The scene layers, bottom to top. Creation order is stacking order.
 struct vela_layers {
     struct vela_tree *background;
     struct vela_tree *bottom;
     struct vela_tree *windows;
-    // Le finestre del desktop che si lascia, mentre scivolano via: sopra le
-    // finestre e sotto i pannelli.
+    // The windows of the desktop being left, while they slide away: above the
+    // windows and below the panels.
     struct vela_tree *windows_out;
     struct vela_tree *top;
     struct vela_tree *fullscreen;
-    // I pannelli dello strato "top" che si richiamano (menu Start,
-    // impostazioni rapide, Esegui...): come su Windows compaiono anche
-    // sopra un gioco a schermo intero, che invece copre la taskbar.
+    // The "top" layer panels that are summoned (Start menu, quick settings,
+    // Run...): like Windows, they appear above a fullscreen game too, which
+    // instead covers the taskbar.
     struct vela_tree *top_above_fullscreen;
-    struct vela_tree *x11_popups; // menu e tooltip delle app X11
+    struct vela_tree *x11_popups; // menus and tooltips of X11 apps
     struct vela_tree *overlay;
-    struct vela_tree *drag; // l'icona di ciò che si trascina tra le app
-    struct vela_tree *lock; // schermata di blocco, sopra tutto
+    struct vela_tree *drag; // the icon of what's being dragged between apps
+    struct vela_tree *lock; // lock screen, above everything
 };
 
-// Dov'era uno schermo l'ultima volta (view.c: le finestre tornano al loro
-// schermo quando lui torna).
+// Where an output was last time (view.c: windows go back to their output when
+// it comes back).
 struct vela_seen_output {
     char name[64];
     struct wlr_box box;
 };
 
-// Cosa fa il puntatore: niente di speciale, sposta o ridimensiona una
-// finestra.
+// What the pointer does: nothing special, moving or resizing a window.
 enum vela_cursor_mode {
     VELA_CURSOR_PASSTHROUGH,
     VELA_CURSOR_MOVE,
@@ -92,22 +91,22 @@ struct vela_server {
     struct wl_display *display;
     struct wl_event_loop *loop;
     struct wlr_backend *backend;
-    struct wlr_session *session; // solo nella sessione vera (DRM): cambio di TTY
-    // Il renderer di Vela (docs/renderer.md): device Vulkan nostro, il
-    // renderer (anche wlr_renderer per wlroots) e l'allocatore GBM dei
-    // buffer di schermi, cursori e catture.
+    struct wlr_session *session; // only in the real session (DRM): VT switching
+    // Vela's renderer (docs/renderer.md): our own Vulkan device, the renderer
+    // (also a wlr_renderer for wlroots) and the GBM allocator for output,
+    // cursor and capture buffers.
     struct vela_vulkan *vulkan;
-    struct vela_renderer *renderer; // appartiene a wlroots: vedi vela_server_destroy
-    struct wlr_renderer *wlr_renderer; // lo stesso, visto da wlroots
+    struct vela_renderer *renderer; // belongs to wlroots: see vela_server_destroy
+    struct wlr_renderer *wlr_renderer; // the same, as wlroots sees it
     struct wlr_allocator *allocator;
     struct wlr_output_layout *output_layout;
     struct vela_scene *scene;
     struct wl_list outputs; // vela_output.link
-    // Frequenza di aggiornamento variabile (VRR): 0 mai, 1 con un'app a
-    // schermo intero (i giochi), 2 sempre. vela.conf "variable-refresh".
+    // Variable refresh rate (VRR): 0 never, 1 with a fullscreen app (games), 2
+    // always. vela.conf "variable-refresh".
     int vrr_mode;
-    bool nested; // dentro un'altra sessione (finestra Wayland o X11)
-    char socket_name[64]; // il nostro WAYLAND_DISPLAY
+    bool nested; // inside another session (Wayland or X11 window)
+    char socket_name[64]; // our WAYLAND_DISPLAY
 
     struct vela_layers layers;
     struct wlr_layer_shell_v1 *layer_shell;
@@ -117,36 +116,35 @@ struct vela_server {
     struct wlr_cursor *cursor;
     struct wlr_xcursor_manager *cursor_manager;
     enum vela_cursor_mode cursor_mode;
-    struct vela_input *input; // dispositivi, tastiere, gesti (input.h)
-    struct vela_a11y *a11y; // luce notturna, filtri, lente, tasti permanenti (a11y.h)
-    struct vela_lock *lock; // blocco dello schermo e inattività (lock.h)
-    // Bloccato (ext-session-lock-v1): si vede solo il programma di blocco.
+    struct vela_input *input; // devices, keyboards, gestures (input.h)
+    struct vela_a11y *a11y; // night light, filters, magnifier, sticky keys (a11y.h)
+    struct vela_lock *lock; // screen lock and inactivity (lock.h)
+    // Locked (ext-session-lock-v1): only the lock program shows.
     bool locked;
 
-    // Il tema scelto nelle Impostazioni ("Scegli la modalità"), mandato
-    // dalla shell: chiara la shell (tinta acrylic) e chiare le app (barre
-    // del titolo).
+    // The theme chosen in Settings ("Choose your mode"), sent by the shell:
+    // light shell (acrylic tint) and light apps (title bars).
     bool light_shell;
     bool light_apps;
-    // La tinta dello sfondo del desktop (Mica, docs/renderer.md §9.4): il
-    // colore medio, in sRGB, mandato dalla shell. La versione cambia con
-    // lei e con il tema: le barre del titolo si ridisegnano.
+    // The desktop wallpaper's tint (Mica, docs/renderer.md §9.4): the average
+    // color, in sRGB, sent by the shell. The version changes with it and with
+    // the theme: title bars redraw.
     bool has_wallpaper_tint;
     float wallpaper_tint[3];
     uint32_t wallpaper_tint_version;
-    // Testo e icone delle barre del titolo, caricati al primo uso
-    // (decoration.c); text_loaded: tentato, anche se non c'è un font.
+    // Title bar text and icons, loaded on first use (decoration.c);
+    // text_loaded: tried, even if there is no font.
     struct vela_text *text;
     bool text_loaded;
     struct vela_icons *icons;
-    // Il tempo delle animazioni: l'istante in cui diventerà luce il frame
-    // che si sta preparando (docs/renderer.md §4.2). Non torna mai indietro,
-    // anche se schermi diversi prevedono istanti diversi; 0 prima del primo.
+    // Animation time: the moment the frame being prepared will become light
+    // (docs/renderer.md §4.2). It never goes back, even when different outputs
+    // predict different moments; 0 before the first.
     double animation_now_ms;
-    struct wl_list snapshot_animations; // le animazioni delle istantanee (snapshot.h)
+    struct wl_list snapshot_animations; // the snapshot animations (snapshot.h)
 
-    // Le finestre (view.h): in ordine di uso recente, la prima è quella
-    // attiva; i protocolli che le portano.
+    // The windows (view.h): in order of recent use, the first is the active
+    // one; the protocols that bring them.
     struct wl_list views; // vela_view.link
     struct wlr_compositor *compositor;
     struct wlr_xdg_shell *xdg_shell;
@@ -156,28 +154,29 @@ struct vela_server {
     struct wl_listener new_capture_request;
     struct wl_listener new_decoration;
     struct wl_listener request_activation;
-    struct wlr_xwayland *xwayland; // NULL senza Xwayland
+    struct wlr_xwayland *xwayland; // NULL without Xwayland
     struct wl_listener xwayland_ready;
     struct wl_listener xwayland_new_surface;
+    struct wl_listener xwayland_shell_surface;
+    uint32_t xwayland_wake_atom; // the root property that wakes the X window manager (xwayland.c)
     struct wl_event_source *output_check;
     struct vela_seen_output *seen_outputs;
     int seen_output_count;
-    // La finestra che il puntatore sta spostando o ridimensionando
-    // (cursor_mode), o NULL.
+    // The window the pointer is moving or resizing (cursor_mode), or NULL.
     struct vela_view *grabbed;
-    struct vela_workspaces *workspaces; // desktop virtuali (workspace.h)
-    // La tastiera ai pezzi della shell (focus.h): quello che ce l'ha e
-    // quello a cui torna quando quello sopra si chiude.
+    struct vela_workspaces *workspaces; // virtual desktops (workspace.h)
+    // The keyboard for shell pieces (focus.h): the one that has it and the one
+    // it returns to when the one above closes.
     struct vela_layer_surface *focused_layer;
     struct vela_layer_surface *previous_layer;
-    struct vela_interaction *interaction; // il puntatore sulle finestre (interact.h)
+    struct vela_interaction *interaction; // the pointer on windows (interact.h)
     struct vela_switcher *switcher; // Alt+Tab (switcher.h)
-    struct vela_snapping *snapping; // anteprima, assist, layout di snap (snap.h)
+    struct vela_snapping *snapping; // preview, assist, snap layouts (snap.h)
 
-    // Commit delle app trattenuti finché la loro GPU non ha finito (§7.3).
+    // App commits held until their GPU has finished (§7.3).
     struct vela_ready ready;
-    struct vela_shell shell; // la shell lanciata e sorvegliata (shell.h)
-    struct vela_commands *commands; // il socket dei comandi (command.h)
+    struct vela_shell shell; // the launched and supervised shell (shell.h)
+    struct vela_commands *commands; // the command socket (command.h)
     // wlr-output-management (output_manager.h).
     struct wlr_output_manager_v1 *output_manager;
     struct wl_listener output_manager_apply;
@@ -186,33 +185,33 @@ struct vela_server {
     struct wl_listener layout_change;
 };
 
-// Crea il display, il backend, il renderer e i protocolli. NULL se manca
-// qualcosa di indispensabile (il motivo è già nel log).
+// Creates the display, backend, renderer and protocols. NULL if something
+// essential is missing (the reason is already in the log).
 struct vela_server *vela_server_create(void);
 
-// Apre il socket Wayland, avvia il backend e lancia `startup_command` (la
-// shell, rilanciata se si chiude male; NULL o vuoto: niente).
+// Opens the Wayland socket, starts the backend and launches `startup_command`
+// (the shell, relaunched when it fails; NULL or empty: nothing).
 bool vela_server_start(struct vela_server *server, const char *startup_command);
 
-// Il ciclo degli eventi, fino all'uscita.
+// The event loop, until exit.
 void vela_server_run(struct vela_server *server);
 
-// Chiude i client e libera tutto.
+// Closes the clients and frees everything.
 void vela_server_destroy(struct vela_server *server);
 
 
-// Uno schermo se ne va: pannelli chiusi, anteprime e lente spente, il
-// blocco non aspetta più il suo frame.
+// An output goes away: panels closed, previews and magnifier off, the lock no
+// longer waits for its frame.
 void vela_server_output_destroyed(struct vela_server *server, struct vela_output *output);
 
-// Prima di ogni frame: le animazioni avanzano all'istante in cui il frame
-// diventerà luce (docs/renderer.md §4.2).
+// Before every frame: animations advance to the moment the frame will become
+// light (docs/renderer.md §4.2).
 void vela_server_animate(struct vela_server *server, int64_t present_ns);
 
-// A ogni frame consegnato (il blocco aspetta il nero su ogni schermo).
+// On every delivered frame (the lock waits for black on every output).
 void vela_server_output_rendered(struct vela_server *server, struct vela_output *output);
 
-// Un frame su ogni schermo (qualcosa si anima o è cambiato).
+// A frame on every output (something animates or changed).
 void vela_server_schedule_frames(struct vela_server *server);
 
 

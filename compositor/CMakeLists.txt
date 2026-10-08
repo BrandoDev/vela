@@ -3,9 +3,9 @@
 
 find_package(PkgConfig REQUIRED)
 
-# wlroots cambia API a ogni versione minore e installa un pkg-config con la
-# versione nel nome. Vela è scritto per la 0.20 (quella di sway 1.12); con
-# -DVELA_WLROOTS=wlroots-0.19 dovrebbe compilare anche con la 0.19.
+# wlroots changes API at every minor version and installs a pkg-config file
+# with the version in its name. Vela is written for 0.20 (sway 1.12's); with
+# -DVELA_WLROOTS=wlroots-0.19 it should also build against 0.19.
 set(VELA_WLROOTS "wlroots-0.20" CACHE STRING "pkg-config name of wlroots")
 
 pkg_check_modules(WLROOTS REQUIRED IMPORTED_TARGET ${VELA_WLROOTS})
@@ -13,22 +13,24 @@ pkg_check_modules(WAYLAND_SERVER REQUIRED IMPORTED_TARGET wayland-server)
 pkg_check_modules(XKBCOMMON REQUIRED IMPORTED_TARGET xkbcommon)
 pkg_check_modules(PIXMAN REQUIRED IMPORTED_TARGET pixman-1)
 pkg_check_modules(LIBINPUT REQUIRED IMPORTED_TARGET libinput)
-# Renderer di Vela (docs/renderer.md): Vulkan, buffer degli schermi con GBM.
+# Vela's renderer (docs/renderer.md): Vulkan, output buffers with GBM.
 pkg_check_modules(VULKAN REQUIRED IMPORTED_TARGET vulkan>=1.4)
 pkg_check_modules(GBM REQUIRED IMPORTED_TARGET gbm)
 pkg_check_modules(LIBDRM REQUIRED IMPORTED_TARGET libdrm)
-# Il testo del compositor (titoli delle finestre): font di KDE via fontconfig.
+# The compositor's text (window titles): KDE's fonts through fontconfig.
 pkg_check_modules(FONTS REQUIRED IMPORTED_TARGET freetype2 harfbuzz fontconfig)
-# Le icone delle app nella barra del titolo (SVG): facoltativo, senza niente icone.
+# App icons in the title bar (SVG): optional, without it no icons.
 pkg_check_modules(RSVG IMPORTED_TARGET librsvg-2.0 cairo)
+# The X11 window manager connection (xwayland.c), when wlroots has Xwayland.
+pkg_check_modules(XCB IMPORTED_TARGET xcb)
 find_program(GLSLC NAMES glslc REQUIRED)
 pkg_check_modules(WAYLAND_PROTOCOLS REQUIRED wayland-protocols>=1.32)
 pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
 find_program(WAYLAND_SCANNER NAMES wayland-scanner REQUIRED)
 
-# Alcuni header di wlroots includono gli header "server" dei protocolli.
-# Con wlroots 0.19 ogni compositor deve generarli da sé; la 0.20 ne installa
-# alcuni, ma generarli qui (come fa sway) funziona con entrambe.
+# Some wlroots headers include the protocols' "server" headers. With wlroots
+# 0.19 every compositor must generate them itself; 0.20 installs some, but
+# generating them here (as sway does) works with both.
 set(VELA_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/protocols)
 file(MAKE_DIRECTORY ${VELA_GENERATED_DIR})
 set(VELA_PROTOCOL_HEADERS)
@@ -49,8 +51,8 @@ vela_server_protocol(${WAYLAND_PROTOCOLS_DIR}/staging/cursor-shape/cursor-shape-
 vela_server_protocol(${PROJECT_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml
     wlr-layer-shell-unstable-v1)
 
-# Protocolli che wlroots non implementa: li implementiamo noi, quindi serve
-# anche il codice delle interfacce.
+# Protocols wlroots doesn't implement: we implement them, so the interface code
+# is needed too.
 set(VELA_OWN_PROTOCOL_SOURCES)
 function(vela_own_protocol xml name)
     set(header ${VELA_GENERATED_DIR}/${name}-protocol.h)
@@ -68,8 +70,8 @@ endfunction()
 vela_own_protocol(${WAYLAND_PROTOCOLS_DIR}/staging/ext-background-effect/ext-background-effect-v1.xml
     ext-background-effect-v1)
 
-# Lato client, per parlare con il compositor ospite quando Vela gira in una
-# finestra (nested.c).
+# Client side, to talk to the host compositor when Vela runs in a window
+# (nested.c).
 pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
 set(VELA_CLIENT_PROTOCOL_SOURCES)
 function(vela_client_protocol xml name)
@@ -90,8 +92,8 @@ vela_client_protocol(${WAYLAND_PROTOCOLS_DIR}/staging/fractional-scale/fractiona
 vela_client_protocol(${WAYLAND_PROTOCOLS_DIR}/unstable/keyboard-shortcuts-inhibit/keyboard-shortcuts-inhibit-unstable-v1.xml
     keyboard-shortcuts-inhibit-unstable-v1)
 
-# Shader: GLSL -> SPIR-V durante la build, inclusi nell'eseguibile come
-# elenco di numeri ("nome.spv.inc", da mettere dentro un array uint32_t).
+# Shaders: GLSL -> SPIR-V during the build, included in the executable as a
+# list of numbers ("name.spv.inc", to put inside a uint32_t array).
 set(VELA_SHADER_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
 file(MAKE_DIRECTORY ${VELA_SHADER_DIR})
 set(VELA_SHADERS)
@@ -107,8 +109,8 @@ foreach(shader quad.vert texture.frag rect.frag shadow.frag blur_down.frag blur_
     list(APPEND VELA_SHADERS ${output})
 endforeach()
 
-# I moduli senza wlroots né GPU (logica pura, provata dai test): il
-# compositor e le prove li condividono.
+# The modules without wlroots or a GPU (pure logic, covered by the tests):
+# shared by the compositor and the tests.
 add_library(vela-pure STATIC
     src/buffer.c
     src/color.c
@@ -180,8 +182,8 @@ target_include_directories(vela-compositor PRIVATE
     ${VELA_GENERATED_DIR} ${VELA_SHADER_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_definitions(vela-compositor PRIVATE WLR_USE_UNSTABLE
     VELA_LIBEXECDIR="${CMAKE_INSTALL_FULL_LIBEXECDIR}")
-# Con Vulkan si inizializzano le strutture indicando solo i campi che
-# servono (gli altri valgono zero): l'avviso sui campi omessi sarebbe rumore.
+# With Vulkan, structs are initialized naming only the fields needed (the
+# others are zero): the warning about omitted fields would be noise.
 target_compile_options(vela-compositor PRIVATE -Wall -Wextra -Wno-unused-parameter
     -Wno-missing-field-initializers)
 set_target_properties(vela-compositor PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
@@ -197,6 +199,9 @@ target_link_libraries(vela-compositor PRIVATE
     PkgConfig::GBM
     PkgConfig::LIBDRM
     PkgConfig::FONTS)
+if(XCB_FOUND)
+    target_link_libraries(vela-compositor PRIVATE PkgConfig::XCB)
+endif()
 if(RSVG_FOUND)
     target_link_libraries(vela-compositor PRIVATE PkgConfig::RSVG)
     target_compile_definitions(vela-compositor PRIVATE VELA_HAVE_RSVG=1)
@@ -206,9 +211,9 @@ endif()
 
 install(TARGETS vela-compositor RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-# Le prove del compositor (ctest), senza GPU né wlroots: il tempo dei frame,
-# le curve, la geometria della nitidezza, il colore, il sole, le impostazioni.
-# Servono GoogleTest (pacchetto gtest) e gli strumenti di prova accesi.
+# The compositor tests (ctest), without a GPU or wlroots: frame timing, curves,
+# sharpness geometry, color, sun, settings. They need GoogleTest (the gtest
+# package) and the test tools enabled.
 if(VELA_BUILD_TOOLS)
     find_package(GTest)
     if(GTest_FOUND)

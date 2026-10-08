@@ -3,6 +3,7 @@
 
 #include "keyboard.h"
 
+#include "listen.h"
 #include "switcher.h"
 #include "lock.h"
 #include "interact.h"
@@ -24,7 +25,7 @@
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
 
-// I nomi XKB di un layout; vuoti: non scelti.
+// The XKB names of a layout; empty: not chosen.
 struct keymap_names {
     char rules[64];
     char model[64];
@@ -38,7 +39,7 @@ static void copy(char *out, size_t size, const char *value)
     snprintf(out, size, "%s", value);
 }
 
-// Da kxkbrc, la sezione [Layout] (solo se KDE gestisce la tastiera).
+// From kxkbrc, the [Layout] section (only if KDE manages the keyboard).
 static void kde_keymap(struct keymap_names *names)
 {
     char path[4096];
@@ -90,7 +91,7 @@ static void kde_keymap(struct keymap_names *names)
     }
     fclose(file);
     if (!use) {
-        return; // KDE non gestisce la tastiera: decide il sistema
+        return; // KDE doesn't manage the keyboard: the system decides
     }
     if (reset_options) {
         copy(found.options, sizeof(found.options), options);
@@ -98,7 +99,7 @@ static void kde_keymap(struct keymap_names *names)
     *names = found;
 }
 
-// Da systemd-localed: Option "XkbLayout" "us".
+// From systemd-localed: Option "XkbLayout" "us".
 static void localed_keymap(struct keymap_names *names)
 {
     FILE *file = fopen("/etc/X11/xorg.conf.d/00-keyboard.conf", "re");
@@ -107,7 +108,7 @@ static void localed_keymap(struct keymap_names *names)
     }
     char line[1024];
     while (fgets(line, sizeof(line), file)) {
-        // La prima parola è "Option", poi due testi tra virgolette.
+        // The first word is "Option", then two quoted strings.
         char *word = line + strspn(line, " \t");
         if (strncmp(word, "Option", 6) != 0 || !strchr(" \t", word[6]) || word[6] == '\0') {
             continue;
@@ -136,12 +137,12 @@ static void localed_keymap(struct keymap_names *names)
     fclose(file);
 }
 
-static void vela_keymap(struct keymap_names *names, const struct vela_config *settings)
+static void keymap_from_settings(struct keymap_names *names, const struct vela_config *settings)
 {
     copy(names->layout, sizeof(names->layout), vela_config_get(settings, "keyboard-layout", ""));
     copy(names->variant, sizeof(names->variant), vela_config_get(settings, "keyboard-variant", ""));
     copy(names->options, sizeof(names->options), vela_config_get(settings, "keyboard-options", ""));
-    // Più layout: Win+Spazio passa al successivo, come su Windows.
+    // Several layouts: Win+Space switches to the next, like Windows.
     if (strchr(names->layout, ',') && !strstr(names->options, "grp:")) {
         size_t used = strlen(names->options);
         snprintf(names->options + used, sizeof(names->options) - used, "%sgrp:win_space_toggle",
@@ -149,7 +150,7 @@ static void vela_keymap(struct keymap_names *names, const struct vela_config *se
     }
 }
 
-// La variabile d'ambiente, se c'è; altrimenti il nome scelto (NULL se vuoto).
+// The environment variable, if set; otherwise the chosen name (NULL if empty).
 static const char *pick(const char *env, const char *fallback)
 {
     const char *value = getenv(env);
@@ -163,7 +164,7 @@ static struct xkb_keymap *system_keymap(struct vela_input *input, struct xkb_con
     const struct vela_config *settings)
 {
     struct keymap_names names = { 0 };
-    vela_keymap(&names, settings);
+    keymap_from_settings(&names, settings);
     const char *origin = "Vela settings";
     if (!names.layout[0]) {
         memset(&names, 0, sizeof(names));
@@ -182,7 +183,7 @@ static struct xkb_keymap *system_keymap(struct vela_input *input, struct xkb_con
         .variant = pick("XKB_DEFAULT_VARIANT", names.variant),
         .options = pick("XKB_DEFAULT_OPTIONS", names.options),
     };
-    // Nel log solo quando cambia (una riga per tastiera sarebbe rumore).
+    // Logged only when it changes (a line per keyboard would be noise).
     char *logged = input->keymap_logged;
     char description[1024];
     snprintf(description, sizeof(description), "%s/%s/%s", rules.layout ? rules.layout : "",
@@ -198,7 +199,7 @@ static struct xkb_keymap *system_keymap(struct vela_input *input, struct xkb_con
 
 void vela_keyboard_apply_settings(struct vela_keyboard *keyboard, const struct vela_config *settings)
 {
-    // Una tastiera virtuale (prove automatiche) porta il suo layout.
+    // A virtual keyboard (automated tests) brings its own layout.
     if (wlr_input_device_get_virtual_keyboard(&keyboard->wlr->base)) {
         return;
     }
@@ -213,14 +214,14 @@ void vela_keyboard_apply_settings(struct vela_keyboard *keyboard, const struct v
     xkb_keymap_unref(keymap);
     xkb_context_unref(context);
 
-    // Ripetizione tasti: predefiniti ritardo 400 ms e 30 caratteri/s (simili
-    // a quelli di Windows).
+    // Key repeat: 400 ms delay and 30 characters/s by default (close to
+    // Windows').
     int delay = atoi(vela_config_get(settings, "keyboard-repeat-delay", "400"));
     int rate = atoi(vela_config_get(settings, "keyboard-repeat-rate", "30"));
     wlr_keyboard_set_repeat_info(keyboard->wlr, vela_clamp(rate, 1, 100), vela_clamp(delay, 100, 2000));
 }
 
-// ------------------------------------------------------------------ tasti --
+// ------------------------------------------------------------------- keys --
 
 static bool is_super(xkb_keysym_t sym)
 {
@@ -238,14 +239,14 @@ static void handle_modifiers(struct wl_listener *listener, void *data)
     struct vela_server *server = keyboard->input->server;
     struct vela_a11y *a11y = server->a11y;
     struct wlr_keyboard *wlr = keyboard->wlr;
-    // Tasti permanenti: chi manda i modificatori da sé (le tastiere
-    // virtuali) non sa di quelli rimasti premuti: si rimettono.
+    // Sticky keys: whoever sends modifiers itself (virtual keyboards) doesn't
+    // know about the latched ones: they are put back.
     const struct wlr_keyboard_modifiers *m = &wlr->modifiers;
     uint32_t latched = m->latched | a11y->latched;
     uint32_t locked = m->locked | a11y->locked;
     if (a11y->sticky_keys && !keyboard->restoring && (latched != m->latched || locked != m->locked)) {
         keyboard->restoring = true;
-        wlr_keyboard_notify_modifiers(wlr, m->depressed, latched, locked, m->group); // richiama qui
+        wlr_keyboard_notify_modifiers(wlr, m->depressed, latched, locked, m->group); // calls back here
         keyboard->restoring = false;
         return;
     }
@@ -262,23 +263,23 @@ static void handle_key(struct wl_listener *listener, void *data)
     uint32_t keycode = event->keycode + 8; // libinput -> xkb
     const xkb_keysym_t *syms = NULL;
     int count = xkb_state_key_get_syms(keyboard->wlr->xkb_state, keycode, &syms);
-    // I modificatori qui sono quelli PRIMA di questo tasto.
+    // The modifiers here are those held BEFORE this key.
     uint32_t mods = wlr_keyboard_get_modifiers(keyboard->wlr);
     bool pressed = event->state == WL_KEYBOARD_KEY_STATE_PRESSED;
 
-    // "Sposta"/"Ridimensiona" da tastiera: i tasti sono tutti del compositor.
+    // Keyboard "Move"/"Size": all keys belong to the compositor.
     if (vela_interact_keyboard(server, syms, count, mods, pressed)) {
         return;
     }
 
     bool handled = false;
-    // Un'app a fuoco che tiene le scorciatoie (macchina virtuale, desktop
-    // remoto) riceve anche il tasto Super da solo.
+    // A focused app that keeps the shortcuts (virtual machine, remote desktop)
+    // also gets the Super key alone.
     bool inhibited = vela_input_shortcuts_inhibited(input) || server->locked;
     vela_lock_note_activity(server->lock);
-    // Tasti permanenti: un modificatore premuto e lasciato vale per il tasto
-    // dopo (i modificatori di questo tasto, `mods`, li comprendono già); al
-    // rilascio di quel tasto si lasciano.
+    // Sticky keys: a modifier pressed and released applies to the next key
+    // (this key's modifiers, `mods`, already include it); they are let go when
+    // that key is released.
     if (vela_a11y_sticky_key(server->a11y, keyboard->wlr, syms, count, pressed)) {
         input->super_tap = false;
     }
@@ -296,7 +297,7 @@ static void handle_key(struct wl_listener *listener, void *data)
             input->super_tap = false;
             vela_shell_send(server, "toggle-start");
         }
-        // Alt rilasciato durante Alt+Tab: si passa alla finestra scelta.
+        // Alt released during Alt+Tab: switch to the chosen window.
         if (is_alt(syms[i]) && vela_switcher_active(server)) {
             vela_switcher_finish(server, true);
         }
@@ -323,12 +324,9 @@ struct vela_keyboard *vela_keyboard_create(struct vela_input *input, struct wlr_
     vela_keyboard_apply_settings(keyboard, &settings);
     vela_config_finish(&settings);
 
-    keyboard->modifiers.notify = handle_modifiers;
-    wl_signal_add(&wlr->events.modifiers, &keyboard->modifiers);
-    keyboard->key.notify = handle_key;
-    wl_signal_add(&wlr->events.key, &keyboard->key);
-    keyboard->destroy.notify = handle_destroy;
-    wl_signal_add(&wlr->base.events.destroy, &keyboard->destroy);
+    vela_listen(&wlr->events.modifiers, &keyboard->modifiers, handle_modifiers);
+    vela_listen(&wlr->events.key, &keyboard->key, handle_key);
+    vela_listen(&wlr->base.events.destroy, &keyboard->destroy, handle_destroy);
 
     wlr_seat_set_keyboard(input->server->seat, wlr);
     wl_list_insert(input->keyboards.prev, &keyboard->link);
