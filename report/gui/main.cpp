@@ -211,7 +211,7 @@ private:
         changes = new QLineEdit("I don't know");
         incident = new QLineEdit(options.value("incident_time").toString());
         incident->setPlaceholderText("Optional ISO timestamp with timezone, e.g. 2026-10-08T13:20:00+02:00");
-        boot = new QLineEdit(options.value("boot").toString("0"));
+        boot = new QLineEdit(options.value("boot").toString("auto"));
         live = new QComboBox;
         live->addItems({"I don't know", "Yes", "No"});
         form->addRow("Short title", title);
@@ -223,7 +223,7 @@ private:
         form->addRow("Updates/settings changed afterward?", changes);
         form->addRow("Incident time", incident);
         form->addRow("Affected Vela session still running?", live);
-        form->addRow("Journal boot: 0=current, -1=previous, or ID", boot);
+        form->addRow("Journal boot: auto, 0=current, -1=previous, or ID", boot);
         minutesBefore = new QSpinBox;
         minutesAfter = new QSpinBox;
         minutesBefore->setRange(0, 120);
@@ -233,8 +233,8 @@ private:
         form->addRow("Journal minutes before incident", minutesBefore);
         form->addRow("Journal minutes after incident", minutesAfter);
         form->addRow(paragraph("Current system/configuration data may differ from the incident. "
-                              "Boot selection is independent of the retained log you choose. "
-                              "An unknown incident time uses collection time for the journal window."));
+                              "Automatic boot selection follows the selected Vela log. "
+                              "An unknown incident time uses its last write, or the whole selected boot."));
         auto *next = new QPushButton("Choose evidence");
         connect(next, &QPushButton::clicked, this, [this] { tabs->setCurrentIndex(1); });
         form->addRow(next);

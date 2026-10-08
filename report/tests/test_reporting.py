@@ -332,6 +332,232 @@ class ReportingTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 Collector(self.report).journal_args()
 
+    def test_incident_log_above_old_limit_is_complete_and_redacted(self):
+        source = self.home / "incident.log"
+        text = "startup\n" + "normal frame\n" * 210000 + "Too many open files\npassword=private\nfinal failure\n"
+        source.write_text(text)
+        self.report.context = {"log_path": str(source)}
+        result = Collector(self.report).logs()
+        self.assertEqual(result.status, "collected")
+        collected = (self.report.directory / "logs/vela.log").read_text()
+        self.assertIn("startup", collected)
+        self.assertIn("final failure", collected)
+        self.assertNotIn("private", collected)
+        self.assertFalse(self.report.artifacts["logs/vela.log"]["metadata"]["truncated"])
+        self.assertIn("file descriptor exhaustion", self.report.observations[0])
+        self.assertEqual(source.read_text(), text)
+
+    def test_oversized_log_preserves_startup_and_last_failure(self):
+        source = self.home / "large.log"
+        source.write_text("startup evidence\n" + "normal frame\n" * 1000 + "latest fatal failure\n")
+        self.report.context = {"log_path": str(source)}
+        with patch("vela_report.collectors.LOG_LIMIT", 512):
+            result = Collector(self.report).logs()
+        self.assertEqual(result.status, "partial")
+        collected = (self.report.directory / "logs/vela.log").read_text()
+        self.assertIn("startup evidence", collected)
+        self.assertIn("latest fatal failure", collected)
+        self.assertIn("middle of oversized log omitted", collected)
+        self.assertLessEqual(len(collected.encode()), 512)
+
+    def test_log_is_refreshed_after_reproduction_sampling(self):
+        source = self.home / "live.log"
+        source.write_text("before reproduction\n")
+        identity = self.fake_process()
+        context = {"log_path": str(source), "processes": [identity], "duration": 1}
+        def append_failure(_):
+            source.write_text(source.read_text() + "Too many open files after recording started\n")
+        with patch("vela_report.collectors.time.sleep", side_effect=append_failure):
+            Collector(self.report).collect(["logs", "resources"], context, {})
+        self.assertIn("after recording started", self.report.preview("logs/vela.log"))
+
+    def test_rotated_log_does_not_replace_selected_incident_snapshot(self):
+        source = self.home / "live.log"
+        source.write_text("original incident\n")
+        identity = self.fake_process()
+        context = {"log_path": str(source), "processes": [identity], "duration": 1}
+        def rotate(_):
+            source.rename(source.with_suffix(".old"))
+            source.write_text("different session\n")
+        with patch("vela_report.collectors.time.sleep", side_effect=rotate):
+            Collector(self.report).collect(["logs", "resources"], context, {})
+        self.assertEqual(self.report.results["logs"]["status"], "partial")
+        self.assertIn("original incident", self.report.preview("logs/vela.log"))
+        self.assertNotIn("different session", self.report.preview("logs/vela.log"))
+
+    def test_auto_journal_uses_boot_recorded_in_incident_log(self):
+        source = self.home / "incident.log"
+        boot = "b" * 32
+        source.write_text("vela-session: started_at=2026-10-08T15:13:26-0400 "
+                          "boot_id=bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\nincident\n")
+        os.utime(source, (1791486800, 1791486800))
+        calls = []
+        runner = lambda args, **kw: calls.append(args) or Result("collected", "fixture")
+        Collector(self.report, runner).collect(["logs", "kernel_journal"], {"log_path": str(source)}, {})
+        query = next(c for c in calls if "-k" in c)
+        self.assertEqual(query[query.index("--boot") + 1], boot)
+        self.assertEqual(self.report.context["journal_scope"]["time_source"], "log_last_write")
+        self.assertIn("--reverse", query)
+
+    def test_rotation_at_open_does_not_replace_incident_snapshot(self):
+        source = self.home / "live.log"
+        source.write_text("original incident\n")
+        reader = collectors.read_regular
+        reads = 0
+        def rotate_on_refresh(path, *args, **kwargs):
+            nonlocal reads
+            reads += 1
+            if reads == 2:
+                source.rename(source.with_suffix(".old"))
+                source.write_text("different session\n")
+            return reader(path, *args, **kwargs)
+        with patch("vela_report.collectors.read_regular", side_effect=rotate_on_refresh):
+            Collector(self.report).collect(["logs", "resources"], {"log_path": str(source)}, {})
+        self.assertEqual(self.report.results["logs"]["status"], "partial")
+        self.assertEqual(self.report.preview("logs/vela.log"), "original incident\n")
+
+    def test_legacy_log_automatically_matches_previous_boot_by_mtime(self):
+        source = self.home / "legacy.log"
+        source.write_text("vela-supervise: socket wayland-0; starting the compositor\n")
+        incident = dt.datetime.fromisoformat("2026-10-08T19:13:48+00:00")
+        os.utime(source, (incident.timestamp(), incident.timestamp()))
+        old, new = "b" * 32, "c" * 32
+        calls = []
+        def runner(args, **kwargs):
+            calls.append(args)
+            if "--list-boots" in args:
+                return Result("collected", f"-1 {old} Thu 2026-10-08 18:00:00 UTC — Thu 2026-10-08 19:14:00 UTC\n"
+                              f"0 {new} Thu 2026-10-08 19:16:13 UTC — Thu 2026-10-08 19:18:43 UTC\n")
+            return Result("collected", "incident kernel evidence")
+        Collector(self.report, runner).collect(["logs", "kernel_journal"], {"log_path": str(source)}, {})
+        query = next(c for c in calls if "-k" in c)
+        self.assertEqual(query[query.index("--boot") + 1], old)
+        when = dt.datetime.fromisoformat(query[query.index("--since") + 1])
+        self.assertEqual(when, incident - dt.timedelta(minutes=10))
+
+    def test_unknown_incident_boot_never_substitutes_current_boot(self):
+        calls = []
+        runner = lambda args, **kw: calls.append(args) or Result("collected")
+        Collector(self.report, runner).collect(["kernel_journal"], {}, {})
+        self.assertEqual(self.report.results["kernel_journal"]["status"], "unavailable")
+        self.assertEqual(calls, [])
+        self.assertIn("not substituted", self.report.results["kernel_journal"]["reason"])
+
+    def test_explicit_wrong_boot_conflicts_with_session_header(self):
+        self.report.context = {"boot": "0", "log_session": {"boot_id": "b" * 32}}
+        path = self.proc / "sys/kernel/random"
+        path.mkdir(parents=True)
+        (path / "boot_id").write_text("c" * 32)
+        with self.assertRaisesRegex(ValueError, "conflicts"):
+            Collector(self.report).journal_args()
+
+    def test_unknown_time_for_explicit_previous_boot_queries_that_whole_boot(self):
+        self.report.context = {"boot": "-1"}
+        self.assertEqual(Collector(self.report).journal_args(), ["--boot", "-1"])
+
+    def test_explicit_previous_boot_index_is_checked_against_incident_header(self):
+        self.report.context = {"boot": "-1", "log_session": {"boot_id": "b" * 32}}
+        runner = lambda args, **kw: Result("collected", f"-1 {'c' * 32} dates\n")
+        with self.assertRaisesRegex(ValueError, "conflicts"):
+            Collector(self.report, runner).journal_args()
+        runner = lambda args, **kw: Result("collected", f"-1 {'b' * 32} dates\n")
+        self.assertEqual(Collector(self.report, runner).journal_args(), ["--boot", "b" * 32])
+
+    def test_incident_boot_listing_is_shared_across_collectors(self):
+        when = "2026-10-01T12:00:00+00:00"
+        boot = "b" * 32
+        calls = []
+        def runner(args, **kwargs):
+            calls.append(args)
+            if "--list-boots" in args:
+                return Result("collected", f"-1 {boot} Thu 2026-10-01 10:00:00 UTC — Thu 2026-10-01 13:00:00 UTC\n")
+            return Result("collected", "fixture")
+        Collector(self.report, runner).collect(["kernel_journal", "session_journal", "crashes"],
+                                              {"incident_time": when}, {})
+        self.assertEqual(sum("--list-boots" in args for args in calls), 1)
+        queries = [args for args in calls if "--boot" in args]
+        self.assertTrue(all(args[args.index("--boot") + 1] == boot for args in queries))
+
+    def test_header_like_injected_arguments_are_not_accepted_as_boot_identity(self):
+        source = self.home / "untrusted.log"
+        source.write_text("vela-session: started_at=--all boot_id=--all\n")
+        self.report.context = {"log_path": str(source)}
+        Collector(self.report).logs()
+        self.assertNotIn("boot_id", self.report.context["log_session"])
+
+    def test_session_launcher_records_boot_identity_and_preserves_previous_log(self):
+        bindir = self.root / "bin with spaces"
+        bindir.mkdir()
+        compositor = bindir / "vela-compositor"
+        compositor.write_text('#!/bin/sh\nprintf "compositor arguments: %s\\n" "$*" >&2\n')
+        compositor.chmod(0o700)
+        template = Path(__file__).resolve().parents[2] / "session/vela-session.in"
+        launcher = self.root / "session"
+        launcher.write_text(template.read_text().replace("@CMAKE_INSTALL_FULL_BINDIR@", str(bindir)))
+        state = self.home / "state"
+        (state / "vela").mkdir(parents=True)
+        (state / "vela/vela.log").write_text("previous incident\n")
+        result = subprocess.run(["sh", str(launcher), "--test"], capture_output=True,
+                                env=dict(os.environ, XDG_STATE_HOME=str(state)), timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((state / "vela/vela.log.old").read_text(), "previous incident\n")
+        context = {"log_path": str(state / "vela/vela.log")}
+        Collector(self.report).collect(["logs"], context, {})
+        self.assertRegex(self.report.context["log_session"]["boot_id"], r"^[0-9a-f]{32}$")
+        self.assertIn("started_at", self.report.context["log_session"])
+        self.assertIn("--supervise -s", self.report.preview("logs/vela.log"))
+        self.assertIn("--test", self.report.preview("logs/vela.log"))
+
+    def test_retained_resource_samples_survive_without_live_process(self):
+        source = self.home / "incident.log"
+        source.write_text("vela-supervise: resources pid=123 elapsed_s=2 fds=100 sync_file=75 nofile=1024\n"
+                          "vela-supervise: resources pid=123 elapsed_s=4 fds=900 sync_file=875 nofile=1024\n")
+        Collector(self.report).collect(["logs"], {"log_path": str(source)}, {})
+        samples = [json.loads(line) for line in self.report.preview("logs/resource-history.jsonl").splitlines()]
+        self.assertEqual([s["sync_file"] for s in samples], [75, 875])
+        self.report.remove_collection("logs")
+        self.assertNotIn("log_session", self.report.context)
+        self.assertNotIn("logs/resource-history.jsonl", self.report.artifacts)
+
+    def test_resource_history_survives_interleaved_wlroots_log_prefix(self):
+        source = self.home / "flood.log"
+        source.write_text("[00:00:12.000] [ERROR] vela-supervise: resources "
+                          "pid=123 fds=1000 sync_file=950 nofile=1024\n")
+        Collector(self.report).collect(["logs"], {"log_path": str(source)}, {})
+        sample = json.loads(self.report.preview("logs/resource-history.jsonl"))
+        self.assertEqual(sample["sync_file"], 950)
+
+    def test_shell_protocol_failures_are_reported_without_fd_exhaustion(self):
+        source = self.home / "shell.log"
+        source.write_text('zwlr_layer_surface_v1#71: error 2: layer_surface has never been configured\n'
+                          '[ERROR] Shell "/usr/bin/vela-shell" exited (code 255): restarting it\n'
+                          '[INFO] Shell "/usr/bin/vela-shell" exited (code 0)\n')
+        Collector(self.report).collect(["logs"], {"log_path": str(source)}, {})
+        summary = json.loads(self.report.preview("logs/error-summary.json"))
+        self.assertEqual(summary["shell_restarts"], 1)
+        self.assertEqual(summary["layer_surface_unconfigured_errors"], 1)
+        self.assertEqual(summary["file_descriptor_exhaustion_messages"], 0)
+        self.assertEqual(len(self.report.observations), 2)
+        self.report.remove_collection("logs")
+        self.assertEqual(self.report.observations, [])
+
+    def test_refresh_removes_derived_errors_no_longer_in_selected_log(self):
+        source = self.home / "current.log"
+        source.write_text('layer_surface has never been configured\n')
+        self.report.context = {"log_path": str(source)}
+        collector = Collector(self.report)
+        collector.logs()
+        source.write_text('new contents, no errors\n')
+        collector.logs()
+        self.assertNotIn("logs/error-summary.json", self.report.artifacts)
+        self.assertEqual(self.report.observations, [])
+
+    def test_no_coredumps_is_collected_empty_evidence(self):
+        self.report.context = {"boot": "a" * 32}
+        result = Collector(self.report, lambda args, **kw: Result(
+            "failed", "No coredumps found.\n", "Command exited with status 1.", 1)).crashes()
+        self.assertEqual(result.status, "collected")
+
     def test_crash_metadata_never_requests_process_memory(self):
         boot = "a" * 32
         self.report.context = {"boot": boot}

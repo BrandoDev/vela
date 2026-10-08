@@ -2,6 +2,16 @@
 
 These workflows run on pull requests, pushes to main, and manual dispatch.
 
+## Package and updater contracts
+
+The [Build workflow](../.github/workflows/build.yml) runs the offline
+`packaging/arch/tests` suite before the full build, and again as CTest's
+`packaging-update` in Arch. It checks public HTTPS defaults, migration of old
+SSH configuration and mirrors, revision selection, CI artifact selection and
+failure handling. It uses real Git with isolated configuration and rejects
+unexpected transports; package tools are simulated. See [testing.md](testing.md)
+for the local command and test isolation details.
+
 ## Static analysis
 
 [Static Analysis](../.github/workflows/static-analysis.yml) builds Vela's C
@@ -28,4 +38,4 @@ This is a package smoke test, NOT a graphical login or Vulkan test.
 
 GitHub Actions must be enabled. No secrets or self-hosted runners are
 needed. Required check / branch protection policy is a separate optional
-admin setting. Existing workflows are unchanged.
+admin setting.

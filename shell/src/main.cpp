@@ -65,6 +65,23 @@ QQuickWindow* findWindow(QQmlApplicationEngine& engine, const char* objectName)
     return nullptr;
 }
 
+void releaseHiddenPanel(QQuickWindow* window)
+{
+    // Qt can retain the wl_surface and its EGL buffers after hide(). A new
+    // layer role then shares that native surface with the previous rendering
+    // cycle. Use a fresh surface on reopen, including its configure handshake.
+    // Keep the QML window, models and LayerShellQt settings intact.
+    QObject::connect(window, &QWindow::visibleChanged, window, [window](bool visible) {
+        if (!visible) {
+            QTimer::singleShot(0, window, [window] {
+                if (!window->isVisible()) {
+                    window->destroy();
+                }
+            });
+        }
+    });
+}
+
 void setupTaskbar(QQuickWindow* window, QScreen* screen)
 {
     LayerWindow* layer = LayerWindow::get(window);
@@ -492,6 +509,13 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    // These are transient panels. Wallpaper/taskbar windows are managed
+    // separately by ScreenWindows and stay mapped throughout the session.
+    for (QObject* root : engine.rootObjects()) {
+        if (auto* panel = qobject_cast<QQuickWindow*>(root)) {
+            releaseHiddenPanel(panel);
+        }
+    }
     setupStartMenu(startMenu);
     placeStartMenu(startMenu, config.taskbarAlignment());
     QObject::connect(&config, &Config::taskbarChanged, startMenu, [&config, startMenu] {

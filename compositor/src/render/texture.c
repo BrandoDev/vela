@@ -429,7 +429,7 @@ static bool read_pixels(struct wlr_texture *wlr, const struct wlr_texture_read_p
     // wants to write it will wait for our read.
     int waits[1];
     int wait_count = 0;
-    if (texture->foreign && vk->sync_file) {
+    if (texture->foreign) {
         struct dma_buf_export_sync_file request = { .flags = DMA_BUF_SYNC_READ, .fd = -1 };
         if (ioctl(texture->dmabuf_fd, DMA_BUF_IOCTL_EXPORT_SYNC_FILE, &request) == 0 && request.fd >= 0) {
             waits[wait_count++] = request.fd;

@@ -38,7 +38,8 @@ cmake -S . -B build-report-cli \
 build-report-cli/report/vela-report --cli
 ```
 
-Current limits are 2 MiB per text source/command, 256 MiB per attachment and
+Current limits are 64 MiB for the selected session log, 2 MiB for other text
+sources/commands, 256 MiB per attachment and
 1 GiB of included evidence. Ordinary commands have a ten-second timeout;
 the read-only Vela socket has a two-second timeout, and the NVIDIA tool has a
 120-second timeout. Live sampling runs once per second with a baseline and
@@ -54,9 +55,37 @@ separate from current machine information. A full installed Vela commit is
 not inferred from the reporter build; unavailable identity is recorded as
 unknown. Previous boot indices are resolved from accessible journal metadata.
 
-Known boundaries: retained logs are bounded snapshots from the start of the
-selected file; rotations and changes during copying are recorded rather than
-reconstructed. The reporter records current process instances and marks exited
+Session logs up to 64 MiB are retained completely. Larger logs retain startup
+and the latest messages, with an omission marker and truncation metadata.
+During live resource recording the log is refreshed afterwards if it is still
+the same file; rotation keeps the original incident snapshot. Journals are
+collected newest first so their size cap preserves the end of the incident.
+
+The default boot selector is `auto`: use the boot ID in the selected session
+log, or match an older log's last-write timestamp to accessible journal boot
+metadata. Unknown incident boots are reported as unavailable; the current
+boot is never silently substituted. Without an incident time or log timestamp,
+an explicitly selected boot is queried in full, subject to the output cap.
+
+New `vela-session` logs include the start timestamp and boot ID. The supervisor
+records compositor FD counts and types, the open-file limit and resident memory
+every two seconds, even while the compositor is hung. These historical samples
+stay in the selected log across logout/reboot and are also exported as
+`logs/resource-history.jsonl`; the last 10000 samples are retained in that
+derived file. Excluding session logs removes the derived evidence too. Live
+sampling of additional selected processes remains optional.
+
+The session-log summary counts descriptor exhaustion, shell restarts after
+errors and layer-shell buffer commits before configuration. Observations
+explain that restarting the shell can reset the wallpaper and desktop panels;
+they do not attribute the underlying fault to a driver or component. The
+summary is refreshed with the log and removed when session logs are excluded.
+Package evidence includes `layer-shell-qt`; the environment allowlist includes
+Qt's platform, shell integration and scene-graph rendering selections.
+
+Known boundaries: rotations and changes during copying are recorded rather than
+reconstructed. Older logs without supervisor samples cannot retroactively
+provide descriptor history. The reporter records current process instances and marks exited
 or reused PIDs; newly restarted processes need a new recording. It does not
 decode GPU memory, generate stack traces, inspect image contents, or redact
 binary files. A vendor tool that requires root may produce incomplete evidence;

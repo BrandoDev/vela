@@ -22,6 +22,7 @@ import zipfile
 from . import VERSION
 
 TEXT_LIMIT = 2 * 1024 * 1024
+LOG_LIMIT = 64 * 1024 * 1024
 ATTACHMENT_LIMIT = 256 * 1024 * 1024
 ARCHIVE_LIMIT = 1024 * 1024 * 1024
 SECRET_KEY = r"(?:password|passwd|(?:access[_-]?|refresh[_-]?|auth[_-]?)?token|secret|api[_-]?key|authorization)"
@@ -130,7 +131,7 @@ def run_command(args, timeout=10, limit=TEXT_LIMIT, cwd=None):
     return Result(status, text, reason, process.returncode)
 
 
-def read_regular(path, limit=TEXT_LIMIT, binary=False):
+def read_regular(path, limit=TEXT_LIMIT, binary=False, bookends=False):
     """Open a regular file without following a substituted symlink or a FIFO."""
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
@@ -138,13 +139,26 @@ def read_regular(path, limit=TEXT_LIMIT, binary=False):
         if not stat.S_ISREG(before.st_mode):
             raise ValueError("Only regular files can be included; symlinks are not followed.")
         with os.fdopen(fd, "rb", closefd=False) as stream:
-            data = stream.read(limit + 1)
+            if bookends and before.st_size > limit:
+                marker = b"\n[vela-report: middle of oversized log omitted; startup and latest messages retained]\n"
+                head_size = min(65536, (limit - len(marker)) // 4)
+                tail_size = limit - head_size - len(marker)
+                if head_size < 0 or tail_size < 0:
+                    raise ValueError("Log limit is too small for the omission marker.")
+                head = stream.read(head_size)
+                stream.seek(before.st_size - tail_size)
+                data = head + marker + stream.read(tail_size)
+                truncated = True
+            else:
+                data = stream.read(limit + 1)
+                truncated = len(data) > limit
         after = os.fstat(fd)
-        truncated = len(data) > limit
         changed = (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns)
         metadata = {"captured_at": timestamp(), "size_at_start": before.st_size,
                     "mtime_ns": before.st_mtime_ns, "changed_during_copy": changed,
-                    "truncated": truncated, "byte_limit": limit}
+                    "truncated": truncated, "byte_limit": limit,
+                    "device": before.st_dev, "inode": before.st_ino,
+                    "retained": "head_and_tail" if bookends and truncated else "complete" if not truncated else "head"}
         data = data[:limit]
         return (data if binary else data.decode("utf-8", errors="replace")), metadata
     finally:
@@ -202,7 +216,7 @@ class Report:
         relative = Path(name)
         if relative.is_absolute() or ".." in relative.parts:
             raise ValueError("Unsafe archive path.")
-        if sum(item["size"] for item in self.artifacts.values()) + len(data) > ARCHIVE_LIMIT:
+        if sum(item["size"] for key, item in self.artifacts.items() if key != name) + len(data) > ARCHIVE_LIMIT:
             raise ValueError("Included evidence exceeds the 1 GiB report limit. Remove a file first.")
         path = self.directory / relative
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -260,11 +274,13 @@ class Report:
     def mark_excluded(self, collection):
         self.plan[collection] = False
         self.results[collection] = {"status": "excluded", "reason": "Removed during review."}
-        fields = {"logs": ["log_path"], "runtime": ["socket"], "resources": ["processes", "duration"]}
+        fields = {"logs": ["log_path", "log_session"], "runtime": ["socket"], "resources": ["processes", "duration"]}
         for key in fields.get(collection, []):
             self.context.pop(key, None)
         if collection == "resources":
-            self.observations.clear()
+            self.observations = [o for o in self.observations if o.startswith("Session log:")]
+        if collection == "logs":
+            self.observations = [o for o in self.observations if not o.startswith("Session log:")]
 
     def remove_collection(self, collection):
         for name in list(self.artifacts):
@@ -301,7 +317,7 @@ class Report:
             "report_id": self.id, "created_at": self.created, "exported_at": timestamp(),
             "description": self.description, "incident": self.context, "collection_plan": self.plan,
             "collectors": self.results, "artifacts": artifacts, "observations": self.observations,
-            "limits": {"text_bytes": TEXT_LIMIT, "attachment_bytes": ATTACHMENT_LIMIT,
+            "limits": {"text_bytes": TEXT_LIMIT, "log_bytes": LOG_LIMIT, "attachment_bytes": ATTACHMENT_LIMIT,
                        "evidence_bytes": ARCHIVE_LIMIT},
             "redaction": {"applied": ["home path", "user and host names", "recognized secret assignments",
                                     "basic serial/UUID fields", "credentials in HTTP URLs"],

@@ -11,7 +11,14 @@
 
 set -u
 cd "$(dirname "$0")/.."
-BUILD=build
+BUILD="${VELA_BUILD:-build}"
+for binary in "$BUILD/compositor/vela-compositor" "$BUILD/tools/vela-pattern" \
+        "$BUILD/tools/vela-shot" "$BUILD/tools/vela-input"; do
+    if [ ! -x "$binary" ]; then
+        echo "$binary not found: build the compositor and test tools first." >&2
+        exit 1
+    fi
+done
 SCALES="${*:-1 1.25 1.5 1.75 2}"
 TMP=$(mktemp -d)
 FAILED=0
@@ -24,7 +31,7 @@ for scale in $SCALES; do
     # Rounded corners (radius 8 logical) touch only those squares.
     CORNER=$(python3 -c "import math; print(math.ceil(8 * $scale) + 1)")
     WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 VELA_DEBUG_INPUT=1 VELA_SCALE=$scale \
-        VELA_OUTPUT_SIZE=2560x1440@60 $BUILD/compositor/vela-compositor > "$TMP/log" 2>&1 &
+        VELA_OUTPUT_SIZE=2560x1440@60 "$BUILD/compositor/vela-compositor" > "$TMP/log" 2>&1 &
     PID=$!
     for i in 1 2 3 4 5 6 7 8 9 10; do
         sleep 0.2
@@ -32,20 +39,20 @@ for scale in $SCALES; do
         [ -n "$DISPLAY_NAME" ] && break
     done
     export WAYLAND_DISPLAY=$DISPLAY_NAME
-    $BUILD/tools/vela-pattern 401 301 2> "$TMP/pattern.log" &
+    "$BUILD/tools/vela-pattern" 401 301 2> "$TMP/pattern.log" &
     CLIENT=$!
     sleep 1
 
     check() {
         sleep 0.8
-        $BUILD/tools/vela-shot "$TMP/shot.png" || { echo "capture failed"; FAILED=1; return; }
+        "$BUILD/tools/vela-shot" "$TMP/shot.png" || { echo "capture failed"; FAILED=1; return; }
         python3 scripts/sharpness-check.py "$TMP/shot.png" "$1" "$CORNER" || FAILED=1
     }
     check opened
-    $BUILD/tools/vela-input key super+Left; check "snapped left"
-    $BUILD/tools/vela-input key super+Right key super+Right; check "snapped right"
-    $BUILD/tools/vela-input key super+Up; check maximized
-    $BUILD/tools/vela-input key super+Down; check restored
+    "$BUILD/tools/vela-input" key super+Left; check "snapped left"
+    "$BUILD/tools/vela-input" key super+Right key super+Right; check "snapped right"
+    "$BUILD/tools/vela-input" key super+Up; check maximized
+    "$BUILD/tools/vela-input" key super+Down; check restored
 
     kill $CLIENT 2> /dev/null
     kill $PID
