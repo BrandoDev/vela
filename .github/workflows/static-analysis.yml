@@ -27,7 +27,7 @@ jobs:
           base-devel git cmake clang clang-tools-extra cppcheck shellcheck
           shaderc vulkan-headers vulkan-icd-loader wayland wayland-protocols
           wlroots0.20 libxkbcommon pixman libinput libdrm mesa
-          freetype2 harfbuzz fontconfig librsvg cairo pam
+          freetype2 harfbuzz fontconfig librsvg cairo pam polkit
 
       - uses: actions/checkout@v7
 

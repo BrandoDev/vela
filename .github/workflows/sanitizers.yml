@@ -26,7 +26,7 @@ jobs:
           base-devel git cmake shaderc vulkan-headers vulkan-icd-loader
           gtest python wayland wayland-protocols wlroots0.20
           libxkbcommon pixman libinput libdrm mesa freetype2 harfbuzz
-          fontconfig librsvg cairo zlib pam qt6-base qt6-declarative
+          fontconfig librsvg cairo zlib pam polkit qt6-base qt6-declarative
           qt6-svg qt6-wayland qt6-tools layer-shell-qt hicolor-icon-theme
       - uses: actions/checkout@v7
       - name: Configure ASan and UBSan

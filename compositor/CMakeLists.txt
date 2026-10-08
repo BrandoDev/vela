@@ -148,6 +148,7 @@ add_executable(vela-compositor
     src/output.c
     src/output_manager.c
     src/popup.c
+    src/polkit.c
     src/process.c
     src/server.c
     src/session.c

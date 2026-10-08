@@ -51,87 +51,12 @@ void vela_shell_send(struct vela_server *server, const char *line)
 
 // -------------------------------------------------------------- supervision --
 
-static void stop_watching(struct vela_shell *shell)
-{
-    if (shell->source) {
-        wl_event_source_remove(shell->source);
-        shell->source = NULL;
-    }
-    if (shell->pidfd >= 0) {
-        close(shell->pidfd);
-    }
-    shell->pidfd = -1;
-    shell->pid = -1;
-}
-
-static int handle_exit(int fd, uint32_t mask, void *data)
-{
-    struct vela_server *server = data;
-    struct vela_shell *shell = &server->shell;
-    int status = 0;
-    waitpid(shell->pid, &status, 0);
-    double uptime = (vela_now_ns() - shell->started_ns) / 1e9;
-    stop_watching(shell);
-    char *command = shell->command;
-    shell->command = NULL;
-
-    // A clean exit (such as "already running") was intended.
-    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-        wlr_log(WLR_INFO, "\"%s\" exited", command);
-        free(command);
-        return 0;
-    }
-    char reason[64];
-    if (WIFSIGNALED(status)) {
-        snprintf(reason, sizeof(reason), "signal %s", strsignal(WTERMSIG(status)));
-    } else {
-        snprintf(reason, sizeof(reason), "code %d", WEXITSTATUS(status));
-    }
-    // When it keeps exiting right after starting, restarting it is pointless.
-    shell->quick_crashes = uptime < 5.0 ? shell->quick_crashes + 1 : 0;
-    if (shell->quick_crashes >= 3) {
-        wlr_log(WLR_ERROR, "\"%s\" keeps exiting (%s): not restarting it", command, reason);
-    } else {
-        wlr_log(WLR_ERROR, "\"%s\" exited (%s): restarting it", command, reason);
-        vela_shell_start(server, command);
-    }
-    free(command);
-    return 0;
-}
-
 void vela_shell_start(struct vela_server *server, const char *command)
 {
-    struct vela_shell *shell = &server->shell;
-    // A single fork, so the process stays our child and a pidfd in the Wayland
-    // loop tells us when it ends.
-    free(shell->command);
-    shell->command = strdup(command);
-    pid_t pid = fork();
-    if (pid < 0) {
-        wlr_log_errno(WLR_ERROR, "Can't start \"%s\"", command);
-        return;
-    }
-    if (pid == 0) {
-        // The shell dies with the compositor: if the compositor crashes, the
-        // supervisor starts another one with a new shell, and the old shell
-        // must not reconnect (QT_WAYLAND_RECONNECT) and make a duplicate.
-        prctl(PR_SET_PDEATHSIG, SIGKILL);
-        vela_exec_shell(command);
-    }
-    int pidfd = pidfd_open(pid, 0);
-    if (pidfd < 0) {
-        wlr_log_errno(WLR_ERROR, "pidfd_open: \"%s\" won't be restarted", command);
-        return;
-    }
-    shell->pid = pid;
-    shell->pidfd = pidfd;
-    shell->started_ns = vela_now_ns();
-    shell->source = wl_event_loop_add_fd(server->loop, pidfd, WL_EVENT_READABLE, handle_exit, server);
+    vela_child_start(&server->shell, server->loop, command);
 }
 
 void vela_shell_stop(struct vela_server *server)
 {
-    stop_watching(&server->shell);
-    free(server->shell.command);
-    server->shell.command = NULL;
+    vela_child_stop(&server->shell);
 }

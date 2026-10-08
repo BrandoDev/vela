@@ -13,6 +13,7 @@
 #include "lock.h"
 #include "output.h"
 #include "output_manager.h"
+#include "polkit.h"
 #include "render/renderer.h"
 #include "scene/effects.h"
 #include "scene/frame.h"
@@ -137,8 +138,10 @@ static bool init(struct vela_server *server)
     wl_list_init(&server->outputs);
     wl_list_init(&server->new_output.link);
     wl_list_init(&server->layout_change.link);
-    server->shell.pid = -1;
-    server->shell.pidfd = -1;
+    vela_child_init(&server->shell, "Shell", SIGKILL, -1);
+    // SIGTERM, not SIGKILL: the agent unregisters from polkitd before
+    // exiting. Exit code 2: another agent already owns this session.
+    vela_child_init(&server->polkit_agent, "Polkit agent", SIGTERM, 2);
     vela_snapshots_init(server);
     server->interaction = vela_interaction_create();
     server->switcher = vela_switcher_create();
@@ -352,6 +355,7 @@ bool vela_server_start(struct vela_server *server, const char *startup_command)
     if (startup_command && *startup_command) {
         vela_shell_start(server, startup_command);
     }
+    vela_polkit_agent_start(server);
     return true;
 }
 
@@ -362,8 +366,10 @@ void vela_server_run(struct vela_server *server)
 
 void vela_server_destroy(struct vela_server *server)
 {
-    // We are shutting down: the shell going away must not be relaunched.
+    // We are shutting down: the shell and the agent going away must not be
+    // relaunched.
     vela_shell_stop(server);
+    vela_child_stop(&server->polkit_agent);
     vela_commands_stop(server);
     if (server->session) {
         vela_session_run_hook("stop");

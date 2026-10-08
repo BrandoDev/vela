@@ -9,9 +9,10 @@
 #include <QTimer>
 
 // The look of Vela's apps (Explorer), taken from the shell: the apps' light or
-// dark mode ("Choose your mode"), accent color and Mica (see mica.h). Updates
-// itself when Settings change something or the wallpaper changes. Icons follow
-// the mode (applyIconTheme).
+// dark mode ("Choose your mode"), accent color and Mica (see mica.h). System
+// UI (the polkit dialog) follows the shell's mode instead (Mode::Shell).
+// Updates itself when Settings change something or the wallpaper changes.
+// Icons follow the mode (applyIconTheme).
 class Appearance : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool light READ light NOTIFY changed)
@@ -23,7 +24,8 @@ class Appearance : public QObject {
     Q_PROPERTY(QString iconMode READ iconMode NOTIFY iconModeChanged)
 
 public:
-    explicit Appearance(QObject* parent = nullptr);
+    enum class Mode { Apps, Shell };
+    explicit Appearance(QObject* parent = nullptr, Mode mode = Mode::Apps);
 
     bool light() const { return m_light; }
     QColor accent() const { return m_accent; }
@@ -41,6 +43,7 @@ signals:
 private:
     void reload();
 
+    Mode m_mode;
     QFileSystemWatcher m_watcher;
     QTimer m_debounce;
     bool m_watching = false;

@@ -8,6 +8,7 @@
 #include "buffer.h"
 #include "decoration.h"
 #include "input.h"
+#include "layer.h"
 #include "lock.h"
 #include "output.h"
 #include "output_manager.h"
@@ -28,8 +29,10 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <wlr/backend/headless.h>
+#include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
 #include <wlr/types/wlr_keyboard.h>
+#include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/util/log.h>
@@ -121,7 +124,37 @@ static void state_json(struct vela_server *server, struct vela_buffer *json)
         vela_buffer_appendf(json, ",\"snapGroup\":%u}", view->snap_group);
         first = false;
     }
-    vela_buffer_append(json, "]}");
+    // The layer-shell surfaces, bottom to top, and the one with the keyboard.
+    vela_buffer_append(json, "],\"layers\":[");
+    first = true;
+    struct vela_layer_surface *layer;
+    struct vela_layer_surface *keyboard_layer = NULL;
+    struct wlr_surface *keyboard_surface = server->seat->keyboard_state.focused_surface;
+    wl_list_for_each (layer, &server->layer_surfaces, link) {
+        const struct wlr_layer_surface_v1 *wlr = layer->wlr;
+        struct vela_output *out = vela_layer_surface_output(layer);
+        vela_buffer_append(json, first ? "{\"namespace\":" : ",{\"namespace\":");
+        vela_buffer_append_json(json, wlr->namespace ? wlr->namespace : "");
+        vela_buffer_appendf(json, ",\"layer\":%d,\"keyboard\":%d,\"mapped\":%s,\"output\":", (int)wlr->current.layer,
+            (int)wlr->current.keyboard_interactive, wlr->surface->mapped ? t : f);
+        if (out) {
+            vela_buffer_append_json(json, out->wlr->name);
+        } else {
+            vela_buffer_append(json, "null");
+        }
+        vela_buffer_append(json, "}");
+        if (keyboard_surface && wlr->surface == keyboard_surface) {
+            keyboard_layer = layer;
+        }
+        first = false;
+    }
+    vela_buffer_append(json, "],\"focusedLayer\":");
+    if (keyboard_layer) {
+        vela_buffer_append_json(json, keyboard_layer->wlr->namespace ? keyboard_layer->wlr->namespace : "");
+    } else {
+        vela_buffer_append(json, "null");
+    }
+    vela_buffer_append(json, "}");
 }
 
 // The visible windows of the current desktop, topmost first, with their frame

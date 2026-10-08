@@ -43,10 +43,11 @@ void vela_focus_view(struct vela_server *server, struct vela_view *view)
         }
     }
 
-    // A panel that asked for exclusive keyboard (such as the lock screen)
+    // A panel that asked for exclusive keyboard (such as the polkit dialog)
     // doesn't give it to a window.
     struct vela_layer_surface *layer = server->focused_layer;
-    if (layer && layer->wlr->current.keyboard_interactive == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE) {
+    if ((layer && layer->wlr->current.keyboard_interactive == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE)
+        || vela_focus_modal_layer(server)) {
         return;
     }
     server->focused_layer = NULL;
@@ -84,6 +85,12 @@ void vela_focus_layer(struct vela_server *server, struct vela_layer_surface *lay
     if (!layer || !layer->wlr->surface->mapped || server->locked) {
         return;
     }
+    // A panel opening while the polkit dialog waits doesn't take its
+    // keyboard (another "overlay" surface does: it is newer and on top).
+    struct vela_layer_surface *modal = vela_focus_modal_layer(server);
+    if (modal && modal != layer && layer->wlr->current.layer != ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY) {
+        return;
+    }
     // Like Windows: opening the Start menu "dims" the active window.
     struct vela_view *active = vela_views_focused(server);
     if (active) {
@@ -98,10 +105,31 @@ void vela_focus_layer(struct vela_server *server, struct vela_layer_surface *lay
     vela_input_keyboard_enter(server->input, layer->wlr->surface);
 }
 
+struct vela_layer_surface *vela_focus_modal_layer(struct vela_server *server)
+{
+    struct vela_layer_surface *layer;
+    wl_list_for_each_reverse (layer, &server->layer_surfaces, link) {
+        const struct wlr_layer_surface_v1 *wlr = layer->wlr;
+        if (wlr->surface->mapped && wlr->current.layer == ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY
+            && wlr->current.keyboard_interactive == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE) {
+            return layer;
+        }
+    }
+    return NULL;
+}
+
 void vela_focus_refocus(struct vela_server *server)
 {
     if (server->locked) {
         return; // the keyboard belongs to the lock screen
+    }
+    // The polkit dialog first, if there is one (after unlocking, or when a
+    // panel under it closes).
+    struct vela_layer_surface *modal = vela_focus_modal_layer(server);
+    if (modal) {
+        server->focused_layer = NULL;
+        vela_focus_layer(server, modal);
+        return;
     }
     server->focused_layer = NULL;
     struct vela_layer_surface *previous = server->previous_layer;

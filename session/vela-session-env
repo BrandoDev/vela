@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 # Ties Vela to the user's session (systemd --user and D-Bus), so the apps they
-# start (portals, polkit agent, autostart apps) find this display. The
-# compositor calls it: "start" as soon as the display is ready, "stop" on exit.
+# start (portals, autostart apps) find this display. The compositor calls it:
+# "start" as soon as the display is ready, "stop" on exit.
 #
 # The user's systemd manager is one for all their sessions: if another
 # graphical session is already active (Plasma on another console, while trying
