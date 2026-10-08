@@ -9,7 +9,7 @@
 
 #include "appmodel.h"
 #include "fileops.h"
-#include "trash.h"
+#include "systemactions.h"
 
 #include <QDateTime>
 #include <QDir>
