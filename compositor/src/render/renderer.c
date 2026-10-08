@@ -905,7 +905,7 @@ VkPipeline vela_renderer_pipeline(struct vela_renderer *r, VkFormat target, enum
     VkShaderModule fragment = r->rect_frag;
     switch (kind) {
     case VELA_PIPELINE_TEXTURE: fragment = r->texture_frag; break;
-    case VELA_PIPELINE_RECT: fragment = r->rect_frag; break;
+    case VELA_PIPELINE_RECT: break; // already the default shader
     case VELA_PIPELINE_SHADOW: fragment = r->shadow_frag; break;
     case VELA_PIPELINE_BLUR_DOWN: fragment = r->blur_down_frag; break;
     case VELA_PIPELINE_BLUR_UP: fragment = r->blur_up_frag; break;

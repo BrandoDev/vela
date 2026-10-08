@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: 2026 Brando Giuffrida
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: Sanitizer Tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sanitizer-tests-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  asan-ubsan:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    env:
+      ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - name: Dependencies
+        run: >-
+          pacman -Syu --noconfirm --needed
+          base-devel git cmake shaderc vulkan-headers vulkan-icd-loader
+          gtest python wayland wayland-protocols wlroots0.20
+          libxkbcommon pixman libinput libdrm mesa freetype2 harfbuzz
+          fontconfig librsvg cairo zlib pam qt6-base qt6-declarative
+          qt6-svg qt6-wayland qt6-tools layer-shell-qt hicolor-icon-theme
+      - uses: actions/checkout@v7
+      - name: Configure ASan and UBSan
+        run: >-
+          cmake -S . -B build-sanitized -DCMAKE_BUILD_TYPE=Debug
+          -DVELA_BUILD_TOOLS=ON
+          -DCMAKE_C_FLAGS=-fsanitize=address,undefined
+          -DCMAKE_CXX_FLAGS=-fsanitize=address,undefined
+          -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined
+          -DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined
+      - name: Build instrumented binaries
+        run: cmake --build build-sanitized --parallel 2
+      - name: CPU-only sanitizer tests
+        run: >-
+          ctest --test-dir build-sanitized --output-on-failure --parallel 2
+          -E '^(functional|sharpness)$'
+      - name: Save failed test logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sanitizer-ctest-logs
+          path: build-sanitized/Testing/Temporary/
+          if-no-files-found: ignore
+          retention-days: 14

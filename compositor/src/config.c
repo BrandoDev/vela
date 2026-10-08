@@ -125,6 +125,9 @@ static void write_lines(const char *path, const struct lines *lines)
 static void set_entry(struct vela_config *config, const char *line, size_t key_length)
 {
     char *entry = strdup(line);
+    if (!entry) {
+        return;
+    }
     entry[key_length] = '\0';
     for (int i = 0; i < config->count; ++i) {
         if (strcmp(config->entries[i].key, entry) == 0) {
@@ -135,8 +138,14 @@ static void set_entry(struct vela_config *config, const char *line, size_t key_l
         }
     }
     if (config->count == config->capacity) {
-        config->capacity = config->capacity ? config->capacity * 2 : 32;
-        config->entries = realloc(config->entries, (size_t)config->capacity * sizeof(*config->entries));
+        int capacity = config->capacity ? config->capacity * 2 : 32;
+        struct vela_config_entry *entries = realloc(config->entries, (size_t)capacity * sizeof(*entries));
+        if (!entries) {
+            free(entry);
+            return;
+        }
+        config->entries = entries;
+        config->capacity = capacity;
     }
     config->entries[config->count].key = entry;
     config->entries[config->count].value = entry + key_length + 1;
