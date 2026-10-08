@@ -408,6 +408,8 @@ int main(int argc, char* argv[])
     TrayModel tray;
     tray.start();
     SystemActions system;
+    system.setAppModel(&apps);
+    QObject::connect(&system, &SystemActions::chooseAppRequested, &shell, &ShellController::openWithRequested);
     QObject::connect(&shell, &ShellController::settingsRequested, &system, [&system] { system.trigger(QStringLiteral("settings")); });
     QObject::connect(&shell, &ShellController::filesRequested, &system, [&system] { system.trigger(QStringLiteral("files")); });
     JumpLists jumps(&apps);
