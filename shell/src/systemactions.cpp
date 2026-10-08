@@ -202,7 +202,7 @@ QString SystemActions::command(const QString& name) const
         if (const QString files = velaFilesExecutable(); !files.isEmpty()) {
             return quote(files);
         }
-        return first({ { "xdg-open", "xdg-open \"$HOME\"" } });
+        return QString(); // no browser fallback when no file manager is installed
     }
     if (name == QLatin1String("settings")) {
         return first({ { "systemsettings", "systemsettings" }, { "gnome-control-center", "gnome-control-center" } });
@@ -338,7 +338,7 @@ void SystemActions::showInFolder(const QString& pathOrUrl) const
         QStringLiteral("ShowItems"));
     call << QStringList { url.toString() } << QString();
     if (!QDBusConnection::sessionBus().send(call) && url.isLocalFile()) {
-        QProcess::startDetached(QStringLiteral("xdg-open"), { QFileInfo(url.toLocalFile()).absolutePath() });
+        qWarning("vela-shell: no file manager available to show %s", qPrintable(url.toLocalFile()));
     }
 }
 
