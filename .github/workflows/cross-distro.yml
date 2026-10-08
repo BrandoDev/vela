@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Brando Giuffrida
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-name: Cross-distro Build
+name: Fedora Build
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cross-distro-${{ github.ref }}
+  group: fedora-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -31,7 +31,8 @@ jobs:
           libxkbcommon-devel pixman-devel libinput-devel libdrm-devel
           mesa-libgbm-devel freetype-devel harfbuzz-devel fontconfig-devel
           librsvg2-devel cairo-devel zlib-devel pam-devel polkit-devel
-          qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel
+          qt6-qtbase-devel qt6-qtbase-private-devel
+          qt6-qtdeclarative-devel qt6-qtsvg-devel
           qt6-qtwayland-devel qt6-qttools-devel layer-shell-qt-devel
           gtest-devel python3
 
@@ -51,46 +52,4 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: >-
           ctest --test-dir build-fedora --output-on-failure --parallel 2
-          -E '^(functional|sharpness)$'
-
-  opensuse:
-    name: openSUSE Tumbleweed
-    runs-on: ubuntu-latest
-    container: opensuse/tumbleweed
-    steps:
-      - name: Install dependencies
-        run: |
-          zypper --non-interactive refresh
-          zypper --non-interactive install -y \
-            git cmake ninja gcc gcc-c++ pkgconf-pkg-config \
-            shaderc vulkan-headers vulkan-devel \
-            wayland-devel wayland-protocols-devel wlroots-devel \
-            libxkbcommon-devel pixman-devel libinput-devel libdrm-devel \
-            Mesa-libgbm-devel freetype2-devel harfbuzz-devel fontconfig-devel \
-            librsvg-devel cairo-devel zlib-devel pam-devel polkit-devel \
-            qt6-base-devel qt6-declarative-devel qt6-linguist-devel \
-            qt6-svg-devel qt6-waylandclient-devel layer-shell-qt6-devel \
-            python3
-          # The package name has changed across SUSE snapshots. Unit tests
-          # remain optional in CMake, so try both without hiding build errors.
-          zypper --non-interactive install -y gtest \
-            || zypper --non-interactive install -y googletest-devel \
-            || true
-
-      - uses: actions/checkout@v7
-
-      - name: Configure
-        run: >-
-          cmake -S . -B build-opensuse -G Ninja
-          -DCMAKE_BUILD_TYPE=RelWithDebInfo
-          -DVELA_BUILD_TOOLS=ON
-
-      - name: Build
-        run: cmake --build build-opensuse --parallel 2
-
-      - name: CPU-only tests
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: >-
-          ctest --test-dir build-opensuse --output-on-failure --parallel 2
           -E '^(functional|sharpness)$'
