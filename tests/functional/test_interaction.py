@@ -128,8 +128,9 @@ class Interaction(unittest.TestCase):
         self.vela.command(f"window {second} snap 6 0 12 12 quiet {first}")
         state = self.vela.wait_for(lambda s: s.window(second)["snapGroup"] != 0, what="a snap group")
         self.assertEqual(state.window(first)["snapGroup"], state.window(second)["snapGroup"])
-        groups = self.shell.wait_for("workspaces ")
-        self.assertIn('"snapGroups":[{"output":"HEADLESS-1"', groups)
+        # The shell may still have an older "workspaces" line, without the
+        # group: wait for the one that has it.
+        self.shell.wait_for("workspaces ", containing='"snapGroups":[{"output":"HEADLESS-1"')
         # The group from the taskbar: all forward, the chosen one focused.
         self.vela.command(f"window {first} activate-group")
         self.vela.wait_for(lambda s: s["focused"] == first, what="the chosen window focused")

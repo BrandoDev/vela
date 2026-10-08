@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // A taskbar button's previews, like Windows 11: with the mouse resting on an
 // open app its windows (of the current desktop) appear above the button, with
@@ -10,7 +11,6 @@ import QtQuick
 // places, and a click brings them all forward together.
 Window {
     id: root
-    objectName: "taskbarPreview"
     visible: false
     width: panel.width + 32
     height: panel.height + 16
@@ -139,8 +139,8 @@ Window {
         signal closeRequested()
         width: root.cardWidth
         height: root.cardHeight
-        radius: Theme.radiusLarge
-        color: cardHover.hovered ? Theme.hover : "transparent"
+        radius: Theme.radiusOverlay
+        color: cardHover.hovered ? Theme.subtleHover : "transparent"
 
         HoverHandler { id: cardHover }
         Row {
@@ -161,7 +161,7 @@ Window {
                 anchors.verticalCenter: parent.verticalCenter
                 text: card.title
                 color: Theme.text
-                font.pixelSize: Theme.fontSmall
+                font.pixelSize: Theme.fontCaption
                 elide: Text.ElideRight
             }
         }
@@ -186,7 +186,7 @@ Window {
             anchors { right: parent.right; top: parent.top; margins: 4 }
             width: 28
             height: 24
-            radius: Theme.radiusSmall
+            radius: Theme.radius
             color: closeMouse.containsMouse ? "#c42b1c" : "transparent"
             Text {
                 anchors.centerIn: parent
@@ -208,7 +208,7 @@ Window {
         opacity: panel.opacity
         blur: 24
         offset: Qt.vector2d(0, 4)
-        radius: Theme.radiusLarge
+        radius: Theme.radiusOverlay
     }
 
     Rectangle {
@@ -217,7 +217,7 @@ Window {
         y: 4
         width: cards.width + 12
         height: root.cardHeight + 12
-        radius: Theme.radiusLarge
+        radius: Theme.radiusOverlay
         color: Theme.surface
         border.width: 1
         border.color: Theme.stroke

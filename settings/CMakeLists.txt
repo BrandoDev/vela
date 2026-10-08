@@ -4,7 +4,7 @@
 # Vela's Settings app: Qt Quick, like the shell, whose pieces it partly reuses
 # (installed apps, system programs, system status).
 set(QT_NO_PRIVATE_MODULE_WARNING ON)
-find_package(Qt6 6.5 REQUIRED COMPONENTS DBus Gui Network Qml Quick QuickControls2 Svg)
+find_package(Qt6 6.5 REQUIRED COMPONENTS DBus Gui GuiPrivate Network Qml Quick QuickControls2 Svg)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -44,15 +44,12 @@ target_include_directories(vela-settings PRIVATE ${SHELL_SRC} ${PROJECT_SOURCE_D
 
 set(SETTINGS_QML_FILES
     qml/Main.qml
-    qml/Theme.qml
     qml/Card.qml
     qml/CardGroup.qml
     qml/LinkCard.qml
     qml/Toggle.qml
     qml/Choice.qml
-    qml/Button.qml
     qml/Slider.qml
-    qml/TextBox.qml
     qml/PageHeader.qml
     qml/Page.qml
     qml/Dialog.qml
@@ -86,7 +83,6 @@ foreach(file IN LISTS SETTINGS_QML_FILES)
     get_filename_component(name ${file} NAME)
     set_source_files_properties(${file} PROPERTIES QT_RESOURCE_ALIAS ${name})
 endforeach()
-set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(vela-settings
     URI Vela.Settings
@@ -109,6 +105,8 @@ target_link_libraries(vela-settings PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::Svg
+    vela-controls # Theme, Button, TextBox, Style (common/)
+    vela-controlsplugin
     vela-app) # the mouse's Back and Forward buttons (common/)
 
 install(TARGETS vela-settings RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

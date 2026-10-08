@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Apps > Installed apps: search and uninstall, like Windows 11.
 Page {

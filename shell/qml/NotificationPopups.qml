@@ -3,12 +3,12 @@
 
 import QtQuick
 import QtQuick.Shapes
+import Vela.Controls
 
 // Notifications, at the bottom right above the taskbar like on Windows 11. The
 // window is as tall as the tiles: the rest of the output stays clickable.
 Window {
     id: root
-    objectName: "notifications"
     width: 380
     height: Math.max(1, stack.implicitHeight + 24)
     visible: Notifications.count > 0
@@ -52,7 +52,7 @@ Window {
 
                 width: stack.width
                 height: content.implicitHeight + 28
-                radius: Theme.radiusLarge
+                radius: Theme.radiusOverlay
                 color: Theme.popup
                 border.width: 1
                 border.color: critical ? Qt.rgba(1, 0.35, 0.35, 0.6) : Theme.stroke
@@ -104,8 +104,8 @@ Window {
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             text: toast.appName
-                            color: Theme.textDim
-                            font.pixelSize: Theme.fontSmall
+                            color: Theme.textSecondary
+                            font.pixelSize: Theme.fontCaption
                         }
                     }
 
@@ -114,7 +114,7 @@ Window {
                         text: toast.summary
                         visible: text !== ""
                         color: Theme.text
-                        font.pixelSize: Theme.fontNormal
+                        font.pixelSize: Theme.fontBody
                         font.weight: Font.DemiBold
                         wrapMode: Text.Wrap
                         maximumLineCount: 2
@@ -124,13 +124,13 @@ Window {
                         width: parent.width
                         text: toast.body
                         visible: text !== ""
-                        color: Theme.textDim
-                        font.pixelSize: Theme.fontNormal
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontBody
                         textFormat: Text.StyledText // <b>, <i>, <a> from the spec
                         wrapMode: Text.Wrap
                         maximumLineCount: 4
                         elide: Text.ElideRight
-                        linkColor: Theme.accentLight
+                        linkColor: Theme.accentFill
                         onLinkActivated: link => Qt.openUrlExternally(link)
                     }
 
@@ -145,8 +145,8 @@ Window {
                                 required property var modelData
                                 width: Math.max(80, actionLabel.implicitWidth + 24)
                                 height: 30
-                                radius: Theme.radiusSmall
-                                color: actionMouse.pressed ? Theme.pressed : actionMouse.containsMouse ? Theme.hover : Theme.surfaceRaised
+                                radius: Theme.radius
+                                color: actionMouse.pressed ? Theme.subtlePressed : actionMouse.containsMouse ? Theme.subtleHover : Theme.control
                                 border.width: 1
                                 border.color: Theme.stroke
                                 Text {
@@ -154,7 +154,7 @@ Window {
                                     anchors.centerIn: parent
                                     text: modelData.label
                                     color: Theme.text
-                                    font.pixelSize: Theme.fontSmall
+                                    font.pixelSize: Theme.fontCaption
                                 }
                                 MouseArea {
                                     id: actionMouse
@@ -172,8 +172,8 @@ Window {
                     anchors { right: parent.right; top: parent.top; margins: 8 }
                     width: 24
                     height: 24
-                    radius: Theme.radiusSmall
-                    color: closeMouse.containsMouse ? Theme.hover : "transparent"
+                    radius: Theme.radius
+                    color: closeMouse.containsMouse ? Theme.subtleHover : "transparent"
                     opacity: toastMouse.containsMouse || closeMouse.containsMouse ? 1 : 0
                     Behavior on opacity {
                         NumberAnimation { duration: Theme.fast }

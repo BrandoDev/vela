@@ -9,7 +9,7 @@
 
 namespace vela::controls {
 
-void install(QQmlEngine& engine, Appearance::Mode mode)
+Appearance* install(QQmlEngine& engine, Appearance::Mode mode)
 {
     if (!StyleForeign::instance) {
         StyleForeign::instance = new Appearance(QCoreApplication::instance(), mode);
@@ -18,6 +18,7 @@ void install(QQmlEngine& engine, Appearance::Mode mode)
         EffectsForeign::instance = new BackgroundEffects(QCoreApplication::instance());
     }
     engine.addImageProvider(QStringLiteral("icon"), new IconProvider);
+    return StyleForeign::instance;
 }
 
 } // namespace vela::controls

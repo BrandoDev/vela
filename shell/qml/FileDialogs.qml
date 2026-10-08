@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Three file dialogs, for the desktop and for Explorer (which asks for
 // them through the shell's socket), like Windows 11:
@@ -11,7 +12,6 @@ import QtQuick
 // - New > Shortcut: the two-step wizard (the item, then the name).
 Window {
     id: root
-    objectName: "fileDialogs"
     visible: false
     width: panel.width + 64
     height: panel.height + 64
@@ -134,14 +134,14 @@ Window {
     }
     component Section: Text {
         color: Theme.text
-        font.pixelSize: Theme.fontNormal
+        font.pixelSize: Theme.fontBody
         font.weight: Font.DemiBold
         topPadding: 8
     }
     component Note: Text {
         width: parent.width
-        color: Theme.textDim
-        font.pixelSize: Theme.fontNormal
+        color: Theme.textSecondary
+        font.pixelSize: Theme.fontBody
         wrapMode: Text.WordWrap
     }
     // A clickable row with an icon (Share targets, apps).
@@ -154,8 +154,8 @@ Window {
         signal doubleClicked()
         width: parent.width
         height: 40
-        radius: Theme.radiusSmall
-        color: selected ? Theme.hover : choiceMouse.containsMouse ? Theme.hover : "transparent"
+        radius: Theme.radius
+        color: selected ? Theme.subtleHover : choiceMouse.containsMouse ? Theme.subtleHover : "transparent"
         border.width: selected ? 1 : 0
         border.color: Theme.accent
         Image {
@@ -172,7 +172,7 @@ Window {
             anchors.verticalCenter: parent.verticalCenter
             text: choice.label
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
             elide: Text.ElideRight
         }
         MouseArea {
@@ -189,8 +189,8 @@ Window {
         property alias text: field.text
         width: parent.width
         height: 32
-        radius: Theme.radiusSmall
-        color: Theme.surfaceRaised
+        radius: Theme.radius
+        color: Theme.control
         border.width: 1
         border.color: field.activeFocus ? Theme.accent : Theme.stroke
         MenuTextField {
@@ -212,7 +212,7 @@ Window {
         anchors.centerIn: parent
         width: root.mode === "openWith" ? 440 : root.mode === "shortcut" ? 500 : 420
         height: (root.mode === "share" ? share.height : root.mode === "openWith" ? openWith.height : shortcut.height) + 48
-        radius: Theme.radiusLarge
+        radius: Theme.radiusOverlay
         color: Theme.dialog
         border.width: 1
         border.color: Theme.stroke
@@ -224,7 +224,7 @@ Window {
             anchors { right: parent.right; top: parent.top; margins: 8 }
             width: 32
             height: 32
-            radius: Theme.radiusSmall
+            radius: Theme.radius
             color: closeMouse.containsMouse ? "#c42b1c" : "transparent"
             Text {
                 anchors.centerIn: parent
@@ -263,7 +263,7 @@ Window {
                     width: share.width - 42
                     text: root.paths.length === 1 ? root.paths[0].substring(root.paths[0].lastIndexOf("/") + 1) : root.paths.length + qsTr(" items")
                     color: Theme.text
-                    font.pixelSize: Theme.fontNormal
+                    font.pixelSize: Theme.fontBody
                     elide: Text.ElideMiddle
                 }
             }
@@ -288,8 +288,8 @@ Window {
                         required property var modelData
                         width: 112
                         height: 92
-                        radius: Theme.radiusSmall
-                        color: deviceMouse.containsMouse ? Theme.hover : Theme.surfaceRaised
+                        radius: Theme.radius
+                        color: deviceMouse.containsMouse ? Theme.subtleHover : Theme.control
                         border.width: 1
                         border.color: Theme.stroke
                         Image {
@@ -304,7 +304,7 @@ Window {
                             width: parent.width - 12
                             text: device.modelData.name
                             color: Theme.text
-                            font.pixelSize: Theme.fontSmall
+                            font.pixelSize: Theme.fontCaption
                             horizontalAlignment: Text.AlignHCenter
                             elide: Text.ElideRight
                         }
@@ -394,8 +394,8 @@ Window {
             Row {
                 anchors.right: parent.right
                 spacing: 8
-                DialogButton { label: qsTr("Always"); primary: true; usable: root.chosen !== ""; onClicked: root.launchChosen(true) }
-                DialogButton { label: qsTr("Just once"); usable: root.chosen !== ""; onClicked: root.launchChosen(false) }
+                Button { text: qsTr("Always"); accent: true; usable: root.chosen !== ""; onClicked: root.launchChosen(true) }
+                Button { text: qsTr("Just once"); usable: root.chosen !== ""; onClicked: root.launchChosen(false) }
             }
         }
 
@@ -419,7 +419,7 @@ Window {
             Text {
                 text: root.step === 0 ? qsTr("Type the location of the item:") : qsTr("Type a name for this shortcut:")
                 color: Theme.text
-                font.pixelSize: Theme.fontNormal
+                font.pixelSize: Theme.fontBody
             }
             Field { id: targetFieldBox; visible: root.step === 0 }
             Field { id: nameFieldBox; visible: root.step === 1 }
@@ -428,21 +428,21 @@ Window {
                 width: parent.width
                 text: root.error
                 color: Theme.light ? "#c42b1c" : "#ff99a4"
-                font.pixelSize: Theme.fontSmall
+                font.pixelSize: Theme.fontCaption
                 wrapMode: Text.WordWrap
             }
             Item { width: 1; height: 8 }
             Row {
                 anchors.right: parent.right
                 spacing: 8
-                DialogButton {
-                    label: root.step === 0 ? qsTr("Next") : qsTr("Finish")
-                    primary: true
+                Button {
+                    text: root.step === 0 ? qsTr("Next") : qsTr("Finish")
+                    accent: true
                     usable: (root.step === 0 ? targetFieldBox.text : nameFieldBox.text).trim() !== ""
                     onClicked: root.shortcutNext()
                 }
-                DialogButton {
-                    label: root.step === 0 ? qsTr("Cancel") : qsTr("Back")
+                Button {
+                    text: root.step === 0 ? qsTr("Cancel") : qsTr("Back")
                     onClicked: {
                         if (root.step === 0) {
                             root.close()

@@ -418,7 +418,7 @@ flowchart TB
   compositor through standard Wayland protocols, plus a small command socket (for
   example, Super opens Start). A shell crash never takes your windows down.
 - **Motion design lives in one place**: `compositor/src/motion.h` and
-  `shell/qml/Theme.qml` share the same cubic-bezier(0, 0, 0.2, 1) curve.
+  `common/controls/Theme.qml` share the same cubic-bezier(0, 0, 0.2, 1) curve.
 - **The session** declares itself `XDG_CURRENT_DESKTOP=Vela:KDE`. Qt/KDE apps use KDE's
   theme, and browsers and Electron apps use KDE's wallet, exactly as inside Plasma. It
   connects to systemd (`vela-session.target`), starts the portals and its own polkit

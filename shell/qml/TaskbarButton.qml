@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // A taskbar button: the background fades on hover and a slight "bounce" when
 // pressed. Under the icon, like on Windows 11, a gray dash if the app is open,
@@ -33,8 +34,8 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: Theme.radiusSmall
-        color: mouse.pressed ? Theme.pressed : Theme.hover
+        radius: Theme.radius
+        color: mouse.pressed ? Theme.subtlePressed : Theme.subtleHover
         opacity: mouse.containsMouse || root.active ? 1 : 0
 
         Behavior on opacity {
@@ -62,7 +63,7 @@ Item {
         height: 3
         radius: 1.5
         width: root.active ? 16 : root.running ? 6 : 0
-        color: root.active ? Theme.accent : Theme.textDim
+        color: root.active ? Theme.accent : Theme.textSecondary
         opacity: root.active || root.running ? 1 : 0
 
         Behavior on width {

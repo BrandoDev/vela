@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The Windows 11 command bar: New; Cut, Copy, Paste, Rename, Share, Delete;
 // Sort and View; "…" with the rest. In the Recycle Bin: Empty Recycle Bin and

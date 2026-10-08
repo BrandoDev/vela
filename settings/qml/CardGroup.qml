@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // A group of cards with its title, like Windows 11 sections ("Scale & layout",
 // "Related settings"...): cards slightly apart.

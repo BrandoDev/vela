@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // A command bar or address bar button, like Windows 11: no background until
 // hovered; icon, optional text, an arrow if it opens a menu.
@@ -19,8 +20,8 @@ Rectangle {
     implicitHeight: 32
     width: implicitWidth
     height: implicitHeight
-    radius: Theme.radiusSmall
-    color: mouse.pressed && usable ? Theme.pressed : (mouse.containsMouse && usable) || checked ? Theme.hover : "transparent"
+    radius: Theme.radius
+    color: mouse.pressed && usable ? Theme.subtlePressed : (mouse.containsMouse && usable) || checked ? Theme.subtleHover : "transparent"
     opacity: usable ? 1 : 0.4
 
     Row {
@@ -40,13 +41,13 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             text: button.text
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
         }
         Text {
             visible: button.menu
             anchors.verticalCenter: parent.verticalCenter
             text: "⌄"
-            color: Theme.textDim
+            color: Theme.textSecondary
             font.pixelSize: 12
             topPadding: -5
         }
@@ -88,8 +89,8 @@ Rectangle {
         z: 1000
         width: tipText.implicitWidth + 16
         height: tipText.implicitHeight + 10
-        radius: Theme.radiusSmall
-        color: Theme.popup
+        radius: Theme.radius
+        color: Theme.flyout
         border.width: 1
         border.color: Theme.stroke
         Text {
@@ -97,7 +98,7 @@ Rectangle {
             anchors.centerIn: parent
             text: button.tooltip
             color: Theme.text
-            font.pixelSize: Theme.fontSmall
+            font.pixelSize: Theme.fontCaption
         }
     }
 }

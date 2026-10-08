@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The Windows 11 Details view: Name, Date modified, Type, Size (and Location
 // in search results); a click on the header sorts, the border between two
@@ -74,23 +75,23 @@ Item {
                 height: header.height
                 Rectangle {
                     anchors { fill: parent; topMargin: 2; bottomMargin: 2 }
-                    radius: Theme.radiusSmall
-                    color: headerMouse.containsMouse && column.modelData.key >= 0 ? Theme.hover : "transparent"
+                    radius: Theme.radius
+                    color: headerMouse.containsMouse && column.modelData.key >= 0 ? Theme.subtleHover : "transparent"
                 }
                 Text {
                     x: 8
                     width: parent.width - 28
                     anchors.verticalCenter: parent.verticalCenter
                     text: column.modelData.title
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fontSmall
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontCaption
                     elide: Text.ElideRight
                 }
                 Text {
                     visible: view.model.sortColumn === column.modelData.key
                     anchors { right: parent.right; rightMargin: 10; verticalCenter: parent.verticalCenter }
                     text: view.model.sortDescending ? "⌄" : "⌃"
-                    color: Theme.textDim
+                    color: Theme.textSecondary
                     font.pixelSize: 11
                     topPadding: view.model.sortDescending ? -4 : 4
                 }
@@ -203,10 +204,10 @@ Item {
                 width: parent.width - 4
                 height: parent.height - 2
                 y: 1
-                radius: Theme.radiusSmall
+                radius: Theme.radius
                 color: rowDrop.containsDrag ? Theme.selectionHover
                     : row.selected ? (rowMouse.containsMouse ? Theme.selectionHover : Theme.selection)
-                    : rowMouse.containsMouse ? Theme.hover : "transparent"
+                    : rowMouse.containsMouse ? Theme.subtleHover : "transparent"
                 border.width: view.model.currentIndex === row.index && view.tab.viewFocused ? 1 : 0
                 border.color: Theme.focusRing
             }
@@ -230,7 +231,7 @@ Item {
                 text: row.name
                 color: Theme.text
                 opacity: row.isCut ? 0.6 : 1
-                font.pixelSize: Theme.fontNormal
+                font.pixelSize: Theme.fontBody
                 elide: Text.ElideRight
             }
             Loader {
@@ -258,8 +259,8 @@ Item {
                         : modelData.key === 3 ? row.sizeText
                         : view.tab.isTrash ? Ops.originalLocation(row.path).replace(/\/[^\/]*$/, "") : row.location
                     horizontalAlignment: modelData.key === 3 ? Text.AlignRight : Text.AlignLeft
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fontSmall + 1
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontCaption + 1
                     elide: modelData.key === -1 ? Text.ElideMiddle : Text.ElideRight
                 }
             }
@@ -322,8 +323,8 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             y: 24
             text: view.searching ? qsTr("No items match your search.") : view.model.exists ? qsTr("This folder is empty.") : qsTr("Can't find this folder.")
-            color: Theme.textDim
-            font.pixelSize: Theme.fontNormal
+            color: Theme.textSecondary
+            font.pixelSize: Theme.fontBody
         }
     }
 

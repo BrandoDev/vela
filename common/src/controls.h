@@ -14,9 +14,10 @@
 
 namespace vela::controls {
 
-// Mode::Shell for system UI (the polkit dialog), Mode::Apps for apps. Also
-// registers the icons (image://icon/...).
-void install(QQmlEngine& engine, Appearance::Mode mode);
+// Mode::Shell for system UI (the shell, the polkit dialog), Mode::Apps for
+// apps. Also registers the icons (image://icon/...). Returns Style: call its
+// watch() to follow Settings live (after the first frame, if startup counts).
+Appearance* install(QQmlEngine& engine, Appearance::Mode mode);
 
 } // namespace vela::controls
 

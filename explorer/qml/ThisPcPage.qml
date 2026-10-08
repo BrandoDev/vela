@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // This PC, like Windows 11: the user's folders and the drives with a
 // used-space bar (red when almost full).
@@ -24,7 +25,7 @@ Flickable {
         Text {
             text: qsTr("Folders")
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
             font.weight: Font.DemiBold
             bottomPadding: 4
         }
@@ -38,8 +39,8 @@ Flickable {
                     required property var modelData
                     width: 220
                     height: 56
-                    radius: Theme.radiusSmall
-                    color: folderMouse.containsMouse ? Theme.hover : "transparent"
+                    radius: Theme.radius
+                    color: folderMouse.containsMouse ? Theme.subtleHover : "transparent"
                     Image {
                         x: 10
                         anchors.verticalCenter: parent.verticalCenter
@@ -54,7 +55,7 @@ Flickable {
                         width: parent.width - 60
                         text: folder.modelData.name
                         color: Theme.text
-                        font.pixelSize: Theme.fontNormal
+                        font.pixelSize: Theme.fontBody
                         elide: Text.ElideRight
                     }
                     MouseArea {
@@ -70,7 +71,7 @@ Flickable {
         Text {
             text: qsTr("Devices and drives")
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
             font.weight: Font.DemiBold
             topPadding: 20
             bottomPadding: 4
@@ -93,8 +94,8 @@ Flickable {
                     width: 300
                     height: 72
                     opacity: mounted ? 1 : 0.85
-                    radius: Theme.radiusSmall
-                    color: driveMouse.containsMouse ? Theme.hover : "transparent"
+                    radius: Theme.radius
+                    color: driveMouse.containsMouse ? Theme.subtleHover : "transparent"
                     Image {
                         x: 10
                         anchors.verticalCenter: parent.verticalCenter
@@ -112,7 +113,7 @@ Flickable {
                             width: parent.width
                             text: drive.modelData.name + (drive.mounted && drive.modelData.path !== "/" ? "  (" + drive.modelData.path + ")" : "")
                             color: Theme.text
-                            font.pixelSize: Theme.fontNormal
+                            font.pixelSize: Theme.fontBody
                             elide: Text.ElideRight
                         }
                         Rectangle {
@@ -127,15 +128,15 @@ Flickable {
                                 y: 1
                                 height: parent.height - 2
                                 width: (parent.width - 2) * drive.used
-                                color: drive.used > 0.9 ? "#d13438" : Theme.accentLight
+                                color: drive.used > 0.9 ? "#d13438" : Theme.accentFill
                             }
                         }
                         Text {
                             text: drive.mounting ? qsTr("Opening...")
                                 : !drive.mounted ? Ops.formatSize(drive.modelData.total) + qsTr(", not opened yet")
                                 : Ops.formatSize(drive.modelData.free) + qsTr(" free of ") + Ops.formatSize(drive.modelData.total)
-                            color: Theme.textDim
-                            font.pixelSize: Theme.fontSmall
+                            color: Theme.textSecondary
+                            font.pixelSize: Theme.fontCaption
                         }
                     }
                     MouseArea {

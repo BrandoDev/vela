@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // System > Sound: where sound goes and where it comes from, with the volume of
 // each, like Windows 11.

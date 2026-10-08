@@ -3,6 +3,7 @@
 
 import QtQuick
 import QtQuick.Window
+import Vela.Controls
 
 // The Settings window, like Windows 11: account, search and sections on the
 // left; the page on the right, with its path in the title.

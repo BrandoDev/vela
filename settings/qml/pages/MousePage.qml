@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Bluetooth & devices > Mouse, like Windows 11: primary button, pointer speed,
 // "Enhance pointer precision", lines per wheel notch. The compositor applies

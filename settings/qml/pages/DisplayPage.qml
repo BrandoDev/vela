@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // System > Display: the monitors' arrangement (draggable), and for the chosen
 // one scale, resolution, orientation and refresh rate. Every change asks "Keep

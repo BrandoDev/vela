@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The Windows 11 dialog (ContentDialog): above the page, which darkens; title,
 // content, and the buttons in a band at the bottom.

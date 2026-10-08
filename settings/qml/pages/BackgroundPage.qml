@@ -4,6 +4,7 @@
 import QtQuick
 import QtQuick.Dialogs
 import QtCore
+import Vela.Controls
 
 // Personalization > Background: recent images, "Browse photos" and the
 // wallpapers installed on the system.
@@ -69,7 +70,7 @@ Page {
                     width: parent.width - 36
                     spacing: 8
                     Repeater {
-                        model: [":/vela/images/vela_splash_169.svg"].concat(Prefs.recentWallpapers)
+                        model: [Prefs.defaultWallpaper].concat(Prefs.recentWallpapers)
                         delegate: Thumb { required property string modelData; path: modelData }
                     }
                 }

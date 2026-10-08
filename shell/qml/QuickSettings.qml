@@ -3,6 +3,7 @@
 
 import QtQuick
 import QtQuick.Shapes
+import Vela.Controls
 
 // Quick settings (Win+A, or a click on the taskbar's system icons), like
 // Windows 11: tiles to turn on and off (Wi-Fi, Bluetooth, airplane mode, power
@@ -13,7 +14,6 @@ import QtQuick.Shapes
 // the volume opens the sound page (outputs and the mixer, Win+Ctrl+V).
 Window {
     id: root
-    objectName: "quickSettings"
     visible: false
     width: 384
     height: panel.height + 24
@@ -152,8 +152,8 @@ Window {
             id: button
             width: parent.width
             height: 48
-            radius: Theme.radiusSmall
-            color: tile.checked ? Theme.accent : Theme.surfaceRaised
+            radius: Theme.radius
+            color: tile.checked ? Theme.accent : Theme.control
             border.width: tile.checked ? 0 : 1
             border.color: Theme.stroke
             clip: true
@@ -244,7 +244,7 @@ Window {
             width: parent.width
             text: tile.label
             color: Theme.text
-            font.pixelSize: Theme.fontSmall
+            font.pixelSize: Theme.fontCaption
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
         }
@@ -277,8 +277,8 @@ Window {
             height: 36
             Rectangle {
                 anchors.fill: parent
-                radius: Theme.radiusSmall
-                color: Theme.hover
+                radius: Theme.radius
+                color: Theme.subtleHover
                 opacity: iconMouse.containsMouse ? 1 : 0
             }
             Image {
@@ -320,7 +320,7 @@ Window {
                 width: parent.width * slider.shown
                 height: 4
                 radius: 2
-                color: slider.muted ? Theme.textDim : Theme.accent
+                color: slider.muted ? Theme.textSecondary : Theme.accent
             }
             Rectangle {
                 id: knob
@@ -337,7 +337,7 @@ Window {
                     width: trackMouse.pressed ? 8 : 10
                     height: width
                     radius: width / 2
-                    color: slider.muted ? Theme.textDim : Theme.accent
+                    color: slider.muted ? Theme.textSecondary : Theme.accent
                 }
             }
             Rectangle {
@@ -345,7 +345,7 @@ Window {
                 anchors { bottom: knob.top; bottomMargin: 6; horizontalCenter: knob.horizontalCenter }
                 width: valueText.implicitWidth + 16
                 height: 26
-                radius: Theme.radiusSmall
+                radius: Theme.radius
                 color: Theme.popup
                 border.width: 1
                 border.color: Theme.stroke
@@ -354,7 +354,7 @@ Window {
                     anchors.centerIn: parent
                     text: Math.round(slider.shown * 100)
                     color: Theme.text
-                    font.pixelSize: Theme.fontSmall
+                    font.pixelSize: Theme.fontCaption
                 }
             }
             MouseArea {
@@ -382,8 +382,8 @@ Window {
             visible: slider.details
             Rectangle {
                 anchors.fill: parent
-                radius: Theme.radiusSmall
-                color: Theme.hover
+                radius: Theme.radius
+                color: Theme.subtleHover
                 opacity: detailsMouse.containsMouse ? 1 : 0
             }
             Shape {
@@ -423,14 +423,14 @@ Window {
             radius: height / 2
             color: toggle.checked ? Theme.accent : "transparent"
             border.width: toggle.checked ? 0 : 1
-            border.color: Theme.textDim
+            border.color: Theme.textSecondary
             Rectangle {
                 x: toggle.checked ? parent.width - width - 4 : 4
                 anchors.verticalCenter: parent.verticalCenter
                 width: switchMouse.containsMouse ? 14 : 12
                 height: width
                 radius: width / 2
-                color: toggle.checked ? "white" : Theme.textDim
+                color: toggle.checked ? "white" : Theme.textSecondary
                 Behavior on x { NumberAnimation { duration: Theme.fast; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.decelerate } }
             }
         }
@@ -456,8 +456,8 @@ Window {
             anchors.verticalCenter: parent.verticalCenter
             Rectangle {
                 anchors.fill: parent
-                radius: Theme.radiusSmall
-                color: Theme.hover
+                radius: Theme.radius
+                color: Theme.subtleHover
                 opacity: backMouse.containsMouse ? 1 : 0
             }
             Image {
@@ -478,7 +478,7 @@ Window {
             anchors { left: back.right; leftMargin: 8; verticalCenter: parent.verticalCenter }
             text: header.title
             color: Theme.text
-            font.pixelSize: Theme.fontNormal + 2
+            font.pixelSize: Theme.fontBody + 2
             font.weight: Font.DemiBold
         }
         Item {
@@ -493,8 +493,8 @@ Window {
     component Link: Text {
         id: link
         property string target
-        color: linkMouse.containsMouse ? Theme.accentLight : Theme.accent
-        font.pixelSize: Theme.fontNormal
+        color: linkMouse.containsMouse ? Theme.accentFill : Theme.accent
+        font.pixelSize: Theme.fontBody
         font.underline: linkMouse.containsMouse
         MouseArea {
             id: linkMouse
@@ -512,7 +512,7 @@ Window {
         width: root.width - 24
         height: root.page === "" ? content.height + 24 + footer.height
             : (root.page === "wifi" ? wifiPage.height : root.page === "sound" ? soundPage.height : accessPage.height) + 32
-        radius: Theme.radiusMenu
+        radius: Theme.radiusOverlay
         color: Theme.surface
         border.width: 1
         border.color: Theme.stroke
@@ -656,8 +656,8 @@ Window {
                     bottomPadding: 8
                     text: !Status.wifiEnabled ? qsTr("Wi-Fi is turned off.")
                         : Network.scanning ? qsTr("Looking for networks...") : qsTr("No networks found.")
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fontNormal
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontBody
                     wrapMode: Text.WordWrap
                 }
                 Flickable {
@@ -682,8 +682,8 @@ Window {
                                 readonly property bool busy: wifiPage.connecting === modelData.ssid && Network.connectResult === ""
                                 width: networks.width
                                 height: open ? row.height + actions.height + 12 : row.height
-                                radius: Theme.radiusSmall
-                                color: open ? Theme.surfaceRaised : netMouse.containsMouse ? Theme.hover : "transparent"
+                                radius: Theme.radius
+                                color: open ? Theme.control : netMouse.containsMouse ? Theme.subtleHover : "transparent"
                                 clip: true
 
                                 Item {
@@ -708,15 +708,15 @@ Window {
                                             width: parent.width
                                             text: net.modelData.ssid
                                             color: Theme.text
-                                            font.pixelSize: Theme.fontNormal
+                                            font.pixelSize: Theme.fontBody
                                             elide: Text.ElideRight
                                         }
                                         Text {
                                             text: net.busy ? qsTr("Connecting...")
                                                 : net.modelData.active ? (net.modelData.secure ? qsTr("Connected, secured") : qsTr("Connected"))
                                                 : net.modelData.secure ? qsTr("Secured") : qsTr("Open")
-                                            color: Theme.textDim
-                                            font.pixelSize: Theme.fontSmall
+                                            color: Theme.textSecondary
+                                            font.pixelSize: Theme.fontCaption
                                         }
                                     }
                                     MouseArea {
@@ -744,8 +744,8 @@ Window {
                                         visible: net.needsPassword
                                         width: parent.width
                                         height: 32
-                                        radius: Theme.radiusSmall
-                                        color: Theme.surfaceRaised
+                                        radius: Theme.radius
+                                        color: Theme.control
                                         border.width: 1
                                         border.color: passwordField.activeFocus ? Theme.accent : Theme.stroke
                                         MenuTextField {
@@ -762,8 +762,8 @@ Window {
                                             anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
                                             visible: passwordField.text === ""
                                             text: qsTr("Enter the network security key")
-                                            color: Theme.textDim
-                                            font.pixelSize: Theme.fontSmall
+                                            color: Theme.textSecondary
+                                            font.pixelSize: Theme.fontCaption
                                         }
                                     }
                                     Text {
@@ -771,7 +771,7 @@ Window {
                                         width: parent.width
                                         text: Network.connectResult
                                         color: Theme.light ? "#c42b1c" : "#ff99a4"
-                                        font.pixelSize: Theme.fontSmall
+                                        font.pixelSize: Theme.fontCaption
                                         wrapMode: Text.WordWrap
                                     }
                                     Rectangle {
@@ -779,12 +779,12 @@ Window {
                                         anchors.right: parent.right
                                         width: 120
                                         height: 32
-                                        radius: Theme.radiusSmall
+                                        radius: Theme.radius
                                         readonly property bool primary: !net.modelData.active
                                         readonly property bool usable: !net.busy && (!net.needsPassword || wifiPage.password.length >= 8)
                                         opacity: usable ? 1 : 0.5
                                         color: primary ? (buttonMouse.containsMouse ? Qt.lighter(Theme.accent, 1.1) : Theme.accent)
-                                            : buttonMouse.containsMouse ? Theme.hover : Theme.surfaceRaised
+                                            : buttonMouse.containsMouse ? Theme.subtleHover : Theme.control
                                         border.width: primary ? 0 : 1
                                         border.color: Theme.stroke
                                         function activate() {
@@ -800,7 +800,7 @@ Window {
                                             anchors.centerIn: parent
                                             text: net.modelData.active ? qsTr("Disconnect") : net.needsPassword ? qsTr("Next") : qsTr("Connect")
                                             color: connectButton.primary ? "white" : Theme.text
-                                            font.pixelSize: Theme.fontNormal
+                                            font.pixelSize: Theme.fontBody
                                         }
                                         MouseArea {
                                             id: buttonMouse
@@ -852,8 +852,8 @@ Window {
                                 required property var modelData
                                 width: soundColumn.width
                                 height: 44
-                                radius: Theme.radiusSmall
-                                color: outputMouse.containsMouse ? Theme.hover : output.modelData.isDefault ? Theme.surfaceRaised : "transparent"
+                                radius: Theme.radius
+                                color: outputMouse.containsMouse ? Theme.subtleHover : output.modelData.isDefault ? Theme.control : "transparent"
                                 // The chosen one: the accent line on the left,
                                 // like a selected item on Windows.
                                 Rectangle {
@@ -879,7 +879,7 @@ Window {
                                     width: parent.width - 56 - (battery.visible ? battery.width + 8 : 0)
                                     text: output.modelData.description
                                     color: Theme.text
-                                    font.pixelSize: Theme.fontNormal
+                                    font.pixelSize: Theme.fontBody
                                     elide: Text.ElideRight
                                 }
                                 // A Bluetooth headset's charge, when it
@@ -900,8 +900,8 @@ Window {
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: output.modelData.battery + "%"
-                                        color: Theme.textDim
-                                        font.pixelSize: Theme.fontSmall
+                                        color: Theme.textSecondary
+                                        font.pixelSize: Theme.fontCaption
                                     }
                                 }
                                 MouseArea {
@@ -917,7 +917,7 @@ Window {
                         Text {
                             text: qsTr("Volume mixer")
                             color: Theme.text
-                            font.pixelSize: Theme.fontNormal
+                            font.pixelSize: Theme.fontBody
                             font.weight: Font.DemiBold
                             bottomPadding: 4
                         }
@@ -926,8 +926,8 @@ Window {
                             text: (Mixer.outputs.find(o => o.isDefault) || { description: qsTr("Speakers") }).description
                             width: parent.width
                             leftPadding: 48
-                            color: Theme.textDim
-                            font.pixelSize: Theme.fontSmall
+                            color: Theme.textSecondary
+                            font.pixelSize: Theme.fontCaption
                             elide: Text.ElideRight
                         }
                         Slider {
@@ -955,8 +955,8 @@ Window {
                                         anchors.verticalCenter: parent.verticalCenter
                                         width: parent.width - 48 - appOutput.width - 12
                                         text: app.modelData.name
-                                        color: Theme.textDim
-                                        font.pixelSize: Theme.fontSmall
+                                        color: Theme.textSecondary
+                                        font.pixelSize: Theme.fontCaption
                                         elide: Text.ElideRight
                                     }
                                     Rectangle {
@@ -965,16 +965,16 @@ Window {
                                         anchors { right: parent.right; rightMargin: 4; verticalCenter: parent.verticalCenter }
                                         width: visible ? Math.min(outputLabel.implicitWidth, soundColumn.width * 0.45) + 28 : 0
                                         height: 22
-                                        radius: Theme.radiusSmall
-                                        color: outputChooser.containsMouse ? Theme.hover : "transparent"
+                                        radius: Theme.radius
+                                        color: outputChooser.containsMouse ? Theme.subtleHover : "transparent"
                                         Text {
                                             id: outputLabel
                                             x: 8
                                             anchors.verticalCenter: parent.verticalCenter
                                             width: parent.width - 28
                                             text: app.modelData.output === "" ? qsTr("Default output") : app.modelData.outputDescription
-                                            color: Theme.textDim
-                                            font.pixelSize: Theme.fontSmall
+                                            color: Theme.textSecondary
+                                            font.pixelSize: Theme.fontCaption
                                             elide: Text.ElideRight
                                         }
                                         // The "v" arrow.
@@ -984,7 +984,7 @@ Window {
                                             height: 5
                                             preferredRendererType: Shape.CurveRenderer
                                             ShapePath {
-                                                strokeColor: Theme.textDim
+                                                strokeColor: Theme.textSecondary
                                                 strokeWidth: 1.2
                                                 fillColor: "transparent"
                                                 capStyle: ShapePath.RoundCap
@@ -1019,8 +1019,8 @@ Window {
                             topPadding: 8
                             leftPadding: 48
                             text: qsTr("No apps are playing sound.")
-                            color: Theme.textDim
-                            font.pixelSize: Theme.fontSmall
+                            color: Theme.textSecondary
+                            font.pixelSize: Theme.fontCaption
                             wrapMode: Text.WordWrap
                         }
                     }
@@ -1054,8 +1054,8 @@ Window {
                         required property var modelData
                         width: accessPage.width
                         height: 48
-                        radius: Theme.radiusSmall
-                        color: optionMouse.containsMouse ? Theme.hover : "transparent"
+                        radius: Theme.radius
+                        color: optionMouse.containsMouse ? Theme.subtleHover : "transparent"
                         Image {
                             x: 12
                             anchors.verticalCenter: parent.verticalCenter
@@ -1069,7 +1069,7 @@ Window {
                             anchors.verticalCenter: parent.verticalCenter
                             text: option.modelData.text
                             color: Theme.text
-                            font.pixelSize: Theme.fontNormal
+                            font.pixelSize: Theme.fontBody
                         }
                         MouseArea {
                             id: optionMouse
@@ -1099,8 +1099,8 @@ Window {
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: 1 }
             height: 48
             color: Theme.footer
-            bottomLeftRadius: Theme.radiusMenu - 1
-            bottomRightRadius: Theme.radiusMenu - 1
+            bottomLeftRadius: Theme.radiusOverlay - 1
+            bottomRightRadius: Theme.radiusOverlay - 1
 
             Row {
                 visible: Status.batteryPresent
@@ -1116,7 +1116,7 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     text: Status.batteryPercent + "%"
                     color: Theme.text
-                    font.pixelSize: Theme.fontSmall
+                    font.pixelSize: Theme.fontCaption
                 }
             }
             Item {
@@ -1125,8 +1125,8 @@ Window {
                 height: 36
                 Rectangle {
                     anchors.fill: parent
-                    radius: Theme.radiusSmall
-                    color: Theme.hover
+                    radius: Theme.radius
+                    color: Theme.subtleHover
                     opacity: settingsMouse.containsMouse ? 1 : 0
                 }
                 Image {

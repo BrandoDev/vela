@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // System > Display > Night light, like Windows 11: turn it on now, how warm it
 // should be, and the schedule (sunset to sunrise, with the time zone's sun

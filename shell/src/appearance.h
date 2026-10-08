@@ -8,9 +8,10 @@
 #include <QObject>
 #include <QTimer>
 
-// The look of Vela's apps (Explorer), taken from the shell: the apps' light or
+// The look of Vela's interfaces (Vela.Controls' Style): the apps' light or
 // dark mode ("Choose your mode"), accent color and Mica (see mica.h). System
-// UI (the polkit dialog) follows the shell's mode instead (Mode::Shell).
+// UI (the shell, the polkit dialog) follows the shell's mode instead
+// (Mode::Shell).
 // Updates itself when Settings change something or the wallpaper changes.
 // Icons follow the mode (applyIconTheme).
 class Appearance : public QObject {

@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Alt+Tab: the open windows with previews, most recent first. The compositor
 // handles the keyboard and tells us what to show and what's selected: here we
 // just draw.
 Window {
     id: root
-    objectName: "switcher"
 
     visible: false
     width: Screen.width
@@ -96,7 +96,7 @@ Window {
         anchors.centerIn: parent
         width: flow.width + 32
         height: flow.height + 32
-        radius: Theme.radiusLarge
+        radius: Theme.radiusOverlay
         color: Theme.surface
         border.width: 1
         border.color: Theme.stroke
@@ -121,8 +121,8 @@ Window {
 
                     width: root.cardWidth
                     height: root.cardHeight
-                    radius: Theme.radiusLarge
-                    color: current || cardMouse.containsMouse ? Theme.hover : "transparent"
+                    radius: Theme.radiusOverlay
+                    color: current || cardMouse.containsMouse ? Theme.subtleHover : "transparent"
                     border.width: current ? 2 : 0
                     border.color: Theme.accent
 
@@ -152,7 +152,7 @@ Window {
                             anchors.verticalCenter: parent.verticalCenter
                             text: card.title
                             color: Theme.text
-                            font.pixelSize: Theme.fontSmall
+                            font.pixelSize: Theme.fontCaption
                             elide: Text.ElideRight
                         }
                     }

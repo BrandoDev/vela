@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The Properties window of a file, a folder or several items, like in Windows:
 // General (name, type, opens with, location, size, dates, attributes),
@@ -10,7 +11,6 @@ import QtQuick
 // Cancel closes.
 Window {
     id: root
-    objectName: "propertiesDialog"
     visible: false
     width: 440
     height: 600
@@ -114,13 +114,13 @@ Window {
     }
 
     component Label: Text {
-        color: Theme.textDim
-        font.pixelSize: Theme.fontNormal
+        color: Theme.textSecondary
+        font.pixelSize: Theme.fontBody
         width: 120
     }
     component Value: Text {
         color: Theme.text
-        font.pixelSize: Theme.fontNormal
+        font.pixelSize: Theme.fontBody
         width: 260
         elide: Text.ElideMiddle
     }
@@ -146,7 +146,7 @@ Window {
             radius: 4
             color: check.checked ? Theme.accent : "transparent"
             border.width: check.checked ? 0 : 1
-            border.color: Theme.textDim
+            border.color: Theme.textSecondary
             Text {
                 anchors.centerIn: parent
                 text: "✓"
@@ -160,7 +160,7 @@ Window {
             anchors { left: box.right; leftMargin: 8; verticalCenter: parent.verticalCenter }
             text: check.label
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
         }
         MouseArea {
             anchors.fill: parent
@@ -172,7 +172,7 @@ Window {
     Rectangle {
         id: panel
         anchors.fill: parent
-        radius: Theme.radiusLarge
+        radius: Theme.radiusOverlay
         color: Theme.dialog
         border.width: 1
         border.color: Theme.stroke
@@ -185,7 +185,7 @@ Window {
             y: 16
             text: qsTr("Properties - ") + (root.info.name || "")
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
             font.weight: Font.DemiBold
             width: parent.width - 48
             elide: Text.ElideMiddle
@@ -207,8 +207,8 @@ Window {
                         id: tabLabel
                         anchors.centerIn: parent
                         text: parent.modelData
-                        color: root.tab === parent.index ? Theme.text : Theme.textDim
-                        font.pixelSize: Theme.fontNormal
+                        color: root.tab === parent.index ? Theme.text : Theme.textSecondary
+                        font.pixelSize: Theme.fontBody
                         font.weight: root.tab === parent.index ? Font.DemiBold : Font.Normal
                     }
                     Rectangle {
@@ -246,8 +246,8 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 336
                     height: 32
-                    radius: Theme.radiusSmall
-                    color: Theme.surfaceRaised
+                    radius: Theme.radius
+                    color: Theme.control
                     border.width: 1
                     border.color: nameField.activeFocus ? Theme.accent : Theme.stroke
                     MenuTextField {
@@ -282,18 +282,18 @@ Window {
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.defaultApp
                         color: Theme.text
-                        font.pixelSize: Theme.fontNormal
+                        font.pixelSize: Theme.fontBody
                         elide: Text.ElideRight
                     }
                     Rectangle {
                         id: changeButton
                         width: 80
                         height: 28
-                        radius: Theme.radiusSmall
-                        color: changeMouse.containsMouse ? Theme.hover : Theme.surfaceRaised
+                        radius: Theme.radius
+                        color: changeMouse.containsMouse ? Theme.subtleHover : Theme.control
                         border.width: 1
                         border.color: Theme.stroke
-                        Text { anchors.centerIn: parent; text: qsTr("Change…"); color: Theme.text; font.pixelSize: Theme.fontSmall }
+                        Text { anchors.centerIn: parent; text: qsTr("Change…"); color: Theme.text; font.pixelSize: Theme.fontCaption }
                         MouseArea {
                             id: changeMouse
                             anchors.fill: parent
@@ -372,8 +372,8 @@ Window {
             Line {}
             Text {
                 text: root.info.mine ? qsTr("Who can do what:") : qsTr("Only the owner can change the permissions.")
-                color: Theme.textDim
-                font.pixelSize: Theme.fontNormal
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontBody
             }
             Repeater {
                 model: [{ who: qsTr("Owner"), shift: 6 }, { who: qsTr("Group"), shift: 3 }, { who: qsTr("Others"), shift: 0 }]
@@ -412,46 +412,17 @@ Window {
             anchors { right: parent.right; bottom: parent.bottom; margins: 20 }
             spacing: 8
 
-            component DialogButton: Rectangle {
-                id: button
-                property string label
-                property bool primary: false
-                property bool usable: true
-                signal clicked()
-                width: 96
-                height: 32
-                radius: Theme.radiusSmall
-                opacity: usable ? 1 : 0.5
-                color: primary ? (mouse.pressed ? Qt.darker(Theme.accent, 1.2) : Theme.accent)
-                               : (mouse.pressed ? Theme.pressed : mouse.containsMouse ? Theme.hover : Theme.surfaceRaised)
-                border.width: primary ? 0 : 1
-                border.color: Theme.stroke
-                Text {
-                    anchors.centerIn: parent
-                    text: button.label
-                    color: button.primary ? "white" : Theme.text
-                    font.pixelSize: Theme.fontNormal
-                }
-                MouseArea {
-                    id: mouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    enabled: button.usable
-                    onClicked: button.clicked()
-                }
-            }
-
-            DialogButton {
-                label: "OK"
-                primary: true
+            Button {
+                text: "OK"
+                accent: true
                 onClicked: { root.apply(); root.visible = false }
             }
-            DialogButton {
-                label: qsTr("Cancel")
+            Button {
+                text: qsTr("Cancel")
                 onClicked: root.visible = false
             }
-            DialogButton {
-                label: qsTr("Apply")
+            Button {
+                text: qsTr("Apply")
                 usable: root.changed
                 onClicked: root.apply()
             }

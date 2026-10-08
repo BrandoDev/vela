@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The name edited in place (F2, Rename), like Windows: the name without the
 // extension is selected; Enter confirms, Esc cancels.
@@ -15,7 +16,7 @@ Rectangle {
     signal cancelled()
 
     height: input.contentHeight + 8
-    radius: Theme.radiusSmall
+    radius: Theme.radius
     color: Theme.field
     border.width: 1
     border.color: Theme.accent
@@ -38,7 +39,7 @@ Rectangle {
         color: Theme.text
         selectionColor: Theme.accent
         selectedTextColor: "white"
-        font.pixelSize: Theme.fontNormal
+        font.pixelSize: Theme.fontBody
         selectByMouse: true
         wrapMode: field.centered ? TextInput.WrapAnywhere : TextInput.NoWrap
         horizontalAlignment: field.centered ? TextInput.AlignHCenter : TextInput.AlignLeft

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Clipboard history (Win+V), like Windows 11: what was copied, most recent
 // first (pinned first). A click, or Enter, pastes it into the focused app; "…"
@@ -9,7 +10,6 @@ import QtQuick
 // turn it on.
 Window {
     id: root
-    objectName: "clipboardPanel"
     visible: false
     width: 384
     height: panel.height + 24
@@ -71,7 +71,7 @@ Window {
         y: 12
         width: root.width - 24
         height: content.height + 32
-        radius: Theme.radiusMenu
+        radius: Theme.radiusOverlay
         color: Theme.surface
         border.width: 1
         border.color: Theme.stroke
@@ -114,7 +114,7 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     text: qsTr("Clipboard")
                     color: Theme.text
-                    font.pixelSize: Theme.fontNormal + 2
+                    font.pixelSize: Theme.fontBody + 2
                     font.weight: Font.DemiBold
                 }
                 Rectangle {
@@ -122,8 +122,8 @@ Window {
                     anchors { right: parent.right; verticalCenter: parent.verticalCenter }
                     width: clearText.implicitWidth + 20
                     height: 30
-                    radius: Theme.radiusSmall
-                    color: clearMouse.containsMouse ? Theme.hover : Theme.surfaceRaised
+                    radius: Theme.radius
+                    color: clearMouse.containsMouse ? Theme.subtleHover : Theme.control
                     border.width: 1
                     border.color: Theme.stroke
                     Text {
@@ -131,7 +131,7 @@ Window {
                         anchors.centerIn: parent
                         text: qsTr("Clear all")
                         color: Theme.text
-                        font.pixelSize: Theme.fontSmall
+                        font.pixelSize: Theme.fontCaption
                     }
                     MouseArea {
                         id: clearMouse
@@ -151,19 +151,19 @@ Window {
                     width: parent.width
                     text: qsTr("Clipboard history")
                     color: Theme.text
-                    font.pixelSize: Theme.fontNormal
+                    font.pixelSize: Theme.fontBody
                     font.weight: Font.DemiBold
                 }
                 Text {
                     width: parent.width
                     text: qsTr("You can't see your clipboard history. Turn it on to find what you copy here and paste it again.")
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fontNormal
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontBody
                     wrapMode: Text.WordWrap
                 }
-                DialogButton {
-                    label: qsTr("Turn on")
-                    primary: true
+                Button {
+                    text: qsTr("Turn on")
+                    accent: true
                     onClicked: Clip.enabled = true
                 }
             }
@@ -171,8 +171,8 @@ Window {
                 visible: Clip.enabled && Clip.items.length === 0
                 width: parent.width
                 text: qsTr("There's nothing here. When you copy something, you'll find it here to paste it again.")
-                color: Theme.textDim
-                font.pixelSize: Theme.fontNormal
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontBody
                 wrapMode: Text.WordWrap
             }
 
@@ -204,8 +204,8 @@ Window {
                             readonly property bool selected: index === root.current
                             width: cards.width
                             height: Math.max(56, (modelData.kind === "image" ? thumb.height : body.height) + 24)
-                            radius: Theme.radiusSmall
-                            color: cardMouse.containsMouse ? Theme.hover : Theme.surfaceRaised
+                            radius: Theme.radius
+                            color: cardMouse.containsMouse ? Theme.subtleHover : Theme.control
                             border.width: selected ? 2 : 1
                             border.color: selected ? Theme.accent : Theme.stroke
 
@@ -218,7 +218,7 @@ Window {
                                 text: card.modelData.text
                                 textFormat: Text.PlainText
                                 color: Theme.text
-                                font.pixelSize: Theme.fontNormal
+                                font.pixelSize: Theme.fontBody
                                 wrapMode: Text.WrapAnywhere
                                 maximumLineCount: 4
                                 elide: Text.ElideRight
@@ -255,13 +255,13 @@ Window {
                                 anchors { right: parent.right; top: parent.top; margins: 8 }
                                 width: 28
                                 height: 28
-                                radius: Theme.radiusSmall
-                                color: moreMouse.containsMouse ? Theme.hover : "transparent"
+                                radius: Theme.radius
+                                color: moreMouse.containsMouse ? Theme.subtleHover : "transparent"
                                 Text {
                                     anchors.centerIn: parent
                                     text: "…"
                                     color: Theme.text
-                                    font.pixelSize: Theme.fontNormal
+                                    font.pixelSize: Theme.fontBody
                                 }
                                 MouseArea {
                                     id: moreMouse

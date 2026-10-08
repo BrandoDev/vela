@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The navigation pane on the left, like Windows 11: Home, the Quick access
 // folders (with the pin), This PC with the drives (also unmounted ones,
@@ -32,8 +33,8 @@ Flickable {
         readonly property bool selected: pane.current === location
         width: column.width
         height: 32
-        radius: Theme.radiusSmall
-        color: drop.containsDrag ? Theme.selectionHover : selected ? Theme.selection : mouse.containsMouse ? Theme.hover : "transparent"
+        radius: Theme.radius
+        color: drop.containsDrag ? Theme.selectionHover : selected ? Theme.selection : mouse.containsMouse ? Theme.subtleHover : "transparent"
 
         Rectangle {
             visible: entry.selected
@@ -41,7 +42,7 @@ Flickable {
             width: 3
             height: 16
             radius: 1.5
-            color: Theme.accentLight
+            color: Theme.accentFill
         }
         Image {
             x: 12 + entry.indent
@@ -57,7 +58,7 @@ Flickable {
             anchors.verticalCenter: parent.verticalCenter
             text: entry.label
             color: Theme.text
-            font.pixelSize: Theme.fontNormal
+            font.pixelSize: Theme.fontBody
             elide: Text.ElideRight
         }
         Text {

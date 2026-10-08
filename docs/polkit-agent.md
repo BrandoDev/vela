@@ -319,21 +319,25 @@ of the dialog is still to do (§12).
 
 ## 8. `Vela.Controls`
 
-Today `Theme.qml` exists in three copies (shell, Settings, Files). Files also
-compiles `MenuPanel.qml` and `PanelShadow.qml` straight from `shell/qml`.
+One theme and one set of controls for every Qt Quick interface of Vela.
+Before it, `Theme.qml` existed in three copies (shell, Settings, Files) that
+had drifted apart; Files also compiles `MenuPanel.qml` and `PanelShadow.qml`
+straight from `shell/qml`, which it still does.
 
 - **The module.** A static QML module, `Vela.Controls`, in `common/`:
-  - `Theme` (singleton): Windows 11's Fluent colors and sizes, the same
-    values as Settings', plus the veil behind system dialogs;
-  - `Button` and `TextBox` (with `password: true`), as in Settings;
+  - `Theme` (singleton): Windows 11's Fluent colors and sizes, named after
+    WinUI's resources, plus what only one interface needs (the shell's
+    acrylic surfaces, Settings' cards, Files' selection and scroll bars) and
+    the veil behind system dialogs;
+  - `Button` (standard, accent or subtle, with text and/or an icon) and
+    `TextBox` (with `password: true`);
   - the C++ singletons `Style` (`Appearance`: light or dark, accent, Mica,
     icon mode; system UI follows the shell's mode, apps their own) and
     `Effects` (`BackgroundEffects`: blur), plus the `image://icon` provider,
     installed with `vela::controls::install()`.
-- **The prompt** is its first user.
-- **Shell, Settings and Files** move to it in a separate step (§11). Their
-  three Themes are not identical today, and merging them deserves its own
-  commit and its own screenshots.
+- **The prompt** was its first user; the shell, Settings and Files followed
+  (P5). The shell took the Fluent values too: text, secondary text, hover,
+  corner radii and dialogs now match the apps'.
 
 ## 9. Security notes
 
@@ -409,7 +413,7 @@ None of them uses polkitd or PAM.
 | P2 | `vela-polkit-agent`: registration, requests, queue, cancellation, re-registration after a polkitd restart, unit tests | done |
 | P3 | Compositor: list of supervised children, the agent started with the session, the modal dialog keeps keyboard and shortcuts; `vela-session.target` drops `Wants=plasma-polkit-agent.service`; PKGBUILD depends on `polkit` instead of suggesting `polkit-kde-agent` | done |
 | P4 | The user tries it for real (§10, "by hand") | |
-| P5 | Shell, Settings and Files move to `Vela.Controls` | |
+| P5 | Shell, Settings and Files move to `Vela.Controls` | done |
 
 ## 12. Open questions and risks
 

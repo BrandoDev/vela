@@ -3,6 +3,7 @@
 
 #include "appearance.h"
 
+#include "defaults.h"
 #include "iconprovider.h"
 #include "mica.h"
 
@@ -51,7 +52,7 @@ void Appearance::reload()
     const bool light = shell.value(key).toString() == QLatin1String("light");
     QColor accent(shell.value(QStringLiteral("appearance/accent")).toString());
     if (!accent.isValid()) {
-        accent = QColor(0x5b, 0x8c, 0xff);
+        accent = vela::defaults::accent();
     }
     const QColor tint = cachedWallpaperTint();
     const QColor mica = micaFromTint(tint, true, light);
@@ -71,6 +72,9 @@ void Appearance::reload()
         return;
     }
     emit changed();
+    // The image://icon prefix a moment later, when the icon caches
+    // (KIconLoader's too, which gets the D-Bus signal) are empty: only then
+    // QML asks for the icons again.
     QTimer::singleShot(300, this, [this, mode] {
         if (mode != m_iconMode) {
             m_iconMode = mode;

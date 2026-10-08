@@ -18,6 +18,7 @@
 #include "fractional-scale-v1-client-protocol.h"
 #include "viewporter-client-protocol.h"
 
+#include "defaults.h"
 #include "language.h"
 
 #include <QCoreApplication>
@@ -102,7 +103,7 @@ void redrawAll();
 
 QImage wallpaperFor(int width, int height)
 {
-    const QString path = qEnvironmentVariable("VELA_WALLPAPER", QStringLiteral(":/vela/images/vela_splash_169.svg"));
+    const QString path = qEnvironmentVariable("VELA_WALLPAPER", vela::defaults::wallpaper());
     QImage image(width, height, QImage::Format_RGB32);
     image.fill(QColor(6, 24, 45));
     QPainter p(&image);

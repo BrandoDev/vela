@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Windows 11 Snap Assist: as soon as a window snaps, the other windows appear
 // as previews in the spaces left free; a click snaps the chosen one there, and
@@ -10,7 +11,6 @@ import QtQuick
 // taskbar stays out).
 Window {
     id: root
-    objectName: "snapAssist"
     visible: false
     color: "transparent"
 
@@ -133,7 +133,7 @@ Window {
                 y: area.y + 4
                 width: area.width - 8
                 height: area.height - 8
-                radius: Theme.radiusLarge
+                radius: Theme.radiusOverlay
                 color: Theme.light ? (active ? Qt.rgba(0.94, 0.94, 0.96, 0.78) : Qt.rgba(0.94, 0.94, 0.96, 0.5))
                     : (active ? Qt.rgba(0.12, 0.12, 0.14, 0.72) : Qt.rgba(0.12, 0.12, 0.14, 0.45))
                 border.width: 1
@@ -165,8 +165,8 @@ Window {
                             required property var modelData
                             width: space.cardWidth
                             height: width * 0.62 + 34
-                            radius: Theme.radiusLarge
-                            color: cardMouse.containsMouse ? Theme.cardHover : Theme.card
+                            radius: Theme.radiusOverlay
+                            color: cardMouse.containsMouse ? Theme.taskCardHover : Theme.taskCard
                             border.width: cardMouse.containsMouse ? 2 : 1
                             border.color: cardMouse.containsMouse ? Theme.accent : Theme.stroke
                             Row {
@@ -184,7 +184,7 @@ Window {
                                     width: parent.width - 24
                                     text: card.modelData.title
                                     color: Theme.text
-                                    font.pixelSize: Theme.fontSmall
+                                    font.pixelSize: Theme.fontCaption
                                     elide: Text.ElideRight
                                 }
                             }

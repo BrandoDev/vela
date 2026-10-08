@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Personalization > Colors: the mode (light, dark, or custom: one for Vela and
 // one for apps) and the accent color, with the Windows 11 palette.

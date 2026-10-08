@@ -14,8 +14,7 @@ target_compile_options(vela-app PRIVATE -Wall -Wextra)
 target_link_libraries(vela-app PUBLIC Qt6::Gui PRIVATE Qt6::GuiPrivate)
 
 # Vela.Controls (docs/polkit-agent.md §8): theme, controls and blur shared by
-# Vela's Qt Quick interfaces. For now the polkit dialog uses it; the shell,
-# Settings and Files will move to it later (P5).
+# Vela's Qt Quick interfaces (the shell, Settings, Files, the polkit dialog).
 #
 # From C++: link vela-controls and vela-controlsplugin,
 # Q_IMPORT_QML_PLUGIN(Vela_ControlsPlugin) and, before loading QML,

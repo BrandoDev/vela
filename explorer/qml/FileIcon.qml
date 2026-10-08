@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // A file's icon: the thumbnail if there is one (images, videos, PDFs),
 // otherwise the type's icon. They load without stalling the view. Shortcuts

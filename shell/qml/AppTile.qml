@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // A Start menu tile: icon and name.
 Item {
@@ -19,8 +20,8 @@ Item {
     Rectangle {
         anchors.fill: parent
         anchors.margins: 3
-        radius: Theme.radiusSmall
-        color: mouse.pressed ? Theme.pressed : Theme.hover
+        radius: Theme.radius
+        color: mouse.pressed ? Theme.subtlePressed : Theme.subtleHover
         opacity: mouse.containsMouse || root.current ? 1 : 0
         border.width: root.current ? 1 : 0
         border.color: Theme.stroke
@@ -54,7 +55,7 @@ Item {
             width: parent.width
             text: root.name
             color: Theme.text
-            font.pixelSize: Theme.fontSmall
+            font.pixelSize: Theme.fontCaption
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
             maximumLineCount: 2

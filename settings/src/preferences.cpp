@@ -8,7 +8,6 @@ extern "C" {
 }
 
 #include "iconprovider.h"
-#include "mica.h"
 
 #include <QDir>
 #include <QTime>
@@ -18,7 +17,6 @@ extern "C" {
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
-#include <QImageReader>
 #include <QLocalSocket>
 #include <QProcess>
 #include <QSaveFile>
@@ -32,8 +30,6 @@ extern "C" {
 
 namespace {
 
-constexpr auto defaultWallpaper = ":/vela/images/vela_splash_169.svg"; // the shell's
-const QColor defaultAccent(0x5b, 0x8c, 0xff);
 
 QSettings shellSettings()
 {
@@ -95,19 +91,18 @@ void Preferences::reload()
 
     QString wallpaper = settings.value(QStringLiteral("appearance/wallpaper")).toString();
     if (wallpaper.isEmpty() || !QFileInfo::exists(wallpaper)) {
-        wallpaper = QString::fromLatin1(defaultWallpaper);
+        wallpaper = vela::defaults::wallpaper();
     }
     const QStringList recent = settings.value(QStringLiteral("appearance/recentWallpapers")).toStringList();
     if (wallpaper != m_wallpaper || recent != m_recentWallpapers) {
         m_wallpaper = wallpaper;
         m_recentWallpapers = recent;
-        computeMica();
         emit wallpaperChanged();
     }
 
     QColor accent(settings.value(QStringLiteral("appearance/accent")).toString());
     if (!accent.isValid()) {
-        accent = defaultAccent;
+        accent = vela::defaults::accent();
     }
     if (accent != m_accent) {
         m_accent = accent;
@@ -141,9 +136,7 @@ void Preferences::reload()
     m_shellTheme = settings.value(QStringLiteral("appearance/shellTheme")).toString() == QLatin1String("light")
         ? QStringLiteral("light")
         : QStringLiteral("dark");
-    computeMica();
     emit appThemeChanged();
-    emit wallpaperChanged();
 
     reloadCompositor();
 }
@@ -345,38 +338,7 @@ void Preferences::setWallpaper(const QString& pathOrUrl)
     settings.sync();
     m_wallpaper = path;
     m_recentWallpapers = recent;
-    computeMica();
     emit wallpaperChanged();
-}
-
-void Preferences::computeMica()
-{
-    // The wallpaper's average color, as the shell computes it for the
-    // compositor.
-    QImageReader reader(m_wallpaper);
-    reader.setScaledSize(QSize(32, 18));
-    const QImage image = reader.read().convertToFormat(QImage::Format_RGB32);
-    if (image.isNull()) {
-        m_tint = QColor();
-        m_mica = micaFromTint({}, true, light());
-        m_micaInactive = micaFromTint({}, false, light());
-        return;
-    }
-    qint64 sum[3] {};
-    for (int y = 0; y < image.height(); ++y) {
-        for (int x = 0; x < image.width(); ++x) {
-            const QRgb pixel = image.pixel(x, y);
-            sum[0] += qRed(pixel);
-            sum[1] += qGreen(pixel);
-            sum[2] += qBlue(pixel);
-        }
-    }
-    const qint64 count = qint64(image.width()) * image.height();
-    // Rounded to 0-255 as in the "wallpaper-tint" command.
-    const QColor tint(int(sum[0] / count), int(sum[1] / count), int(sum[2] / count));
-    m_tint = tint;
-    m_mica = micaFromTint(tint, true, light());
-    m_micaInactive = micaFromTint(tint, false, light());
 }
 
 // --------------------------------------------------- colors and theme --
@@ -422,9 +384,7 @@ void Preferences::setAppTheme(const QString& theme)
                     QStringLiteral("--key"), QStringLiteral("Theme"), QIcon::themeName() });
         }
     }
-    computeMica();
     emit appThemeChanged();
-    emit wallpaperChanged();
 }
 
 void Preferences::setShellTheme(const QString& theme)

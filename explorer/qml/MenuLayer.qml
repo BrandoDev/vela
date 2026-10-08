@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The right-click menus inside Explorer's window, with the same panel as the
 // desktop (MenuPanel.qml, docs/renderer.md §14): it covers the window, menus
@@ -18,7 +19,7 @@ Item {
 
     Component {
         id: panelComponent
-        MenuPanel {}
+        MenuPanel { fill: Theme.flyout }
     }
 
     function open(entries, x, y, opts) {

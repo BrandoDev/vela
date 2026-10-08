@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // The thin Windows 11 scroll bar for a non-draggable Flickable (file views:
 // dragging is for selecting): it widens on hover; the wheel scrolls the view.

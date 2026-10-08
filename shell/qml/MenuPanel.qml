@@ -4,6 +4,7 @@
 import QtQuick
 import QtQuick.Effects
 import QtQuick.Shapes
+import Vela.Controls
 
 // One level of a menu (the menu or one of its submenus), like Windows 11
 // menus: rounded corners, 32-high rows with the icon on the left and the
@@ -24,6 +25,9 @@ Item {
     property bool keyboardMode: false
     property int currentIndex: -1
     property int parentIndex: -1 // the parent's entry that opened it
+    // The shell's menus are surfaces the compositor blurs; an app's are drawn
+    // inside its window (Files: Theme.flyout).
+    property color fill: Theme.popup
 
     // The container (the whole output) to keep it within the edges.
     readonly property real areaWidth: parent ? parent.width : 0
@@ -48,7 +52,7 @@ Item {
 
     FontMetrics {
         id: metrics
-        font.pixelSize: Theme.fontNormal
+        font.pixelSize: Theme.fontBody
     }
 
     function plainText(text) {
@@ -219,7 +223,7 @@ Item {
     // --- look ---
     PanelShadow {
         target: panel
-        radius: Theme.radiusMenu
+        radius: Theme.radiusOverlay
         blur: 16
         offset: Qt.vector2d(0, 4)
         color: Qt.rgba(0, 0, 0, 0.4)
@@ -227,8 +231,8 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: Theme.radiusMenu
-        color: Theme.popup
+        radius: Theme.radiusOverlay
+        color: panel.fill
         border.width: 1
         border.color: Theme.stroke
     }
@@ -283,8 +287,8 @@ Item {
                             height: 36
                             Rectangle {
                                 anchors.fill: parent
-                                radius: Theme.radiusSmall - 2
-                                color: iconMouse.pressed ? Theme.pressed : Theme.hover
+                                radius: Theme.radius
+                                color: iconMouse.pressed ? Theme.subtlePressed : Theme.subtleHover
                                 opacity: iconMouse.containsMouse && iconButton.usable ? 1 : 0
                             }
                             Image {
@@ -312,8 +316,8 @@ Item {
                     x: 16
                     anchors.verticalCenter: parent.verticalCenter
                     text: row.entry.header || ""
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fontSmall
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontCaption
                     font.weight: Font.DemiBold
                 }
 
@@ -325,8 +329,8 @@ Item {
                         x: 4
                         width: parent.width - 8
                         height: parent.height
-                        radius: Theme.radiusSmall - 2
-                        color: rowMouse.pressed ? Theme.pressed : Theme.hover
+                        radius: Theme.radius
+                        color: rowMouse.pressed ? Theme.subtlePressed : Theme.subtleHover
                         opacity: row.isCurrent && row.usable ? 1 : 0
                     }
 
@@ -380,16 +384,16 @@ Item {
                         // opened from the keyboard.
                         textFormat: panel.keyboardMode ? Text.StyledText : Text.PlainText
                         text: panel.keyboardMode ? panel.styledText(row.entry.text) : panel.plainText(row.entry.text)
-                        color: row.usable ? Theme.text : Theme.textDim
-                        font.pixelSize: Theme.fontNormal
+                        color: row.usable ? Theme.text : Theme.textSecondary
+                        font.pixelSize: Theme.fontBody
                         elide: Text.ElideRight
                     }
                     Text {
                         id: shortcutText
                         anchors { right: parent.right; rightMargin: row.entry.children ? 36 : 16; verticalCenter: parent.verticalCenter }
                         text: row.entry.shortcut || ""
-                        color: Theme.textDim
-                        font.pixelSize: Theme.fontSmall
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontCaption
                     }
                     // Submenu arrow.
                     Shape {
@@ -399,7 +403,7 @@ Item {
                         height: 10
                         preferredRendererType: Shape.CurveRenderer
                         ShapePath {
-                            strokeColor: Theme.textDim
+                            strokeColor: Theme.textSecondary
                             strokeWidth: 1.2
                             fillColor: "transparent"
                             capStyle: ShapePath.RoundCap
@@ -446,8 +450,8 @@ Item {
                     height: 28
                     Rectangle {
                         anchors.fill: parent
-                        radius: Theme.radiusSmall - 2
-                        color: Theme.hover
+                        radius: Theme.radius
+                        color: Theme.subtleHover
                         opacity: pinMouse.containsMouse ? 1 : 0
                     }
                     Shape {

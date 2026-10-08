@@ -298,15 +298,16 @@ class FakeShell:
         with self.lock:
             return [line for line in self.lines if line.startswith(prefix)]
 
-    def wait_for(self, prefix, timeout=5.0):
-        """The last line starting with `prefix`, as soon as it arrives."""
+    def wait_for(self, prefix, timeout=5.0, containing=""):
+        """The last line starting with `prefix` (and `containing` that), as
+        soon as it arrives."""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            lines = self.received(prefix)
+            lines = [line for line in self.received(prefix) if containing in line]
             if lines:
                 return lines[-1]
             time.sleep(0.05)
-        raise TimeoutError(f"the shell never received «{prefix}»; it got: {self.received()[-10:]}")
+        raise TimeoutError(f"the shell never received «{prefix}…{containing}»; it got: {self.received()[-10:]}")
 
     def clear(self):
         with self.lock:

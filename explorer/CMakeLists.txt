@@ -5,7 +5,7 @@
 # fast. It reuses shell pieces: installed apps ("Open with"), thumbnails, KDE
 # service menus, system actions and the right-click menu component
 # (MenuPanel.qml).
-find_package(Qt6 6.5 REQUIRED COMPONENTS DBus Gui Network Qml Quick Svg)
+find_package(Qt6 6.5 REQUIRED COMPONENTS DBus Gui GuiPrivate Network Qml Quick QuickControls2 Svg)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -19,15 +19,12 @@ add_library(vela-files-core OBJECT
     src/foldermodel.h
     src/places.cpp
     src/places.h
-    ${SHELL_SRC}/appearance.cpp
-    ${SHELL_SRC}/appearance.h
     ${SHELL_SRC}/appmodel.cpp
     ${SHELL_SRC}/appmodel.h
     ${SHELL_SRC}/filethumbnails.cpp
     ${SHELL_SRC}/filethumbnails.h
     ${SHELL_SRC}/iconprovider.h
     ${SHELL_SRC}/links.h
-    ${SHELL_SRC}/mica.h
     ${SHELL_SRC}/servicemenus.cpp
     ${SHELL_SRC}/servicemenus.h
     ${SHELL_SRC}/systemactions.cpp
@@ -46,7 +43,6 @@ qt_add_executable(vela-files src/main.cpp)
 
 set(FILES_QML_FILES
     qml/Main.qml
-    qml/Theme.qml
     qml/TabPage.qml
     qml/NavPane.qml
     qml/AddressBar.qml
@@ -71,7 +67,6 @@ foreach(file IN LISTS FILES_QML_FILES)
     get_filename_component(name ${file} NAME)
     set_source_files_properties(${file} PROPERTIES QT_RESOURCE_ALIAS ${name})
 endforeach()
-set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(vela-files
     URI Vela.Files
@@ -79,7 +74,11 @@ qt_add_qml_module(vela-files
     QML_FILES ${FILES_QML_FILES})
 
 target_compile_options(vela-files PRIVATE -Wall -Wextra)
-target_link_libraries(vela-files PRIVATE vela-files-core vela-app) # vela-app: the mouse's Back and Forward buttons (common/)
+target_link_libraries(vela-files PRIVATE
+    vela-files-core
+    vela-controls # Theme, Style (common/)
+    vela-controlsplugin
+    vela-app) # the mouse's Back and Forward buttons (common/)
 
 # The tests (ctest): copies and moves without a UI, with the cases that must
 # never lose data (replace, disk full, type change).

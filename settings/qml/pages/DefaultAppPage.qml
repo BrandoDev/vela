@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick
+import Vela.Controls
 
 // Apps > Default apps > an app, like Windows 11: the file and link types it
 // can open, with who opens them today, and "Set default" for all at once.

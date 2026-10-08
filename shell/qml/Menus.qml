@@ -4,6 +4,7 @@
 pragma Singleton
 
 import QtQuick
+import Vela.Controls
 
 // All of Vela's right-click menus go through here (docs/renderer.md §14):
 // whoever wants a menu calls Menus.open(entries, x, y, options) and the
