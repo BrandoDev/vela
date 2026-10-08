@@ -12,6 +12,7 @@ class AppModel;
 namespace vela::trash {
 // Empty Vela Files' FreeDesktop home trash without external gio/ktrash tools.
 // Returns entries that could not be deleted; never follows symlinks.
+QStringList empty(const QString& trashDirectory); // also used by the isolated test
 QStringList emptyHome();
 }
 
