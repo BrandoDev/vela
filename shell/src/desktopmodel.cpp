@@ -4,6 +4,7 @@
 #include "desktopmodel.h"
 
 #include "appmodel.h"
+#include "systemactions.h"
 
 #include <QCoreApplication>
 #include <QClipboard>
@@ -19,6 +20,8 @@
 #include <QMimeData>
 #include <QMimeDatabase>
 #include <QProcess>
+#include <QPointer>
+#include <QThreadPool>
 #include <QSet>
 #include <QSettings>
 #include <QStandardPaths>
@@ -499,11 +502,22 @@ void DesktopModel::open(const QStringList& paths)
 {
     for (const QString& path : paths) {
         if (path == trashPath) {
-            runDetached(QStringLiteral("xdg-open"), { trashPath }, m_dir);
+            runDetached(velaFilesExecutable(), { trashFilesDir() }, m_dir);
         } else if (path.endsWith(QLatin1String(".desktop")) && m_apps->launchDesktopFile(path)) {
             continue;
         } else {
-            runDetached(QStringLiteral("xdg-open"), { path }, m_dir);
+            const QFileInfo info(path);
+            if (info.isDir()) {
+                const QString files = velaFilesExecutable();
+                if (files.isEmpty() || !runDetached(files, { path }, m_dir))
+                    qWarning("vela-shell: couldn't open folder %s in Vela Files", qPrintable(path));
+            } else if (info.isFile()) {
+                const QString app = defaultAppFor(QMimeDatabase().mimeTypeForFile(info).name());
+                if (app.isEmpty() || !m_apps->launchWithFile(app, QUrl::fromLocalFile(path).toString()))
+                    emit chooseAppRequested(path);
+            } else {
+                qWarning("vela-shell: no handler for %s", qPrintable(path));
+            }
         }
     }
 }
@@ -588,11 +602,16 @@ bool DesktopModel::trashEmpty() const
 
 void DesktopModel::emptyTrash()
 {
-    if (!QStandardPaths::findExecutable(QStringLiteral("gio")).isEmpty()) {
-        runDetached(QStringLiteral("gio"), { QStringLiteral("trash"), QStringLiteral("--empty") }, m_dir);
-    } else {
-        runDetached(QStringLiteral("ktrash6"), { QStringLiteral("--empty") }, m_dir);
-    }
+    QPointer<DesktopModel> self(this);
+    QThreadPool::globalInstance()->start([self] {
+        const QStringList failed = vela::trash::emptyHome();
+        if (!failed.isEmpty()) {
+            qWarning("vela-shell: could not empty Recycle Bin entries: %s", qPrintable(failed.join(u", ")));
+        }
+        QMetaObject::invokeMethod(qApp, [self] {
+            if (self) self->reload();
+        }, Qt::QueuedConnection);
+    });
 }
 
 void DesktopModel::pushUndo(UndoStep step)
