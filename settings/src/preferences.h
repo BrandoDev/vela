@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "defaults.h"
+
 #include <QColor>
 #include <QFileSystemWatcher>
 #include <QTimer>
@@ -25,13 +27,14 @@ class Preferences : public QObject {
     Q_PROPERTY(QString wallpaper READ wallpaper NOTIFY wallpaperChanged)
     Q_PROPERTY(QStringList recentWallpapers READ recentWallpapers NOTIFY wallpaperChanged)
     Q_PROPERTY(QStringList systemWallpapers READ systemWallpapers CONSTANT)
+    Q_PROPERTY(QString defaultWallpaper READ defaultWallpaper CONSTANT) // Vela's
     Q_PROPERTY(QColor accent READ accent WRITE setAccent NOTIFY accentChanged)
     Q_PROPERTY(QString appTheme READ appTheme WRITE setAppTheme NOTIFY appThemeChanged)
     // Vela's mode (taskbar, menus, panels): "dark" or "light".
     Q_PROPERTY(QString shellTheme READ shellTheme WRITE setShellTheme NOTIFY appThemeChanged)
     // Settings itself is light (it follows the apps' mode).
     Q_PROPERTY(bool light READ light NOTIFY appThemeChanged)
-    // "l/" or "d/" for image://icon, a moment after the mode (applyIconTheme).
+    // "l/" or "d/" for image://icon, a moment after the mode (switchIconMode).
     Q_PROPERTY(QString iconMode READ iconMode NOTIFY iconModeChanged)
     Q_PROPERTY(QString taskbarAlignment READ taskbarAlignment WRITE setTaskbarAlignment NOTIFY taskbarChanged)
     Q_PROPERTY(bool endTask READ endTask WRITE setEndTask NOTIFY taskbarChanged)
@@ -96,6 +99,7 @@ public:
     explicit Preferences(QObject* parent = nullptr);
 
     QString wallpaper() const { return m_wallpaper; }
+    QString defaultWallpaper() const { return vela::defaults::wallpaper(); }
     QStringList recentWallpapers() const { return m_recentWallpapers; }
     QStringList systemWallpapers() const;
     Q_INVOKABLE void setWallpaper(const QString& pathOrUrl);

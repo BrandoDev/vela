@@ -9,7 +9,6 @@ import QtQuick
 // zones. Zones are in twelfths of the usable area.
 Window {
     id: root
-    objectName: "snapLayouts"
     visible: false
     color: "transparent"
 

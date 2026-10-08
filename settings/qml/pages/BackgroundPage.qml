@@ -69,7 +69,7 @@ Page {
                     width: parent.width - 36
                     spacing: 8
                     Repeater {
-                        model: [":/vela/images/vela_splash_169.svg"].concat(Prefs.recentWallpapers)
+                        model: [Prefs.defaultWallpaper].concat(Prefs.recentWallpapers)
                         delegate: Thumb { required property string modelData; path: modelData }
                     }
                 }

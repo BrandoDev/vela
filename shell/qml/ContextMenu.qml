@@ -8,7 +8,6 @@ import QtQuick
 // closes them. Opened with Menus.open().
 Window {
     id: root
-    objectName: "contextMenu"
     visible: false
     color: "transparent"
 

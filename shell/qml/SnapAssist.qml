@@ -10,7 +10,6 @@ import QtQuick
 // taskbar stays out).
 Window {
     id: root
-    objectName: "snapAssist"
     visible: false
     color: "transparent"
 

@@ -8,7 +8,6 @@ import QtQuick.Shapes
 // window is as tall as the tiles: the rest of the output stays clickable.
 Window {
     id: root
-    objectName: "notifications"
     width: 380
     height: Math.max(1, stack.implicitHeight + 24)
     visible: Notifications.count > 0

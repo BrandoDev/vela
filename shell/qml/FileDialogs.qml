@@ -11,7 +11,6 @@ import QtQuick
 // - New > Shortcut: the two-step wizard (the item, then the name).
 Window {
     id: root
-    objectName: "fileDialogs"
     visible: false
     width: panel.width + 64
     height: panel.height + 64

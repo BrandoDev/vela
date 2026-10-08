@@ -41,7 +41,7 @@ function(vela_server_protocol xml name)
         OUTPUT ${header}
         COMMAND ${WAYLAND_SCANNER} server-header ${xml} ${header}
         DEPENDS ${xml}
-        COMMENT "Genero ${name}-protocol.h")
+        COMMENT "Generating ${name}-protocol.h")
     list(APPEND VELA_PROTOCOL_HEADERS ${header})
     set(VELA_PROTOCOL_HEADERS ${VELA_PROTOCOL_HEADERS} PARENT_SCOPE)
 endfunction()
@@ -62,7 +62,7 @@ function(vela_own_protocol xml name)
         COMMAND ${WAYLAND_SCANNER} server-header ${xml} ${header}
         COMMAND ${WAYLAND_SCANNER} private-code ${xml} ${code}
         DEPENDS ${xml}
-        COMMENT "Genero ${name} (server)")
+        COMMENT "Generating the ${name} server")
     list(APPEND VELA_OWN_PROTOCOL_SOURCES ${header} ${code})
     set(VELA_OWN_PROTOCOL_SOURCES ${VELA_OWN_PROTOCOL_SOURCES} PARENT_SCOPE)
 endfunction()
@@ -82,7 +82,7 @@ function(vela_client_protocol xml name)
         COMMAND ${WAYLAND_SCANNER} client-header ${xml} ${header}
         COMMAND ${WAYLAND_SCANNER} private-code ${xml} ${code}
         DEPENDS ${xml}
-        COMMENT "Genero ${name} (client)")
+        COMMENT "Generating the ${name} client")
     list(APPEND VELA_CLIENT_PROTOCOL_SOURCES ${header} ${code})
     set(VELA_CLIENT_PROTOCOL_SOURCES ${VELA_CLIENT_PROTOCOL_SOURCES} PARENT_SCOPE)
 endfunction()

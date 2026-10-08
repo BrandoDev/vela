@@ -8,7 +8,6 @@ import QtQuick
 // just draw.
 Window {
     id: root
-    objectName: "switcher"
 
     visible: false
     width: Screen.width

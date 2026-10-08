@@ -3,6 +3,8 @@
 
 #include "config.h"
 
+#include "defaults.h"
+
 #include <QDir>
 #include <QFileInfo>
 #include <QSettings>
@@ -47,7 +49,7 @@ void Config::reload()
         wallpaper = settings.value(QStringLiteral("appearance/wallpaper")).toString();
     }
     if (wallpaper.isEmpty() || (!wallpaper.startsWith(u':') && !QFileInfo::exists(wallpaper))) {
-        wallpaper = defaultWallpaper();
+        wallpaper = vela::defaults::wallpaper();
     }
     if (wallpaper != m_wallpaper) {
         m_wallpaper = wallpaper;
@@ -56,7 +58,7 @@ void Config::reload()
 
     QColor accent(settings.value(QStringLiteral("appearance/accent")).toString());
     if (!accent.isValid()) {
-        accent = defaultAccent();
+        accent = vela::defaults::accent();
     }
     if (accent != m_accent) {
         m_accent = accent;

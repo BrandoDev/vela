@@ -32,7 +32,6 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
-#include <QTimer>
 #include <QQuickWindow>
 #include <QStandardPaths>
 
@@ -154,13 +153,9 @@ int main(int argc, char* argv[])
     Preferences preferences;
     // Icons from the theme matching the apps' mode (breeze or breeze-dark).
     applyIconTheme(preferences.light());
-    preferences.setIconMode(preferences.light() ? QStringLiteral("l/") : QStringLiteral("d/"));
-    QObject::connect(&preferences, &Preferences::appThemeChanged, &preferences, [&preferences] {
-        applyIconTheme(preferences.light());
-        QTimer::singleShot(300, &preferences, [&preferences] {
-            preferences.setIconMode(preferences.light() ? QStringLiteral("l/") : QStringLiteral("d/"));
-        });
-    });
+    preferences.setIconMode(iconModeFor(preferences.light()));
+    QObject::connect(&preferences, &Preferences::appThemeChanged, &preferences,
+        [&preferences] { switchIconMode(&preferences, preferences.light()); });
     Displays displays;
     Audio audio;
     Network network;

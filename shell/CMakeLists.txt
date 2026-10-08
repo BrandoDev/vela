@@ -101,7 +101,7 @@ foreach(name
         COMMAND ${WAYLAND_SCANNER} client-header ${xml} ${header}
         COMMAND ${WAYLAND_SCANNER} private-code ${xml} ${code}
         DEPENDS ${xml}
-        COMMENT "Genero il client di ${base}")
+        COMMENT "Generating the ${base} client")
     target_sources(vela-shell PRIVATE ${header} ${code})
 endforeach()
 target_include_directories(vela-shell PRIVATE ${SHELL_GENERATED_DIR})

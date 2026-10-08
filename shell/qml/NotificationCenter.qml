@@ -9,7 +9,6 @@ import QtQuick
 // bottom right.
 Window {
     id: root
-    objectName: "notificationCenter"
     visible: false
     width: 384
     height: column.height + 24

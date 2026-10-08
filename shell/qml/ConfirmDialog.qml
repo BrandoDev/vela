@@ -8,7 +8,6 @@ import QtQuick
 // Menus.confirm(); Enter confirms, Esc gives up.
 Window {
     id: root
-    objectName: "confirmDialog"
     visible: false
     width: 420
     height: 170

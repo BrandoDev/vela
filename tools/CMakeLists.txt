@@ -24,7 +24,7 @@ function(vela_client_protocol target xml name)
         COMMAND ${WAYLAND_SCANNER} client-header ${xml} ${header}
         COMMAND ${WAYLAND_SCANNER} private-code ${xml} ${code}
         DEPENDS ${xml}
-        COMMENT "Genero il client di ${name}")
+        COMMENT "Generating the ${name} client")
     add_library(${target} STATIC ${code} ${header})
     target_include_directories(${target} PUBLIC ${TOOLS_GENERATED_DIR})
     target_link_libraries(${target} PUBLIC PkgConfig::TOOLS_WAYLAND_CLIENT)

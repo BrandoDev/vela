@@ -10,7 +10,6 @@ import QtQuick
 // click on the icon mutes. It stays while the mouse is on it.
 Window {
     id: root
-    objectName: "volumeOsd"
     visible: false
     width: 232
     height: 64 // the pill and the room it rises from

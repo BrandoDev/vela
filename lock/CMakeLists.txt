@@ -25,7 +25,7 @@ foreach(xml
         COMMAND ${WAYLAND_SCANNER} client-header ${LOCK_WAYLAND_PROTOCOLS_DIR}/${xml} ${header}
         COMMAND ${WAYLAND_SCANNER} private-code ${LOCK_WAYLAND_PROTOCOLS_DIR}/${xml} ${code}
         DEPENDS ${LOCK_WAYLAND_PROTOCOLS_DIR}/${xml}
-        COMMENT "Genero il client di ${name}")
+        COMMENT "Generating the ${name} client")
     list(APPEND LOCK_PROTOCOL_SOURCES ${header} ${code})
 endforeach()
 

@@ -9,7 +9,6 @@ import QtQuick
 // turn it on.
 Window {
     id: root
-    objectName: "clipboardPanel"
     visible: false
     width: 384
     height: panel.height + 24

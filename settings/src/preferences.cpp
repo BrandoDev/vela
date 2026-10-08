@@ -32,8 +32,6 @@ extern "C" {
 
 namespace {
 
-constexpr auto defaultWallpaper = ":/vela/images/vela_splash_169.svg"; // the shell's
-const QColor defaultAccent(0x5b, 0x8c, 0xff);
 
 QSettings shellSettings()
 {
@@ -95,7 +93,7 @@ void Preferences::reload()
 
     QString wallpaper = settings.value(QStringLiteral("appearance/wallpaper")).toString();
     if (wallpaper.isEmpty() || !QFileInfo::exists(wallpaper)) {
-        wallpaper = QString::fromLatin1(defaultWallpaper);
+        wallpaper = vela::defaults::wallpaper();
     }
     const QStringList recent = settings.value(QStringLiteral("appearance/recentWallpapers")).toStringList();
     if (wallpaper != m_wallpaper || recent != m_recentWallpapers) {
@@ -107,7 +105,7 @@ void Preferences::reload()
 
     QColor accent(settings.value(QStringLiteral("appearance/accent")).toString());
     if (!accent.isValid()) {
-        accent = defaultAccent;
+        accent = vela::defaults::accent();
     }
     if (accent != m_accent) {
         m_accent = accent;

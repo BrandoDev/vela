@@ -8,7 +8,6 @@ import QtQuick.Dialogs
 // opens a program, a folder, a document or an address.
 Window {
     id: root
-    objectName: "runDialog"
     visible: false
     width: 420
     height: 196

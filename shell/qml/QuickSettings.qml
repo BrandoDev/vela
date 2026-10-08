@@ -13,7 +13,6 @@ import QtQuick.Shapes
 // the volume opens the sound page (outputs and the mixer, Win+Ctrl+V).
 Window {
     id: root
-    objectName: "quickSettings"
     visible: false
     width: 384
     height: panel.height + 24

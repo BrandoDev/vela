@@ -20,7 +20,7 @@ class Appearance : public QObject {
     Q_PROPERTY(QColor mica READ mica NOTIFY changed)
     Q_PROPERTY(QColor micaInactive READ micaInactive NOTIFY changed)
     // "l/" or "d/" for image://icon: changes a moment after the mode, once the
-    // icon caches are emptied (applyIconTheme).
+    // icon caches are emptied (switchIconMode).
     Q_PROPERTY(QString iconMode READ iconMode NOTIFY iconModeChanged)
 
 public:
@@ -35,6 +35,7 @@ public:
 
     // Starts watching the files (after the first frame: startup stays fast).
     void watch();
+    void setIconMode(const QString& mode); // switchIconMode
 
 signals:
     void changed();

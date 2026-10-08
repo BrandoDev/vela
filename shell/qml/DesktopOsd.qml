@@ -7,7 +7,6 @@ import QtQuick
 // desktops (Win+Ctrl+arrows), like Windows 11.
 Window {
     id: root
-    objectName: "desktopOsd"
     visible: false
     width: label.implicitWidth + 64
     height: 64

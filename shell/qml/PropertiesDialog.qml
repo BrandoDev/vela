@@ -10,7 +10,6 @@ import QtQuick
 // Cancel closes.
 Window {
     id: root
-    objectName: "propertiesDialog"
     visible: false
     width: 440
     height: 600

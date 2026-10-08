@@ -3,6 +3,7 @@
 
 #include "appearance.h"
 
+#include "defaults.h"
 #include "iconprovider.h"
 #include "mica.h"
 
@@ -51,7 +52,7 @@ void Appearance::reload()
     const bool light = shell.value(key).toString() == QLatin1String("light");
     QColor accent(shell.value(QStringLiteral("appearance/accent")).toString());
     if (!accent.isValid()) {
-        accent = QColor(0x5b, 0x8c, 0xff);
+        accent = vela::defaults::accent();
     }
     const QColor tint = cachedWallpaperTint();
     const QColor mica = micaFromTint(tint, true, light);
@@ -64,17 +65,19 @@ void Appearance::reload()
     m_accent = accent;
     m_mica = mica;
     m_micaInactive = micaInactive;
-    applyIconTheme(light); // before QML asks for the icons
-    const QString mode = light ? QStringLiteral("l/") : QStringLiteral("d/");
     if (first) {
-        m_iconMode = mode;
+        applyIconTheme(light); // before QML asks for the icons
+        m_iconMode = iconModeFor(light);
         return;
     }
+    switchIconMode(this, light);
     emit changed();
-    QTimer::singleShot(300, this, [this, mode] {
-        if (mode != m_iconMode) {
-            m_iconMode = mode;
-            emit iconModeChanged();
-        }
-    });
+}
+
+void Appearance::setIconMode(const QString& mode)
+{
+    if (mode != m_iconMode) {
+        m_iconMode = mode;
+        emit iconModeChanged();
+    }
 }

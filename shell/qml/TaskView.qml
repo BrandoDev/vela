@@ -9,7 +9,6 @@ import QtQuick
 // desktop moves there. Right button: the menus of docs/renderer.md §14.10.
 Window {
     id: root
-    objectName: "taskView"
     visible: false
     color: "transparent"
 

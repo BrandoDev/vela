@@ -10,7 +10,6 @@ import QtQuick
 // places, and a click brings them all forward together.
 Window {
     id: root
-    objectName: "taskbarPreview"
     visible: false
     width: panel.width + 32
     height: panel.height + 16

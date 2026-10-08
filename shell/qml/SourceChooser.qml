@@ -9,7 +9,6 @@ import QtQuick
 // session/xdpw-vela.conf.in).
 Window {
     id: root
-    objectName: "sourceChooser"
     visible: false
     width: 760
     height: 540

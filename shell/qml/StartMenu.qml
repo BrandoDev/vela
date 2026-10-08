@@ -9,7 +9,6 @@ import QtQuick.Effects
 // opens rising and fading; it closes on a click outside or with Esc.
 Window {
     id: root
-    objectName: "startMenu"
 
     visible: false
     width: 660

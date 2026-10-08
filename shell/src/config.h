@@ -34,7 +34,7 @@ class Config : public QObject {
     Q_PROPERTY(QString appTheme READ appTheme NOTIFY themeChanged)
     // Icons for the shell's mode ("l/" or "d/" for image://icon): they change
     // a moment after the mode, once the icon caches have been emptied (see
-    // applyIconTheme).
+    // switchIconMode).
     Q_PROPERTY(QString iconMode READ iconMode NOTIFY iconModeChanged)
 
 public:
@@ -58,9 +58,6 @@ public:
             emit iconModeChanged();
         }
     }
-
-    static QColor defaultAccent() { return QColor(0x5b, 0x8c, 0xff); }
-    static QString defaultWallpaper() { return QStringLiteral(":/vela/images/vela_splash_169.svg"); }
 
 signals:
     void wallpaperChanged();
