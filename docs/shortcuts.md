@@ -62,6 +62,10 @@ The keyboard's media and volume keys (and a volume knob) work whatever window ha
 | Volume down / up | <kbd>🔉</kbd> / <kbd>🔊</kbd>, or the knob |
 | Mute | <kbd>🔇</kbd> |
 
+## Back and Forward in Vela's apps
+
+File Explorer, Settings and quick settings' pages go back and forward the same way, whatever has the focus: the mouse's side buttons, the keyboard's Back/Forward keys and <kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd>. Every Vela app gets the side buttons from `common/` (it links `vela-app`): they become Qt's Back and Forward commands, so an app only handles `StandardKey.Back` and `StandardKey.Forward`. Pressed on a window that isn't active, the button activates it and then goes back, like on Windows.
+
 ## Session and system
 
 | Action | Shortcut |

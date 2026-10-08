@@ -428,9 +428,8 @@ Item {
             const alt = event.modifiers & Qt.AltModifier
             const view = contentLoader.item
             event.accepted = true
-            if (alt && event.key === Qt.Key_Left || event.key === Qt.Key_Back) page.back()
-            else if (alt && event.key === Qt.Key_Right || event.key === Qt.Key_Forward) page.forward()
-            else if (alt && event.key === Qt.Key_Up) page.up()
+            // Back and Forward (Alt+arrows): Main.qml, for the whole window.
+            if (alt && event.key === Qt.Key_Up) page.up()
             else if (event.key === Qt.Key_Backspace && !page.typed) page.back()
             else if (event.key === Qt.Key_F5 || (ctrl && event.key === Qt.Key_R)) page.refresh()
             else if (alt && event.key === Qt.Key_P) win.togglePane(shift ? "details" : "preview")

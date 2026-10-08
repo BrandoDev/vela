@@ -82,14 +82,40 @@ Window {
         return list
     }
 
-    function navigate(name) {
+    function navigate(name, fromHistory) {
         name = aliases[name] || name
         if (!pages[name]) {
             name = "home"
         }
+        if (!fromHistory && (name !== current || history.length === 0)) {
+            const h = history.slice(0, historyIndex + 1)
+            h.push(name)
+            history = h
+            historyIndex = h.length - 1
+        }
         current = name
         search.text = ""
     }
+
+    // The pages visited, for Back and Forward like Windows 11's Settings:
+    // Alt+arrows, the keyboard's Back/Forward keys and the mouse's side
+    // buttons (common/navigationbuttons.cpp), whatever has the focus.
+    property var history: []
+    property int historyIndex: -1
+    function back() {
+        if (historyIndex > 0) {
+            historyIndex--
+            navigate(history[historyIndex], true)
+        }
+    }
+    function forward() {
+        if (historyIndex < history.length - 1) {
+            historyIndex++
+            navigate(history[historyIndex], true)
+        }
+    }
+    Shortcut { sequences: [StandardKey.Back]; onActivated: root.back() }
+    Shortcut { sequences: [StandardKey.Forward]; onActivated: root.forward() }
 
     Component.onCompleted: navigate(Router.initialPage)
 

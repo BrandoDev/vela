@@ -89,6 +89,11 @@ Window {
         function onEjected(error) { if (error !== "") root.showError(error) }
     }
 
+    // Back and Forward: Alt+arrows, the keyboard's Back/Forward keys and the
+    // mouse's side buttons (common/navigationbuttons.cpp), whatever has the
+    // focus.
+    Shortcut { sequences: [StandardKey.Back]; onActivated: if (root.current) root.current.back() }
+    Shortcut { sequences: [StandardKey.Forward]; onActivated: if (root.current) root.current.forward() }
     Shortcut { sequence: "Ctrl+T"; onActivated: root.newTab("home:", "") }
     Shortcut { sequence: "Ctrl+W"; onActivated: root.closeTab(root.currentIndex) }
     Shortcut { sequence: "Ctrl+Tab"; onActivated: root.currentIndex = (root.currentIndex + 1) % root.tabs.length }
@@ -204,19 +209,6 @@ Window {
     Item {
         id: pages
         anchors { left: parent.left; right: parent.right; top: strip.bottom; bottom: parent.bottom }
-    }
-
-    // The mouse side buttons: Back and Forward, like in Windows. Other
-    // buttons, the wheel and dragged files pass to what's below.
-    MouseArea {
-        anchors.fill: pages
-        z: 90
-        acceptedButtons: Qt.BackButton | Qt.ForwardButton
-        onPressed: mouse => {
-            if (!root.current) return
-            if (mouse.button === Qt.BackButton) root.current.back()
-            else root.current.forward()
-        }
     }
 
     ProgressPanel {

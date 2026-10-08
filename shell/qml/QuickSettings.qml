@@ -100,6 +100,14 @@ Window {
         function onNotificationCenterRequested() { root.close() }
     }
 
+    // Back from a page: Alt+Left, the keyboard's Back key and the mouse's
+    // side button (common/navigationbuttons.cpp), like the arrow at the top.
+    Shortcut {
+        sequences: [StandardKey.Back]
+        enabled: root.page !== ""
+        onActivated: root.showPage("")
+    }
+
     onActiveChanged: {
         if (!active && visible && !Menus.isOpen) {
             close()

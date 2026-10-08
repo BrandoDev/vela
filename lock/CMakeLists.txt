@@ -37,7 +37,7 @@ qt_add_resources(vela-lock "images"
     FILES ${PROJECT_SOURCE_DIR}/images/vela_splash_169.svg)
 target_include_directories(vela-lock PRIVATE ${LOCK_GENERATED_DIR} ${PROJECT_SOURCE_DIR}/shell/src)
 target_compile_options(vela-lock PRIVATE -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
-target_link_libraries(vela-lock PRIVATE Qt6::Gui Qt6::Svg PkgConfig::LOCK_DEPS ${PAM_LIBRARY})
+target_link_libraries(vela-lock PRIVATE Qt6::Gui Qt6::Svg PkgConfig::LOCK_DEPS ${PAM_LIBRARY} vela-app)
 
 install(TARGETS vela-lock RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 # The PAM service: the same check as a console login.

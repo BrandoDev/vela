@@ -108,7 +108,8 @@ target_link_libraries(vela-settings PRIVATE
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
-    Qt6::Svg)
+    Qt6::Svg
+    vela-app) # the mouse's Back and Forward buttons (common/)
 
 install(TARGETS vela-settings RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES vela-settings.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)

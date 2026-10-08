@@ -161,7 +161,8 @@ target_link_libraries(vela-shell PRIVATE
     Qt6::WaylandClient
     PkgConfig::SHELL_WAYLAND_CLIENT
     Qt6::GuiPrivate # the taskbar's wl_surface (see foreigntoplevels.cpp)
-    LayerShellQt::Interface)
+    LayerShellQt::Interface
+    vela-app) # the mouse's Back and Forward buttons (common/)
 
 install(TARGETS vela-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 

@@ -79,7 +79,7 @@ qt_add_qml_module(vela-files
     QML_FILES ${FILES_QML_FILES})
 
 target_compile_options(vela-files PRIVATE -Wall -Wextra)
-target_link_libraries(vela-files PRIVATE vela-files-core)
+target_link_libraries(vela-files PRIVATE vela-files-core vela-app) # vela-app: the mouse's Back and Forward buttons (common/)
 
 # The tests (ctest): copies and moves without a UI, with the cases that must
 # never lose data (replace, disk full, type change).
