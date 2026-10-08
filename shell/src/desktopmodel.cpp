@@ -4,7 +4,7 @@
 #include "desktopmodel.h"
 
 #include "appmodel.h"
-#include "trash.h"
+#include "systemactions.h"
 
 #include <QCoreApplication>
 #include <QClipboard>
