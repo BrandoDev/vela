@@ -27,14 +27,13 @@ depends=(
     'wlroots0.20' 'wayland' 'libxkbcommon' 'pixman' 'libinput' 'libdrm' 'mesa' 'vulkan-icd-loader'
     'freetype2' 'harfbuzz' 'fontconfig' 'librsvg' 'cairo'
     'qt6-base' 'qt6-declarative' 'qt6-svg' 'qt6-wayland' 'layer-shell-qt'
-    'pam' 'hicolor-icon-theme'
+    'pam' 'polkit' 'hicolor-icon-theme'
 )
 makedepends=('git' 'cmake' 'shaderc' 'vulkan-headers' 'wayland-protocols' 'qt6-tools')
 optdepends=(
     'xorg-xwayland: X11 apps (Steam, many games)'
     'xdg-desktop-portal-wlr: screen sharing'
     'xdg-desktop-portal-kde: file chooser and other portals for apps'
-    'polkit-kde-agent: the password prompt for system actions'
     'breeze-icons: Vela icons (breeze and breeze-dark)'
     'plasma-workspace: light or dark colors for KDE apps'
     'networkmanager: network and Wi-Fi (quick settings and Settings)'

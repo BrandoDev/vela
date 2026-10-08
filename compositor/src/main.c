@@ -38,6 +38,8 @@ static void print_usage(const char *program)
            "                     otherwise screen-off= in ~/.config/vela/vela.conf)\n"
            "  VELA_LOCK_ON_IDLE=0  when idle, turn screens off without locking\n"
            "  VELA_LOCK          locker to use instead of vela-lock\n"
+           "  VELA_POLKIT_AGENT  polkit agent to start instead of vela-polkit-agent, 0: none\n"
+           "                     (by default only in a real session; polkit-agent= in vela.conf)\n"
            "  VELA_VULKAN_VALIDATION=1  Vulkan validation layers (for development)\n"
            "  VELA_NATURAL_SCROLL=0  classic touchpad scrolling\n"
            "  VELA_STATS=1       every 2 s, per output: fps, frame cost, latency, missed vblanks\n"

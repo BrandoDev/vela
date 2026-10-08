@@ -239,8 +239,12 @@ The whole design is written down in [docs/renderer.md](docs/renderer.md).
 - If the shell crashes, the compositor restarts it, and your windows stay open.
 - A **secure lock screen** (`ext-session-lock-v1`): if the locker dies, the screen stays
   black and locked, and the locker is restarted.
-- **Integrates with KDE's services**: portals, polkit agent, the KDE wallet (so Chrome,
-  Brave and VS Code keep their logins), color schemes and icon themes.
+- **User Account Control.** When an app needs administrator rights, the whole desktop
+  dims and blurs and one dialog asks: who is asking, for what, and the password. Nothing
+  else takes the keyboard until you answer; requests queue up instead of being refused
+  ([design](docs/polkit-agent.md)).
+- **Integrates with KDE's services**: portals, the KDE wallet (so Chrome, Brave and VS
+  Code keep their logins), color schemes and icon themes.
 
 ## Install
 
@@ -405,8 +409,8 @@ flowchart TB
   `shell/qml/Theme.qml` share the same cubic-bezier(0, 0, 0.2, 1) curve.
 - **The session** declares itself `XDG_CURRENT_DESKTOP=Vela:KDE`. Qt/KDE apps use KDE's
   theme, and browsers and Electron apps use KDE's wallet, exactly as inside Plasma. It
-  connects to systemd (`vela-session.target`), starts the portals and the polkit agent,
-  and keeps the last two session logs in `~/.local/state/vela/`.
+  connects to systemd (`vela-session.target`), starts the portals and its own polkit
+  agent, and keeps the last two session logs in `~/.local/state/vela/`.
 
 ## Performance
 
@@ -459,6 +463,7 @@ see the documentation below.
 | Document | Contents |
 |---|---|
 | **[Renderer](docs/renderer.md)** | Scene graph, Vulkan renderer, scaling, damage, frame scheduling and direct scanout. |
+| **[Polkit agent](docs/polkit-agent.md)** | The User Account Control dialog: agent, dialog, protocol, security notes and tests. |
 | **[Development](docs/development.md)** | Build options, nested/headless workflows, development tools and repository layout. |
 | **[Testing](docs/testing.md)** | Unit, functional and sharpness suites; GPU requirements; local and CI coverage. |
 | **[Configuration](docs/configuration.md)** | `vela.conf`, display persistence, runtime overrides and renderer/debug environment variables. |

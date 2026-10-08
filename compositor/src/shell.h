@@ -7,25 +7,11 @@
 // The Qt shell: the startup command (the shell) that the compositor launches
 // and relaunches when it fails, and the messages it sends it.
 
-#include <stdint.h>
-#include <sys/types.h>
-
 struct vela_server;
-struct wl_event_source;
-
-// The launched and supervised shell (a pidfd in the event loop tells when it
-// ends). Lives in vela_server.shell.
-struct vela_shell {
-    char *command; // NULL: none
-    pid_t pid;
-    int pidfd;
-    struct wl_event_source *source;
-    int64_t started_ns;
-    int quick_crashes; // abnormal exits in a row shortly after starting
-};
 
 // Launches `command` and relaunches it when it fails (not when it exits
-// cleanly, nor when it keeps failing right after starting).
+// cleanly, nor when it keeps failing right after starting). The shell lives
+// in vela_server.shell (a vela_child, process.h).
 void vela_shell_start(struct vela_server *server, const char *command);
 // We are shutting down: the shell going away must not be relaunched.
 void vela_shell_stop(struct vela_server *server);

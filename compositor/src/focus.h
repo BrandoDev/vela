@@ -24,9 +24,14 @@ void vela_focus_view(struct vela_server *server, struct vela_view *view);
 // keyboard.
 void vela_focus_new_view(struct vela_server *server, struct vela_view *view);
 void vela_focus_layer(struct vela_server *server, struct vela_layer_surface *layer);
-// The keyboard goes back to whoever should have it: the previous panel, or the
-// most recent window on the current desktop (after unlocking, a close...).
+// The keyboard goes back to whoever should have it: the modal system dialog,
+// the previous panel, or the most recent window on the current desktop (after
+// unlocking, a close...).
 void vela_focus_refocus(struct vela_server *server);
+// The modal system dialog (polkit, docs/polkit-agent.md §7): a mapped
+// "overlay" surface with exclusive keyboard interactivity, the most recent
+// one. While it is there, keyboard and shortcuts are its own. NULL: none.
+struct vela_layer_surface *vela_focus_modal_layer(struct vela_server *server);
 
 // The window is gone (already out of the list): whoever remembered it (drag,
 // Alt+Tab, clicks, snap layouts) forgets it; if it had the keyboard, the

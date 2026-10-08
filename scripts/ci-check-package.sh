@@ -19,9 +19,14 @@ for path in \
 done
 grep -Fq 'Exec=/usr/bin/vela-session' /usr/share/wayland-sessions/vela.desktop \
     || fail "Session entry does not launch /usr/bin/vela-session"
-for program in vela-compositor vela-shell vela-files vela-settings vela-lock; do
-    if ldd "$(command -v "$program")" | grep -q 'not found'; then
-        ldd "$(command -v "$program")" >&2
+for helper in vela-polkit-agent vela-polkit-prompt; do
+    test -x "/usr/lib/vela/$helper" || fail "Missing helper: /usr/lib/vela/$helper"
+done
+for program in vela-compositor vela-shell vela-files vela-settings vela-lock \
+    /usr/lib/vela/vela-polkit-agent /usr/lib/vela/vela-polkit-prompt; do
+    path=$(command -v "$program")
+    if ldd "$path" | grep -q 'not found'; then
+        ldd "$path" >&2
         fail "$program has an unresolved runtime library"
     fi
 done

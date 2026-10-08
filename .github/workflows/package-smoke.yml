@@ -23,7 +23,7 @@ jobs:
           qt6-tools wlroots0.20 wayland libxkbcommon pixman libinput
           libdrm mesa vulkan-icd-loader freetype2 harfbuzz fontconfig
           librsvg cairo qt6-base qt6-declarative qt6-svg qt6-wayland
-          layer-shell-qt pam hicolor-icon-theme
+          layer-shell-qt pam polkit hicolor-icon-theme
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0

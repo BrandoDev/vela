@@ -17,6 +17,7 @@
 #include <wayland-server-core.h>
 #include <wlr/util/box.h>
 
+#include "process.h"
 #include "scene/ready.h"
 #include "shell.h"
 
@@ -175,7 +176,8 @@ struct vela_server {
 
     // App commits held until their GPU has finished (§7.3).
     struct vela_ready ready;
-    struct vela_shell shell; // the launched and supervised shell (shell.h)
+    struct vela_child shell; // the launched and supervised shell (shell.h)
+    struct vela_child polkit_agent; // the polkit agent (polkit.h)
     struct vela_commands *commands; // the command socket (command.h)
     // wlr-output-management (output_manager.h).
     struct wlr_output_manager_v1 *output_manager;

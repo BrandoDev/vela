@@ -8,11 +8,39 @@
 // own and with signals unblocked (wlroots blocks some to handle them in its
 // loop).
 
+#include <stdint.h>
+#include <sys/types.h>
+
+struct wl_event_loop;
+struct wl_event_source;
+
 // In the child process: runs `command` and never returns.
 void vela_exec_shell(const char *command) __attribute__((noreturn));
 
 // Launches `command` detached from Vela (double fork: init adopts it and no
 // zombie is left).
 void vela_spawn(const char *command);
+
+// A child the compositor launches and relaunches when it fails: the shell
+// and the polkit agent (docs/polkit-agent.md §7). A pidfd in the event loop
+// tells when it ends. Not relaunched when it exits cleanly (0 or
+// `final_exit_code`), nor when it keeps failing right after starting.
+struct vela_child {
+    const char *name; // for the log
+    int death_signal; // sent to the child when the compositor dies
+    int final_exit_code; // besides 0, an exit that means "don't relaunch me" (-1: none)
+    struct wl_event_loop *loop;
+    char *command; // NULL: none
+    pid_t pid;
+    int pidfd;
+    struct wl_event_source *source;
+    int64_t started_ns;
+    int quick_crashes; // abnormal exits in a row shortly after starting
+};
+
+void vela_child_init(struct vela_child *child, const char *name, int death_signal, int final_exit_code);
+void vela_child_start(struct vela_child *child, struct wl_event_loop *loop, const char *command);
+// We are shutting down: the child going away must not be relaunched.
+void vela_child_stop(struct vela_child *child);
 
 #endif

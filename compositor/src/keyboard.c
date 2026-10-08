@@ -10,6 +10,7 @@
 #include "bindings.h"
 #include "a11y.h"
 #include "config.h"
+#include "focus.h"
 #include "input.h"
 #include "server.h"
 #include "shell.h"
@@ -315,7 +316,8 @@ static void handle_key(struct wl_listener *listener, void *data)
     bool handled = false;
     // A focused app that keeps the shortcuts (virtual machine, remote desktop)
     // also gets the Super key alone.
-    bool inhibited = vela_input_shortcuts_inhibited(input) || server->locked;
+    // The polkit dialog turns them off too (vela_focus_modal_layer).
+    bool inhibited = vela_input_shortcuts_inhibited(input) || server->locked || vela_focus_modal_layer(server);
     vela_lock_note_activity(server->lock);
     // Sticky keys: a modifier pressed and released applies to the next key
     // (this key's modifiers, `mods`, already include it); they are let go when

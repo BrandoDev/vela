@@ -141,6 +141,7 @@ compositor/src/
   input.c/h       seat, pointers, gestures, constraints, drag icon, paste
   keyboard.c/h    keyboards, layouts, key handling
   shell.c/h       the supervised shell and one-line messages to it
+  polkit.c/h      starting Vela's polkit agent (docs/polkit-agent.md)
   view.c/h        struct vela_view: windows (xdg-shell), handles, animation;
                   xwayland.c for X11 windows and menus
   popup.c/h       menus of windows and shell pieces
@@ -151,7 +152,8 @@ compositor/src/
   bindings.c/h    shortcuts, window menu, window actions
   switcher.c/h    Alt+Tab
   snap.c/h        snap, preview, Snap Assist, layouts, groups
-  workspace.c/h   virtual desktops; a11y.c/h; lock.c/h; process.c/h
+  workspace.c/h   virtual desktops; a11y.c/h; lock.c/h
+  process.c/h     launching programs; supervised children (struct vela_child)
   buffer.c/h      growing text buffer (messages, JSON)
 ```
 

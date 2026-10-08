@@ -145,6 +145,8 @@ shell/              Qt Quick shell: taskbar, launcher, panels and desktop
 explorer/           vela-files
 settings/           vela-settings
 lock/               vela-lock
+polkit/             vela-polkit-agent and vela-polkit-prompt (docs/polkit-agent.md)
+common/             Vela.Controls: theme, controls and blur shared by the Qt Quick apps
 session/            login entry, systemd target and portal integration
 packaging/arch/     PKGBUILD and vela-update
 tools/              development and test clients
@@ -163,6 +165,7 @@ The interface is in English and Italian. Strings in the code are written in Engl
 | Files | `explorer/i18n/vela-files_it.ts` |
 | Settings | `settings/i18n/vela-settings_it.ts` |
 | Lock screen | `lock/i18n/vela-lock_it.ts` |
+| User Account Control (polkit) | `polkit/i18n/vela-polkit-prompt_it.ts` |
 
 The build compiles them and embeds them in each executable. After adding or changing text, refresh the files and translate the new entries (they are marked unfinished), for example with Qt Linguist:
 

@@ -4,11 +4,10 @@
 [Unit]
 Description=Sessione di Vela
 Documentation=https://github.com/BrandoDev/vela
-# It's the graphical session: portals, polkit agent and autostart apps (XDG
-# autostart) start and stop with it.
+# It's the graphical session: portals and autostart apps (XDG autostart)
+# start and stop with it. Not the polkit agent: the compositor starts it, so
+# it is in the compositor's logind session (docs/polkit-agent.md §4.1).
 BindsTo=graphical-session.target
 Wants=graphical-session-pre.target
 After=graphical-session-pre.target
 Wants=xdg-desktop-autostart.target
-# KDE's agent for administrator passwords, if present.
-Wants=plasma-polkit-agent.service

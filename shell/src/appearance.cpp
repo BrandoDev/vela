@@ -10,8 +10,9 @@
 #include <QFileInfo>
 #include <QSettings>
 
-Appearance::Appearance(QObject* parent)
+Appearance::Appearance(QObject* parent, Mode mode)
     : QObject(parent)
+    , m_mode(mode)
 {
     m_debounce.setSingleShot(true);
     m_debounce.setInterval(100);
@@ -46,7 +47,8 @@ void Appearance::reload()
 {
     QSettings shell(QStringLiteral("Vela"), QStringLiteral("vela-shell"));
     shell.sync();
-    const bool light = shell.value(QStringLiteral("appearance/appTheme")).toString() == QLatin1String("light");
+    const QString key = m_mode == Mode::Shell ? QStringLiteral("appearance/shellTheme") : QStringLiteral("appearance/appTheme");
+    const bool light = shell.value(key).toString() == QLatin1String("light");
     QColor accent(shell.value(QStringLiteral("appearance/accent")).toString());
     if (!accent.isValid()) {
         accent = QColor(0x5b, 0x8c, 0xff);

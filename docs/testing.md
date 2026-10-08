@@ -21,10 +21,11 @@ CTest includes both CPU-only and GPU-dependent suites.
 | **Compositor / GoogleTest** | FrameClock, vblank grid, late latching, adaptive margin, learned host latency, animation curves, output scale selection, pixel geometry, night light, color filters, sunrise/sunset, `vela.conf` parsing and `outputs.conf` persistence. | No |
 | **Files** (`files-copies`) | Copy/move behavior, staged replacement and failure handling including a simulated full disk with `RLIMIT_FSIZE`. | No |
 | **Shell** (`shell-*`) | `.desktop` `Exec=` parsing and default-app resolution through `mimeapps.list`. | No |
-| **Functional** (`functional`) | Opening and manipulating windows (Wayland and X11), menus (popups and X11 override-redirect menus) kept where they belong, resizing from the invisible borders, keyboard Move/Resize, the window menu, drag-to-edge snap with Snap Assist, snap layouts and snap groups, snap, maximize/restore, minimize/Alt+Tab, virtual desktops, Vela's title bar (text, buttons, double click), shell layers (reserved space, live blur), partial redraws identical to full redraws, output hotplug, per-output scale and position set like Settings does, accessibility quick settings (night light and its schedule, color filters, magnifier, sticky keys), Super alone opening Start, the media and volume keys (held volume keys repeat), the mouse's side buttons as Back and Forward in Vela's apps (File Explorer, also with the focus elsewhere or on an inactive window), lock/unlock, screen power, compositor crash recovery, a shell that crashes (restarted, then given up) or exits cleanly (left alone), and an app whose GPU finishes 150 ms late (explicit and implicit sync) without a missed vblank. | Yes |
+| **Functional** (`functional`) | Opening and manipulating windows (Wayland and X11), menus (popups and X11 override-redirect menus) kept where they belong, resizing from the invisible borders, keyboard Move/Resize, the window menu, drag-to-edge snap with Snap Assist, snap layouts and snap groups, snap, maximize/restore, minimize/Alt+Tab, virtual desktops, Vela's title bar (text, buttons, double click), shell layers (reserved space, live blur), partial redraws identical to full redraws, output hotplug, per-output scale and position set like Settings does, accessibility quick settings (night light and its schedule, color filters, magnifier, sticky keys), Super alone opening Start, the media and volume keys (held volume keys repeat), the mouse's side buttons as Back and Forward in Vela's apps (File Explorer, also with the focus elsewhere or on an inactive window), lock/unlock, screen power, compositor crash recovery, a shell that crashes (restarted, then given up) or exits cleanly (left alone), and an app whose GPU finishes 150 ms late (explicit and implicit sync) without a missed vblank, and the polkit agent (below). | Yes |
+| **Polkit agent / GoogleTest** (`polkit.*`) | The agent's queue, cancellations by polkit and by the user, a crashed dialog counting as "No", retries after a wrong password, sessions that fail by themselves, identity order and choice, the dialog protocol. | No |
 | **Sharpness** (`sharpness`) | Pixel-level checks that windows reach the expected physical pixels across fractional scales and common window states. | Yes |
 
-The compositor currently contains 52 GoogleTest cases; the functional harness contains 53 end-to-end scenarios. Every scenario also checks that the compositor exits with status 0 when asked to stop: a crash on the way out would look like a real one to the supervisor.
+The compositor currently contains 52 GoogleTest cases and the polkit agent 23; the functional harness runs 79 end-to-end scenarios. Every scenario also checks that the compositor exits with status 0 when asked to stop: a crash on the way out would look like a real one to the supervisor.
 
 ## Run a subset
 
@@ -132,6 +133,17 @@ with Session(scale=1.25) as vela:
     vela.keys("super+Left")
     vela.wait_for(lambda s: s.window(window)["snap"] == [0, 0, 6, 12])
 ```
+
+## Polkit agent
+
+`tests/functional/test_polkit.py` never talks to the real polkitd or PAM: a wrong password sent to PAM can lock the account (`pam_faillock`).
+
+- **The dialog** (`vela-polkit-prompt`) is started by the test, which plays the agent over its stdin/stdout ([protocol](polkit-agent.md#5-agent--prompt-protocol)). Covered: veil and dialog on the right outputs, the keyboard kept by the dialog while windows open, shortcuts switched off, clicks outside going nowhere, answers, "try again", Esc, cancellation by the agent, a dead agent, unavailable authentication, choosing another identity, a keyboard Move ended by the dialog.
+- **The agent** (`vela-polkit-agent`) is started by the compositor (`VELA_POLKIT_AGENT`) and registers with `fake_polkitd.py`, a fake polkitd on a private D-Bus bus passed as `DBUS_SYSTEM_BUS_ADDRESS`. `VELA_POLKIT_TEST_PASSWORD` replaces PAM with a session that accepts one password; the agent refuses that mode unless the authority reports itself as the fake one. Covered: registration for the session in Vela's language, authorizing after a wrong password, "No", a request withdrawn by polkit, a crashed dialog counting as "No", queued requests, restart after a crash, no restart when another agent owns the session, test mode refused against another authority.
+
+The agent tests need `dbus-python` and `dbus-daemon`; without them they are skipped.
+
+`state` also lists the layer-shell surfaces (`layers`: namespace, layer, keyboard interactivity, output) and the one with the keyboard (`focusedLayer`).
 
 ## Sharpness testing
 
