@@ -20,6 +20,8 @@
 #include "iconprovider.h"
 #include "jumplists.h"
 #include "language.h"
+#include "mediakeys.h"
+#include "mixer.h"
 #include "network.h"
 #include "notifications.h"
 #include "servicemenus.h"
@@ -218,6 +220,19 @@ void setupDesktopOsd(QQuickWindow* window)
     window->setFlag(Qt::WindowTransparentForInput);
 }
 
+void setupVolumeOsd(QQuickWindow* window)
+{
+    // The volume indicator: at the bottom in the middle, above the taskbar
+    // (which reserved its space), above fullscreen windows too, like Windows
+    // 11. It takes the mouse (drag, mute, wheel) but not the keyboard.
+    LayerWindow* layer = LayerWindow::get(window);
+    layer->setScope(QStringLiteral("vela-volume-osd"));
+    layer->setLayer(LayerWindow::LayerOverlay);
+    layer->setAnchors(LayerWindow::Anchors(LayerWindow::AnchorBottom));
+    layer->setMargins(QMargins(0, 0, 0, 12));
+    layer->setKeyboardInteractivity(LayerWindow::KeyboardInteractivityNone);
+}
+
 void setupTaskbarPreview(QQuickWindow* window)
 {
     // Button previews: at the bottom, just above the taskbar (which reserved
@@ -391,6 +406,11 @@ int main(int argc, char* argv[])
         [&config, &clipboard] { clipboard.setEnabled(config.clipboardHistory()); });
     BackgroundEffects effects;
     SystemStatus status;
+    QObject::connect(&shell, &ShellController::volumeKeyPressed, &status, &SystemStatus::volumeKey);
+    Mixer mixer(&apps);
+    QObject::connect(&status, &SystemStatus::audioEvents, &mixer, &Mixer::onAudioEvents);
+    MediaKeys media;
+    QObject::connect(&shell, &ShellController::mediaKeyPressed, &media, &MediaKeys::press);
 
     QQmlApplicationEngine engine;
     qmlEngine = &engine;
@@ -423,6 +443,7 @@ int main(int argc, char* argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("Snip"), &snip);
     engine.rootContext()->setContextProperty(QStringLiteral("Effects"), &effects);
     engine.rootContext()->setContextProperty(QStringLiteral("Status"), &status);
+    engine.rootContext()->setContextProperty(QStringLiteral("Mixer"), &mixer);
     engine.rootContext()->setContextProperty(QStringLiteral("Access"), &accessibility);
     engine.rootContext()->setContextProperty(QStringLiteral("Network"), &network);
 
@@ -440,6 +461,7 @@ int main(int argc, char* argv[])
     engine.loadFromModule("Vela.Shell", "NotificationCenter");
     engine.loadFromModule("Vela.Shell", "TaskView");
     engine.loadFromModule("Vela.Shell", "DesktopOsd");
+    engine.loadFromModule("Vela.Shell", "VolumeOsd");
     engine.loadFromModule("Vela.Shell", "SnapLayouts");
     engine.loadFromModule("Vela.Shell", "SnapAssist");
     engine.loadFromModule("Vela.Shell", "TaskbarPreview");
@@ -458,13 +480,14 @@ int main(int argc, char* argv[])
     QQuickWindow* notificationCenter = findWindow(engine, "notificationCenter");
     QQuickWindow* taskView = findWindow(engine, "taskView");
     QQuickWindow* desktopOsd = findWindow(engine, "desktopOsd");
+    QQuickWindow* volumeOsd = findWindow(engine, "volumeOsd");
     QQuickWindow* snapLayouts = findWindow(engine, "snapLayouts");
     QQuickWindow* snapAssist = findWindow(engine, "snapAssist");
     QQuickWindow* taskbarPreview = findWindow(engine, "taskbarPreview");
     QQuickWindow* fileDialogs = findWindow(engine, "fileDialogs");
     QQuickWindow* clipboardPanel = findWindow(engine, "clipboardPanel");
     if (!startMenu || !switcher || !notificationWindow || !contextMenu || !runDialog || !confirmDialog || !sourceChooser || !propertiesDialog || !quickSettings
-        || !notificationCenter || !taskView || !desktopOsd || !snapLayouts || !snapAssist || !taskbarPreview || !fileDialogs || !clipboardPanel) {
+        || !notificationCenter || !taskView || !desktopOsd || !volumeOsd || !snapLayouts || !snapAssist || !taskbarPreview || !fileDialogs || !clipboardPanel) {
         qCritical("vela-shell: can't load the QML interface");
         return 1;
     }
@@ -486,6 +509,7 @@ int main(int argc, char* argv[])
     setupSidePanel(clipboardPanel, QStringLiteral("vela-clipboard"));
     setupTaskView(taskView);
     setupDesktopOsd(desktopOsd);
+    setupVolumeOsd(volumeOsd);
     setupSnapLayouts(snapLayouts);
     setupSnapAssist(snapAssist);
     setupTaskbarPreview(taskbarPreview);

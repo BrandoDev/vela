@@ -329,6 +329,21 @@ Window {
                     Tasks.activate(index)
                 }
                 onMiddleClicked: Tasks.launchNew(index)
+                // The wheel: the volume of this app only, if it's playing
+                // sound, with the indicator. A step every notch (120),
+                // touchpads add up their small ones.
+                property real wheelRest: 0
+                onWheeled: delta => {
+                    wheelRest += delta
+                    while (Math.abs(wheelRest) >= 120) {
+                        root.fromHere()
+                        if (!Mixer.stepTaskVolume(desktopId, wheelRest > 0 ? 1 : -1)) {
+                            wheelRest = 0
+                            return
+                        }
+                        wheelRest -= wheelRest > 0 ? 120 : -120
+                    }
+                }
                 // The previews of its windows, with the mouse resting on the
                 // button (at once, if another button's are already open).
                 onHoveredChanged: {
@@ -506,16 +521,22 @@ Window {
                 const overVolume = volumeIcon.visible && mouse.x >= volumeIcon.x + iconsRow.x - 5
                     && mouse.x < volumeIcon.x + iconsRow.x + volumeIcon.width + 5
                 root.openMenu(overVolume ? [
-                    { text: qsTr("Open volume &mixer"), icon: "audio-volume-high", enabled: System.available("volume-mixer"), action: () => System.trigger("volume-mixer") },
+                    { text: qsTr("Open volume &mixer"), icon: "audio-volume-high", enabled: Mixer.available, action: () => { root.fromHere(); Shell.soundOutputRequested() } },
                     { text: qsTr("&Sound settings"), icon: "preferences-desktop-sound", enabled: System.available("sound-settings"), action: () => System.trigger("sound-settings") }
                 ] : [
                     { text: qsTr("&Troubleshoot network problems"), icon: "network-workgroup", enabled: false },
                     { text: qsTr("&Network and Internet settings"), icon: "preferences-system-network", enabled: System.available("network"), action: () => System.trigger("network") }
                 ], p.x, root.menuBottom, { above: true })
             }
+            // Like the keyboard's volume keys, with the indicator: a step every
+            // notch (120), touchpads add up their small ones.
+            property real wheelRest: 0
             onWheel: wheel => {
-                if (Status.volumeAvailable) {
-                    Status.setVolume(Status.volume + (wheel.angleDelta.y > 0 ? 0.02 : -0.02))
+                wheelRest += wheel.angleDelta.y
+                while (Math.abs(wheelRest) >= 120) {
+                    root.fromHere()
+                    Status.volumeKey(wheelRest > 0 ? "up" : "down")
+                    wheelRest -= wheelRest > 0 ? 120 : -120
                 }
             }
         }

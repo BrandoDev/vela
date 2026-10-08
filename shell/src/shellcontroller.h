@@ -114,6 +114,7 @@ signals:
     void runRequested(); // Win+R
     void showDesktopRequested(); // Win+D
     void quickSettingsRequested(); // Win+A
+    void soundOutputRequested(); // Win+Ctrl+V: quick settings' sound page
     void notificationCenterRequested(); // Win+N
     void settingsRequested(); // Win+I
     void filesRequested(); // Win+E
@@ -131,6 +132,11 @@ signals:
     void clipboardRequested(); // Win+V
     void snipRequested(); // Win+Shift+S, Print
     void clipboardClearRequested(); // from Settings
+    // The keyboard's volume keys: "up", "down", "mute".
+    void volumeKeyPressed(const QString& key);
+    // The keyboard's media keys: "play-pause", "pause", "stop", "next",
+    // "previous".
+    void mediaKeyPressed(const QString& key);
     // The window menu (right click on the title bar, Alt+Space): on which
     // output and where, in output coordinates.
     void windowMenuRequested(const QString& window, const QString& output, int x, int y, bool maximized,

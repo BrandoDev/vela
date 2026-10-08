@@ -57,6 +57,7 @@ Page {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 220
                 to: 1
+                stepSize: 0.02 // even numbers, like the volume keys and quick settings
                 value: volumeCard.device ? Math.min(1, volumeCard.device.volume) : 0
                 onMoved: value => Audio.setVolume(volumeCard.kind, volumeCard.device.name, value)
             }

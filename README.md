@@ -174,7 +174,11 @@ The whole design is written down in [docs/renderer.md](docs/renderer.md).
   one taskbar per monitor.
 - **App launcher**: instant search, pinned apps, keyboard navigation, and a Super+X power-user menu.
 - **Quick settings** (Super+A): Wi-Fi network picker, Bluetooth, airplane mode, power
-  mode, Night light, accessibility, brightness, volume and battery.
+  mode, Night light, accessibility, brightness, volume and battery, and a sound page
+  (Super+Ctrl+V) to pick the output, see Bluetooth headsets' charge, and set each app's
+  volume and output.
+- **Media and volume keys** that work whatever has the focus, with a volume indicator;
+  the wheel over an app's taskbar button sets that app's volume.
 - **Notifications** with actions, a **notification center** with a calendar (Super+N),
   and Do Not Disturb.
 - **Clipboard history** (Super+V): text and images, pinned items that survive a reboot,

@@ -9,7 +9,8 @@ import QtQuick.Shapes
 // saving, night light...), brightness and volume, battery and Settings at the
 // bottom. An acrylic panel at the bottom right. Some tiles have a page of
 // their own: the Wi-Fi arrow lists the networks to choose one, Accessibility
-// turns on the magnifier, color filters and sticky keys.
+// turns on the magnifier, color filters and sticky keys; the arrow next to
+// the volume opens the sound page (outputs and the mixer, Win+Ctrl+V).
 Window {
     id: root
     objectName: "quickSettings"
@@ -18,8 +19,11 @@ Window {
     height: panel.height + 24
     color: "transparent"
 
-    // "" the quick settings; "wifi" and "accessibility" their pages.
+    // "" the quick settings; "wifi", "sound" and "accessibility" their pages.
     property string page: ""
+    // The mixer reads the system only while its page is on screen.
+    readonly property bool soundShown: visible && page === "sound"
+    onSoundShownChanged: Mixer.setActive(soundShown)
 
     function open() {
         Menus.notificationCenterOpen = false
@@ -44,6 +48,17 @@ Window {
             open()
         }
     }
+    // Win+Ctrl+V, "Open volume mixer": straight to the sound page.
+    function toggleSound() {
+        if (visible && page === "sound") {
+            close()
+            return
+        }
+        if (!visible) {
+            open()
+        }
+        showPage("sound")
+    }
     function showPage(name) {
         page = name
         pageIn.restart()
@@ -61,6 +76,18 @@ Window {
         const p = item.mapToItem(null, x, y)
         return Qt.point(Screen.width - root.width + p.x, Screen.height - Theme.taskbarHeight - root.height + p.y)
     }
+    // The outputs for one app (the mixer), in a menu under its button.
+    function chooseAppOutput(app, button) {
+        const choose = output => () => Mixer.setAppOutput(app.key, output)
+        const entries = [{ text: qsTr("Default output"), radio: true, checked: app.output === "", action: choose("") },
+                         { separator: true }]
+        for (const output of Mixer.outputs) {
+            entries.push({ text: output.description.replace(/&/g, "&&"), icon: output.icon, radio: true,
+                           checked: app.output === output.name, action: choose(output.name) })
+        }
+        const p = screenPoint(button, 0, button.height + 4)
+        Menus.open(entries, p.x, p.y, { minWidth: 240, screen: root.screen ? root.screen.name : "" })
+    }
     function openSettings(name) {
         close()
         System.trigger(name)
@@ -69,6 +96,7 @@ Window {
     Connections {
         target: Shell
         function onQuickSettingsRequested() { root.toggle() }
+        function onSoundOutputRequested() { root.toggleSound() }
         function onNotificationCenterRequested() { root.close() }
     }
 
@@ -214,13 +242,24 @@ Window {
         }
     }
 
-    // A slider (brightness, volume) with its icon on the left.
+    // A slider (brightness, volume, an app's volume) with its icon on the
+    // left: a click on it mutes. `details`: an arrow on the right opening a
+    // page (the volume's: the sound page). While it's dragged the number shows
+    // above the knob, like Windows.
     component Slider: Item {
         id: slider
         property string icon
         property real value
+        property bool muted: false
+        // An app's icon (the mixer): muted, it fades and gets a crossed
+        // speaker; the volume's icon is already the crossed one.
+        property bool appIcon: false
+        property bool details: false
         signal moved(real value)
+        signal wheeled(int direction)
         signal iconClicked()
+        signal detailsClicked()
+        readonly property real shown: Math.max(0, Math.min(1, value))
         width: parent.width
         height: 36
 
@@ -238,7 +277,16 @@ Window {
                 anchors.centerIn: parent
                 width: 18
                 height: 18
+                opacity: slider.muted && slider.appIcon ? 0.45 : 1
                 source: Theme.icons + encodeURIComponent(slider.icon)
+                sourceSize: Qt.size(width, height)
+            }
+            Image {
+                visible: slider.muted && slider.appIcon
+                anchors { right: parent.right; bottom: parent.bottom; margins: 5 }
+                width: 12
+                height: 12
+                source: Theme.icons + "audio-volume-muted"
                 sourceSize: Qt.size(width, height)
             }
             MouseArea {
@@ -250,7 +298,7 @@ Window {
         }
         Item {
             id: track
-            anchors { left: iconButton.right; leftMargin: 12; right: parent.right; rightMargin: 8; verticalCenter: parent.verticalCenter }
+            anchors { left: iconButton.right; leftMargin: 12; right: detailsButton.left; rightMargin: 8; verticalCenter: parent.verticalCenter }
             height: 20
             Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
@@ -261,13 +309,14 @@ Window {
             }
             Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
-                width: parent.width * slider.value
+                width: parent.width * slider.shown
                 height: 4
                 radius: 2
-                color: Theme.accent
+                color: slider.muted ? Theme.textDim : Theme.accent
             }
             Rectangle {
-                x: parent.width * slider.value - width / 2
+                id: knob
+                x: parent.width * slider.shown - width / 2
                 anchors.verticalCenter: parent.verticalCenter
                 width: 18
                 height: 18
@@ -280,7 +329,24 @@ Window {
                     width: trackMouse.pressed ? 8 : 10
                     height: width
                     radius: width / 2
-                    color: Theme.accent
+                    color: slider.muted ? Theme.textDim : Theme.accent
+                }
+            }
+            Rectangle {
+                visible: trackMouse.pressed
+                anchors { bottom: knob.top; bottomMargin: 6; horizontalCenter: knob.horizontalCenter }
+                width: valueText.implicitWidth + 16
+                height: 26
+                radius: Theme.radiusSmall
+                color: Theme.popup
+                border.width: 1
+                border.color: Theme.stroke
+                Text {
+                    id: valueText
+                    anchors.centerIn: parent
+                    text: Math.round(slider.shown * 100)
+                    color: Theme.text
+                    font.pixelSize: Theme.fontSmall
                 }
             }
             MouseArea {
@@ -289,7 +355,50 @@ Window {
                 function update(x) { slider.moved(Math.max(0, Math.min(1, (x - 8) / track.width))) }
                 onPressed: mouse => update(mouse.x)
                 onPositionChanged: mouse => { if (pressed) update(mouse.x) }
-                onWheel: wheel => slider.moved(Math.max(0, Math.min(1, slider.value + (wheel.angleDelta.y > 0 ? 0.02 : -0.02))))
+                // A step every notch (120), touchpads add up their small ones.
+                property real wheelRest: 0
+                onWheel: wheel => {
+                    wheelRest += wheel.angleDelta.y
+                    while (Math.abs(wheelRest) >= 120) {
+                        slider.wheeled(wheelRest > 0 ? 1 : -1)
+                        wheelRest -= wheelRest > 0 ? 120 : -120
+                    }
+                }
+            }
+        }
+        Item {
+            id: detailsButton
+            anchors.right: parent.right
+            width: slider.details ? 36 : 0
+            height: 36
+            visible: slider.details
+            Rectangle {
+                anchors.fill: parent
+                radius: Theme.radiusSmall
+                color: Theme.hover
+                opacity: detailsMouse.containsMouse ? 1 : 0
+            }
+            Shape {
+                anchors.centerIn: parent
+                width: 6
+                height: 10
+                preferredRendererType: Shape.CurveRenderer
+                ShapePath {
+                    strokeColor: Theme.text
+                    strokeWidth: 1.2
+                    fillColor: "transparent"
+                    capStyle: ShapePath.RoundCap
+                    joinStyle: ShapePath.RoundJoin
+                    startX: 1; startY: 1
+                    PathLine { x: 5; y: 5 }
+                    PathLine { x: 1; y: 9 }
+                }
+            }
+            MouseArea {
+                id: detailsMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: slider.detailsClicked()
             }
         }
     }
@@ -394,7 +503,7 @@ Window {
         y: 12
         width: root.width - 24
         height: root.page === "" ? content.height + 24 + footer.height
-            : root.page === "wifi" ? wifiPage.height + 32 : accessPage.height + 32
+            : (root.page === "wifi" ? wifiPage.height : root.page === "sound" ? soundPage.height : accessPage.height) + 32
         radius: Theme.radiusMenu
         color: Theme.surface
         border.width: 1
@@ -497,13 +606,19 @@ Window {
                     icon: "brightness-high"
                     value: Status.brightness
                     onMoved: value => Status.setBrightness(value)
+                    onWheeled: direction => Status.setBrightness(Math.max(0, Math.min(1, Status.brightness + direction * 0.02)))
                 }
+                // The arrow opens the sound page: outputs and the mixer.
                 Slider {
                     visible: Status.volumeAvailable
                     icon: Status.volumeIconName
                     value: Status.volume
+                    muted: Status.muted
+                    details: Mixer.available
                     onMoved: value => { if (Status.muted) Status.setMuted(false); Status.setVolume(value) }
+                    onWheeled: direction => Status.stepVolume(direction)
                     onIconClicked: Status.setMuted(!Status.muted)
+                    onDetailsClicked: root.showPage("sound")
                 }
             }
 
@@ -695,6 +810,217 @@ Window {
                 Link {
                     text: qsTr("More Wi-Fi settings")
                     target: "network"
+                }
+            }
+
+            // ------------------------------------------------------- sound --
+            // Like Windows 11's: where the sound goes, then the volume of the
+            // output and of each app playing.
+            Column {
+                id: soundPage
+                visible: root.page === "sound"
+                x: 16
+                y: 16
+                width: parent.width - 32
+                spacing: 8
+
+                PageHeader { title: qsTr("Sound output") }
+                Flickable {
+                    width: parent.width
+                    height: Math.min(contentHeight, 440)
+                    contentHeight: soundColumn.height
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    Column {
+                        id: soundColumn
+                        width: parent.width
+                        spacing: 2
+
+                        Repeater {
+                            model: Mixer.outputs
+                            delegate: Rectangle {
+                                id: output
+                                required property var modelData
+                                width: soundColumn.width
+                                height: 44
+                                radius: Theme.radiusSmall
+                                color: outputMouse.containsMouse ? Theme.hover : output.modelData.isDefault ? Theme.surfaceRaised : "transparent"
+                                // The chosen one: the accent line on the left,
+                                // like a selected item on Windows.
+                                Rectangle {
+                                    visible: output.modelData.isDefault
+                                    x: 0
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 3
+                                    height: 16
+                                    radius: 1.5
+                                    color: Theme.accent
+                                }
+                                Image {
+                                    x: 12
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 18
+                                    height: 18
+                                    source: Theme.icons + encodeURIComponent(output.modelData.icon)
+                                    sourceSize: Qt.size(width, height)
+                                }
+                                Text {
+                                    x: 44
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width - 56 - (battery.visible ? battery.width + 8 : 0)
+                                    text: output.modelData.description
+                                    color: Theme.text
+                                    font.pixelSize: Theme.fontNormal
+                                    elide: Text.ElideRight
+                                }
+                                // A Bluetooth headset's charge, when it
+                                // reports it.
+                                Row {
+                                    id: battery
+                                    visible: output.modelData.battery >= 0
+                                    anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
+                                    spacing: 4
+                                    Image {
+                                        width: 16
+                                        height: 16
+                                        source: Theme.icons + (output.modelData.battery >= 90 ? "battery-full"
+                                            : output.modelData.battery >= 40 ? "battery-good"
+                                            : output.modelData.battery >= 15 ? "battery-low" : "battery-caution")
+                                        sourceSize: Qt.size(width, height)
+                                    }
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: output.modelData.battery + "%"
+                                        color: Theme.textDim
+                                        font.pixelSize: Theme.fontSmall
+                                    }
+                                }
+                                MouseArea {
+                                    id: outputMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: Mixer.setDefaultOutput(output.modelData.name)
+                                }
+                            }
+                        }
+
+                        Item { width: 1; height: 12 }
+                        Text {
+                            text: qsTr("Volume mixer")
+                            color: Theme.text
+                            font.pixelSize: Theme.fontNormal
+                            font.weight: Font.DemiBold
+                            bottomPadding: 4
+                        }
+                        // The output's volume first, then the apps'.
+                        Text {
+                            text: (Mixer.outputs.find(o => o.isDefault) || { description: qsTr("Speakers") }).description
+                            width: parent.width
+                            leftPadding: 48
+                            color: Theme.textDim
+                            font.pixelSize: Theme.fontSmall
+                            elide: Text.ElideRight
+                        }
+                        Slider {
+                            icon: Status.volumeIconName
+                            value: Status.volume
+                            muted: Status.muted
+                            onMoved: value => { if (Status.muted) Status.setMuted(false); Status.setVolume(value) }
+                            onWheeled: direction => Status.stepVolume(direction)
+                            onIconClicked: Status.setMuted(!Status.muted)
+                        }
+                        Repeater {
+                            model: Mixer.apps
+                            delegate: Column {
+                                id: app
+                                required property var modelData
+                                width: soundColumn.width
+                                topPadding: 6
+                                // The name, and on the right where its sound
+                                // goes: a click chooses another output.
+                                Item {
+                                    width: parent.width
+                                    height: 20
+                                    Text {
+                                        x: 48
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: parent.width - 48 - appOutput.width - 12
+                                        text: app.modelData.name
+                                        color: Theme.textDim
+                                        font.pixelSize: Theme.fontSmall
+                                        elide: Text.ElideRight
+                                    }
+                                    Rectangle {
+                                        id: appOutput
+                                        visible: Mixer.outputs.length > 1 || app.modelData.output !== ""
+                                        anchors { right: parent.right; rightMargin: 4; verticalCenter: parent.verticalCenter }
+                                        width: visible ? Math.min(outputLabel.implicitWidth, soundColumn.width * 0.45) + 28 : 0
+                                        height: 22
+                                        radius: Theme.radiusSmall
+                                        color: outputChooser.containsMouse ? Theme.hover : "transparent"
+                                        Text {
+                                            id: outputLabel
+                                            x: 8
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: parent.width - 28
+                                            text: app.modelData.output === "" ? qsTr("Default output") : app.modelData.outputDescription
+                                            color: Theme.textDim
+                                            font.pixelSize: Theme.fontSmall
+                                            elide: Text.ElideRight
+                                        }
+                                        // The "v" arrow.
+                                        Shape {
+                                            anchors { right: parent.right; rightMargin: 8; verticalCenter: parent.verticalCenter }
+                                            width: 9
+                                            height: 5
+                                            preferredRendererType: Shape.CurveRenderer
+                                            ShapePath {
+                                                strokeColor: Theme.textDim
+                                                strokeWidth: 1.2
+                                                fillColor: "transparent"
+                                                capStyle: ShapePath.RoundCap
+                                                joinStyle: ShapePath.RoundJoin
+                                                startX: 1; startY: 1
+                                                PathLine { x: 4.5; y: 4.5 }
+                                                PathLine { x: 8; y: 1 }
+                                            }
+                                        }
+                                        MouseArea {
+                                            id: outputChooser
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            onClicked: root.chooseAppOutput(app.modelData, appOutput)
+                                        }
+                                    }
+                                }
+                                Slider {
+                                    icon: app.modelData.icon
+                                    appIcon: true
+                                    value: app.modelData.volume
+                                    muted: app.modelData.muted
+                                    onMoved: value => Mixer.setAppVolume(app.modelData.key, value)
+                                    onWheeled: direction => Mixer.stepAppVolume(app.modelData.key, direction)
+                                    onIconClicked: Mixer.setAppMuted(app.modelData.key, !app.modelData.muted)
+                                }
+                            }
+                        }
+                        Text {
+                            visible: Mixer.apps.length === 0
+                            width: parent.width
+                            topPadding: 8
+                            leftPadding: 48
+                            text: qsTr("No apps are playing sound.")
+                            color: Theme.textDim
+                            font.pixelSize: Theme.fontSmall
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+                Item { width: 1; height: 4 }
+                Link {
+                    text: qsTr("More volume settings")
+                    target: "sound-settings"
                 }
             }
 

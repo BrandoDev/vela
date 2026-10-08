@@ -22,6 +22,7 @@ Item {
     signal middleClicked()
     signal rightClicked(bool shift) // Shift+right click: the window menu
     signal dropped(real dx)
+    signal wheeled(real delta) // angleDelta.y
 
     // While dragged it follows the mouse, above the other buttons.
     z: mouse.dragging ? 10 : 0
@@ -102,6 +103,7 @@ Item {
                 root.dropped(dragX)
             }
         }
+        onWheel: wheel => root.wheeled(wheel.angleDelta.y)
         onClicked: mouse => {
             if (dragged) {
                 dragged = false

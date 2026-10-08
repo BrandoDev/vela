@@ -41,6 +41,15 @@ class Lock(unittest.TestCase):
             state = vela.wait_for(lambda s: not s["locked"], timeout=6, what="unlocked")
             vela.wait_for(lambda s: s["focused"] == window, what="focus goes back to the window")
 
+    def test_volume_keys_work_while_locked(self):
+        with Session(lock_hold_ms=3000) as vela:
+            shell = vela.fake_shell()
+            vela.command("lock")
+            vela.wait_for(lambda s: s["locked"])
+            vela.keys("XF86AudioRaiseVolume", "XF86AudioPlay")
+            shell.wait_for("media play-pause")
+            self.assertEqual(shell.received("volume"), ["volume up"])
+
     def test_screens_off_and_on_while_locked(self):
         with Session(lock_hold_ms=4000) as vela:
             window = vela.open_window()

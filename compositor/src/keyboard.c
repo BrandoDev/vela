@@ -254,6 +254,41 @@ static void handle_modifiers(struct wl_listener *listener, void *data)
     wlr_seat_keyboard_notify_modifiers(server->seat, &wlr->modifiers);
 }
 
+static void stop_repeat(struct vela_keyboard *keyboard)
+{
+    if (keyboard->repeat) {
+        wl_event_source_timer_update(keyboard->repeat, 0);
+    }
+    keyboard->repeat_keycode = 0;
+}
+
+static int repeat_binding(void *data)
+{
+    struct vela_keyboard *keyboard = data;
+    int rate = keyboard->wlr->repeat_info.rate;
+    if (!keyboard->repeat_keycode || rate <= 0) {
+        return 0;
+    }
+    vela_bindings_handle(keyboard->input->server, keyboard->repeat_mods, keyboard->repeat_sym);
+    wl_event_source_timer_update(keyboard->repeat, vela_max(1, 1000 / rate));
+    return 0;
+}
+
+static void start_repeat(struct vela_keyboard *keyboard, uint32_t keycode, xkb_keysym_t sym, uint32_t mods)
+{
+    if (keyboard->wlr->repeat_info.rate <= 0) {
+        return;
+    }
+    if (!keyboard->repeat) {
+        struct wl_event_loop *loop = wl_display_get_event_loop(keyboard->input->server->display);
+        keyboard->repeat = wl_event_loop_add_timer(loop, repeat_binding, keyboard);
+    }
+    keyboard->repeat_keycode = keycode;
+    keyboard->repeat_sym = sym;
+    keyboard->repeat_mods = mods;
+    wl_event_source_timer_update(keyboard->repeat, keyboard->wlr->repeat_info.delay);
+}
+
 static void handle_key(struct wl_listener *listener, void *data)
 {
     struct vela_keyboard *keyboard = wl_container_of(listener, keyboard, key);
@@ -266,6 +301,11 @@ static void handle_key(struct wl_listener *listener, void *data)
     // The modifiers here are those held BEFORE this key.
     uint32_t mods = wlr_keyboard_get_modifiers(keyboard->wlr);
     bool pressed = event->state == WL_KEYBOARD_KEY_STATE_PRESSED;
+    // Like the apps' repeat: another key pressed, or that one released, stops
+    // it.
+    if (pressed || event->keycode == keyboard->repeat_keycode) {
+        stop_repeat(keyboard);
+    }
 
     // Keyboard "Move"/"Size": all keys belong to the compositor.
     if (vela_interact_keyboard(server, syms, count, mods, pressed)) {
@@ -290,7 +330,12 @@ static void handle_key(struct wl_listener *listener, void *data)
                 continue;
             }
             input->super_tap = false;
-            handled = handled || vela_bindings_handle(server, mods, syms[i]);
+            if (!handled && vela_bindings_handle(server, mods, syms[i])) {
+                handled = true;
+                if (vela_bindings_repeats(syms[i])) {
+                    start_repeat(keyboard, event->keycode, syms[i], mods);
+                }
+            }
             continue;
         }
         if (is_super(syms[i]) && input->super_tap) {
@@ -339,5 +384,8 @@ void vela_keyboard_destroy(struct vela_keyboard *keyboard)
     wl_list_remove(&keyboard->key.link);
     wl_list_remove(&keyboard->destroy.link);
     wl_list_remove(&keyboard->link);
+    if (keyboard->repeat) {
+        wl_event_source_remove(keyboard->repeat);
+    }
     free(keyboard);
 }

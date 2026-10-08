@@ -280,6 +280,8 @@ void ShellController::handleCommand(const QByteArray& command)
         emit showDesktopRequested();
     } else if (command == "quick-settings") {
         emit quickSettingsRequested();
+    } else if (command == "sound-output") {
+        emit soundOutputRequested();
     } else if (command == "notification-center") {
         emit notificationCenterRequested();
     } else if (command == "settings") {
@@ -292,6 +294,10 @@ void ShellController::handleCommand(const QByteArray& command)
         emit snipRequested();
     } else if (command == "clipboard-clear") {
         emit clipboardClearRequested();
+    } else if (parts.first() == "volume" && parts.size() == 2) {
+        emit volumeKeyPressed(QString::fromLatin1(parts.at(1)));
+    } else if (parts.first() == "media" && parts.size() == 2) {
+        emit mediaKeyPressed(QString::fromLatin1(parts.at(1)));
     } else if (command == "task-view") {
         emit taskViewRequested();
     } else if (parts.first() == "workspaces") {

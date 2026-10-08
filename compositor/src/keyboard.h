@@ -14,6 +14,7 @@
 // brings its own.
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <wayland-server-core.h>
 
 struct vela_config;
@@ -25,6 +26,12 @@ struct vela_keyboard {
     struct vela_input *input;
     struct wlr_keyboard *wlr;
     bool restoring; // sticky keys: the modifiers are being put back
+    // A shortcut held down that repeats (the volume keys): the app doesn't get
+    // the key, so it can't repeat it. With the keyboard's delay and rate.
+    struct wl_event_source *repeat;
+    uint32_t repeat_keycode; // 0: nothing repeating
+    uint32_t repeat_sym;
+    uint32_t repeat_mods;
 
     struct wl_listener modifiers;
     struct wl_listener key;

@@ -483,6 +483,10 @@
 <context>
     <name>QuickSettings</name>
     <message>
+        <source>Default output</source>
+        <translation>Uscita predefinita</translation>
+    </message>
+    <message>
         <source>Wi-Fi</source>
         <translation>Wi-Fi</translation>
     </message>
@@ -565,6 +569,26 @@
     <message>
         <source>More Wi-Fi settings</source>
         <translation>Altre impostazioni Wi-Fi</translation>
+    </message>
+    <message>
+        <source>Sound output</source>
+        <translation>Uscita audio</translation>
+    </message>
+    <message>
+        <source>Volume mixer</source>
+        <translation>Mixer volume</translation>
+    </message>
+    <message>
+        <source>Speakers</source>
+        <translation>Altoparlanti</translation>
+    </message>
+    <message>
+        <source>No apps are playing sound.</source>
+        <translation>Nessuna app sta riproducendo audio.</translation>
+    </message>
+    <message>
+        <source>More volume settings</source>
+        <translation>Altre impostazioni del volume</translation>
     </message>
     <message>
         <source>Magnifier</source>

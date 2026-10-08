@@ -942,8 +942,8 @@ Shift+right click on the button opens the window menu instead (§14.8).
 
 - **Empty space**: "Task Manager", "Taskbar settings".
 - **Date and time**: "Adjust date and time", "Notification settings".
-- **System icons** (done with quick settings): volume → "Open volume mixer",
-  "Sound settings" ("Troubleshoot sound problems" has no equivalent); network →
+- **System icons** (done with quick settings): volume → "Open volume mixer"
+  (quick settings' sound page), "Sound settings" ("Troubleshoot sound problems" has no equivalent); network →
   "Diagnose network problems" (disabled), "Network and Internet settings";
   battery → "Power and sleep settings" (to do together with the battery in the
   laptop taskbar).

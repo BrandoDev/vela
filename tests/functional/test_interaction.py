@@ -59,6 +59,38 @@ class Interaction(unittest.TestCase):
         self.vela.keys("Right", "Right", "Right", "ctrl+Right", "Return")
         self.vela.wait_for(lambda s: s.window(window)["w"] == w + 21, what="21 wider")
 
+    def test_media_keys_reach_the_shell_whatever_has_focus(self):
+        window = self.vela.open_window(300, 200)
+        self.vela.wait_for(lambda s: s["focused"] == window)
+        self.vela.keys("XF86AudioPlay", "XF86AudioNext", "XF86AudioRaiseVolume", "XF86AudioLowerVolume",
+                       "XF86AudioMute")
+        self.shell.wait_for("volume mute")
+        self.assertEqual(self.shell.received("media") + self.shell.received("volume"),
+                         ["media play-pause", "media next", "volume up", "volume down", "volume mute"])
+
+    def test_held_volume_key_repeats(self):
+        # With the keyboard's delay and rate (the virtual one: 600 ms, 25 a
+        # second); released, it stops.
+        self.vela.input("keydown", "XF86AudioRaiseVolume", "sleep", "1000", "keyup", "XF86AudioRaiseVolume")
+        time.sleep(0.3)
+        held = len(self.shell.received("volume up"))
+        self.assertGreaterEqual(held, 6)
+        self.assertLessEqual(held, 25)
+        time.sleep(0.3)
+        self.assertEqual(len(self.shell.received("volume up")), held)
+        # A knob's notch (pressed and released at once) is one step.
+        self.shell.clear()
+        self.vela.keys("XF86AudioLowerVolume")
+        time.sleep(0.6)
+        self.assertEqual(self.shell.received("volume down"), ["volume down"])
+
+    def test_win_ctrl_v_opens_the_sound_page(self):
+        self.vela.keys("super+ctrl+v")
+        self.shell.wait_for("sound-output")
+        self.vela.keys("super+v")
+        self.shell.wait_for("clipboard")
+        self.assertEqual(self.shell.received("sound-output"), ["sound-output"])
+
     def test_window_menu(self):
         window = self.vela.open_window(300, 200, decorated=True)
         x, y, _, _ = self.frame(window)

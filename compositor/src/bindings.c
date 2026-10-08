@@ -34,6 +34,11 @@ static bool shell(struct vela_server *server, const char *line)
     return true;
 }
 
+bool vela_bindings_repeats(uint32_t sym)
+{
+    return sym == XKB_KEY_XF86AudioRaiseVolume || sym == XKB_KEY_XF86AudioLowerVolume;
+}
+
 bool vela_bindings_handle(struct vela_server *server, uint32_t modifiers, uint32_t sym)
 {
     bool alt = modifiers & WLR_MODIFIER_ALT;
@@ -55,9 +60,30 @@ bool vela_bindings_handle(struct vela_server *server, uint32_t modifiers, uint32
         }
         return true;
     }
+    // The keyboard's media and volume keys (and knob) work whatever window has
+    // the focus, even on the lock screen, like Windows: the shell plays or
+    // pauses the active player (MPRIS) and changes the volume. The app never
+    // sees them, or Play/Pause would toggle twice.
+    static const struct {
+        xkb_keysym_t key;
+        const char *command;
+    } media_keys[] = {
+        { XKB_KEY_XF86AudioRaiseVolume, "volume up" },
+        { XKB_KEY_XF86AudioLowerVolume, "volume down" },
+        { XKB_KEY_XF86AudioMute, "volume mute" },
+        { XKB_KEY_XF86AudioPlay, "media play-pause" },
+        { XKB_KEY_XF86AudioPause, "media pause" },
+        { XKB_KEY_XF86AudioStop, "media stop" },
+        { XKB_KEY_XF86AudioNext, "media next" },
+        { XKB_KEY_XF86AudioPrev, "media previous" },
+    };
+    for (size_t i = 0; i < sizeof(media_keys) / sizeof(media_keys[0]); ++i) {
+        if (sym == media_keys[i].key) {
+            return shell(server, media_keys[i].command);
+        }
+    }
     // The focused app keeps the shortcuts for itself (virtual machine, remote
-    // desktop), or the screen is locked: only the console switch above is
-    // left.
+    // desktop), or the screen is locked: only the keys above are left.
     if (vela_input_shortcuts_inhibited(server->input) || server->locked) {
         return false;
     }
@@ -131,10 +157,11 @@ bool vela_bindings_handle(struct vela_server *server, uint32_t modifiers, uint32
         vela_a11y_set_magnifier(a11y, false);
         return true;
     }
-    // Win+V: clipboard history; Win+Shift+S and Print: the Snipping Tool
+    // Win+V: clipboard history; Win+Ctrl+V: the sound outputs and the volume
+    // mixer, in quick settings; Win+Shift+S and Print: the Snipping Tool
     // (drawn by the shell).
-    if (super && !ctrl && xkb_keysym_to_lower(sym) == XKB_KEY_v) {
-        return shell(server, "clipboard");
+    if (super && xkb_keysym_to_lower(sym) == XKB_KEY_v) {
+        return shell(server, ctrl ? "sound-output" : "clipboard");
     }
     if ((super && shift && xkb_keysym_to_lower(sym) == XKB_KEY_s) || sym == XKB_KEY_Print) {
         return shell(server, "snip");

@@ -18,6 +18,9 @@ struct vela_view;
 // (and must not reach the app).
 bool vela_bindings_handle(struct vela_server *server, uint32_t modifiers, uint32_t sym);
 
+// The shortcuts that repeat while their key is held: volume up and down.
+bool vela_bindings_repeats(uint32_t sym);
+
 // The window menu (docs/renderer.md §14.8), drawn by the shell at (lx, ly) in
 // the layout. keyboard: opened from the keyboard (Alt+Space).
 void vela_window_menu_show(struct vela_server *server, struct vela_view *view, double lx, double ly, bool keyboard);

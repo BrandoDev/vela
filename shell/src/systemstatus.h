@@ -57,8 +57,15 @@ public:
     bool volumeAvailable() const { return m_volumeAvailable; }
     double volume() const { return m_volume; }
     bool muted() const { return m_muted; }
+    // On the volume's grid (volumesteps.h): even numbers, or the device's
+    // positions if it has only a few.
     Q_INVOKABLE void setVolume(double value);
     Q_INVOKABLE void setMuted(bool muted);
+    // One step up (direction > 0) or down, and unmuted, like Windows.
+    Q_INVOKABLE void stepVolume(int direction);
+    // The keyboard's volume keys and knob, the wheel on the taskbar: "up",
+    // "down", "mute" (toggles). The volume indicator shows up.
+    Q_INVOKABLE void volumeKey(const QString& key);
 
     bool networkConnected() const { return m_networkConnected; }
     bool networkWireless() const { return m_networkWireless; }
@@ -97,6 +104,10 @@ public:
 
 signals:
     void volumeChanged();
+    // A volume key or the wheel on the taskbar: the indicator (VolumeOsd.qml).
+    void volumeOsdRequested();
+    // The lines of pactl subscribe ("Event 'change' on sink-input #12"...).
+    void audioEvents(const QByteArray& lines);
     void networkChanged();
     void bluetoothChanged();
     void batteryChanged();
@@ -113,6 +124,8 @@ private Q_SLOTS:
 
 private:
     void refreshVolume();
+    void writeVolume();
+    int deviceIntervals();
     void readBacklight();
 
     bool m_volumeAvailable = false;
@@ -120,6 +133,13 @@ private:
     bool m_muted = false;
     QProcess m_subscribe; // pactl subscribe: audio changes
     QTimer m_volumeTimer;
+    // One wpctl set-volume at a time, so a quickly turned knob can't end on an
+    // older value; m_volumePending: another one is due when it finishes.
+    QProcess m_volumeWriter;
+    bool m_volumePending = false;
+    // The default output's positions (VolumeSteps::intervals); 0: to be read
+    // again (another output, another profile).
+    int m_intervals = 0;
 
     bool m_networkConnected = false;
     bool m_networkWireless = false;

@@ -39,6 +39,10 @@ qt_add_executable(vela-shell
     src/jumplists.cpp
     src/jumplists.h
     src/links.h
+    src/mediakeys.cpp
+    src/mediakeys.h
+    src/mixer.cpp
+    src/mixer.h
     src/network.cpp
     src/network.h
     src/notifications.cpp
@@ -53,6 +57,7 @@ qt_add_executable(vela-shell
     src/taskbarmodel.cpp
     src/tray.cpp
     src/taskbarmodel.h
+    src/volumesteps.h
     src/wallpaperprovider.h
     src/screenwindows.cpp
     src/screenwindows.h
@@ -124,6 +129,7 @@ set(VELA_QML_FILES
     qml/NotificationCenter.qml
     qml/TaskView.qml
     qml/DesktopOsd.qml
+    qml/VolumeOsd.qml
     qml/SnapLayouts.qml
     qml/SnapAssist.qml
     qml/TaskbarPreview.qml
@@ -159,7 +165,8 @@ target_link_libraries(vela-shell PRIVATE
 
 install(TARGETS vela-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-# The tests (ctest): the Exec key of .desktop files and default apps.
+# The tests (ctest): the Exec key of .desktop files, default apps and the
+# volume's steps.
 if(VELA_BUILD_TOOLS)
     find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
     qt_add_executable(vela-desktopexec-test tests/desktopexec.cpp src/desktopexec.h)
@@ -173,6 +180,12 @@ if(VELA_BUILD_TOOLS)
     target_compile_options(vela-mimeapps-test PRIVATE -Wall -Wextra)
     target_link_libraries(vela-mimeapps-test PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME shell-mimeapps COMMAND vela-mimeapps-test)
+
+    qt_add_executable(vela-volumesteps-test tests/volumesteps.cpp src/volumesteps.h)
+    target_include_directories(vela-volumesteps-test PRIVATE src)
+    target_compile_options(vela-volumesteps-test PRIVATE -Wall -Wextra)
+    target_link_libraries(vela-volumesteps-test PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME shell-volumesteps COMMAND vela-volumesteps-test)
 endif()
 
 # Italian translation: strings in the code are in English, Italian lives
