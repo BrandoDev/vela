@@ -580,7 +580,7 @@ void FileOps::open(const QStringList& paths)
         }
         const QString app = defaultAppFor(mimes.mimeTypeForFile(info).name());
         if (app.isEmpty() || !m_apps->launchWithFile(app, QUrl::fromLocalFile(path).toString())) {
-            runDetached(QStringLiteral("xdg-open"), { path }, info.absolutePath());
+            chooseApp(path);
         }
     }
 }
