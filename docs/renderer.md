@@ -378,6 +378,13 @@ For each output, when the time comes (§4.3):
 7. **Presentation**: atomic commit with the end-of-rendering fence; at the
    vblank, frame callbacks and presentation feedback.
 
+The CPU scene comparison has a [standalone benchmark](scene-diff-benchmark.md)
+for stable scenes, movement, reordered and replaced elements, and multiple
+outputs. Its match flags are reused per output; only growth allocates memory.
+The search still starts at the expected position and can be quadratic for
+heavily changed lists. The benchmark measures that cost separately from the
+GPU and frame presentation.
+
 ## 7. Vulkan
 
 ### 7.1 Minimum requirement
