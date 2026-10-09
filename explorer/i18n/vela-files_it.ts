@@ -240,6 +240,18 @@
         <translation>Impossibile scrivere %1</translation>
     </message>
     <message>
+        <source>Replaced %1, but couldn&apos;t remove the old item at %2</source>
+        <translation>%1 sostituito, ma impossibile rimuovere il vecchio elemento in %2</translation>
+    </message>
+    <message>
+        <source>Couldn&apos;t remove the temporary item %1</source>
+        <translation>Impossibile rimuovere l&apos;elemento temporaneo %1</translation>
+    </message>
+    <message>
+        <source>Copied %1, but couldn&apos;t remove the source %2</source>
+        <translation>%1 copiato, ma impossibile rimuovere l&apos;origine %2</translation>
+    </message>
+    <message>
         <source>The destination folder is inside the source folder.</source>
         <translation>La cartella di destinazione è dentro quella di origine.</translation>
     </message>
