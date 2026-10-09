@@ -117,6 +117,9 @@ struct vela_output_frame {
     // from them.
     struct vela_elements last;
     struct vela_elements current;
+    // Match flags for the previous frame; reused per output, only growing.
+    bool *found;
+    int found_capacity;
     // The surfaces visible in the last frame (for frame callbacks).
     struct wlr_surface **visible_surfaces;
     int visible_count, visible_capacity;

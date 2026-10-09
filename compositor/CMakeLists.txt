@@ -218,6 +218,48 @@ install(TARGETS vela-compositor RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 # sharpness geometry, color, sun, settings. They need GoogleTest (the gtest
 # package) and the test tools enabled.
 if(VELA_BUILD_TOOLS)
+    # CPU scene comparison, using the actual private frame function. Discard
+    # unrelated rendering sections so these tools need no compositor or GPU.
+    set(VELA_SCENE_DIFF_REFERENCE "" CACHE FILEPATH
+        "Optional compatible frame.c from a prior revision, for scene-diff benchmarking")
+    set(diff_drivers vela-scene-diff-driver)
+    set(diff_targets vela-scene-diff-bench vela-scene-diff-test)
+    if(VELA_SCENE_DIFF_REFERENCE)
+        list(APPEND diff_drivers vela-scene-diff-reference-driver)
+        list(APPEND diff_targets vela-scene-diff-reference)
+    endif()
+    foreach(driver IN LISTS diff_drivers)
+        add_library(${driver} OBJECT tests/frame_diff_driver.c ${VELA_PROTOCOL_HEADERS})
+        target_include_directories(${driver} PRIVATE src ${VELA_GENERATED_DIR})
+        target_compile_definitions(${driver} PRIVATE WLR_USE_UNSTABLE)
+        target_compile_options(${driver} PRIVATE -ffunction-sections -fdata-sections
+            -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
+        target_link_libraries(${driver} PRIVATE vela-pure PkgConfig::WLROOTS
+            PkgConfig::WAYLAND_SERVER PkgConfig::PIXMAN)
+        set_target_properties(${driver} PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
+    endforeach()
+    if(VELA_SCENE_DIFF_REFERENCE)
+        get_filename_component(diff_reference "${VELA_SCENE_DIFF_REFERENCE}" ABSOLUTE)
+        target_compile_definitions(vela-scene-diff-reference-driver PRIVATE VELA_FRAME_SOURCE="${diff_reference}")
+    endif()
+    foreach(target IN LISTS diff_targets)
+        set(driver vela-scene-diff-driver)
+        if(target STREQUAL "vela-scene-diff-reference")
+            set(driver vela-scene-diff-reference-driver)
+        endif()
+        add_executable(${target} tests/frame_diff_bench.c $<TARGET_OBJECTS:${driver}>)
+        target_include_directories(${target} PRIVATE src)
+        target_compile_definitions(${target} PRIVATE WLR_USE_UNSTABLE)
+        target_compile_options(${target} PRIVATE -Wall -Wextra)
+        target_link_options(${target} PRIVATE -Wl,--gc-sections)
+        target_link_libraries(${target} PRIVATE vela-pure PkgConfig::WLROOTS
+            PkgConfig::WAYLAND_SERVER PkgConfig::PIXMAN)
+        set_target_properties(${target} PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
+    endforeach()
+    target_compile_definitions(vela-scene-diff-test PRIVATE VELA_DIFF_ALLOCATION_TEST)
+    target_link_options(vela-scene-diff-test PRIVATE -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=free)
+    add_test(NAME compositor.scene-diff COMMAND vela-scene-diff-test --test)
+
     find_package(GTest)
     if(GTest_FOUND)
         add_executable(vela-compositor-tests
