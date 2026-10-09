@@ -87,6 +87,9 @@ if(VELA_BUILD_TOOLS)
     qt_add_executable(vela-files-test tests/transfers.cpp)
     target_compile_options(vela-files-test PRIVATE -Wall -Wextra)
     target_link_libraries(vela-files-test PRIVATE vela-files-core Qt6::Test)
+    # Fault injection and process interruption at the atomic replacement's
+    # syscall boundary, without adding test hooks to the application.
+    target_link_options(vela-files-test PRIVATE "LINKER:--wrap=renameat2")
     add_test(NAME files-copies COMMAND vela-files-test)
     set_tests_properties(files-copies PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

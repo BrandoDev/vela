@@ -19,7 +19,7 @@ CTest includes both CPU-only and GPU-dependent suites.
 | Suite | What it covers | GPU required |
 |---|---|---:|
 | **Compositor / GoogleTest** | FrameClock, vblank grid, late latching, adaptive margin, learned host latency, animation curves, output scale selection, pixel geometry, night light, color filters, sunrise/sunset, `vela.conf` parsing and `outputs.conf` persistence. | No |
-| **Files** (`files-copies`) | Copy/move behavior, staged replacement and failure handling including a simulated full disk with `RLIMIT_FSIZE`. | No |
+| **Files** (`files-copies`) | Copy/move behavior, atomic replacement across file/directory types, failed or unsupported exchanges, processes killed immediately before/after exchange, removal errors, and a simulated full disk with `RLIMIT_FSIZE`. | No |
 | **Shell** (`shell-*`) | `.desktop` `Exec=` parsing and default-app resolution through `mimeapps.list`. | No |
 | **Vela Report** (`reporting`, `reporting-gui`) | Guided CLI without a display, shared Qt worker and ZIP export, explicit collection boundaries, redaction, review exclusion, process identity, resource recording, bounded commands and archive failures. | No |
 | **Package updater** (`packaging-update`) | Public HTTPS defaults in both the updater and PKGBUILD, first run and cached fetches, migration of saved SSH URLs and old mirrors, local sources, branch/commit selection, exact CI artifacts, download fallback and failed fetch/build/install handling. Uses real Git repositories with simulated package tools. | No |
@@ -42,6 +42,17 @@ Files and shell tests:
 ```sh
 ctest --test-dir build -R 'files-copies|shell-' --output-on-failure
 ```
+
+For replacements between different item types, Explorer stages the complete copy
+and exchanges it with the destination using Linux `renameat2(RENAME_EXCHANGE)`.
+If the exchange fails (including unsupported kernels/filesystems), the old
+destination stays in place; there is no delete-then-rename fallback. After a
+successful exchange, the old item is removed from the hidden staging path. If
+that removal fails, the job reports the remaining path and a move retains its
+source. A process killed before that cleanup may leave a hidden
+`.name.vela-copy-XXXXXX` item containing the old destination. These interruption
+tests kill a separate process at the syscall boundary; they do not simulate
+power loss. Directory-to-directory replacements still merge file by file.
 
 Diagnostic reporter and graphical smoke check:
 
