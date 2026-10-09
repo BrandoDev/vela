@@ -37,6 +37,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <cstdio>
 #include <functional>
 
 namespace {
@@ -69,8 +70,8 @@ QString copyName(const QFileInfo& source)
 }
 
 // A hidden free name next to `destination`, on the same disk: the copy is
-// written there and becomes `destination` with an atomic rename only once
-// complete. "photo.jpg" -> ".photo.jpg.vela-copy-XXXXXX". With `directory` it
+// written there and published atomically only once complete.
+// "photo.jpg" -> ".photo.jpg.vela-copy-XXXXXX". With `directory` it
 // creates an empty folder, otherwise an empty file (0600).
 QString makeTemporary(const QString& destination, bool directory)
 {
@@ -89,10 +90,10 @@ QString makeTemporary(const QString& destination, bool directory)
     return QFile::decodeName(pattern);
 }
 
-void removeAny(const QString& path)
+bool removeAny(const QString& path)
 {
     const QFileInfo info(path);
-    info.isDir() && !info.isSymLink() ? QDir(path).removeRecursively() : QFile::remove(path);
+    return info.isDir() && !info.isSymLink() ? QDir(path).removeRecursively() : QFile::remove(path);
 }
 
 // Writes to disk everything pending on `directory`'s filesystem.
@@ -108,6 +109,17 @@ void syncDirectory(const QString& directory)
 bool renameOver(const QString& from, const QString& to)
 {
     return ::rename(QFile::encodeName(from).constData(), QFile::encodeName(to).constData()) == 0;
+}
+
+bool exchangeWith(const QString& from, const QString& to)
+{
+    // Unlike rename(), this can replace a nonempty directory with a file (or
+    // vice versa). The old destination becomes `from` in the same operation:
+    // there is never a moment when `to` is missing. Unsupported filesystems
+    // must fail safely; never fall back to deleting `to` before a rename.
+    return ::renameat2(AT_FDCWD, QFile::encodeName(from).constData(),
+               AT_FDCWD, QFile::encodeName(to).constData(), RENAME_EXCHANGE)
+        == 0;
 }
 
 void sendToShell(const QByteArray& command)
@@ -463,31 +475,40 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                 // atomic file by file.
                 copied = copyOne(source, destination);
             } else {
-                // A new folder, or one type replacing another: everything in a
-                // temporary next to it, then the old one goes and a rename. An
-                // error never leaves a half tree.
+                // A new folder, or one type replacing another: prepare the
+                // entire copy next to the destination before publishing it.
                 const QString temporary = makeTemporary(destination, sourceIsDir);
                 if (temporary.isEmpty()) {
                     error = QCoreApplication::translate("Files", "Couldn't write to %1").arg(transfer.directory);
-                } else if (!sourceIsDir) {
-                    copied = copyOne(source, temporary);
-                    if (copied) {
-                        removeAny(destination);
-                        copied = renameOver(temporary, destination);
-                    }
-                    if (!copied) {
-                        QFile::remove(temporary);
-                    }
                 } else {
                     copied = copyOne(source, temporary);
+                    if (copied && replacing) {
+                        // Write the staged tree before exchanging the names.
+                        syncDirectory(transfer.directory);
+                    }
+                    copied = copied && !job->cancelled;
                     if (copied) {
                         if (replacing) {
-                            removeAny(destination);
+                            copied = exchangeWith(temporary, destination);
+                            if (copied) {
+                                // `temporary` now holds the old destination.
+                                // Persist the exchange before removing it. A
+                                // process killed here leaves both items intact.
+                                syncDirectory(transfer.directory);
+                                if (!removeAny(temporary)) {
+                                    error = QCoreApplication::translate("Files", "Replaced %1, but couldn't remove the old item at %2")
+                                                .arg(destination, temporary);
+                                }
+                            }
+                        } else {
+                            copied = renameOver(temporary, destination);
                         }
-                        copied = renameOver(temporary, destination);
                     }
-                    if (!copied) {
-                        QDir(temporary).removeRecursively();
+                    if (!copied && !removeAny(temporary)) {
+                        if (!error.isEmpty()) {
+                            error += u'\n';
+                        }
+                        error += QCoreApplication::translate("Files", "Couldn't remove the temporary item %1").arg(temporary);
                     }
                 }
                 if (!copied && error.isEmpty() && !job->cancelled) {
@@ -498,11 +519,17 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                 break;
             }
             if (transfer.move) {
-                // From one disk to another: the source is deleted only when
-                // the copy is really on disk.
-                syncDirectory(transfer.directory);
-                removeAny(source);
-                step.moves.append({ destination, source });
+                // Moves that needed a copy: delete the source only when the
+                // copy is on disk and cleanup has succeeded.
+                if (error.isEmpty()) {
+                    syncDirectory(transfer.directory);
+                    if (removeAny(source)) {
+                        step.moves.append({ destination, source });
+                    } else {
+                        error = QCoreApplication::translate("Files", "Copied %1, but couldn't remove the source %2")
+                                    .arg(destination, source);
+                    }
+                }
             } else if (!merging) {
                 step.created.append(destination);
             }
@@ -510,13 +537,14 @@ void FileOps::startTransfer(const Transfer& transfer, const QString& policy)
                 firstArrived = destination;
             }
         }
-        // "Done" means written to disk: one syncfs for the whole job, instead
-        // of an fsync per file.
+        // Finish new copies with a filesystem sync. Type replacements have
+        // already been synced before cleaning up the old destination.
         if (!step.created.isEmpty()) {
             syncDirectory(transfer.directory);
         }
         const bool cancelled = job->cancelled;
-        post(total, total, QString(), true, cancelled ? QCoreApplication::translate("Files", "Canceled") : error);
+        const QString result = error.isEmpty() && cancelled ? QCoreApplication::translate("Files", "Canceled") : error;
+        post(total, total, QString(), true, result);
         QMetaObject::invokeMethod(
             qApp,
             [self, step, firstArrived, id = job->id, ok = error.isEmpty() && !cancelled] {

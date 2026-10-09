@@ -657,6 +657,7 @@ void vela_output_frame_destroy(struct vela_output_frame *frame)
     wlr_damage_ring_finish(&frame->ring);
     free(frame->last.items);
     free(frame->current.items);
+    free(frame->found);
     free(frame->visible_surfaces);
     free(frame);
 }
@@ -834,7 +835,11 @@ static void diff_with_last(struct vela_output_frame *frame)
     pixman_region32_init(&changed);
     // Which earlier elements are found now; the search starts where they're
     // expected (usually the order doesn't change).
-    bool *found = calloc((size_t)(last->count ? last->count : 1), sizeof(*found));
+    frame->found = vela_grow(frame->found, &frame->found_capacity, last->count, sizeof(*frame->found));
+    bool *found = frame->found;
+    if (last->count > 0) {
+        memset(found, 0, (size_t)last->count * sizeof(*found));
+    }
     int highest_old_order = 0;
     for (int i = 0; i < current->count; ++i) {
         struct vela_element *e = &current->items[i];
@@ -871,7 +876,6 @@ static void diff_with_last(struct vela_output_frame *frame)
             vela_surface_forget(last->items[j].surface, frame->output);
         }
     }
-    free(found);
     wlr_damage_ring_add(&frame->ring, &changed);
     pixman_region32_fini(&changed);
 
