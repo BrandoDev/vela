@@ -53,7 +53,10 @@ signals:
     void connectResultChanged();
 
 private:
+    void readDevices(const QByteArray& output, quint64 revision);
+    void finishDevices(quint64 revision);
     void readWifi(const QByteArray& output);
+    void refreshAfterAction();
 
     bool m_available = false;
     QVariantList m_devices;
@@ -61,4 +64,11 @@ private:
     QStringList m_known; // names of the saved connections
     bool m_scanning = false;
     QString m_connectResult;
+    bool m_detailsRequested = false;
+    bool m_loadingDevices = false;
+    bool m_devicesPending = false;
+    bool m_loadingWifi = false;
+    bool m_wifiPending = false;
+    quint64 m_revision = 0;
+    quint64 m_connectionRevision = 0;
 };
