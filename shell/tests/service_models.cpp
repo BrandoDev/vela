@@ -585,7 +585,16 @@ private slots:
         QVERIFY(!network->connectResult().contains("psk"));
         QVERIFY(!network->connectResult().contains("passwd-file"));
         QCOMPARE(count("connect"), 1);
-        const QJsonArray savedArgs = requests().last().value("arguments").toArray();
+        auto lastConnectArgs = [&] {
+            QJsonArray args;
+            for (const QJsonObject& record : requests()) {
+                if (record.value("operation").toString() == QStringLiteral("connect")) {
+                    args = record.value("arguments").toArray();
+                }
+            }
+            return args;
+        };
+        const QJsonArray savedArgs = lastConnectArgs();
         QCOMPARE(savedArgs, QJsonArray::fromStringList(
             { "connection", "up", "id", "Home:Lab" }));
 
@@ -596,7 +605,7 @@ private slots:
         QTRY_COMPARE(network->connectResult(), QString("ok"));
         QCOMPARE(network->passwordRequiredSsid(), QString());
         QCOMPARE(count("connect"), 2);
-        const QJsonArray retryArgs = requests().last().value("arguments").toArray();
+        const QJsonArray retryArgs = lastConnectArgs();
         QCOMPARE(retryArgs, QJsonArray::fromStringList(
             { "device", "wifi", "connect", "Home:Lab", "password", "example-password" }));
     }
