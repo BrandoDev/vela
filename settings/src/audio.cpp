@@ -76,7 +76,9 @@ void Audio::refresh()
         m_subscribe = subscription;
         connect(subscription, &QProcess::readyReadStandardOutput, this, [this, subscription] {
             const QByteArray events = subscription->readAllStandardOutput();
-            if (events.contains("sink") || events.contains("source") || events.contains("server")) {
+            // Stream events (sink-input/source-output) do not change the
+            // device list; treating them as device changes can starve snapshots.
+            if (events.contains("on sink #") || events.contains("on source #") || events.contains("on server")) {
                 ++m_revision;
                 m_debounce.start();
             }
