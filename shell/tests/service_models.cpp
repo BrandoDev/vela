@@ -600,6 +600,8 @@ private slots:
         const int before = count("set-source-mute");
         audio->setMuted("input", "test-mic", true);
         QCOMPARE(count("set-source-mute"), before);
+        audio->setVolume("input", "test-mic", 0.0);
+        QCOMPARE(count("set-source-volume"), 0);
 
         option("get-default-source", "code", 0);
         audio->refresh();
