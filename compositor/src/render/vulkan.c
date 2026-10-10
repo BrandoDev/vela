@@ -621,15 +621,36 @@ bool vela_vulkan_import_dmabuf(const struct vela_vulkan *vk, const struct wlr_dm
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    if (vkCreateImage(vk->device, &image_info, NULL, image) != VK_SUCCESS) {
+    if (vela_env_one("VELA_DEBUG_DMABUF")) {
+        wlr_log(WLR_INFO, "DMABUF trace: before vkCreateImage fd=%d modifier=0x%llx format=%d usage=0x%x",
+            dmabuf->fd[0], (unsigned long long)dmabuf->modifier, (int)format, (unsigned)usage);
+    }
+    VkResult image_result = vkCreateImage(vk->device, &image_info, NULL, image);
+    if (vela_env_one("VELA_DEBUG_DMABUF")) {
+        wlr_log(WLR_INFO, "DMABUF trace: after vkCreateImage result=%d", (int)image_result);
+    }
+    if (image_result != VK_SUCCESS) {
         *image = VK_NULL_HANDLE;
         return false;
     }
 
     VkMemoryRequirements requirements;
+    if (vela_env_one("VELA_DEBUG_DMABUF")) {
+        wlr_log(WLR_INFO, "DMABUF trace: before vkGetImageMemoryRequirements");
+    }
     vkGetImageMemoryRequirements(vk->device, *image, &requirements);
+    if (vela_env_one("VELA_DEBUG_DMABUF")) {
+        wlr_log(WLR_INFO, "DMABUF trace: image requirements size=%llu memoryTypeBits=0x%x",
+            (unsigned long long)requirements.size, requirements.memoryTypeBits);
+        wlr_log(WLR_INFO, "DMABUF trace: before vkGetMemoryFdPropertiesKHR fd=%d", dmabuf->fd[0]);
+    }
     VkMemoryFdPropertiesKHR fd_props = { .sType = VK_STRUCTURE_TYPE_MEMORY_FD_PROPERTIES_KHR };
-    vk->get_memory_fd_properties(vk->device, VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT, dmabuf->fd[0], &fd_props);
+    VkResult fd_result = vk->get_memory_fd_properties(
+        vk->device, VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT, dmabuf->fd[0], &fd_props);
+    if (vela_env_one("VELA_DEBUG_DMABUF")) {
+        wlr_log(WLR_INFO, "DMABUF trace: after vkGetMemoryFdPropertiesKHR result=%d memoryTypeBits=0x%x",
+            (int)fd_result, fd_props.memoryTypeBits);
+    }
     uint32_t memory_type = vela_vulkan_memory_type(vk, requirements.memoryTypeBits & fd_props.memoryTypeBits, 0);
 
     // Vulkan takes ownership of the descriptor: we give it a copy.
@@ -650,7 +671,18 @@ bool vela_vulkan_import_dmabuf(const struct vela_vulkan *vk, const struct wlr_dm
         .allocationSize = requirements.size,
         .memoryTypeIndex = memory_type,
     };
-    if (fd < 0 || memory_type == UINT32_MAX || vkAllocateMemory(vk->device, &alloc_info, NULL, memory) != VK_SUCCESS) {
+    VkResult allocate_result = VK_ERROR_UNKNOWN;
+    if (fd >= 0 && memory_type != UINT32_MAX) {
+        if (vela_env_one("VELA_DEBUG_DMABUF")) {
+            wlr_log(WLR_INFO, "DMABUF trace: before vkAllocateMemory fd=%d size=%llu memoryType=%u",
+                fd, (unsigned long long)requirements.size, memory_type);
+        }
+        allocate_result = vkAllocateMemory(vk->device, &alloc_info, NULL, memory);
+        if (vela_env_one("VELA_DEBUG_DMABUF")) {
+            wlr_log(WLR_INFO, "DMABUF trace: after vkAllocateMemory result=%d", (int)allocate_result);
+        }
+    }
+    if (fd < 0 || memory_type == UINT32_MAX || allocate_result != VK_SUCCESS) {
         if (fd >= 0) {
             close(fd);
         }
@@ -659,7 +691,13 @@ bool vela_vulkan_import_dmabuf(const struct vela_vulkan *vk, const struct wlr_dm
         *memory = VK_NULL_HANDLE;
         return false;
     }
-    vkBindImageMemory(vk->device, *image, *memory, 0);
+    if (vela_env_one("VELA_DEBUG_DMABUF")) {
+        wlr_log(WLR_INFO, "DMABUF trace: before vkBindImageMemory");
+    }
+    VkResult bind_result = vkBindImageMemory(vk->device, *image, *memory, 0);
+    if (vela_env_one("VELA_DEBUG_DMABUF")) {
+        wlr_log(WLR_INFO, "DMABUF trace: after vkBindImageMemory result=%d", (int)bind_result);
+    }
     return true;
 }
 
