@@ -671,7 +671,18 @@ bool vela_vulkan_import_dmabuf(const struct vela_vulkan *vk, const struct wlr_dm
         .allocationSize = requirements.size,
         .memoryTypeIndex = memory_type,
     };
-    if (fd < 0 || memory_type == UINT32_MAX || vkAllocateMemory(vk->device, &alloc_info, NULL, memory) != VK_SUCCESS) {
+    VkResult allocate_result = VK_ERROR_UNKNOWN;
+    if (fd >= 0 && memory_type != UINT32_MAX) {
+        if (vela_env_one("VELA_DEBUG_DMABUF")) {
+            wlr_log(WLR_INFO, "DMABUF trace: before vkAllocateMemory fd=%d size=%llu memoryType=%u",
+                fd, (unsigned long long)requirements.size, memory_type);
+        }
+        allocate_result = vkAllocateMemory(vk->device, &alloc_info, NULL, memory);
+        if (vela_env_one("VELA_DEBUG_DMABUF")) {
+            wlr_log(WLR_INFO, "DMABUF trace: after vkAllocateMemory result=%d", (int)allocate_result);
+        }
+    }
+    if (fd < 0 || memory_type == UINT32_MAX || allocate_result != VK_SUCCESS) {
         if (fd >= 0) {
             close(fd);
         }
@@ -680,7 +691,13 @@ bool vela_vulkan_import_dmabuf(const struct vela_vulkan *vk, const struct wlr_dm
         *memory = VK_NULL_HANDLE;
         return false;
     }
-    vkBindImageMemory(vk->device, *image, *memory, 0);
+    if (vela_env_one("VELA_DEBUG_DMABUF")) {
+        wlr_log(WLR_INFO, "DMABUF trace: before vkBindImageMemory");
+    }
+    VkResult bind_result = vkBindImageMemory(vk->device, *image, *memory, 0);
+    if (vela_env_one("VELA_DEBUG_DMABUF")) {
+        wlr_log(WLR_INFO, "DMABUF trace: after vkBindImageMemory result=%d", (int)bind_result);
+    }
     return true;
 }
 
