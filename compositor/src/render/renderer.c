@@ -452,6 +452,11 @@ struct vela_target *vela_renderer_target(struct vela_renderer *r, struct wlr_buf
         wlr_log(WLR_ERROR, "Renderer: can only render to dmabuf buffers");
         return NULL;
     }
+    if (vela_env_one("VELA_DEBUG_DMABUF")) {
+        wlr_log(WLR_INFO, "DMABUF trace: renderer target %dx%d drm=0x%08x modifier=0x%" PRIx64
+            " planes=%d fd0=%d", dmabuf.width, dmabuf.height, dmabuf.format, dmabuf.modifier,
+            dmabuf.n_planes, dmabuf.fd[0]);
+    }
     const struct vela_pixel_format *format = vela_pixel_format_from_drm(dmabuf.format);
     if (!format || format->srgb == VK_FORMAT_UNDEFINED
         || !wlr_drm_format_set_has(&r->vk->render_formats, dmabuf.format, dmabuf.modifier)) {
@@ -469,9 +474,16 @@ struct vela_target *vela_renderer_target(struct vela_renderer *r, struct wlr_buf
     // Readable too, if the format allows it: the blur reads what is already
     // drawn under a zone (§8.3).
     VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    if (vela_env_one("VELA_DEBUG_DMABUF")) {
+        wlr_log(WLR_INFO, "DMABUF trace: querying sampled-image support for VkFormat=%d", (int)format->srgb);
+    }
     if (vela_vulkan_supports_dmabuf(r->vk, format->srgb, dmabuf.modifier, usage | VK_IMAGE_USAGE_SAMPLED_BIT)) {
         usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
         target->sampleable = true;
+    }
+    if (vela_env_one("VELA_DEBUG_DMABUF")) {
+        wlr_log(WLR_INFO, "DMABUF trace: sampled-image query complete; sampleable=%d; entering import",
+            target->sampleable);
     }
     if (!vela_vulkan_import_dmabuf(r->vk, &dmabuf, format->srgb, usage, &target->image, &target->memory)) {
         wlr_log(WLR_ERROR, "Renderer: can't import the target buffer");
