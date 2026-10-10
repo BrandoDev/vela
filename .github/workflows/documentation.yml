@@ -8,7 +8,8 @@ on:
       - 'SECURITY.md'
       - 'docs/**'
       - '.github/workflows/documentation.yml'
-      - '.github/workflows/{build,fedora}.yml'
+      - '.github/workflows/build.yml'
+      - '.github/workflows/fedora.yml'
       - 'scripts/check-docs.py'
   workflow_dispatch:
 

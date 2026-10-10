@@ -364,7 +364,7 @@ suites additionally require NumPy and Pillow for Python 3.
 sudo pacman -S --needed base-devel git cmake ninja pkgconf wlroots0.20 wayland wayland-protocols \
     libxkbcommon pixman libinput qt6-base qt6-declarative qt6-svg qt6-wayland qt6-tools layer-shell-qt \
     vulkan-headers vulkan-icd-loader shaderc mesa libdrm freetype2 harfbuzz fontconfig cairo \
-    pam polkit librsvg zlib gtest python hicolor-icon-theme
+    pam polkit librsvg zlib gtest python python-numpy python-pillow hicolor-icon-theme
 ```
 </details>
 
@@ -379,7 +379,7 @@ sudo dnf install git cmake ninja-build gcc gcc-c++ pkgconf-pkg-config \
     qt6-qttools-devel qt6-qtsvg-devel qt6-qtwayland-devel layer-shell-qt-devel \
     vulkan-headers vulkan-loader-devel glslc freetype-devel harfbuzz-devel \
     fontconfig-devel pam-devel polkit-devel librsvg2-devel cairo-devel \
-    zlib-devel gtest-devel python3
+    zlib-devel gtest-devel python3 python3-numpy python3-pillow
 ```
 </details>
 
