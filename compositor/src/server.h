@@ -107,6 +107,7 @@ struct vela_server {
     // always. vela.conf "variable-refresh".
     int vrr_mode;
     bool nested; // inside another session (Wayland or X11 window)
+    bool unsupported_gpu; // renderer initialization failed; supervisor must not retry
     char socket_name[64]; // our WAYLAND_DISPLAY
 
     struct vela_layers layers;
@@ -189,7 +190,7 @@ struct vela_server {
 
 // Creates the display, backend, renderer and protocols. NULL if something
 // essential is missing (the reason is already in the log).
-struct vela_server *vela_server_create(void);
+struct vela_server *vela_server_create(bool *unsupported_gpu);
 
 // Opens the Wayland socket, starts the backend and launches `startup_command`
 // (the shell, relaunched when it fails; NULL or empty: nothing).
