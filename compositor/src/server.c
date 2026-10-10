@@ -267,16 +267,14 @@ static bool init(struct vela_server *server)
     return true;
 }
 
-struct vela_server *vela_server_create(void)
+struct vela_server *vela_server_create(bool *unsupported_gpu)
 {
+    if (unsupported_gpu) *unsupported_gpu = false;
     struct vela_server *server = calloc(1, sizeof(*server));
     if (!init(server)) {
         // What was already created is left to the process, which is about to
         // end.
-        if (server->unsupported_gpu) {
-            free(server);
-            return (struct vela_server *)-1; // handled by main as a permanent startup failure
-        }
+        if (unsupported_gpu) *unsupported_gpu = server->unsupported_gpu;
         free(server);
         return NULL;
     }
