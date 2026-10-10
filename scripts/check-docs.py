@@ -25,7 +25,7 @@ def anchors(text: str) -> set[str]:
         heading = CODE.sub(r'\1', TAG.sub('', match.group(1)))
         heading = heading.strip().lower()
         heading = re.sub(r'[^\w\- ]', '', heading, flags=re.UNICODE)
-        slug = re.sub(r'\s+', '-', heading)
+        slug = heading.replace(' ', '-')  # GitHub preserves repeated spaces as repeated hyphens
         suffix = count.get(slug, 0)
         count[slug] = suffix + 1
         found.add(f'{slug}-{suffix}' if suffix else slug)
