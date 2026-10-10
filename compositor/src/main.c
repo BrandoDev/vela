@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "server.h"
+#include "error_screen.h"
 #include "supervisor.h"
 
 #include <getopt.h>
@@ -80,6 +81,9 @@ int main(int argc, char *argv[])
     wlr_log_init(debug && *debug ? WLR_DEBUG : WLR_INFO, NULL);
 
     struct vela_server *server = vela_server_create();
+    if (server == (struct vela_server *)-1) {
+        return VELA_EXIT_UNSUPPORTED_GPU;
+    }
     if (!server || !vela_server_start(server, startup)) {
         return 1;
     }
