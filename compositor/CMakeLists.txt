@@ -135,6 +135,7 @@ endif()
 
 add_executable(vela-compositor
     src/a11y.c
+    src/error_screen.c
     src/bindings.c
     src/command.c
     src/decoration.c
