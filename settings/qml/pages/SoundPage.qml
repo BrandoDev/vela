@@ -21,7 +21,7 @@ Page {
         title: modelData.description
         description: modelData.isDefault
             ? (modelData.defaultError
-                ? qsTr("Default device unverified; microphone controls disabled")
+                ? qsTr("Default device unverified; controls disabled")
                 : modelData.defaultPending
                     ? qsTr("Confirming default device…")
                     : qsTr("Default device")) : ""
@@ -53,7 +53,7 @@ Page {
         icon: device && device.muted ? "audio-volume-muted" : kind === "output" ? "audio-volume-high" : "audio-input-microphone"
         title: qsTr("Volume")
         description: device && device.defaultError
-            ? qsTr("Default device unverified; microphone controls disabled.")
+            ? qsTr("Default device unverified; controls disabled.")
             : device && device.defaultPending
                 ? qsTr("Confirming default device…")
                 : device && device.muteError
@@ -72,6 +72,7 @@ Page {
             Slider {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 220
+                enabled: volumeCard.device && !volumeCard.device.defaultPending && !volumeCard.device.defaultError
                 to: 1
                 stepSize: 0.02 // even numbers, like the volume keys and quick settings
                 value: volumeCard.device ? Math.min(1, volumeCard.device.volume) : 0
