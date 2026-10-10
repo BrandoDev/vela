@@ -47,11 +47,16 @@ Page {
         required property string kind
         icon: device && device.muted ? "audio-volume-muted" : kind === "output" ? "audio-volume-high" : "audio-input-microphone"
         title: qsTr("Volume")
+        description: device && device.muteError
+            ? qsTr("Mute command failed. State is unverified; check the microphone.")
+            : device && device.mutePending
+                ? qsTr("Confirming mute state…") : ""
         trailing: Row {
             spacing: 8
             Button {
                 subtle: true
                 icon: volumeCard.device && volumeCard.device.muted ? (volumeCard.kind === "output" ? "audio-volume-muted" : "microphone-sensitivity-muted") : (volumeCard.kind === "output" ? "audio-volume-high" : "audio-input-microphone")
+                enabled: volumeCard.device && !volumeCard.device.mutePending
                 onClicked: Audio.setMuted(volumeCard.kind, volumeCard.device.name, !volumeCard.device.muted)
             }
             Slider {
