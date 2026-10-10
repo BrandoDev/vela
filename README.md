@@ -12,7 +12,7 @@ experience — smooth motion, precise rendering, rich effects — and avoids ove
 it does not. Every animation is tied to your monitor's real frames, and fractional scaling
 is designed around physical pixels rather than treated as an afterthought.
 
-[![Build](https://github.com/BrandoDev/vela/actions/workflows/build.yml/badge.svg)](https://github.com/BrandoDev/vela/actions/workflows/build.yml)
+[![Build](https://github.com/vela-desktop/vela/actions/workflows/build.yml/badge.svg)](https://github.com/vela-desktop/vela/actions/workflows/build.yml)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 [![License: GPL v3+](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 ![wlroots](https://img.shields.io/badge/wlroots-0.20-4b8bbe)
@@ -257,7 +257,7 @@ proprietary driver ≥ 570 or NVK. Once installed, **Vela** appears on the login
 Vela installs as a proper `vela-git` package:
 
 ```sh
-git clone https://github.com/BrandoDev/vela.git
+git clone https://github.com/vela-desktop/vela.git
 cd vela/packaging/arch
 VELA_GIT_URL=file://$PWD/../.. makepkg -si
 ```
