@@ -6,6 +6,8 @@ set -euo pipefail
 fail() { printf '::error::%s\n' "$*" >&2; exit 1; }
 pacman -Q vela-git
 pacman -Qk vela-git
+pacman -Q xorg-xwayland >/dev/null || fail "Missing Xwayland package"
+test -x /usr/bin/Xwayland || fail "Missing Xwayland binary"
 for program in vela-compositor vela-shell vela-files vela-settings vela-lock vela-session vela-update vela-report; do
     command -v "$program" >/dev/null || fail "Missing executable: $program"
 done
