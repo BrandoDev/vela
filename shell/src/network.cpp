@@ -145,7 +145,9 @@ void Network::refreshWifi()
     if (!m_available) {
         return;
     }
-    if (m_loadingWifi || m_scanning) {
+    // A hardware scan may be slow. Read NM's cached AP list concurrently
+    // instead of hiding it until the scan completes.
+    if (m_loadingWifi) {
         m_wifiPending = true;
         return;
     }
@@ -229,6 +231,7 @@ void Network::scan()
     m_scanning = true;
     const quint64 revision = ++m_revision;
     emit scanningChanged();
+    refreshWifi(); // show cached access points while hardware discovery runs
     vela::runProcess(this, QStringLiteral("nmcli"),
         { QStringLiteral("-t"), QStringLiteral("-f"), QStringLiteral("IN-USE,SSID,SIGNAL,SECURITY"), QStringLiteral("device"),
             QStringLiteral("wifi"), QStringLiteral("list"), QStringLiteral("--rescan"), QStringLiteral("yes") },
@@ -247,23 +250,56 @@ void Network::connectWifi(const QString& ssid, const QString& password)
     ++m_revision;
     const quint64 connection = ++m_connectionRevision;
     m_connectResult.clear();
+    m_passwordRequiredSsid.clear();
     emit connectResultChanged();
-    QStringList arguments { QStringLiteral("device"), QStringLiteral("wifi"), QStringLiteral("connect"), ssid };
+
+    // A saved connection already owns the Wi-Fi credentials. Re-activate it
+    // instead of using 'device wifi connect', which may request a new PSK
+    // without an interactive secret agent (or create a duplicate profile).
+    const bool saved = m_known.contains(ssid) && password.isEmpty();
+    QStringList arguments = saved
+        ? QStringList { QStringLiteral("connection"), QStringLiteral("up"), QStringLiteral("id"), ssid }
+        : QStringList { QStringLiteral("device"), QStringLiteral("wifi"), QStringLiteral("connect"), ssid };
     if (!password.isEmpty()) {
         arguments << QStringLiteral("password") << password;
     }
-    vela::runProcess(this, QStringLiteral("nmcli"), arguments, 90000, [this, connection](vela::ProcessResult result) {
-        if (connection != m_connectionRevision) {
-            return;
-        }
-        m_connectResult = result.ok ? QStringLiteral("ok")
-                                    : QString::fromUtf8(result.error).trimmed().section(u'\n', 0, 0).remove(QStringLiteral("Error: "));
-        if (m_connectResult.isEmpty()) {
-            m_connectResult = QCoreApplication::translate("Network", "Couldn't connect to this network");
-        }
-        emit connectResultChanged();
-        refreshAfterAction();
-    });
+    vela::runProcess(this, QStringLiteral("nmcli"), arguments, 90000,
+        [this, connection, ssid, saved](vela::ProcessResult result) {
+            if (connection != m_connectionRevision) {
+                return;
+            }
+            if (result.ok) {
+                m_connectResult = QStringLiteral("ok");
+            } else {
+                // nmcli's stderr is localized, implementation-specific and
+                // frequently contains internal key names. Never show it raw.
+                const QString details = QString::fromUtf8(result.error).toLower();
+                const bool credentials = details.contains(QLatin1String("psk"))
+                    || details.contains(QLatin1String("password"))
+                    || details.contains(QLatin1String("passwd-file"))
+                    || details.contains(QLatin1String("secret"))
+                    || details.contains(QLatin1String("segreti"))
+                    || details.contains(QLatin1String("autentic"))
+                    || details.contains(QLatin1String("authentic"));
+                if (credentials) {
+                    m_passwordRequiredSsid = ssid;
+                    m_connectResult = QCoreApplication::translate("Network", "Password required or incorrect. Enter the Wi-Fi password again.");
+                } else if (details.contains(QLatin1String("timed out"))
+                    || details.contains(QLatin1String("timeout"))
+                    || details.contains(QLatin1String("tempo scaduto"))) {
+                    m_connectResult = QCoreApplication::translate("Network", "Connection timed out. Please try again.");
+                } else if (saved) {
+                    // Saved profiles without usable secrets need a manual
+                    // retry even if NetworkManager returns an opaque error.
+                    m_passwordRequiredSsid = ssid;
+                    m_connectResult = QCoreApplication::translate("Network", "Couldn't reconnect. Re-enter the Wi-Fi password or try again.");
+                } else {
+                    m_connectResult = QCoreApplication::translate("Network", "Couldn't connect to this network. Please try again.");
+                }
+            }
+            emit connectResultChanged();
+            refreshAfterAction();
+        });
 }
 
 void Network::disconnectDevice(const QString& device)
