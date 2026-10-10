@@ -5,6 +5,7 @@
 
 #include <QObject>
 #include <QPair>
+#include <QSet>
 #include <QTimer>
 #include <QVariantList>
 
@@ -40,6 +41,7 @@ signals:
 private:
     QVariantList list(const QJsonArray& devices, bool inputs, const QString& defaultName) const;
     void run(const QString& key, const QStringList& arguments);
+    void markMute(const QString& kind, const QString& name, bool pending, bool error);
     void runNext();
     void update(const QString& kind, const QString& name, const QString& property, const QVariant& value);
 
@@ -53,4 +55,7 @@ private:
     bool m_running = false;
     quint64 m_revision = 0;
     QList<QPair<QString, QStringList>> m_queue;
+    // A pending mute must never be displayed as an already confirmed mute.
+    QSet<QString> m_unconfirmedMutes;
+    bool m_muteCommandFailed = false;
 };
