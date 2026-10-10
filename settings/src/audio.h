@@ -42,6 +42,7 @@ private:
     QVariantList list(const QJsonArray& devices, bool inputs, const QString& defaultName) const;
     void run(const QString& key, const QStringList& arguments);
     void markMute(const QString& kind, const QString& name, bool pending, bool error);
+    void markDefault(const QString& kind, bool pending, bool error);
     void runNext();
     void update(const QString& kind, const QString& name, const QString& property, const QVariant& value);
 
@@ -57,4 +58,7 @@ private:
     QList<QPair<QString, QStringList>> m_queue;
     // A pending mute must never be displayed as an already confirmed mute.
     QSet<QString> m_unconfirmedMutes;
+    // A default-input change may have taken effect even if its command or
+    // subsequent query failed. Do not target microphone mute until confirmed.
+    QSet<QString> m_unconfirmedDefaults;
 };
