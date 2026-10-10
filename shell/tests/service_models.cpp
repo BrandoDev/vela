@@ -84,7 +84,7 @@ QString operation(const QString& program, const QStringList& args)
     if (args.contains("show")) {
         return "details";
     }
-    if (args.contains("connect")) {
+    if (args.contains("connect") || (args.value(0) == "connection" && args.value(1) == "up")) {
         return "connect";
     }
     if (args.contains("disconnect") || args.contains("down") || args.contains("delete")) {
@@ -555,6 +555,66 @@ private slots:
         QTRY_COMPARE(osd.size(), 1);
         QCOMPARE(qRound(100 * mixer->apps().first().toMap().value("volume").toDouble()), 52);
         QTRY_COMPARE(readFile(m_dir->filePath("volume")), QByteArray("52"));
+    }
+
+    void savedWifiUsesExistingProfileAndFriendlyErrors()
+    {
+        makeModel(NetworkModel);
+        auto* network = static_cast<Network*>(m_model.get());
+        network->refreshWifi();
+        QTRY_VERIFY(!network->wifiNetworks().isEmpty());
+        auto knownNetwork = [&] {
+            for (const QVariant& item : network->wifiNetworks()) {
+                const QVariantMap wifi = item.toMap();
+                if (wifi.value("ssid").toString() == QStringLiteral("Home:Lab")) {
+                    return wifi;
+                }
+            }
+            return QVariantMap();
+        };
+        QVERIFY(knownNetwork().value("known").toBool());
+
+        // A saved profile without a usable secret must offer a retry instead
+        // of displaying raw, potentially localized nmcli implementation text.
+        option("connect", "code", 4);
+        option("connect", "error",
+            "Error: password for '802-11-wireless-security.psk' not provided in passwd-file");
+        network->connectWifi("Home:Lab", {});
+        QTRY_VERIFY(!network->connectResult().isEmpty());
+        QCOMPARE(network->passwordRequiredSsid(), QString("Home:Lab"));
+        QVERIFY(!network->connectResult().contains("psk"));
+        QVERIFY(!network->connectResult().contains("passwd-file"));
+        QCOMPARE(count("connect"), 1);
+        const QJsonArray savedArgs = requests().last().value("arguments").toArray();
+        QCOMPARE(savedArgs, QJsonArray::fromStringList(
+            { "connection", "up", "id", "Home:Lab" }));
+
+        // With a newly entered password, use the explicit credential flow.
+        option("connect", "code", 0);
+        option("connect", "error", "");
+        network->connectWifi("Home:Lab", "example-password");
+        QTRY_COMPARE(network->connectResult(), QString("ok"));
+        QCOMPARE(network->passwordRequiredSsid(), QString());
+        QCOMPARE(count("connect"), 2);
+        const QJsonArray retryArgs = requests().last().value("arguments").toArray();
+        QCOMPARE(retryArgs, QJsonArray::fromStringList(
+            { "device", "wifi", "connect", "Home:Lab", "password", "example-password" }));
+    }
+
+    void slowWifiScanKeepsCachedNetworksVisible()
+    {
+        makeModel(NetworkModel);
+        auto* network = static_cast<Network*>(m_model.get());
+        option("scan", "gate", "finish-scan");
+        network->scan();
+        QVERIFY(network->scanning());
+        // The slow hardware scan must not hold back cached NetworkManager APs.
+        QTRY_VERIFY(!network->wifiNetworks().isEmpty());
+        QVERIFY(network->scanning());
+        QTRY_COMPARE(count("scan"), 1);
+        saveFile(m_dir->filePath("finish-scan"), {});
+        QTRY_VERIFY(!network->scanning());
+        QTRY_VERIFY(!network->wifiNetworks().isEmpty());
     }
 
     void missingProgramCompletesAndRecovers()
