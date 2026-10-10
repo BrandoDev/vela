@@ -68,10 +68,15 @@ void Audio::refresh()
     }
     // The first time the page opens: from then on it updates itself.
     if (!m_subscribe) {
-        m_subscribe = vela::runProcess(this, QStringLiteral("pactl"), { QStringLiteral("subscribe") }, 0,
-            [this](vela::ProcessResult) { m_subscribe = nullptr; });
-        connect(m_subscribe, &QProcess::readyReadStandardOutput, this, [this] {
-            const QByteArray events = m_subscribe->readAllStandardOutput();
+        QProcess* subscription = vela::runProcess(this, QStringLiteral("pactl"), { QStringLiteral("subscribe") }, 0,
+            [this](vela::ProcessResult) {
+                m_subscribe = nullptr;
+                // Retry on the next refresh rather than spinning on a missing service.
+                m_debounce.start();
+            });
+        m_subscribe = subscription;
+        connect(subscription, &QProcess::readyReadStandardOutput, this, [this, subscription] {
+            const QByteArray events = subscription->readAllStandardOutput();
             if (events.contains("sink") || events.contains("source") || events.contains("server")) {
                 ++m_revision;
                 m_debounce.start();
@@ -98,6 +103,9 @@ void Audio::refresh()
             if (ok && sinks.isArray() && sources.isArray() && revision == m_revision && !m_running && m_queue.isEmpty()) {
                 m_outputs = list(sinks.array(), false, QString::fromUtf8(results.value(QStringLiteral("output"))).trimmed());
                 m_inputs = list(sources.array(), true, QString::fromUtf8(results.value(QStringLiteral("input"))).trimmed());
+                // Only authoritative service snapshots confirm microphone state.
+                m_unconfirmedMutes.clear();
+                m_muteCommandFailed = false;
                 emit changed();
             }
             if (std::exchange(m_refreshPending, false) || revision != m_revision) {
@@ -125,7 +133,27 @@ void Audio::setMuted(const QString& kind, const QString& name, bool muted)
     run(kind + u' ' + name + QStringLiteral(" mute"),
         { QStringLiteral("set-") + sinkOrSource(kind) + QStringLiteral("-mute"), name,
             muted ? QStringLiteral("1") : QStringLiteral("0") });
-    update(kind, name, QStringLiteral("muted"), muted);
+    // Do not optimistically publish a privacy-affecting state.
+    markMute(kind, name, true, false);
+}
+
+void Audio::markMute(const QString& kind, const QString& name, bool pending, bool error)
+{
+    QVariantList& devices = kind == QLatin1String("input") ? m_inputs : m_outputs;
+    const QString key = kind + u' ' + name;
+    if (pending || error) {
+        m_unconfirmedMutes.insert(key);
+    }
+    for (QVariant& device : devices) {
+        QVariantMap map = device.toMap();
+        if (map.value(QStringLiteral("name")).toString() != name) {
+            continue;
+        }
+        map.insert(QStringLiteral("mutePending"), pending);
+        map.insert(QStringLiteral("muteError"), error);
+        device = map;
+    }
+    emit changed();
 }
 
 void Audio::update(const QString& kind, const QString& name, const QString& property, const QVariant& value)
@@ -166,8 +194,14 @@ void Audio::runNext()
         return;
     }
     m_running = true;
-    const QStringList arguments = m_queue.takeFirst().second;
-    vela::runProcess(this, QStringLiteral("pactl"), arguments, 2000, [this](vela::ProcessResult) {
+    const auto command = m_queue.takeFirst();
+    vela::runProcess(this, QStringLiteral("pactl"), command.second, 2000, [this, command](vela::ProcessResult result) {
+        if (command.first.endsWith(QStringLiteral(" mute"))) {
+            const QString kind = command.first.section(u' ', 0, 0);
+            const QString name = command.first.mid(kind.size() + 1).chopped(5);
+            // A successful command still needs a fresh snapshot for confirmation.
+            markMute(kind, name, result.ok, !result.ok);
+        }
         m_running = false;
         runNext();
     });
