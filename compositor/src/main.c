@@ -80,8 +80,9 @@ int main(int argc, char *argv[])
     const char *debug = getenv("VELA_DEBUG");
     wlr_log_init(debug && *debug ? WLR_DEBUG : WLR_INFO, NULL);
 
-    struct vela_server *server = vela_server_create();
-    if (server == (struct vela_server *)-1) {
+    bool unsupported_gpu = false;
+    struct vela_server *server = vela_server_create(&unsupported_gpu);
+    if (unsupported_gpu) {
         return VELA_EXIT_UNSUPPORTED_GPU;
     }
     if (!server || !vela_server_start(server, startup)) {
