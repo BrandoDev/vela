@@ -555,6 +555,96 @@ private slots:
         QTRY_VERIFY(clientsStopped());
     }
 
+    void failedDefaultMicrophoneCannotRetargetMute()
+    {
+        // Two microphones make it possible to distinguish the confirmed
+        // default from an optimistically selected (but rejected) replacement.
+        QJsonArray sources = QJsonDocument::fromJson(
+            m_config.value("sources").toObject().value("output").toString().toUtf8()).array();
+        QJsonObject backup = sources.first().toObject();
+        backup.insert("name", "backup-mic");
+        backup.insert("description", "Backup microphone");
+        sources.append(backup);
+        response("sources", QJsonDocument(sources).toJson());
+        makeModel(AudioModel);
+        auto* audio = static_cast<Audio*>(m_model.get());
+        audio->refresh();
+        QTRY_COMPARE(audio->inputs().size(), 2);
+
+        auto device = [&](const QString& name) {
+            for (const QVariant& value : audio->inputs()) {
+                const QVariantMap item = value.toMap();
+                if (item.value("name").toString() == name) {
+                    return item;
+                }
+            }
+            return QVariantMap();
+        };
+        QVERIFY(device("test-mic").value("isDefault").toBool());
+        QVERIFY(!device("backup-mic").value("isDefault").toBool());
+
+        option("set-default-source", "code", 3);
+        option("get-default-source", "code", 3);
+        audio->setDefault("input", "backup-mic");
+        QVERIFY(device("test-mic").value("isDefault").toBool());
+        QVERIFY(!device("backup-mic").value("isDefault").toBool());
+        QVERIFY(device("test-mic").value("defaultPending").toBool());
+
+        QTRY_VERIFY(device("test-mic").value("defaultError").toBool());
+        QVERIFY(!device("test-mic").value("defaultPending").toBool());
+        QVERIFY(device("test-mic").value("isDefault").toBool());
+        QVERIFY(!device("backup-mic").value("isDefault").toBool());
+
+        // Even a direct QML/API mute request must not act on an unconfirmed
+        // default selection (the real microphone could still be test-mic).
+        const int before = count("set-source-mute");
+        audio->setMuted("input", "test-mic", true);
+        QCOMPARE(count("set-source-mute"), before);
+
+        option("get-default-source", "code", 0);
+        audio->refresh();
+        QTRY_VERIFY(!device("test-mic").value("defaultError").toBool());
+        QVERIFY(device("test-mic").value("isDefault").toBool());
+        audio->setMuted("input", "test-mic", true);
+        QTRY_COMPARE(count("set-source-mute"), before + 1);
+    }
+
+    void successfulDefaultChangeNeedsConfirmedRead()
+    {
+        QJsonArray sources = QJsonDocument::fromJson(
+            m_config.value("sources").toObject().value("output").toString().toUtf8()).array();
+        QJsonObject backup = sources.first().toObject();
+        backup.insert("name", "backup-mic");
+        sources.append(backup);
+        response("sources", QJsonDocument(sources).toJson());
+        makeModel(AudioModel);
+        auto* audio = static_cast<Audio*>(m_model.get());
+        audio->refresh();
+        QTRY_COMPARE(audio->inputs().size(), 2);
+        const auto devices = [&] { return audio->inputs(); };
+        const int reads = count("get-default-source");
+
+        // pactl accepts the change, but follow-up reads are unavailable.
+        option("get-default-source", "code", 3);
+        audio->setDefault("input", "backup-mic");
+        QTRY_VERIFY(count("get-default-source") > reads);
+        QTRY_VERIFY(devices().first().toMap().value("defaultPending").toBool());
+        QVERIFY(devices().first().toMap().value("isDefault").toBool());
+        audio->setMuted("input", "test-mic", true);
+        QCOMPARE(count("set-source-mute"), 0);
+
+        // Only an authoritative snapshot may move the default to backup-mic
+        // and re-enable input mute operations.
+        response("get-default-source", "backup-mic\n");
+        audio->refresh();
+        QTRY_VERIFY(devices().last().toMap().value("isDefault").toBool());
+        QVERIFY(!devices().first().toMap().value("defaultPending").toBool());
+        QVERIFY(!devices().first().toMap().value("defaultError").toBool());
+        QVERIFY(!devices().first().toMap().value("isDefault").toBool());
+        audio->setMuted("input", "backup-mic", true);
+        QTRY_COMPARE(count("set-source-mute"), 1);
+    }
+
     void failedMicrophoneMuteMustNotClaimSuccess()
     {
         makeModel(AudioModel);
