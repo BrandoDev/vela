@@ -104,6 +104,7 @@ void Audio::refresh()
                 m_inputs = list(sources.array(), true, QString::fromUtf8(results.value(QStringLiteral("input"))).trimmed());
                 // Only authoritative service snapshots confirm microphone state.
                 m_unconfirmedMutes.clear();
+                m_unconfirmedDefaults.clear();
                 emit changed();
             }
             if (std::exchange(m_refreshPending, false) || revision != m_revision) {
@@ -114,8 +115,11 @@ void Audio::refresh()
 
 void Audio::setDefault(const QString& kind, const QString& name)
 {
+    // Keep the last confirmed default selected until the service can be read.
+    // If the command succeeds but reconciliation fails, the actual default is
+    // unknown, so microphone mute must not target the cached device.
+    markDefault(kind, true, false);
     run(kind + QStringLiteral(" default"), { QStringLiteral("set-default-") + sinkOrSource(kind), name });
-    update(kind, name, QStringLiteral("isDefault"), true);
 }
 
 void Audio::setVolume(const QString& kind, const QString& name, double volume)
@@ -128,6 +132,9 @@ void Audio::setVolume(const QString& kind, const QString& name, double volume)
 
 void Audio::setMuted(const QString& kind, const QString& name, bool muted)
 {
+    if (kind == QLatin1String("input") && m_unconfirmedDefaults.contains(kind)) {
+        return; // the selected microphone may no longer be the real default
+    }
     run(kind + u' ' + name + QStringLiteral(" mute"),
         { QStringLiteral("set-") + sinkOrSource(kind) + QStringLiteral("-mute"), name,
             muted ? QStringLiteral("1") : QStringLiteral("0") });
@@ -151,6 +158,23 @@ void Audio::markMute(const QString& kind, const QString& name, bool pending, boo
         }
         map.insert(QStringLiteral("mutePending"), pending);
         map.insert(QStringLiteral("muteError"), error);
+        device = map;
+    }
+    emit changed();
+}
+
+void Audio::markDefault(const QString& kind, bool pending, bool error)
+{
+    if (pending || error) {
+        m_unconfirmedDefaults.insert(kind);
+    } else {
+        m_unconfirmedDefaults.remove(kind);
+    }
+    QVariantList& devices = kind == QLatin1String("input") ? m_inputs : m_outputs;
+    for (QVariant& device : devices) {
+        QVariantMap map = device.toMap();
+        map.insert(QStringLiteral("defaultPending"), pending);
+        map.insert(QStringLiteral("defaultError"), error);
         device = map;
     }
     emit changed();
@@ -196,6 +220,11 @@ void Audio::runNext()
     m_running = true;
     const auto command = m_queue.takeFirst();
     vela::runProcess(this, QStringLiteral("pactl"), command.second, 2000, [this, command](vela::ProcessResult result) {
+        if (command.first.endsWith(QStringLiteral(" default"))) {
+            const QString kind = command.first.section(u' ', 0, 0);
+            // Even a successful write remains unconfirmed until a valid read.
+            markDefault(kind, result.ok, !result.ok);
+        }
         if (command.first.endsWith(QStringLiteral(" mute"))) {
             const QString kind = command.first.section(u' ', 0, 0);
             const QString name = command.first.mid(kind.size() + 1).chopped(5);
