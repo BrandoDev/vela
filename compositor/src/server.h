@@ -107,6 +107,7 @@ struct vela_server {
     // always. vela.conf "variable-refresh".
     int vrr_mode;
     bool nested; // inside another session (Wayland or X11 window)
+    bool unsupported_gpu; // renderer initialization failed; supervisor must not retry
     char socket_name[64]; // our WAYLAND_DISPLAY
 
     struct vela_layers layers;
