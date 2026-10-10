@@ -57,7 +57,12 @@ inline QProcess* runProcess(QObject* owner, const QString& program, const QStrin
         [complete](int code, QProcess::ExitStatus status) { complete(code == 0 && status == QProcess::NormalExit); });
     QObject::connect(process, &QProcess::errorOccurred, process, [process, complete](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart) {
-            complete(false, process->errorString().toUtf8());
+            // Qt can emit this synchronously from start(). Deliver completion
+            // only after runProcess() has returned to its caller.
+            const QByteArray errorString = process->errorString().toUtf8();
+            QTimer::singleShot(0, process, [complete, errorString] {
+                complete(false, errorString);
+            });
         }
     });
     QObject::connect(timer, &QTimer::timeout, process, [process, state] {
