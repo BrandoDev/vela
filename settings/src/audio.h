@@ -57,5 +57,4 @@ private:
     QList<QPair<QString, QStringList>> m_queue;
     // A pending mute must never be displayed as an already confirmed mute.
     QSet<QString> m_unconfirmedMutes;
-    bool m_muteCommandFailed = false;
 };
