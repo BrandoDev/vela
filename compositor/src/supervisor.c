@@ -21,6 +21,7 @@
 // compositor that never comes back.
 
 #include "supervisor.h"
+#include "error_screen.h"
 #include "diagnostics.h"
 
 #include <dirent.h>
@@ -344,6 +345,11 @@ int vela_supervise(int argc, char **argv)
         }
         if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
             break; // exited by itself: "Sign out" from the menu
+        }
+        if (WIFEXITED(status) && WEXITSTATUS(status) == VELA_EXIT_UNSUPPORTED_GPU) {
+            say("Vulkan 1.4 or required dmabuf support is unavailable; returning to login");
+            exit_code = VELA_EXIT_UNSUPPORTED_GPU;
+            break; // restarting cannot make the GPU support Vulkan
         }
         if (WIFSIGNALED(status)) {
             say("the compositor crashed (%s)", strsignal(WTERMSIG(status)));
