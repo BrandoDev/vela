@@ -21,10 +21,8 @@ Page {
         title: modelData.description
         description: modelData.isDefault
             ? (modelData.defaultError
-                ? qsTr("Default device unverified; controls disabled")
-                : modelData.defaultPending
-                    ? qsTr("Confirming default device…")
-                    : qsTr("Default device")) : ""
+                ? qsTr("Couldn't verify the selected device. Controls are disabled.")
+                : qsTr("Default device")) : ""
         clickable: !modelData.isDefault && !modelData.defaultPending
         onClicked: Audio.setDefault(kind, modelData.name)
         trailing: Rectangle {
@@ -53,13 +51,10 @@ Page {
         icon: device && device.muted ? "audio-volume-muted" : kind === "output" ? "audio-volume-high" : "audio-input-microphone"
         title: qsTr("Volume")
         description: device && device.defaultError
-            ? qsTr("Default device unverified; controls disabled.")
-            : device && device.defaultPending
-                ? qsTr("Confirming default device…")
-                : device && device.muteError
-                    ? qsTr("Mute command failed. State is unverified; check the microphone.")
-                    : device && device.mutePending
-                        ? qsTr("Confirming mute state…") : ""
+            ? qsTr("Couldn't verify the selected device. Controls are disabled.")
+            : device && device.muteError
+                ? qsTr("Couldn't change mute. Check the device state.")
+                : ""
         trailing: Row {
             spacing: 8
             Button {
