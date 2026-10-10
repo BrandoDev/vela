@@ -26,6 +26,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QThread>
+#include <QTimer>
 
 #include <cerrno>
 #include <memory>
@@ -118,6 +119,25 @@ int fakeService(const QString& program, const QStringList& arguments)
     }
     logRequest(key, arguments);
     if (key == "subscribe") {
+        // Feed real QProcess subscription events to the model from an
+        // isolated test file; neither PipeWire nor PulseAudio is contacted.
+        QTimer events;
+        events.setInterval(10);
+        qsizetype sent = 0;
+        QObject::connect(&events, &QTimer::timeout, &events, [&] {
+            const QByteArray data = readFile(serviceRoot() + "/subscription-events");
+            if (data.size() < sent) {
+                sent = 0;
+            }
+            if (data.size() == sent) {
+                return;
+            }
+            const QByteArray next = data.mid(sent);
+            sent = data.size();
+            logRequest("subscription-output");
+            ::write(STDOUT_FILENO, next.constData(), next.size());
+        });
+        events.start();
         return QCoreApplication::exec();
     }
     const QString gate = response.value("gate").toString();
@@ -371,6 +391,45 @@ private slots:
             QCOMPARE(network->wifiNetworks().first().toMap().value("ssid").toString(), QString("Home:Lab"));
             QVERIFY(network->wifiNetworks().first().toMap().value("known").toBool());
         }
+    }
+
+    void streamEventsDoNotInvalidateAudioSnapshot()
+    {
+        makeModel(AudioModel);
+        auto* audio = static_cast<Audio*>(m_model.get());
+        audio->refresh();
+        QTRY_VERIFY(populated());
+        QTRY_COMPARE(count("subscribe"), 1);
+        saveFile(m_dir->filePath("requests.jsonl"), {});
+
+        QJsonArray sinks = QJsonDocument::fromJson(
+            m_config.value("sinks").toObject().value("output").toString().toUtf8()).array();
+        QJsonObject sink = sinks.first().toObject();
+        sink.insert("description", "Fresh speakers");
+        sinks[0] = sink;
+        option("sinks", "output", QString::fromUtf8(QJsonDocument(sinks).toJson()));
+        option("sinks", "gate", "release");
+
+        audio->refresh();
+        QTRY_COMPARE(count("sinks"), 1);
+        saveFile(m_dir->filePath("subscription-events"),
+            "Event 'change' on sink-input #7\\nEvent 'change' on source-output #3\\n");
+        QTRY_COMPARE(count("subscription-output"), 1);
+        QTest::qWait(50); // allow QProcess stdout to reach the model
+        saveFile(m_dir->filePath("release"), {});
+        QTRY_COMPARE(audio->outputs().first().toMap().value("description").toString(), QString("Fresh speakers"));
+        QTest::qWait(120);
+        QCOMPARE(count("sinks"), 1); // no invalidation or extra query
+
+        // A genuine device event must still trigger a fresh snapshot.
+        sink.insert("description", "New speakers");
+        sinks[0] = sink;
+        option("sinks", "output", QString::fromUtf8(QJsonDocument(sinks).toJson()));
+        saveFile(m_dir->filePath("subscription-events"),
+            "Event 'change' on sink-input #7\\nEvent 'change' on source-output #3\\n"
+            "Event 'change' on sink #1\\n");
+        QTRY_COMPARE(count("subscription-output"), 2);
+        QTRY_COMPARE(audio->outputs().first().toMap().value("description").toString(), QString("New speakers"));
     }
 
     void failedRefreshKeepsCache_data()
