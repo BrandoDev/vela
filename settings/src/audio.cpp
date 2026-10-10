@@ -71,8 +71,7 @@ void Audio::refresh()
         QProcess* subscription = vela::runProcess(this, QStringLiteral("pactl"), { QStringLiteral("subscribe") }, 0,
             [this](vela::ProcessResult) {
                 m_subscribe = nullptr;
-                // Retry on the next refresh rather than spinning on a missing service.
-                m_debounce.start();
+                // A later refresh can re-establish the subscription.
             });
         m_subscribe = subscription;
         connect(subscription, &QProcess::readyReadStandardOutput, this, [this, subscription] {
@@ -105,7 +104,6 @@ void Audio::refresh()
                 m_inputs = list(sources.array(), true, QString::fromUtf8(results.value(QStringLiteral("input"))).trimmed());
                 // Only authoritative service snapshots confirm microphone state.
                 m_unconfirmedMutes.clear();
-                m_muteCommandFailed = false;
                 emit changed();
             }
             if (std::exchange(m_refreshPending, false) || revision != m_revision) {
@@ -143,6 +141,8 @@ void Audio::markMute(const QString& kind, const QString& name, bool pending, boo
     const QString key = kind + u' ' + name;
     if (pending || error) {
         m_unconfirmedMutes.insert(key);
+    } else {
+        m_unconfirmedMutes.remove(key);
     }
     for (QVariant& device : devices) {
         QVariantMap map = device.toMap();
