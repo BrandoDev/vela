@@ -555,6 +555,45 @@ private slots:
         QTRY_VERIFY(clientsStopped());
     }
 
+    void failedMicrophoneMuteMustNotClaimSuccess()
+    {
+        makeModel(AudioModel);
+        refresh();
+        auto* audio = static_cast<Audio*>(m_model.get());
+        QTRY_VERIFY(populated());
+        auto mic = [&] { return audio->inputs().first().toMap(); };
+        QVERIFY(!mic().value("muted").toBool());
+
+        // A failing command followed by a failing reconciliation must never
+        // make the visible input appear safely muted.
+        option("set-source-mute", "code", 3);
+        option("sources", "code", 3);
+        audio->setMuted("input", "test-mic", true);
+        QCOMPARE(mic().value("muted").toBool(), false);
+        QTRY_VERIFY(mic().value("muteError").toBool());
+        QVERIFY(!mic().value("mutePending").toBool());
+        QVERIFY(!mic().value("muted").toBool());
+
+        // Service recovery clears the error only after a valid source snapshot.
+        option("sources", "code", 0);
+        audio->refresh();
+        QTRY_VERIFY(!mic().value("muteError").toBool());
+        QVERIFY(!mic().value("muted").toBool());
+    }
+
+    void failedSubscriptionCanRestart()
+    {
+        makeModel(AudioModel);
+        auto* audio = static_cast<Audio*>(m_model.get());
+        QVERIFY(QFile::remove(m_dir->filePath("pactl")));
+        audio->refresh();
+        QTest::qWait(100);
+        QVERIFY(QFile::link(QCoreApplication::applicationFilePath(), m_dir->filePath("pactl")));
+        audio->refresh();
+        QTRY_COMPARE(count("subscribe"), 1);
+        QTRY_VERIFY(populated());
+    }
+
     void missingPipeWireMetadataStillUpdatesMixer()
     {
         makeModel(MixerModel);
