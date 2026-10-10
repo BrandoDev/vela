@@ -124,6 +124,9 @@ void Audio::setDefault(const QString& kind, const QString& name)
 
 void Audio::setVolume(const QString& kind, const QString& name, double volume)
 {
+    if (kind == QLatin1String("input") && m_unconfirmedDefaults.contains(kind)) {
+        return; // the selected microphone may no longer be the real default
+    }
     const int percent = qRound(qBound(0.0, volume, 1.5) * 100.0);
     run(kind + u' ' + name + QStringLiteral(" volume"),
         { QStringLiteral("set-") + sinkOrSource(kind) + QStringLiteral("-volume"), name, QString::number(percent) + u'%' });
