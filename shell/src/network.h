@@ -24,6 +24,8 @@ class Network : public QObject {
     // The outcome of the last connection: "" (in progress or none), "ok", or
     // the error message.
     Q_PROPERTY(QString connectResult READ connectResult NOTIFY connectResultChanged)
+    // SSID requiring new credentials after a saved-profile connection fails.
+    Q_PROPERTY(QString passwordRequiredSsid READ passwordRequiredSsid NOTIFY connectResultChanged)
 
 public:
     explicit Network(QObject* parent = nullptr);
@@ -33,6 +35,7 @@ public:
     QVariantList wifiNetworks() const { return m_wifi; }
     bool scanning() const { return m_scanning; }
     QString connectResult() const { return m_connectResult; }
+    QString passwordRequiredSsid() const { return m_passwordRequiredSsid; }
 
     Q_INVOKABLE void refresh();
     // Wi-Fi networks only (and saved ones), in the background: for the shell's
@@ -64,6 +67,7 @@ private:
     QStringList m_known; // names of the saved connections
     bool m_scanning = false;
     QString m_connectResult;
+    QString m_passwordRequiredSsid;
     bool m_detailsRequested = false;
     bool m_loadingDevices = false;
     bool m_devicesPending = false;
