@@ -6,6 +6,7 @@
 #include "a11y.h"
 #include "command.h"
 #include "config.h"
+#include "error_screen.h"
 #include "input.h"
 #include "interact.h"
 #include "layer.h"
@@ -169,6 +170,8 @@ static bool init(struct vela_server *server)
     }
     if (!server->renderer) {
         wlr_log(WLR_ERROR, "Vela needs a GPU with Vulkan 1.4 and dmabuf support: can't draw");
+        server->unsupported_gpu = true;
+        vela_error_screen_no_vulkan(wlr_backend_get_drm_fd(server->backend));
         return false;
     }
     server->wlr_renderer = vela_renderer_wlr(server->renderer);
@@ -264,12 +267,14 @@ static bool init(struct vela_server *server)
     return true;
 }
 
-struct vela_server *vela_server_create(void)
+struct vela_server *vela_server_create(bool *unsupported_gpu)
 {
+    if (unsupported_gpu) *unsupported_gpu = false;
     struct vela_server *server = calloc(1, sizeof(*server));
     if (!init(server)) {
         // What was already created is left to the process, which is about to
         // end.
+        if (unsupported_gpu) *unsupported_gpu = server->unsupported_gpu;
         free(server);
         return NULL;
     }
